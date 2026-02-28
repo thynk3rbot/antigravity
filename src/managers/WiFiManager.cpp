@@ -408,7 +408,7 @@ void WiFiManager::serveApiCmd() {
   if (server.hasArg("cmd")) {
     String cmd = server.arg("cmd");
     if (_webCmdCallback) {
-      _webCmdCallback(cmd, CommInterface::WIFI);
+      _webCmdCallback(cmd, CommInterface::COMM_WIFI);
     }
     server.send(200, "text/plain", "OK");
   } else {

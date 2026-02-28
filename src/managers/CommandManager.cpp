@@ -30,17 +30,17 @@ const PinMap PIN_LOOKUP[] = {{"LED", PIN_LED_BUILTIN},
 
 const char *CommandManager::interfaceName(CommInterface ifc) {
   switch (ifc) {
-  case CommInterface::SERIAL:
+  case CommInterface::COMM_SERIAL:
     return "Serial";
-  case CommInterface::LORA:
+  case CommInterface::COMM_LORA:
     return "LoRa";
-  case CommInterface::BLE:
+  case CommInterface::COMM_BLE:
     return "BLE";
-  case CommInterface::WIFI:
+  case CommInterface::COMM_WIFI:
     return "WiFi";
-  case CommInterface::ESPNOW:
+  case CommInterface::COMM_ESPNOW:
     return "ESP-NOW";
-  case CommInterface::INTERNAL:
+  case CommInterface::COMM_INTERNAL:
     return "Internal";
   default:
     return "Unknown";
@@ -94,9 +94,9 @@ void CommandManager::handleCommand(const String &fullCmdIn,
   if (fullCmd.length() == 0 || fullCmd.length() > 256)
     return;
 
-  bool fromLoRa = (source == CommInterface::LORA);
-  bool fromRemote =
-      (source != CommInterface::SERIAL && source != CommInterface::INTERNAL);
+  bool fromLoRa = (source == CommInterface::COMM_LORA);
+  bool fromRemote = (source != CommInterface::COMM_SERIAL &&
+                     source != CommInterface::COMM_INTERNAL);
 
   DataManager &data = DataManager::getInstance();
   DisplayManager &display = DisplayManager::getInstance();
@@ -242,7 +242,7 @@ void CommandManager::handleCommand(const String &fullCmdIn,
     String payload = fullCmd.substring(6);
     payload.trim();
     LOG_PRINTLN("DBG: Injecting LoRa Packet: " + payload);
-    handleCommand(payload, CommInterface::LORA);
+    handleCommand(payload, CommInterface::COMM_LORA);
     return;
   }
 
@@ -306,7 +306,7 @@ void CommandManager::executeLocalCommand(const String &cmd,
   LOG_PRINTF("CMD: Executing [%s] (from %s)\n", cmd.c_str(),
              interfaceName(source));
 
-  bool fromLoRa = (source == CommInterface::LORA);
+  bool fromLoRa = (source == CommInterface::COMM_LORA);
   String cmdCopy = cmd;
   cmdCopy.trim();
 

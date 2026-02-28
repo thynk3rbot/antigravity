@@ -6,7 +6,6 @@
 #include <WiFi.h>
 #include <esp_now.h>
 
-
 class ESPNowManager {
 public:
   static ESPNowManager &getInstance() {
@@ -43,8 +42,8 @@ private:
 
   // Static callbacks for esp_now
   static void onDataSent(const uint8_t *mac_addr, esp_now_send_status_t status);
-  static void onDataRecv(const esp_now_recv_info_t *recv_info,
-                         const uint8_t *data, int data_len);
+  static void onDataRecv(const uint8_t *mac_addr, const uint8_t *data,
+                         int data_len);
 };
 
 #endif // ESPNOW_MANAGER_H

@@ -158,7 +158,8 @@ void ScheduleManager::serialTask() {
   if (Serial.available()) {
     String input = Serial.readStringUntil('\n');
     if (input.length() > 0 && input.length() < 128) {
-      CommandManager::getInstance().handleCommand(input, CommInterface::SERIAL);
+      CommandManager::getInstance().handleCommand(input,
+                                                  CommInterface::COMM_SERIAL);
     }
   }
 }
@@ -183,7 +184,7 @@ void ScheduleManager::bleTask() {
   String cmd;
   while (BLEManager::getInstance().poll(cmd)) {
     DataManager::getInstance().LogMessage("BLE> " + cmd);
-    CommandManager::getInstance().handleCommand(cmd, CommInterface::BLE);
+    CommandManager::getInstance().handleCommand(cmd, CommInterface::COMM_BLE);
   }
 }
 
@@ -191,7 +192,8 @@ void ScheduleManager::espNowTask() {
   String msg;
   while (ESPNowManager::getInstance().poll(msg)) {
     DataManager::getInstance().LogMessage("EN> " + msg);
-    CommandManager::getInstance().handleCommand(msg, CommInterface::ESPNOW);
+    CommandManager::getInstance().handleCommand(msg,
+                                                CommInterface::COMM_ESPNOW);
   }
 }
 

@@ -26,8 +26,8 @@ void ESPNowManager::onDataSent(const uint8_t *mac_addr,
   }
 }
 
-void ESPNowManager::onDataRecv(const esp_now_recv_info_t *recv_info,
-                               const uint8_t *data, int data_len) {
+void ESPNowManager::onDataRecv(const uint8_t *mac_addr, const uint8_t *data,
+                               int data_len) {
   if (!_espNowInstance || data_len <= 0 || data_len > 250)
     return;
 
@@ -46,10 +46,8 @@ void ESPNowManager::onDataRecv(const esp_now_recv_info_t *recv_info,
 
     // Log the sender MAC
     char macStr[18];
-    sprintf(macStr, "%02X:%02X:%02X:%02X:%02X:%02X", recv_info->src_addr[0],
-            recv_info->src_addr[1], recv_info->src_addr[2],
-            recv_info->src_addr[3], recv_info->src_addr[4],
-            recv_info->src_addr[5]);
+    sprintf(macStr, "%02X:%02X:%02X:%02X:%02X:%02X", mac_addr[0], mac_addr[1],
+            mac_addr[2], mac_addr[3], mac_addr[4], mac_addr[5]);
     LOG_PRINTF("ESPNOW: RX from %s: %s\n", macStr, msg.c_str());
   }
 }

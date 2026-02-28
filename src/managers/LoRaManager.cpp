@@ -217,9 +217,9 @@ void LoRaManager::ProcessPacket(uint8_t *rxEncBuf, int size) {
     LOG_PRINTLN("RX LORA: [" + sender + "] <Binary/Garbage>");
   }
 
-  // Callback to CommandManager with CommInterface::LORA
+  // Callback to CommandManager with CommInterface::COMM_LORA
   if (_msgCallback) {
-    _msgCallback(text, CommInterface::LORA);
+    _msgCallback(text, CommInterface::COMM_LORA);
   }
 
   // Repeater Logic
