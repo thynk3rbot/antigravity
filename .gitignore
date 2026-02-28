@@ -1,0 +1,42 @@
+# PlatformIO
+.pio/
+.pioenvs/
+.piolibdeps/
+
+# Build
+.cache/
+compile_commands.json
+
+# IDE
+.vscode/
+.idea/
+*.code-workspace
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+*.txt
+!README.md
+!LICENSE
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Firmware artifacts
+firmware.zip
+firmware_extract/
+
+# Upload/Serial logs
+upload_log*.txt
+serial_output*.txt
+build_log*.txt
+
+# Agent artifacts
+.agent/
+.agents/
+.claude/
