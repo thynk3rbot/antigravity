@@ -35,7 +35,8 @@ src/
     ├── ESPNowManager      — Peer management, queue-based RX
     ├── WiFiManager        — Web dashboard (/), config page (/config), OTA
     ├── BLEManager         — BLE GATT server, command queue
-    └── DisplayManager     — SSD1306 OLED, 4 pages (Home/Net/Status/Log)
+    ├── DisplayManager     — SSD1306 OLED, 4 pages (Home/Net/Status/Log)
+    └── MQTTManager        — MQTT broker integration, telemetry & commands
 ```
 
 ## Critical Gotchas

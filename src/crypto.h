@@ -5,6 +5,7 @@
 #pragma once
 
 #include "mbedtls/aes.h"
+#include "mbedtls/gcm.h"
 #include <Arduino.h>
 #include <esp_random.h>
 #include <stdint.h>
@@ -45,40 +46,42 @@ inline bool parseHexKey(const char *hex, uint8_t *out) {
   return true;
 }
 
-// Encrypted wire format: | IV[16] | ciphertext[64] | = 80 bytes
-#define AES_BLOCK_SIZE 16
+// Encrypted wire format: | IV[12] | Tag[16] | ciphertext[64] | = 92 bytes
+#define ENCRYPTED_PAYLOAD_SIZE 64
+#define GCM_IV_SIZE 12
+#define GCM_TAG_SIZE 16
 
-// Encrypt a MessagePacket (64 bytes) into an 80-byte output buffer.
+// Encrypt a MessagePacket (64 bytes) into a 92-byte output buffer.
 inline void encryptPacket(const void *plainPacket, uint8_t *outBuf,
                           const uint8_t *key) {
-  uint8_t iv[16];
-  esp_fill_random(iv, 16);
-  memcpy(outBuf, iv, 16);
+  uint8_t iv[GCM_IV_SIZE];
+  esp_fill_random(iv, GCM_IV_SIZE);
+  memcpy(outBuf, iv, GCM_IV_SIZE);
 
-  mbedtls_aes_context aes;
-  mbedtls_aes_init(&aes);
-  mbedtls_aes_setkey_enc(&aes, key, 128);
+  mbedtls_gcm_context gcm;
+  mbedtls_gcm_init(&gcm);
+  mbedtls_gcm_setkey(&gcm, MBEDTLS_CIPHER_ID_AES, key, 128);
 
-  uint8_t iv_tmp[16];
-  memcpy(iv_tmp, iv, 16);
+  mbedtls_gcm_crypt_and_tag(
+      &gcm, MBEDTLS_GCM_ENCRYPT, ENCRYPTED_PAYLOAD_SIZE, iv, GCM_IV_SIZE,
+      nullptr, 0, (const uint8_t *)plainPacket,
+      outBuf + GCM_IV_SIZE + GCM_TAG_SIZE, GCM_TAG_SIZE, outBuf + GCM_IV_SIZE);
 
-  mbedtls_aes_crypt_cbc(&aes, MBEDTLS_AES_ENCRYPT, 64, iv_tmp,
-                        (const uint8_t *)plainPacket, outBuf + 16);
-  mbedtls_aes_free(&aes);
+  mbedtls_gcm_free(&gcm);
 }
 
-// Decrypt an 80-byte buffer into a 64-byte MessagePacket.
+// Decrypt a 92-byte buffer into a 64-byte MessagePacket.
 inline bool decryptPacket(const uint8_t *inBuf, void *plainPacket,
                           const uint8_t *key) {
-  uint8_t iv[16];
-  memcpy(iv, inBuf, 16);
+  mbedtls_gcm_context gcm;
+  mbedtls_gcm_init(&gcm);
+  mbedtls_gcm_setkey(&gcm, MBEDTLS_CIPHER_ID_AES, key, 128);
 
-  mbedtls_aes_context aes;
-  mbedtls_aes_init(&aes);
-  mbedtls_aes_setkey_dec(&aes, key, 128);
+  int ret = mbedtls_gcm_auth_decrypt(
+      &gcm, ENCRYPTED_PAYLOAD_SIZE, inBuf, GCM_IV_SIZE, nullptr, 0,
+      inBuf + GCM_IV_SIZE, GCM_TAG_SIZE, inBuf + GCM_IV_SIZE + GCM_TAG_SIZE,
+      (uint8_t *)plainPacket);
 
-  int ret = mbedtls_aes_crypt_cbc(&aes, MBEDTLS_AES_DECRYPT, 64, iv, inBuf + 16,
-                                  (uint8_t *)plainPacket);
-  mbedtls_aes_free(&aes);
+  mbedtls_gcm_free(&gcm);
   return (ret == 0);
 }

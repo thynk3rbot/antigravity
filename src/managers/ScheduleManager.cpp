@@ -1,4 +1,3 @@
-#define _TASK_SLEEP_ON_IDLE_RUN
 #include "ScheduleManager.h"
 #include "../utils/DebugMacros.h"
 #include "BLEManager.h"
@@ -42,7 +41,10 @@ ScheduleManager::ScheduleManager()
       tBlink(200, 20, &ScheduleManager::blinkTask),
       tRestart(1000, TASK_ONCE, &ScheduleManager::restartTask),
       tBLE(20, TASK_FOREVER, &ScheduleManager::bleTask),
-      tESPNow(50, TASK_FOREVER, &ScheduleManager::espNowTask), blinkCount(0) {
+      tESPNow(50, TASK_FOREVER, &ScheduleManager::espNowTask),
+      tBatteryMonitor(300000, TASK_FOREVER,
+                      &ScheduleManager::batteryMonitorCallback),
+      blinkCount(0) {
   instance_ptr = this;
 }
 
@@ -76,6 +78,7 @@ void ScheduleManager::init() {
   runner.addTask(tRestart);
   runner.addTask(tBLE);
   runner.addTask(tESPNow);
+  runner.addTask(tBatteryMonitor);
 
   // Load Saved Interval
   unsigned long savedInterval =
@@ -94,15 +97,25 @@ void ScheduleManager::init() {
   tSerial.enable();
   tButton.enable();
   tDisplay.enable();
-  tBLE.enable();
+  if (DataManager::getInstance().bleEnabled) {
+    tBLE.enable();
+  }
   tLoRa.enableDelayed(2000);
-  tWiFi.enableDelayed(3000);
-  tHeartbeat.enableDelayed(8000);
+  if (DataManager::getInstance().wifiEnabled) {
+    tWiFi.enableDelayed(3000);
+  }
+  // Random jitter to desynchronize heartbeats across nodes
+  unsigned long hbJitter = 8000 + random(0, 17000);
+  tHeartbeat.enableDelayed(hbJitter);
+  LOG_PRINTF("SCHED: Heartbeat start jitter: %lu ms\n", hbJitter);
 
   // ESP-NOW task
   if (DataManager::getInstance().espNowEnabled) {
     tESPNow.enable();
   }
+
+  // Battery protection monitor
+  tBatteryMonitor.enableDelayed(10000);
 
   // Dynamic Tasks
   for (int i = 0; i < MAX_DYNAMIC_TASKS; i++) {
@@ -171,6 +184,7 @@ void ScheduleManager::heartbeatTask() {
     initial = false;
   }
   LoRaManager::getInstance().SendHeartbeat();
+  DataManager::getInstance().PruneStaleNodes();
 }
 
 void ScheduleManager::bleTask() {
@@ -183,7 +197,7 @@ void ScheduleManager::bleTask() {
   }
   String cmd;
   while (BLEManager::getInstance().poll(cmd)) {
-    DataManager::getInstance().LogMessage("BLE> " + cmd);
+    DataManager::getInstance().LogMessage("BLE", 0, cmd);
     CommandManager::getInstance().handleCommand(cmd, CommInterface::COMM_BLE);
   }
 }
@@ -191,7 +205,7 @@ void ScheduleManager::bleTask() {
 void ScheduleManager::espNowTask() {
   String msg;
   while (ESPNowManager::getInstance().poll(msg)) {
-    DataManager::getInstance().LogMessage("EN> " + msg);
+    DataManager::getInstance().LogMessage("ESPNOW", 0, msg);
     CommandManager::getInstance().handleCommand(msg,
                                                 CommInterface::COMM_ESPNOW);
   }
@@ -405,4 +419,27 @@ void ScheduleManager::loadSchedulesFromCsv(const String &csv) {
   serializeJson(doc, json);
   DataManager::getInstance().SaveSchedule(json);
   loadDynamicSchedules();
+}
+
+void ScheduleManager::batteryMonitorCallback() {
+  float bat = analogRead(PIN_BAT_ADC) / 4095.0 * 3.3 * 2.0;
+  LOG_PRINTF("SCHED: Battery Monitor -> %.2fV\n", bat);
+  if (bat > 0.5 && bat < 3.20) {
+    LOG_PRINTLN("SCHED: Low Battery! Entering Deep Sleep.");
+    DataManager::getInstance().LogMessage("SYS", 0, "Low Battery Sleep");
+    if (LoRaManager::getInstance().loraActive) {
+      LoRaManager::getInstance().SendLoRa(DataManager::getInstance().myId +
+                                          " SYS: Low Battery Sleep");
+    }
+    delay(1000);
+    if (Heltec.display) {
+      Heltec.display->clear();
+      Heltec.display->drawString(0, 0, "LOW BATTERY SLEEP");
+      Heltec.display->display();
+      delay(2000);
+      Heltec.display->displayOff();
+    }
+    esp_sleep_enable_timer_wakeup(6ULL * 60 * 60 * 1000000ULL); // 6 Hours
+    esp_deep_sleep_start();
+  }
 }

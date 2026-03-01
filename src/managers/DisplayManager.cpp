@@ -51,7 +51,7 @@ void DisplayManager::ShowSplash() {
   Heltec.display->drawString(64, 15, "SPW");
 
   Heltec.display->setFont(ArialMT_Plain_10);
-  Heltec.display->drawString(64, 40, "LoRaLink V3");
+  Heltec.display->drawString(64, 40, "Any2Any");
 
   Heltec.display->setTextAlignment(TEXT_ALIGN_LEFT);
   Heltec.display->drawString(2, 52, "B:" + String(data.bootCount));
@@ -122,11 +122,9 @@ void DisplayManager::DrawUi() {
 
 void DisplayManager::drawHome(DataManager &data) {
   Heltec.display->drawLine(0, 12, 128, 12);
+
+  // Status Line (10pt)
   Heltec.display->setFont(ArialMT_Plain_10);
-
-  Heltec.display->setTextAlignment(TEXT_ALIGN_CENTER);
-  Heltec.display->drawString(64, 24, data.myId);
-
   Heltec.display->setTextAlignment(TEXT_ALIGN_LEFT);
   Heltec.display->drawString(0, 0, "LORA READY");
 
@@ -141,6 +139,11 @@ void DisplayManager::drawHome(DataManager &data) {
   if (data.encryptionActive)
     icons += "Enc ";
   Heltec.display->drawString(128, 0, icons);
+
+  // Device Name (Large 16pt)
+  Heltec.display->setFont(ArialMT_Plain_16);
+  Heltec.display->setTextAlignment(TEXT_ALIGN_CENTER);
+  Heltec.display->drawString(64, 20, data.myId);
 
   Heltec.display->setTextAlignment(TEXT_ALIGN_LEFT);
   int y = 35;
@@ -221,9 +224,9 @@ void DisplayManager::drawLog(DataManager &data) {
 
   for (int i = 0; i < 4; i++) {
     int idx = (data.logIndex - 1 - i + LOG_SIZE) % LOG_SIZE;
-    if (data.msgLog[idx].length() > 0) {
+    if (data.msgLog[idx].message.length() > 0) {
       Heltec.display->drawString(0, 14 + i * 12,
-                                 data.msgLog[idx].substring(0, 21));
+                                 data.msgLog[idx].message.substring(0, 21));
     }
   }
   Heltec.display->setTextAlignment(TEXT_ALIGN_RIGHT);

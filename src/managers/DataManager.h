@@ -7,6 +7,15 @@
 #include <LittleFS.h>
 #include <Preferences.h>
 
+#include <Preferences.h>
+
+struct LogEntry {
+  uint32_t timestamp;
+  String source;
+  int rssi;
+  String message;
+};
+
 class DataManager {
 public:
   static DataManager &getInstance() {
@@ -24,16 +33,27 @@ public:
   String staticIp;
   String gateway;
   String subnet;
+  String cryptoKey;
 
-  // ESP-NOW Settings
+  // Integrations
+  bool streamToSerial;
+  bool mqttEnabled;
+  String mqttServer;
+  int mqttPort;
+  String mqttUser;
+  String mqttPass;
+
+  // ESP-NOW & Protocol Settings
   bool espNowEnabled;
   uint8_t espNowChannel;
+  bool wifiEnabled;
+  bool bleEnabled;
 
   // State
   int bootCount;
   RemoteNode remoteNodes[MAX_NODES];
   int numNodes;
-  String msgLog[LOG_SIZE];
+  LogEntry msgLog[LOG_SIZE];
   int logIndex;
 
   // ESP-NOW Peers
@@ -49,11 +69,15 @@ public:
                    const String &subnet);
   void SetName(const String &name);
   void SetRepeater(bool enabled);
-  void SetAesKey(uint8_t *key);
-  bool GetAesKey(uint8_t *keyBuf);
+  void SetCryptoKey(const String &hexKey);
+  bool GetCryptoKey(uint8_t *keyBuf);
+  void SetMqtt(bool enabled, const String &server, int port, const String &user,
+               const String &pass);
 
-  // ESP-NOW Persistence
+  // Persistence
   void SetESPNowEnabled(bool enabled);
+  void SetWifiEnabled(bool enabled);
+  void SetBleEnabled(bool enabled);
   void SaveESPNowPeer(int index, const uint8_t *mac, const char *name);
   void RemoveESPNowPeer(int index);
   void LoadESPNowPeers();
@@ -68,8 +92,12 @@ public:
   void FactoryReset();
 
   // Node & Log Methods
-  void UpdateNode(const char *id, TelemetryPacket *tp, int rssi);
-  void LogMessage(const String &msg);
+  void UpdateNode(const char *id, uint32_t uptime, float battery,
+                  uint8_t resetCode, float lat, float lon, int rssi,
+                  uint8_t hops = 0);
+  void SawNode(const char *id, int rssi, uint8_t hops);
+  void PruneStaleNodes();
+  void LogMessage(const String &source, int rssi, const String &msg);
 
   // Filesystem Search/Load
   bool SaveSchedule(const String &json);

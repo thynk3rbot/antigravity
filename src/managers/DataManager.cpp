@@ -1,4 +1,6 @@
 #include "DataManager.h"
+#include "../config.h"
+#include "../crypto.h"
 #include "../utils/DebugMacros.h"
 #include <LittleFS.h>
 #include <Preferences.h>
@@ -14,6 +16,9 @@ DataManager::DataManager() {
   numEspNowPeers = 0;
   myPrefix = "GW";
   myId = "GW-INIT";
+  streamToSerial = false;
+  mqttEnabled = false;
+  mqttPort = 1883;
 }
 
 String DataManager::getHardwareSuffix() {
@@ -117,12 +122,26 @@ void DataManager::LoadSettings() {
   gateway = p.getString("gateway", "");
   subnet = p.getString("subnet", "");
 
+  LOG_PRINTLN("INIT: Loading Crypto Key...");
+  cryptoKey = p.getString("crypto_key", "");
+
   LOG_PRINTLN("INIT: Loading Sched...");
   schedulerInterval110V = p.getULong("sched_int_110", 5000);
 
   LOG_PRINTLN("INIT: Loading ESP-NOW...");
   espNowEnabled = p.getBool("espnow_en", false);
   espNowChannel = p.getUChar("espnow_ch", ESPNOW_CHANNEL);
+
+  LOG_PRINTLN("INIT: Loading Radio Profiles...");
+  wifiEnabled = p.getBool("wifi_en", true);
+  bleEnabled = p.getBool("ble_en", true);
+
+  LOG_PRINTLN("INIT: Loading Integrations...");
+  mqttEnabled = p.getBool("mqtt_en", false);
+  mqttServer = p.getString("mqtt_srv", "");
+  mqttPort = p.getInt("mqtt_prt", 1883);
+  mqttUser = p.getString("mqtt_usr", "");
+  mqttPass = p.getString("mqtt_pwd", "");
 
   p.end();
 
@@ -172,19 +191,37 @@ void DataManager::SetRepeater(bool enabled) {
   p.end();
 }
 
-void DataManager::SetAesKey(uint8_t *key) {
+void DataManager::SetCryptoKey(const String &hexKey) {
+  cryptoKey = hexKey;
   Preferences p;
   p.begin("loralink", false);
-  p.putBytes("aes_key", key, 16);
+  p.putString("crypto_key", hexKey);
   p.end();
 }
 
-bool DataManager::GetAesKey(uint8_t *keyBuf) {
+bool DataManager::GetCryptoKey(uint8_t *keyBuf) {
+  if (cryptoKey.length() == 32) {
+    return parseHexKey(cryptoKey.c_str(), keyBuf);
+  }
+  return false;
+}
+
+void DataManager::SetMqtt(bool enabled, const String &server, int port,
+                          const String &user, const String &pass) {
+  this->mqttEnabled = enabled;
+  this->mqttServer = server;
+  this->mqttPort = port;
+  this->mqttUser = user;
+  this->mqttPass = pass;
+
   Preferences p;
-  p.begin("loralink", true);
-  size_t len = p.getBytes("aes_key", keyBuf, 16);
+  p.begin("loralink", false);
+  p.putBool("mqtt_en", enabled);
+  p.putString("mqtt_srv", server);
+  p.putInt("mqtt_prt", port);
+  p.putString("mqtt_usr", user);
+  p.putString("mqtt_pwd", pass);
   p.end();
-  return (len == 16);
 }
 
 void DataManager::SetESPNowEnabled(bool enabled) {
@@ -192,6 +229,22 @@ void DataManager::SetESPNowEnabled(bool enabled) {
   Preferences p;
   p.begin("loralink", false);
   p.putBool("espnow_en", enabled);
+  p.end();
+}
+
+void DataManager::SetWifiEnabled(bool enabled) {
+  wifiEnabled = enabled;
+  Preferences p;
+  p.begin("loralink", false);
+  p.putBool("wifi_en", enabled);
+  p.end();
+}
+
+void DataManager::SetBleEnabled(bool enabled) {
+  bleEnabled = enabled;
+  Preferences p;
+  p.begin("loralink", false);
+  p.putBool("ble_en", enabled);
   p.end();
 }
 
@@ -246,16 +299,21 @@ void DataManager::LoadESPNowPeers() {
   LOG_PRINTF("INIT: Loaded %d ESP-NOW peers\n", numEspNowPeers);
 }
 
-void DataManager::UpdateNode(const char *id, TelemetryPacket *tp, int rssi) {
+void DataManager::UpdateNode(const char *id, uint32_t uptime, float battery,
+                             uint8_t resetCode, float lat, float lon, int rssi,
+                             uint8_t hops) {
+  if (strcmp(id, myId.c_str()) == 0)
+    return;
   for (int i = 0; i < numNodes; i++) {
     if (strcmp(remoteNodes[i].id, id) == 0) {
       remoteNodes[i].lastSeen = millis();
-      remoteNodes[i].battery = tp->battery;
-      remoteNodes[i].resetCode = tp->resetCode;
-      remoteNodes[i].uptime = tp->uptime;
+      remoteNodes[i].battery = battery;
+      remoteNodes[i].resetCode = resetCode;
+      remoteNodes[i].uptime = uptime;
       remoteNodes[i].rssi = rssi;
-      remoteNodes[i].lat = tp->lat;
-      remoteNodes[i].lon = tp->lon;
+      remoteNodes[i].hops = hops;
+      remoteNodes[i].lat = lat;
+      remoteNodes[i].lon = lon;
       return;
     }
   }
@@ -263,18 +321,64 @@ void DataManager::UpdateNode(const char *id, TelemetryPacket *tp, int rssi) {
     strncpy(remoteNodes[numNodes].id, id, 15);
     remoteNodes[numNodes].id[15] = 0;
     remoteNodes[numNodes].lastSeen = millis();
-    remoteNodes[numNodes].battery = tp->battery;
-    remoteNodes[numNodes].resetCode = tp->resetCode;
-    remoteNodes[numNodes].uptime = tp->uptime;
+    remoteNodes[numNodes].battery = battery;
+    remoteNodes[numNodes].resetCode = resetCode;
+    remoteNodes[numNodes].uptime = uptime;
     remoteNodes[numNodes].rssi = rssi;
-    remoteNodes[numNodes].lat = tp->lat;
-    remoteNodes[numNodes].lon = tp->lon;
+    remoteNodes[numNodes].hops = hops;
+    remoteNodes[numNodes].lat = lat;
+    remoteNodes[numNodes].lon = lon;
     numNodes++;
   }
 }
 
-void DataManager::LogMessage(const String &msg) {
-  msgLog[logIndex] = msg;
+void DataManager::SawNode(const char *id, int rssi, uint8_t hops) {
+  if (strcmp(id, myId.c_str()) == 0)
+    return;
+  for (int i = 0; i < numNodes; i++) {
+    if (strcmp(remoteNodes[i].id, id) == 0) {
+      remoteNodes[i].lastSeen = millis();
+      remoteNodes[i].rssi = rssi;
+      remoteNodes[i].hops = hops;
+      return;
+    }
+  }
+  if (numNodes < MAX_NODES) {
+    strncpy(remoteNodes[numNodes].id, id, 15);
+    remoteNodes[numNodes].id[15] = 0;
+    remoteNodes[numNodes].lastSeen = millis();
+    remoteNodes[numNodes].battery = 0.0f;
+    remoteNodes[numNodes].resetCode = 0;
+    remoteNodes[numNodes].uptime = 0;
+    remoteNodes[numNodes].rssi = rssi;
+    remoteNodes[numNodes].hops = hops;
+    remoteNodes[numNodes].lat = 0.0f;
+    remoteNodes[numNodes].lon = 0.0f;
+    numNodes++;
+  }
+}
+
+void DataManager::PruneStaleNodes() {
+  unsigned long now = millis();
+  for (int i = 0; i < numNodes; i++) {
+    if (now - remoteNodes[i].lastSeen > 300000) { // 5 minutes
+      LOG_PRINTF("MESH: Pruned stale node: %s\n", remoteNodes[i].id);
+      // Shift remaining nodes down
+      for (int j = i; j < numNodes - 1; j++) {
+        remoteNodes[j] = remoteNodes[j + 1];
+      }
+      numNodes--;
+      i--; // Re-check this index
+    }
+  }
+}
+
+void DataManager::LogMessage(const String &source, int rssi,
+                             const String &msg) {
+  msgLog[logIndex].timestamp = millis() / 1000;
+  msgLog[logIndex].source = source;
+  msgLog[logIndex].rssi = rssi;
+  msgLog[logIndex].message = msg;
   logIndex = (logIndex + 1) % LOG_SIZE;
 }
 

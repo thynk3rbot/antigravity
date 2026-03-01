@@ -2,7 +2,9 @@
 // Drawn with OLED primitives for maximum clarity on 128x64 SSD1306
 // Copyright 2026 Steven P Williams spw1.com
 #pragma once
+#include "config.h"
 #include <math.h>
+
 
 // Draws the SPW LoRaLink splash screen on the Heltec OLED.
 // Call Heltec.display->display() after this to push to screen.
@@ -34,7 +36,7 @@ inline void drawSplash(OLEDDisplay *display) {
   // === "LoRaLink" below in medium font ===
   display->setFont(ArialMT_Plain_16);
   display->setTextAlignment(TEXT_ALIGN_CENTER);
-  display->drawString(64, 30, "LoRaLink");
+  display->drawString(64, 30, "LoRaLink " FIRMWARE_VERSION);
 
   // === Copyright footer ===
   display->setFont(ArialMT_Plain_10);

@@ -8,7 +8,7 @@ static ESPNowManager *_espNowInstance = nullptr;
 
 ESPNowManager::ESPNowManager() {
   espNowActive = false;
-  lastSendSuccess = false;
+  lastSendSuccess = true;
   rxCount = 0;
   txCount = 0;
   qHead = 0;
@@ -81,7 +81,8 @@ void ESPNowManager::init() {
     if (data.espNowPeers[i].active) {
       esp_now_peer_info_t peerInfo = {};
       memcpy(peerInfo.peer_addr, data.espNowPeers[i].mac, 6);
-      peerInfo.channel = data.espNowChannel;
+      peerInfo.channel = 0; // Use system channel
+      peerInfo.ifidx = WIFI_IF_STA;
       peerInfo.encrypt = false;
 
       if (esp_now_add_peer(&peerInfo) == ESP_OK) {
@@ -104,7 +105,8 @@ bool ESPNowManager::addPeer(const uint8_t *mac, const char *name) {
 
   esp_now_peer_info_t peerInfo = {};
   memcpy(peerInfo.peer_addr, mac, 6);
-  peerInfo.channel = DataManager::getInstance().espNowChannel;
+  peerInfo.channel = 0; // Use system channel
+  peerInfo.ifidx = WIFI_IF_STA;
   peerInfo.encrypt = false;
 
   esp_err_t result = esp_now_add_peer(&peerInfo);
@@ -153,6 +155,9 @@ void ESPNowManager::sendToAll(const String &message) {
   DataManager &data = DataManager::getInstance();
   for (int i = 0; i < data.numEspNowPeers; i++) {
     if (data.espNowPeers[i].active) {
+      DataManager::getInstance().LogMessage(
+          "ESPNOW_TX", 0,
+          "To " + String(data.espNowPeers[i].name) + ": " + message);
       sendToPeer(data.espNowPeers[i].mac, message);
     }
   }
@@ -167,6 +172,8 @@ void ESPNowManager::sendToPeer(const uint8_t *mac, const String &message) {
       esp_now_send(mac, (const uint8_t *)message.c_str(), message.length());
   if (result != ESP_OK) {
     LOG_PRINTLN("ESPNOW: Send error");
+    DataManager::getInstance().LogMessage("ESPNOW_ERR", (int)result,
+                                          "Send failed");
   }
 }
 

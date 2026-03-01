@@ -7,8 +7,8 @@
 // ============================================================================
 //   FIRMWARE & FEATURE FLAGS
 // ============================================================================
-#define FIRMWARE_VERSION "v1.0"
-#define FIRMWARE_NAME "LoRaLink-AnyToAny"
+#define FIRMWARE_VERSION "v1.3"
+#define FIRMWARE_NAME "LoRaLink Any2Any"
 #define ALLOW_GPIO_CONTROL true
 
 // ============================================================================
@@ -49,7 +49,7 @@
 
 // Relay & Sensor Pins
 #define PIN_RELAY_110V 5
-#define PIN_RELAY_12V_1 14
+#define PIN_RELAY_12V_1 46
 #define PIN_RELAY_12V_2 6
 #define PIN_RELAY_12V_3 7
 #define PIN_SENSOR_DHT 15
@@ -72,26 +72,19 @@ enum class CommInterface : uint8_t {
 //   DATA STRUCTURES
 // ============================================================================
 
-// Binary Telemetry Struct
-struct TelemetryPacket {
-  uint32_t uptime;   // Seconds
-  float battery;     // Voltage
-  int16_t rssi;      // Gateway RSSI
-  uint8_t resetCode; // Why we rebooted last
-  float lat;         // Placeholder - Latitude
-  float lon;         // Placeholder - Longitude
-  char padding[13];  // Align to block size
-};
-
+// Binary Telemetry Struct removed in favor of JSON string payloads
 // Data Packet Structure (Optimized: 64 bytes total)
-struct MessagePacket {
+struct __attribute__((packed)) MessagePacket {
   char sender[16];   // Readable Sender Name
-  char text[46];     // Message Text
+  char text[45];     // Message Text
+  uint8_t ttl;       // Time-To-Live
   uint16_t checksum; // Integrity check to filter noise
 };
 
-// Encrypted packet buffer size (16 IV + 64 ciphertext)
-#define ENCRYPTED_PACKET_SIZE 80
+#define MAX_TTL 3
+
+// Encrypted packet buffer size (12 IV + 16 Tag + 64 ciphertext)
+#define ENCRYPTED_PACKET_SIZE 92
 
 // Remote Node Tracking
 struct RemoteNode {
@@ -101,6 +94,7 @@ struct RemoteNode {
   uint8_t resetCode;
   uint32_t uptime;
   int16_t rssi;
+  uint8_t hops; // 0 = direct neighbor, 1+ = relayed
   float lat;
   float lon;
 };

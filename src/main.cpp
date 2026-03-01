@@ -16,9 +16,11 @@
 #include "managers/DisplayManager.h"
 #include "managers/ESPNowManager.h"
 #include "managers/LoRaManager.h"
+#include "managers/MQTTManager.h"
 #include "managers/ScheduleManager.h"
 #include "managers/WiFiManager.h"
 
+#ifndef UNIT_TEST
 // ============================================================================
 //   BOOT SEQUENCE
 // ============================================================================
@@ -98,7 +100,11 @@ void setup() {
 
   // 10. WiFi Manager
   Serial.println("BOOT: WiFiManager...");
-  WiFiManager::getInstance().init();
+  if (DataManager::getInstance().wifiEnabled) {
+    WiFiManager::getInstance().init();
+  } else {
+    Serial.println("WiFi: Disabled by RADIO profile.");
+  }
   setWebCallback([](const String &cmd, CommInterface ifc) {
     CommandManager::getInstance().handleCommand(cmd, ifc);
   });
@@ -114,6 +120,11 @@ void setup() {
   DisplayManager::getInstance().Init();
   Serial.flush();
 
+  // 13. MQTT Manager
+  Serial.println("BOOT: MQTTManager...");
+  MQTTManager::getInstance().Init();
+  Serial.flush();
+
   // 13. Schedule Manager - start all tasks
   Serial.println("BOOT: ScheduleManager...");
   ScheduleManager::getInstance().init();
@@ -127,4 +138,8 @@ void setup() {
 // ============================================================================
 //   MAIN LOOP
 // ============================================================================
-void loop() { ScheduleManager::getInstance().execute(); }
+void loop() {
+  ScheduleManager::getInstance().execute();
+  MQTTManager::getInstance().loop();
+}
+#endif

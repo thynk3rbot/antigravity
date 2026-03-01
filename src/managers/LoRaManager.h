@@ -11,6 +11,14 @@
 
 void IRAM_ATTR setFlag(void);
 
+struct PendingAck {
+  String targetId;
+  String commandText;
+  int retryCount;
+  unsigned long lastAttemptMs;
+  bool active;
+};
+
 class LoRaManager {
 public:
   static void SetCallback(void (*cb)(const String &, CommInterface));
@@ -26,6 +34,9 @@ public:
   void ProcessPacket(uint8_t *rxEncBuf, int size);
   void SetKey(const uint8_t *newKey);
   void DumpDiagnostics();
+  void QueueReliableCommand(const String &targetId, const String &commandText);
+  void clearPendingAck(const String &targetId);
+  void periodicTick();
 
   bool loraActive;
   volatile bool receivedFlag;
@@ -40,6 +51,9 @@ public:
 private:
   LoRaManager();
   SX1262 *radio;
+
+  static const int MAX_PENDING_ACKS = 5;
+  PendingAck ackQueue[MAX_PENDING_ACKS];
 
   uint32_t seenMsgHashes[HASH_BUFFER_SIZE];
   int hashIndex;

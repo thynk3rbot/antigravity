@@ -62,14 +62,9 @@ bool BLEManager::poll(String &cmdOut) {
 void BLEManager::init() {
   DataManager &data = DataManager::getInstance();
 
-  uint8_t baseMac[6];
-  esp_read_mac(baseMac, ESP_MAC_WIFI_STA);
-  uint8_t newMac[6];
-  memcpy(newMac, baseMac, 6);
-  newMac[5] = 0xCD;
-  esp_base_mac_addr_set(newMac);
-  Serial.print("BLE: Spoofed MAC to x:");
-  Serial.println(newMac[5], HEX);
+  // [FIX] Disabled Base MAC Spoofing entirely
+  // Calling esp_base_mac_addr_set() while radio initialization is pending
+  // causes an RTCWDT_RTC_RST (watchdog reset) on the ESP32-S3 board.
 
   String devName = data.myId;
   if (devName.length() == 0)
@@ -100,15 +95,25 @@ void BLEManager::init() {
 
   BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
 
+  // [CONFIG] ONE PACKET STRATEGY (The "Compact" Fix)
+  // Diagnosis: Scan Response is unreliable or timing out.
+  // Solution: Put EVERYTHING in the primary Advertisement packet.
+  // Capacity: 31 Bytes.
+  // Payload: Flags(3) + UUID16(4) + Name(9) = 16 Bytes. FITS!
   BLEAdvertisementData oAdvertisementData = BLEAdvertisementData();
-  oAdvertisementData.setFlags(0x06);
-  oAdvertisementData.setCompleteServices(BLEUUID((uint16_t)0x180F));
-  oAdvertisementData.setName(devName.c_str());
+  oAdvertisementData.setFlags(0x06); // General Discoverable
+  oAdvertisementData.setCompleteServices(BLEUUID((uint16_t)0x180F)); // UUID
+  oAdvertisementData.setName(devName.c_str());                       // Name
   pAdvertising->setAdvertisementData(oAdvertisementData);
 
+  // DISABLE Scan Response (Not needed, everything is in Advert)
   pAdvertising->setScanResponse(false);
-  pAdvertising->setMinInterval(0x100);
-  pAdvertising->setMaxInterval(0x200);
+
+  // [CONFIG] RELAXED TIMING (Keep Safe)
+  pAdvertising->setMinInterval(0x100); // 160ms
+  pAdvertising->setMaxInterval(0x200); // 320ms
+
+  // [CONFIG] PASSIVE CONNECTION PARAMS
   pAdvertising->setMinPreferred(0);
   pAdvertising->setMaxPreferred(0);
 

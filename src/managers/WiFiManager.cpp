@@ -16,6 +16,8 @@ WiFiManager::WiFiManager() {
   isConnected = false;
   serverStarted = false;
   lastWifiTry = 0;
+  lastApiHit = 0;
+  modemSleepEnabled = false;
 }
 
 void WiFiManager::init() {
@@ -40,9 +42,16 @@ void WiFiManager::handle() {
       if (!configured) {
         if (data.staticIp.length() > 0) {
           IPAddress ip, gw, sn;
-          if (ip.fromString(data.staticIp) && gw.fromString(data.gateway) &&
-              sn.fromString(data.subnet)) {
+          if (ip.fromString(data.staticIp)) {
+            if (!gw.fromString(data.gateway)) {
+              gw = ip; // Fallback to X.X.X.1
+              gw[3] = 1;
+            }
+            if (!sn.fromString(data.subnet)) {
+              sn = IPAddress(255, 255, 255, 0); // Fallback to /24
+            }
             WiFi.config(ip, gw, sn);
+            Serial.println("WiFi: Using Static IP " + ip.toString());
           }
         }
         WiFi.begin(data.wifiSsid.c_str(), data.wifiPass.c_str());
@@ -61,10 +70,12 @@ void WiFiManager::handle() {
         startServer();
         ArduinoOTA.begin();
         serverStarted = true;
+        lastApiHit = millis();
         Serial.println("Web server & OTA started");
       }
       ArduinoOTA.handle();
       server.handleClient();
+
     } else {
       isConnected = false;
       if (millis() - lastWifiTry > 10000) {
@@ -88,18 +99,58 @@ void WiFiManager::startServer() {
   });
 
   // Dashboard
-  server.on("/", HTTP_GET, [this]() { serveHome(); });
+  server.on("/", HTTP_GET, [this]() {
+    lastApiHit = millis();
+    serveHome();
+  });
 
   // Configuration page
-  server.on("/config", HTTP_GET, [this]() { serveConfig(); });
-  server.on("/config", HTTP_POST, [this]() { serveConfigSave(); });
+  server.on("/config", HTTP_GET, [this]() {
+    lastApiHit = millis();
+    serveConfig();
+  });
+  server.on("/config", HTTP_POST, [this]() {
+    lastApiHit = millis();
+    serveConfigSave();
+  });
+
+  // Integration page
+  server.on("/integration", HTTP_GET, [this]() {
+    lastApiHit = millis();
+    serveIntegration();
+  });
+  server.on("/integration", HTTP_POST, [this]() {
+    lastApiHit = millis();
+    serveIntegrationSave();
+  });
+
+  // Help page
+  server.on("/help", HTTP_GET, [this]() {
+    lastApiHit = millis();
+    serveHelp();
+  });
 
   // API
-  server.on("/api/status", HTTP_GET, [this]() { serveApiStatus(); });
-  server.on("/api/cmd", HTTP_POST, [this]() { serveApiCmd(); });
-  server.on("/api/peers", HTTP_GET, [this]() { serveApiPeers(); });
-  server.on("/api/peers/add", HTTP_POST, [this]() { serveApiAddPeer(); });
-  server.on("/api/peers/remove", HTTP_POST, [this]() { serveApiRemovePeer(); });
+  server.on("/api/status", HTTP_GET, [this]() {
+    lastApiHit = millis();
+    serveApiStatus();
+  });
+  server.on("/api/cmd", HTTP_POST, [this]() {
+    lastApiHit = millis();
+    serveApiCmd();
+  });
+  server.on("/api/peers", HTTP_GET, [this]() {
+    lastApiHit = millis();
+    serveApiPeers();
+  });
+  server.on("/api/peers/add", HTTP_POST, [this]() {
+    lastApiHit = millis();
+    serveApiAddPeer();
+  });
+  server.on("/api/peers/remove", HTTP_POST, [this]() {
+    lastApiHit = millis();
+    serveApiRemovePeer();
+  });
 
   server.begin();
 }
@@ -110,7 +161,7 @@ void WiFiManager::startServer() {
 void WiFiManager::serveHome() {
   String html = R"rawhtml(<!DOCTYPE html><html><head><meta charset='utf-8'>
 <meta name='viewport' content='width=device-width,initial-scale=1'>
-<title>LoRaLink Dashboard</title>
+<title>LoRaLink Dashboard )rawhtml" FIRMWARE_VERSION R"rawhtml(</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:'Segoe UI',sans-serif;background:#0f0f1a;color:#e0e0e0;min-height:100vh}
@@ -124,23 +175,33 @@ body{font-family:'Segoe UI',sans-serif;background:#0f0f1a;color:#e0e0e0;min-heig
 .card .val{font-size:1.4em;font-weight:700;margin-top:4px}
 .card .val.ok{color:#00ff88}
 .card .val.warn{color:#ffaa00}
-.log{margin:16px;background:#1a1a2e;border-radius:10px;border:1px solid #2a2a4a;max-height:240px;overflow-y:auto}
+.log{margin:12px;background:#1a1a2e;border-radius:10px;border:1px solid #2a2a4a;max-height:180px;overflow-y:auto}
+.ft{position:fixed;bottom:0;left:0;right:0;background:#1a1a2e;border-top:1px solid #2a2a4a;padding:6px;display:flex;flex-wrap:wrap;justify-content:center;gap:3px;z-index:99}
+.p{width:8px;height:8px;border-radius:1px;background:#333;cursor:crosshair}
+.p.hi{background:#00ff88;box-shadow:0 0 5px #00ff8888}
+.p:hover::after{content:attr(t);position:absolute;bottom:12px;background:#000;color:#fff;padding:2px 6px;border-radius:4px;font-size:10px;white-space:nowrap;z-index:100}
 .log .m{padding:6px 16px;font-size:0.85em;border-bottom:1px solid #1f1f3a;font-family:monospace}
 .cmd{display:flex;gap:8px;padding:16px}
 .cmd input{flex:1;background:#1a1a2e;border:1px solid #2a2a4a;border-radius:8px;padding:10px 14px;color:#fff;outline:none}
 .cmd input:focus{border-color:#00d4ff}
 .cmd button{background:#00d4ff;border:none;border-radius:8px;padding:10px 20px;color:#0f0f1a;cursor:pointer;font-weight:600}
 .cmd button:hover{background:#00b8d4}
-.ifc{display:flex;gap:6px;padding:0 16px;flex-wrap:wrap}
-.ifc .badge{padding:4px 10px;border-radius:12px;font-size:0.7em;font-weight:600;letter-spacing:1px}
-.ifc .on{background:#00ff8822;color:#00ff88;border:1px solid #00ff8844}
-.ifc .off{background:#ff444422;color:#ff4444;border:1px solid #ff444444}
+.ifc{display:flex;gap:6px;padding:8px 16px;flex-wrap:wrap;background:#16213e;border-bottom:1px solid #2a2a4a}
+.badge{padding:4px 10px;border-radius:12px;font-size:0.7em;font-weight:650;letter-spacing:0.5px;text-transform:uppercase}
+.badge.on{background:#00ff8822;color:#00ff88;border:1px solid #00ff8844;box-shadow:0 0 10px #00ff8811}
+.badge.off{background:#ff444422;color:#ff4444;border:1px solid #ff444444}
+.pb{padding:2px 6px;border-radius:6px;font-size:0.6em;font-weight:600;border:1px solid #444;font-family:monospace}
+.pb.hi{color:#00ff88;border-color:#00ff8833;background:#00ff8808}
+.pb.lo{color:#888;border-color:#333;background:#111}
+.pb.an{color:#00d4ff;border-color:#00d4ff33;background:#00d4ff08}
+.ftl{font-size:0.6em;color:#555;margin-right:8px;text-transform:uppercase;letter-spacing:1px;font-weight:700}
 </style></head><body>
-<div class='hdr'><h1>&#x1F4E1; LoRaLink AnyToAny</h1><a href='/config'>&#x2699; Config</a></div>
+<div class='hdr'><h1>&#x1F4E1; LoRaLink Any2Any <span id='fwv'></span></h1><div><a href='/integration'>&#x1F50C; Integrations</a> <a href='/help'>&#x2753; Help</a> <a href='/config'>&#x2699; Config</a></div></div>
 <div class='ifc' id='ifc'></div>
 <div class='grid' id='cards'></div>
 <div class='log'><div class='m' style='color:#00d4ff'>Message Log</div><div id='log'></div></div>
-<div class='cmd'><input id='ci' placeholder='Command (e.g. ALL LED ON)' onkeydown="if(event.key==='Enter')send()"><button onclick='send()'>Send</button></div>
+<div class='ft' id='ft'></div>
+<div class='cmd'><input id='ci' placeholder='Command...' onkeydown="if(event.key==='Enter')send()"><button onclick='send()'>Send</button></div>
 <script>
 function up(){fetch('/api/status').then(r=>r.json()).then(d=>{
 document.getElementById('ifc').innerHTML=
@@ -148,14 +209,27 @@ document.getElementById('ifc').innerHTML=
 `<span class="badge ${d.ble?'on':'off'}">BLE</span>`+
 `<span class="badge ${d.wifi?'on':'off'}">WiFi</span>`+
 `<span class="badge ${d.espnow?'on':'off'}">ESP-NOW</span>`;
-let c=`<div class="card"><div class="lbl">Device</div><div class="val">${d.id}</div></div>`;
+
+let m=BigInt("0x"+d.gp),f='<div class="ftl">Logic Map</div>';
+for(let i=0;i<48;i++){
+  let h=(m >> BigInt(i)) & 1n;
+  f+=`<div class="p ${h?'hi':''}" t="P${i}:${h?'HI':'LO'}" style="position:relative"></div>`;
+}
+document.getElementById('ft').innerHTML=f;
+
+let c=`<div class="card"><div class="lbl">Device</div><div class="val">${d.id} <span style="font-size:0.6em;color:#666">(${d.hw})</span></div></div>`;
+document.getElementById('fwv').innerText=d.version;
 c+=`<div class="card"><div class="lbl">Uptime</div><div class="val">${d.uptime}</div></div>`;
 c+=`<div class="card"><div class="lbl">Battery</div><div class="val ${d.bat>3.5?'ok':'warn'}">${d.bat}V</div></div>`;
+c+=`<div class="card"><div class="lbl">Reset</div><div class="val" style="font-size:0.9em">${d.reset}</div></div>`;
 c+=`<div class="card"><div class="lbl">LoRa RSSI</div><div class="val">${d.rssi} dBm</div></div>`;
 c+=`<div class="card"><div class="lbl">Nodes</div><div class="val">${d.nodes}</div></div>`;
 c+=`<div class="card"><div class="lbl">Heap</div><div class="val">${d.heap}</div></div>`;
+c+=`<div class="card" style="border-color:#00ff8844"><div class="lbl">ESPNOW RX/TX</div><div class="val">${d.espnow_rx} / ${d.espnow_tx}</div></div>`;
+c+=`<div class="card" style="border-color:${d.espnow_ok?'#00ff8844':'#ff444444'}"><div class="lbl">ESPNOW Status</div><div class="val ${d.espnow_ok?'ok':'warn'}">${d.espnow_ok?'OK':'FAIL'}</div></div>`;
+c+=`<div class="card"><div class="lbl">Last Command</div><div class="val" style="font-size:0.7em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${d.last_cmd}">${d.last_cmd||'-'}</div></div>`;
 document.getElementById('cards').innerHTML=c;
-let l='';d.log.forEach(m=>{if(m)l+=`<div class="m">${m}</div>`;});
+let l='';d.log.forEach(m=>{if(m)l+=`<div class="m"><span style="color:#888">[${m.ts}s]</span> <span style="color:#00d4ff">${m.src}</span>: ${m.msg}</div>`;});
 document.getElementById('log').innerHTML=l;
 })}
 setInterval(up,3000);up();
@@ -174,7 +248,7 @@ void WiFiManager::serveConfig() {
 
   String html = R"rawhtml(<!DOCTYPE html><html><head><meta charset='utf-8'>
 <meta name='viewport' content='width=device-width,initial-scale=1'>
-<title>LoRaLink Config</title>
+<title>LoRaLink Config )rawhtml" FIRMWARE_VERSION R"rawhtml(</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:'Segoe UI',sans-serif;background:#0f0f1a;color:#e0e0e0;min-height:100vh}
@@ -205,7 +279,7 @@ body{font-family:'Segoe UI',sans-serif;background:#0f0f1a;color:#e0e0e0;min-heig
 .tag.off{background:#ff444422;color:#ff4444}
 .msg{background:#00ff8822;color:#00ff88;border:1px solid #00ff8844;border-radius:8px;padding:10px 16px;margin:16px;text-align:center;display:none}
 </style></head><body>
-<div class='hdr'><h1>&#x2699; Configuration</h1><a href='/'>&#x1F4E1; Dashboard</a></div>
+<div class='hdr'><h1>&#x2699; Configuration</h1><div><a href='/'>&#x1F4E1; Dashboard</a> <a href='/integration'>&#x1F50C; Integrations</a></div></div>
 <div class='msg' id='msg'></div>
 <form method='POST' action='/config'>
 
@@ -312,6 +386,83 @@ fetch('/api/peers/remove',{method:'POST',body:new URLSearchParams({mac:mac})}).t
 }
 
 // ============================================================================
+//   HELP PAGE
+// ============================================================================
+void WiFiManager::serveHelp() {
+  String html = R"rawhtml(<!DOCTYPE html><html><head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width,initial-scale=1'>
+<title>LoRaLink Help </title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',sans-serif;background:#0f0f1a;color:#e0e0e0;min-height:100vh}
+.hdr{background:linear-gradient(135deg,#1a1a2e,#16213e);padding:16px 20px;border-bottom:1px solid #2a2a4a;display:flex;justify-content:space-between;align-items:center}
+.hdr h1{font-size:1.3em;color:#00d4ff;font-weight:600}
+.hdr a{color:#888;text-decoration:none;font-size:0.85em;padding:6px 14px;border:1px solid #2a2a4a;border-radius:6px}
+.hdr a:hover{color:#00d4ff;border-color:#00d4ff}
+.content{padding:20px;max-width:800px;margin:0 auto}
+h2{color:#00d4ff;margin-top:20px;margin-bottom:10px;font-size:1.2em;border-bottom:1px solid #2a2a4a;padding-bottom:5px}
+p{margin-bottom:10px;line-height:1.5}
+table{width:100%;border-collapse:collapse;margin-bottom:20px;background:#1a1a2e;border-radius:8px;overflow:hidden;box-shadow:0 4px 6px rgba(0,0,0,0.1)}
+th,td{padding:12px 15px;text-align:left;border-bottom:1px solid #2a2a4a}
+th{background:#16213e;color:#00d4ff;font-weight:600}
+tr:last-child td{border-bottom:none}
+pre{background:#000;padding:10px;border-radius:6px;overflow-x:auto;margin-bottom:15px;border:1px solid #333}
+code{font-family:monospace;color:#00ff88;background:#00ff8811;padding:2px 6px;border-radius:4px}
+ul{margin-left:20px;margin-bottom:15px}
+li{margin-bottom:5px;line-height:1.4}
+</style></head><body>
+<div class='hdr'><h1>&#x2753; Command Reference</h1><div><a href='/'>&#x1F4E1; Dashboard</a> <a href='/config'>&#x2699; Config</a></div></div>
+<div class='content'>
+  <p>The <code>CommandManager</code> routes commands uniformly regardless of the interface they are received on (Serial, LoRa, BLE, or Web UI).</p>
+  
+  <h2>Command Routing</h2>
+  <ul>
+    <li><b>Local:</b> Type the command directly (e.g., <code>STATUS</code>).</li>
+    <li><b>Targeted:</b> Prefix the command with a node's Name or MAC Suffix (e.g., <code>Master STATUS</code> or <code>E4 STATUS</code>).</li>
+    <li><b>Broadcast:</b> Prefix the command with <code>ALL</code> (e.g., <code>ALL STATUS</code>). Every node will execute it.</li>
+  </ul>
+
+  <h2>Global / System Commands</h2>
+  <table>
+    <tr><th>Command</th><th>Arguments</th><th>Description</th></tr>
+    <tr><td><code>SETNAME</code></td><td><code>&lt;name&gt;</code></td><td>Sets friendly display name (1-14 chars). Reboots.</td></tr>
+    <tr><td><code>SETWIFI</code></td><td><code>&lt;ssid&gt; &lt;pass&gt;</code></td><td>Sets WiFi credentials. Reboots.</td></tr>
+    <tr><td><code>SETIP</code></td><td><code>&lt;ip&gt;</code> / <code>OFF</code></td><td>Sets static IP or returns to DHCP. Reboots.</td></tr>
+    <tr><td><code>ESPNOW</code></td><td><code>ON</code> / <code>OFF</code></td><td>Enables/disables high-speed peer network. Reboots.</td></tr>
+    <tr><td><code>REPEATER</code></td><td><code>ON</code> / <code>OFF</code></td><td>Enables/disables LoRa repeater mode.</td></tr>
+    <tr><td><code>SLEEP</code></td><td><code>&lt;hours&gt;</code></td><td>Deep sleep for X hours.</td></tr>
+    <tr><td><code>SETKEY</code></td><td><code>&lt;32_hex&gt;</code></td><td>Sets AES-128 key (32 hex chars). Reboots.</td></tr>
+    <tr><td><code>WIPECONFIG</code></td><td><i>(none)</i></td><td>Factory resets all settings. Reboots.</td></tr>
+  </table>
+
+  <h2>Action & Diagnostic Commands</h2>
+  <table>
+    <tr><th>Command</th><th>Arguments</th><th>Description</th></tr>
+    <tr><td><code>STATUS</code></td><td><i>(none)</i></td><td>Returns battery, IP, LoRa RSSI, etc.</td></tr>
+    <tr><td><code>RADIO</code></td><td><i>(none)</i></td><td>Dumps LoRa diagnostic info to Serial.</td></tr>
+    <tr><td><code>READMAC</code></td><td><i>(none)</i></td><td>Returns raw WiFi MAC address.</td></tr>
+    <tr><td><code>BLINK</code></td><td><i>(none)</i></td><td>Blinks the onboard LED.</td></tr>
+    <tr><td><code>LED</code></td><td><code>ON</code> / <code>OFF</code></td><td>Turns the built-in LED on/off.</td></tr>
+    <tr><td><code>GPIO</code></td><td><code>&lt;pin/name&gt; &lt;1/0&gt;</code></td><td>Sets a specific GPIO pin HIGH/LOW.</td></tr>
+    <tr><td><code>READ</code></td><td><code>&lt;pin/name&gt;</code></td><td>Reads digital state of a pin.</td></tr>
+    <tr><td><code>GETSCHED</code></td><td><i>(none)</i></td><td>Dumps saved JSON schedule.</td></tr>
+    <tr><td><code>SETSCHED</code></td><td><code>&lt;json&gt;</code></td><td>Uploads a new JSON schedule.</td></tr>
+    <tr><td><code>HELP</code></td><td><i>(none)</i></td><td>Prints a short list of commands on Serial.</td></tr>
+  </table>
+
+  <h2>Hidden / Debug Commands</h2>
+  <ul>
+    <li><code>INJECT &lt;cmd&gt;</code>: Simulates receiving a LoRa packet containing a command.</li>
+  </ul>
+
+  <h2>Chat Messaging</h2>
+  <p>Any text that does not match a known command is treated as a Chat Message. It is displayed on the OLED and transmitted via LoRa to all nodes.</p>
+</div>
+</body></html>)rawhtml";
+  server.send(200, "text/html", html);
+}
+
+// ============================================================================
 //   CONFIG SAVE HANDLER
 // ============================================================================
 void WiFiManager::serveConfigSave() {
@@ -376,7 +527,18 @@ void WiFiManager::serveApiStatus() {
 
   String json = "{";
   json += "\"id\":\"" + data.myId + "\",";
+  json += "\"version\":\"" FIRMWARE_VERSION "\",";
   json += "\"uptime\":\"" + uptime + "\",";
+  json += "\"espnow_ch\":" + String(data.espNowChannel) + ",";
+  json += "\"espnow_rx\":" + String(ESPNowManager::getInstance().rxCount) + ",";
+  json += "\"espnow_tx\":" + String(ESPNowManager::getInstance().txCount) + ",";
+  json +=
+      "\"espnow_ok\":" + String(ESPNowManager::getInstance().lastSendSuccess) +
+      ",";
+  json += "\"espnow_peers\":" + String(data.numEspNowPeers) + ",";
+  json += "\"hw\":\"" + data.getMacSuffix() + "\",";
+  json += "\"reset\":\"" + data.getResetReason() + "\",";
+  json += "\"last_cmd\":\"" + lora.lastMsgReceived + "\",";
   json += "\"bat\":" + String(bat, 2) + ",";
   json += "\"rssi\":" + String(lora.lastRssi) + ",";
   json += "\"nodes\":" + String(data.numNodes) + ",";
@@ -386,16 +548,84 @@ void WiFiManager::serveApiStatus() {
   json += "\"wifi\":true,";
   json += "\"espnow\":" + String(espnow.espNowActive ? "true" : "false") + ",";
 
+  // Standard pins array for labeled diagnostics
+  json += "\"pins\":[";
+  struct PinDef {
+    const char *n;
+    int p;
+    bool a;
+  };
+  PinDef pins[] = {
+      {"LED", PIN_LED_BUILTIN, false},    {"PRG", PIN_BUTTON_PRG, false},
+      {"VEXT", PIN_VEXT_CTRL, false},     {"BAT", PIN_BAT_ADC, true},
+      {"RLY1", PIN_RELAY_110V, false},    {"RL12_1", PIN_RELAY_12V_1, false},
+      {"RL12_2", PIN_RELAY_12V_2, false}, {"RL12_3", PIN_RELAY_12V_3, false}};
+  for (int i = 0; i < 8; i++) {
+    if (i > 0)
+      json += ",";
+    json += "{\"n\":\"" + String(pins[i].n) +
+            "\",\"v\":" + String(digitalRead(pins[i].p));
+    if (pins[i].a)
+      json += ",\"a\":" + String(analogRead(pins[i].p));
+    json += "}";
+  }
+  json += "],";
+
+  // Comprehensive GPIO Bitmask (0-47)
+  uint64_t mask = 0;
+  for (int i = 0; i < 48; i++) {
+    // Skip flash/invalid pins to prevent crashes
+    if (i >= 26 && i <= 32)
+      continue;
+    if (digitalRead(i))
+      mask |= (1ULL << i);
+  }
+  char hex[17];
+  sprintf(hex, "%012llX", mask);
+  json += "\"gp\":\"" + String(hex) + "\",";
+
+  // Mesh neighbor table
+  json += "\"mesh\":[";
+  bool meshFirst = true;
+  unsigned long now = millis();
+  for (int i = 0; i < data.numNodes; i++) {
+    if (!meshFirst)
+      json += ",";
+    json += "{";
+    json += "\"id\":\"" + String(data.remoteNodes[i].id) + "\",";
+    json += "\"bat\":" + String(data.remoteNodes[i].battery, 2) + ",";
+    json += "\"rssi\":" + String(data.remoteNodes[i].rssi) + ",";
+    json += "\"hops\":" + String(data.remoteNodes[i].hops) + ",";
+    json += "\"ago\":" + String((now - data.remoteNodes[i].lastSeen) / 1000);
+    json += "}";
+    meshFirst = false;
+  }
+  json += "],";
+
   json += "\"log\":[";
   bool first = true;
   for (int i = 0; i < LOG_SIZE; i++) {
     int idx = (data.logIndex - 1 - i + LOG_SIZE) % LOG_SIZE;
-    if (data.msgLog[idx].length() > 0) {
-      String sanitized = data.msgLog[idx];
+    if (data.msgLog[idx].message.length() > 0) {
+      String sanitized = data.msgLog[idx].message;
       sanitized.replace("\"", "'");
+      String cleanStr = "";
+      for (unsigned int j = 0; j < sanitized.length(); j++) {
+        char c = sanitized[j];
+        if (c >= 0x20 && c <= 0x7E) {
+          cleanStr += c;
+        }
+      }
       if (!first)
         json += ",";
-      json += "\"" + sanitized + "\"";
+
+      json += "{";
+      json += "\"ts\":" + String(data.msgLog[idx].timestamp) + ",";
+      json += "\"src\":\"" + data.msgLog[idx].source + "\",";
+      json += "\"rssi\":" + String(data.msgLog[idx].rssi) + ",";
+      json += "\"msg\":\"" + cleanStr + "\"";
+      json += "}";
+
       first = false;
     }
   }
@@ -478,4 +708,114 @@ void WiFiManager::serveApiRemovePeer() {
 
   bool ok = ESPNowManager::getInstance().removePeer(mac);
   server.send(ok ? 200 : 500, "text/plain", ok ? "OK" : "Failed");
+}
+
+// ============================================================================
+//   INTEGRATION PAGE
+// ============================================================================
+void WiFiManager::serveIntegration() {
+  DataManager &data = DataManager::getInstance();
+
+  String html = R"rawhtml(<!DOCTYPE html><html><head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width,initial-scale=1'>
+<title>LoRaLink Integrations</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',sans-serif;background:#0f0f1a;color:#e0e0e0;min-height:100vh}
+.hdr{background:linear-gradient(135deg,#1a1a2e,#16213e);padding:16px 20px;border-bottom:1px solid #2a2a4a;display:flex;justify-content:space-between;align-items:center}
+.hdr h1{font-size:1.3em;color:#00d4ff;font-weight:600}
+.hdr a{color:#888;text-decoration:none;font-size:0.85em;padding:6px 14px;border:1px solid #2a2a4a;border-radius:6px}
+.hdr a:hover{color:#00d4ff;border-color:#00d4ff}
+.sec{margin:16px;background:#1a1a2e;border-radius:10px;border:1px solid #2a2a4a;padding:20px}
+.sec h2{color:#00d4ff;font-size:1em;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid #2a2a4a}
+.row{display:flex;gap:12px;margin-bottom:10px;align-items:center;flex-wrap:wrap}
+.row label{width:160px;font-size:0.85em;color:#aaa;flex-shrink:0}
+.row input,.row select{flex:1;background:#0f0f1a;border:1px solid #2a2a4a;border-radius:6px;padding:8px 12px;color:#fff;outline:none;min-width:140px}
+.row input:focus,.row select:focus{border-color:#00d4ff}
+.btn{background:#00d4ff;border:none;border-radius:8px;padding:10px 24px;color:#0f0f1a;cursor:pointer;font-weight:600;margin-top:12px}
+.btn:hover{background:#00b8d4}
+.msg{background:#00ff8822;color:#00ff88;border:1px solid #00ff8844;border-radius:8px;padding:10px 16px;margin:16px;text-align:center;display:none}
+</style></head><body>
+<div class='hdr'><h1>&#x1F50C; Integrations</h1><div><a href='/'>&#x1F4E1; Dashboard</a> <a href='/config'>&#x2699; Config</a></div></div>
+)rawhtml";
+
+  if (server.hasArg("saved")) {
+    html += "<div class='msg' style='display:block'>Settings saved. "
+            "Rebooting...</div>";
+  }
+
+  html += R"rawhtml(<form method='POST' action='/integration'>
+
+<div class='sec'>
+<h2>&#x1F4CA; Excel Data Streamer</h2>
+<p style='font-size:0.85em;color:#888;margin-bottom:12px'>Outputs live telemetry and messages to the USB Serial port in CSV format.</p>
+<div class='row'><label>Serial CSV Stream</label><select name='stream'><option value='0')rawhtml";
+  if (!data.streamToSerial)
+    html += " selected";
+  html += R"rawhtml(>OFF</option><option value='1')rawhtml";
+  if (data.streamToSerial)
+    html += " selected";
+  html += R"rawhtml(>ON</option></select></div>
+</div>
+
+<div class='sec'>
+<h2>&#x1F310; MQTT Broker</h2>
+<p style='font-size:0.85em;color:#888;margin-bottom:12px'>Publishes telemetry to <code>loralink/telemetry/&lt;Node&gt;</code> and messages to <code>loralink/msg/&lt;Node&gt;</code>.</p>
+<div class='row'><label>MQTT Enabled</label><select name='mqtt_en'><option value='0')rawhtml";
+  if (!data.mqttEnabled)
+    html += " selected";
+  html += R"rawhtml(>OFF</option><option value='1')rawhtml";
+  if (data.mqttEnabled)
+    html += " selected";
+  html +=
+      R"rawhtml(>ON</option></select></div>
+<div class='row'><label>Server Address</label><input name='mqtt_srv' value=')rawhtml" +
+      data.mqttServer +
+      R"rawhtml(' placeholder='e.g. 192.168.1.100 or broker.hivemq.com'></div>
+<div class='row'><label>Server Port</label><input name='mqtt_port' type='number' value=')rawhtml" +
+      String(data.mqttPort) + R"rawhtml('></div>
+<div class='row'><label>Username (Optional)</label><input name='mqtt_user' value=')rawhtml" +
+      data.mqttUser + R"rawhtml('></div>
+<div class='row'><label>Password (Optional)</label><input name='mqtt_pass' type='password' value=')rawhtml" +
+      data.mqttPass + R"rawhtml('></div>
+</div>
+
+<div class='sec'>
+<button type='submit' class='btn'>&#x1F4BE; Save & Reboot</button>
+</div>
+
+</form>
+</body></html>)rawhtml";
+
+  server.send(200, "text/html", html);
+}
+
+void WiFiManager::serveIntegrationSave() {
+  DataManager &data = DataManager::getInstance();
+
+  if (server.hasArg("stream")) {
+    data.streamToSerial = server.arg("stream") == "1";
+    // Also trigger it locally in CommandManager if we are not rebooting
+    // immediately
+  }
+
+  if (server.hasArg("mqtt_en")) {
+    bool en = server.arg("mqtt_en") == "1";
+    String srv = server.hasArg("mqtt_srv") ? server.arg("mqtt_srv") : "";
+    int port =
+        server.hasArg("mqtt_port") ? server.arg("mqtt_port").toInt() : 1883;
+    String user = server.hasArg("mqtt_user") ? server.arg("mqtt_user") : "";
+    String pass = server.hasArg("mqtt_pass") ? server.arg("mqtt_pass") : "";
+
+    data.SetMqtt(en, srv, port, user, pass);
+  }
+
+  data.SaveSettings();
+
+  server.sendHeader("Location", "/integration?saved=1");
+  server.send(303);
+
+  // Reboot to apply changes cleanly like in serveConfigSave
+  delay(1000);
+  ESP.restart();
 }

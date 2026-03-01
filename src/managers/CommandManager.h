@@ -3,6 +3,10 @@
 
 #include "../config.h"
 #include <Arduino.h>
+#include <functional>
+#include <map>
+
+typedef std::function<void(const String &, CommInterface)> CommandHandler;
 
 class CommandManager {
 public:
@@ -16,13 +20,17 @@ public:
   void executeLocalCommand(const String &subCmd, CommInterface source);
   void restoreHardwareState();
 
+  void registerCommand(const String &cmd, CommandHandler handler);
+
   int getPinFromName(const String &name);
 
   // Helper to get interface name string
   static const char *interfaceName(CommInterface ifc);
 
 private:
-  CommandManager() {}
+  CommandManager();
+  void initRegistry();
+  std::map<String, CommandHandler> _commandRegistry;
 };
 
 #endif // COMMAND_MANAGER_H

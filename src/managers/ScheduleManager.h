@@ -62,6 +62,7 @@ private:
   static void restartTask();
   static void bleTask();
   static void espNowTask();
+  static void batteryMonitorCallback();
 
   // Tasks
   Task tEnvironmental;
@@ -79,6 +80,7 @@ private:
   Task tRestart;
   Task tBLE;
   Task tESPNow;
+  Task tBatteryMonitor;
   int blinkCount;
 
   // Dynamic Pool

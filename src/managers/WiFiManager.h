@@ -20,6 +20,8 @@ public:
   void init();
   void handle();
   bool isConnected;
+  unsigned long lastApiHit;
+  bool modemSleepEnabled;
 
 private:
   WiFiManager();
@@ -32,6 +34,9 @@ private:
   void serveHome();
   void serveConfig();
   void serveConfigSave();
+  void serveIntegration();
+  void serveIntegrationSave();
+  void serveHelp();
   void serveApiStatus();
   void serveApiCmd();
   void serveApiPeers();

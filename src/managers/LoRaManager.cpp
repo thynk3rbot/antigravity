@@ -1,7 +1,10 @@
 #include "LoRaManager.h"
 #include "../utils/DebugMacros.h"
+#include "MQTTManager.h"
 #include <Arduino.h>
+#include <ArduinoJson.h>
 #include <SPI.h>
+
 
 // ISR Trampoline
 LoRaManager *_loraInstance = NULL;
@@ -23,6 +26,9 @@ LoRaManager::LoRaManager() {
   _loraInstance = this;
   for (int i = 0; i < HASH_BUFFER_SIZE; i++)
     seenMsgHashes[i] = 0;
+  for (int i = 0; i < MAX_PENDING_ACKS; i++) {
+    ackQueue[i].active = false;
+  }
   memcpy(currentKey, DEFAULT_AES_KEY, 16);
 }
 
@@ -39,10 +45,10 @@ void LoRaManager::Init() {
   radio = new SX1262(mod);
 
   DataManager &data = DataManager::getInstance();
-  if (data.GetAesKey(currentKey)) {
-    LOG_PRINTLN("LoRa: Loaded saved AES Key");
+  if (data.GetCryptoKey(currentKey)) {
+    LOG_PRINTLN("LoRa: Loaded custom AES-GCM key");
   } else {
-    LOG_PRINTLN("LoRa: Using Default AES Key");
+    LOG_PRINTLN("LoRa: Using Default AES-GCM key");
     memcpy(currentKey, DEFAULT_AES_KEY, 16);
   }
   Serial.flush();
@@ -74,7 +80,7 @@ uint32_t LoRaManager::getMsgHash(MessagePacket *p) {
   uint32_t hash = 5381;
   for (int i = 0; i < 16; i++)
     hash = ((hash << 5) + hash) + p->sender[i];
-  for (int i = 0; i < 46; i++)
+  for (int i = 0; i < 45; i++)
     hash = ((hash << 5) + hash) + p->text[i];
   return hash;
 }
@@ -108,12 +114,14 @@ void LoRaManager::SendLoRa(const String &text) {
   DataManager &data = DataManager::getInstance();
   DisplayManager &display = DisplayManager::getInstance();
 
-  memset(&txPacket, 0, sizeof(txPacket));
+  memset(&txPacket, 0, sizeof(MessagePacket)); // Explicitly wipe entire packet
   strncpy(txPacket.sender, data.myId.c_str(), sizeof(txPacket.sender) - 1);
   strncpy(txPacket.text, text.c_str(), sizeof(txPacket.text) - 1);
+  txPacket.ttl = MAX_TTL;
 
   lastMsgSent = text;
-  data.LogMessage("TX> " + text);
+
+  data.LogMessage(data.myId, 0, text);
   display.SetDisplayActive(true);
   display.DrawUi();
 
@@ -121,13 +129,28 @@ void LoRaManager::SendLoRa(const String &text) {
   encryptPacket(&txPacket, encBuf, currentKey);
   radio->transmit(encBuf, ENCRYPTED_PACKET_SIZE);
   receivedFlag = false;
+  radio->setPacketReceivedAction(setFlag);
   radio->startReceive();
 }
 
 void LoRaManager::HandleRx() {
+  static int rxPollCount = 0;
+  rxPollCount++;
+
+  // Periodic diagnostic: every 120 polls (~60s at 500ms)
+  if (rxPollCount % 120 == 0) {
+    LOG_PRINTF("LORA-DIAG: poll=%d, flag=%d, active=%d, DIO1=%d\n", rxPollCount,
+               receivedFlag ? 1 : 0, loraActive ? 1 : 0,
+               digitalRead(PIN_LORA_DIO1));
+    // Force re-arm the receiver
+    radio->setPacketReceivedAction(setFlag);
+    radio->startReceive();
+  }
+
   if (!loraActive || !receivedFlag)
     return;
   receivedFlag = false;
+  LOG_PRINTLN("LORA: *** RX EVENT ***");
 
   uint8_t rxEncBuf[ENCRYPTED_PACKET_SIZE];
   int state = radio->readData(rxEncBuf, ENCRYPTED_PACKET_SIZE);
@@ -140,15 +163,19 @@ void LoRaManager::HandleRx() {
   lastRssi = radio->getRSSI();
   lastSnr = radio->getSNR();
 
-  decryptPacket(rxEncBuf, &rxPacket, currentKey);
   ProcessPacket(rxEncBuf, ENCRYPTED_PACKET_SIZE);
 }
 
 void LoRaManager::ProcessPacket(uint8_t *rxEncBuf, int size) {
-  decryptPacket(rxEncBuf, &rxPacket, currentKey);
+  if (!decryptPacket(rxEncBuf, &rxPacket, currentKey)) {
+    LOG_PRINTLN("CRYPTO: GCM auth failed (Wrong Key or Tampered)");
+    radio->startReceive();
+    return;
+  }
 
   rxPacket.sender[15] = '\0';
-  rxPacket.text[45] = '\0';
+  rxPacket.text[44] =
+      '\0'; // Strictly enforce null-termination within the 45-byte block
 
   if (rxPacket.checksum != calculateChecksum(&rxPacket)) {
     LOG_PRINTLN("LORA: Integrity Fail (Noise/Garbage)");
@@ -177,9 +204,39 @@ void LoRaManager::ProcessPacket(uint8_t *rxEncBuf, int size) {
 
   DataManager &data = DataManager::getInstance();
 
+  uint8_t hops = 0;
+  if (MAX_TTL >= rxPacket.ttl) {
+    hops = MAX_TTL - rxPacket.ttl;
+  }
+  data.SawNode(rxPacket.sender, lastRssi, hops);
+
+  if (text.startsWith("{") && text.indexOf("\"t\":\"T\"") > 0) {
+    JsonDocument doc;
+    DeserializationError error = deserializeJson(doc, text);
+    if (!error) {
+      uint32_t uptime = doc["u"] | 0;
+      float bat = doc["b"] | 0.0f;
+      uint8_t rst = doc["r"] | 0;
+      uint8_t hops = doc["h"] | 0;
+      data.UpdateNode(rxPacket.sender, uptime, bat, rst, 0.0f, 0.0f, lastRssi,
+                      hops);
+      LOG_PRINTF("TEL: %s (hops=%d)\n", sender.c_str(), hops);
+
+      if (data.streamToSerial) {
+        Serial.printf("DATA,%s,%.2f,%d,%d\n", sender.c_str(), bat, lastRssi,
+                      hops);
+      }
+      MQTTManager::getInstance().publishTelemetry(sender, bat, lastRssi, hops);
+
+      lastMsgReceived = "TEL [" + sender + "]";
+      radio->startReceive();
+      return;
+    }
+  }
+
   // Telemetry or Binary Check
   bool hasNonPrintable = false;
-  for (int i = 0; i < 46 && rxPacket.text[i] != '\0'; i++) {
+  for (int i = 0; i < 45 && rxPacket.text[i] != '\0'; i++) {
     if (rxPacket.text[i] < 0x20 || rxPacket.text[i] > 0x7E) {
       hasNonPrintable = true;
       break;
@@ -187,22 +244,18 @@ void LoRaManager::ProcessPacket(uint8_t *rxEncBuf, int size) {
   }
 
   if (hasNonPrintable) {
-    TelemetryPacket *tp = (TelemetryPacket *)rxPacket.text;
-    if (tp->uptime > 0 && tp->uptime < 10000000 && tp->battery > 2.0 &&
-        tp->battery < 5.0) {
-      data.UpdateNode(rxPacket.sender, tp, lastRssi);
-      LOG_PRINTF("TEL: %s\n", sender.c_str());
-      lastMsgReceived = "TEL [" + sender + "]";
-      radio->startReceive();
-      return;
-    } else {
-      LOG_PRINTLN("LORA: RX Garbled (Key Mismatch or Noise)");
-      text = "<GARBLED>";
-    }
+    LOG_PRINTLN("LORA: RX Garbled (Key Mismatch or Noise)");
+    text = "<GARBLED>";
   }
 
   lastMsgReceived = "[" + sender + "] " + text;
-  data.LogMessage("RX [" + sender + "] " + text);
+  data.LogMessage(sender, radio->getRSSI(), text);
+
+  if (data.streamToSerial) {
+    Serial.printf("MSG,%s,%d,%s\n", sender.c_str(), radio->getRSSI(),
+                  text.c_str());
+  }
+  MQTTManager::getInstance().publishMessage(sender, radio->getRSSI(), text);
 
   bool clean = true;
   for (unsigned int i = 0; i < text.length(); i++) {
@@ -222,6 +275,11 @@ void LoRaManager::ProcessPacket(uint8_t *rxEncBuf, int size) {
     _msgCallback(text, CommInterface::COMM_LORA);
   }
 
+  // Clear Pending ACK if this is an ACK response
+  if (text.startsWith("ACK: ")) {
+    clearPendingAck(sender);
+  }
+
   // Repeater Logic
   if (data.repeaterEnabled && !text.startsWith("ACK:")) {
     String target = "";
@@ -235,11 +293,19 @@ void LoRaManager::ProcessPacket(uint8_t *rxEncBuf, int size) {
     bool isForAll = target.equalsIgnoreCase("ALL");
 
     if (!isForMeTarget || isForAll) {
-      int jitter = random(200, 1000);
-      LOG_PRINTF("RPTR: Propagation delay %d ms...\n", jitter);
-      delay(jitter);
-      radio->transmit(rxEncBuf, ENCRYPTED_PACKET_SIZE);
-      data.LogMessage("RPTR> Propagation: " + text);
+      if (rxPacket.ttl > 0) {
+        int jitter = random(200, 1000);
+        LOG_PRINTF("RPTR: Propagation delay %d ms...\n", jitter);
+        delay(jitter);
+        rxPacket.ttl--;
+        rxPacket.checksum = calculateChecksum(&rxPacket);
+        uint8_t fwdEncBuf[ENCRYPTED_PACKET_SIZE];
+        encryptPacket(&rxPacket, fwdEncBuf, currentKey);
+        radio->transmit(fwdEncBuf, ENCRYPTED_PACKET_SIZE);
+        data.LogMessage("RPTR", radio->getRSSI(), "Propagation: " + text);
+      } else {
+        LOG_PRINTLN("RPTR: Packet dropped (TTL=0)");
+      }
     }
   }
 
@@ -266,21 +332,81 @@ void LoRaManager::SendHeartbeat() {
   memset(&txPacket, 0, sizeof(txPacket));
   strncpy(txPacket.sender, data.myId.c_str(), sizeof(txPacket.sender) - 1);
 
-  TelemetryPacket tp;
-  tp.uptime = millis() / 1000;
-  tp.battery = analogRead(PIN_BAT_ADC) / 4095.0 * 3.3 * 2.0;
-  tp.rssi = lastRssi;
-  tp.resetCode = 0;
-  tp.lat = 0.0;
-  tp.lon = 0.0;
+  JsonDocument doc;
+  doc["t"] = "T";
+  doc["u"] = millis() / 1000;
+  doc["h"] = 0; // hop count: originated here
 
-  memcpy(txPacket.text, &tp, sizeof(tp));
+  float batVal = analogRead(PIN_BAT_ADC) / 4095.0 * 3.3 * 2.0;
+  doc["b"] = round(batVal * 100.0) / 100.0;
+  doc["r"] = 0;
+
+  String json;
+  serializeJson(doc, json);
+  strncpy(txPacket.text, json.c_str(), sizeof(txPacket.text) - 1);
+
+  txPacket.ttl = MAX_TTL;
   txPacket.checksum = calculateChecksum(&txPacket);
   encryptPacket(&txPacket, encBuf, currentKey);
 
-  radio->transmit(encBuf, ENCRYPTED_PACKET_SIZE);
+  int txState = radio->transmit(encBuf, ENCRYPTED_PACKET_SIZE);
+  LOG_PRINTF("LORA: TX result=%d, size=%d\n", txState, ENCRYPTED_PACKET_SIZE);
   receivedFlag = false;
-  radio->startReceive();
+  radio->setPacketReceivedAction(setFlag);
+  int rxState = radio->startReceive();
+  LOG_PRINTF("LORA: RX re-armed, state=%d\n", rxState);
 
-  LOG_PRINTLN("LORA: Heartbeat Sent");
+  LOG_PRINTLN("LORA: Heartbeat Sent -> " + json);
+}
+void LoRaManager::QueueReliableCommand(const String &targetId,
+                                       const String &commandText) {
+  for (int i = 0; i < MAX_PENDING_ACKS; i++) {
+    if (!ackQueue[i].active) {
+      ackQueue[i].targetId = targetId;
+      ackQueue[i].commandText = commandText;
+      ackQueue[i].retryCount = 0;
+      ackQueue[i].lastAttemptMs = millis();
+      ackQueue[i].active = true;
+      LOG_PRINTLN("LORA: Queued reliable transmission -> " + targetId);
+      SendLoRa(targetId + " " + commandText);
+      return;
+    }
+  }
+  LOG_PRINTLN("ERR: ACK Queue is full!");
+}
+
+void LoRaManager::clearPendingAck(const String &targetId) {
+  for (int i = 0; i < MAX_PENDING_ACKS; i++) {
+    if (ackQueue[i].active && ackQueue[i].targetId.equalsIgnoreCase(targetId)) {
+      ackQueue[i].active = false;
+      LOG_PRINTLN("LORA: RX ACK Verified from " + targetId);
+      return;
+    }
+  }
+}
+
+void LoRaManager::periodicTick() {
+  if (!loraActive)
+    return;
+
+  unsigned long now = millis();
+  for (int i = 0; i < MAX_PENDING_ACKS; i++) {
+    if (ackQueue[i].active) {
+      if (now - ackQueue[i].lastAttemptMs > 3000) {
+        ackQueue[i].retryCount++;
+        if (ackQueue[i].retryCount > 3) {
+          ackQueue[i].active = false;
+          LOG_PRINTLN("LORA: Delivery Failed (Max retries) -> " +
+                      ackQueue[i].targetId);
+          DataManager::getInstance().LogMessage(
+              "SYS", 0, "Delivery failed -> " + ackQueue[i].targetId);
+        } else {
+          ackQueue[i].lastAttemptMs = now;
+          LOG_PRINTF("LORA: Resending reliable command (Try %d/3)...\n",
+                     ackQueue[i].retryCount);
+          SendLoRa(ackQueue[i].targetId + " " + ackQueue[i].commandText);
+        }
+      }
+    }
+  }
 }

@@ -95,8 +95,8 @@ void CommandManager::handleCommand(const String &fullCmdIn,
     return;
 
   bool fromLoRa = (source == CommInterface::COMM_LORA);
-  bool fromRemote = (source != CommInterface::COMM_SERIAL &&
-                     source != CommInterface::COMM_INTERNAL);
+  bool fromRemote = (source == CommInterface::COMM_LORA ||
+                     source == CommInterface::COMM_ESPNOW);
 
   DataManager &data = DataManager::getInstance();
   DisplayManager &display = DisplayManager::getInstance();
@@ -104,7 +104,9 @@ void CommandManager::handleCommand(const String &fullCmdIn,
 
   display.SetDisplayActive(true);
 
-  LOG_PRINTF("CMD: [%s] via %s\n", fullCmd.c_str(), interfaceName(source));
+  const char *sourceStr = interfaceName(source);
+  DataManager::getInstance().LogMessage(sourceStr, 0, fullCmd);
+  LOG_PRINTF("CMD: [%s] via %s\n", fullCmd.c_str(), sourceStr);
 
   // "CMD:" prefix legacy support
   if (fullCmd.startsWith("CMD:")) {
@@ -112,142 +114,21 @@ void CommandManager::handleCommand(const String &fullCmdIn,
     fullCmd.trim();
   }
 
-  // --- GLOBAL COMMANDS ---
+  // --- GLOBAL / UNTARGETED COMMAND ROUTING ---
+  // If the command doesn't have a space, or its first word isn't a node ID/MAC,
+  // check the registry.
+  int space = fullCmd.indexOf(' ');
+  String potentialCmd = (space > 0) ? fullCmd.substring(0, space) : fullCmd;
 
-  // SETNAME
-  if (strncasecmp(fullCmd.c_str(), "SETNAME", 7) == 0) {
-    String newName = fullCmd.substring(7);
-    newName.trim();
-    if (newName.length() > 0 && newName.length() < 15) {
-      data.SetName(newName);
-      lora.lastMsgReceived = "SYS: Named " + newName;
-      LOG_PRINTLN("SETNAME -> " + newName);
-#ifndef UNIT_TEST
-      ScheduleManager::getInstance().triggerRestart(1000);
-#endif
-    } else {
-      lora.lastMsgReceived = "ERR: Name 1-14 chars";
-    }
-    return;
-  }
-
-  // SLEEP
-  if (strncasecmp(fullCmd.c_str(), "SLEEP", 5) == 0) {
-    String arg = fullCmd.substring(5);
-    arg.trim();
-    float hours = arg.toFloat();
-    if (hours > 0.0 && hours <= 24.0) {
-      uint64_t sleepUs = (uint64_t)(hours * 3600.0 * 1000000.0);
-      unsigned int mins = (unsigned int)(hours * 60.0);
-      lora.lastMsgReceived = "SYS: Sleep " + String(mins) + "min";
-      lora.SendLoRa(data.myId + " sleeping for " + String(mins) + "min");
-      delay(500);
-      digitalWrite(PIN_LED_BUILTIN, LOW);
-      Heltec.display->displayOff();
-      esp_sleep_enable_timer_wakeup(sleepUs);
-      esp_deep_sleep_start();
-    } else {
-      lora.lastMsgReceived = "ERR: SLEEP 0.01-24";
-    }
-    return;
-  }
-
-  // REPEATER
-  if (strncasecmp(fullCmd.c_str(), "REPEATER", 8) == 0) {
-    String arg = fullCmd.substring(8);
-    arg.trim();
-    if (arg.equalsIgnoreCase("ON") || arg == "1") {
-      data.SetRepeater(true);
-      lora.lastMsgReceived = "SYS: Repeater ON";
-    } else if (arg.equalsIgnoreCase("OFF") || arg == "0") {
-      data.SetRepeater(false);
-      lora.lastMsgReceived = "SYS: Repeater OFF";
-    }
-    return;
-  }
-
-  // SETWIFI
-  if (strncasecmp(fullCmd.c_str(), "SETWIFI", 7) == 0) {
-    String args = fullCmd.substring(7);
-    args.trim();
-    int sep = args.indexOf(' ');
-    if (sep > 0) {
-      String ssid = args.substring(0, sep);
-      String pass = args.substring(sep + 1);
-      pass.trim();
-      data.SetWifi(ssid, pass);
-      lora.lastMsgReceived = "SYS: WiFi set -> " + ssid;
-#ifndef UNIT_TEST
-      ScheduleManager::getInstance().triggerRestart(1000);
-#endif
-    } else {
-      lora.lastMsgReceived = "ERR: SETWIFI ssid pass";
-    }
-    return;
-  }
-
-  // WIPECONFIG
-  if (strncasecmp(fullCmd.c_str(), "WIPECONFIG", 10) == 0) {
-    data.FactoryReset();
-    lora.lastMsgReceived = "SYS: CONFIG WIPED";
-    ScheduleManager::getInstance().triggerRestart(2000);
-    return;
-  }
-
-  // SETIP
-  if (strncasecmp(fullCmd.c_str(), "SETIP", 5) == 0) {
-    String args = fullCmd.substring(5);
-    args.trim();
-    if (args.equalsIgnoreCase("OFF") || args == "0") {
-      data.SetStaticIp("", "", "");
-#ifndef UNIT_TEST
-      ScheduleManager::getInstance().triggerRestart(1000);
-#endif
-      return;
-    }
-    if (WiFi.status() != WL_CONNECTED) {
-      LOG_PRINTLN("ERR: SETIP rejected. Must be connected to WiFi first.");
-      return;
-    }
-    String ip = args;
-    String gw = WiFi.gatewayIP().toString();
-    String sn = WiFi.subnetMask().toString();
-    if (ip.length() > 0) {
-      data.SetStaticIp(ip, gw, sn);
-#ifndef UNIT_TEST
-      ScheduleManager::getInstance().triggerRestart(1000);
-#endif
-    }
-    return;
-  }
-
-  // ESPNOW
-  if (strncasecmp(fullCmd.c_str(), "ESPNOW", 6) == 0) {
-    String arg = fullCmd.substring(6);
-    arg.trim();
-    if (arg.equalsIgnoreCase("ON") || arg == "1") {
-      data.SetESPNowEnabled(true);
-      lora.lastMsgReceived = "SYS: ESP-NOW ON (Reboot)";
-      ScheduleManager::getInstance().triggerRestart(1000);
-    } else if (arg.equalsIgnoreCase("OFF") || arg == "0") {
-      data.SetESPNowEnabled(false);
-      lora.lastMsgReceived = "SYS: ESP-NOW OFF (Reboot)";
-      ScheduleManager::getInstance().triggerRestart(1000);
-    }
-    return;
-  }
-
-  // INJECT (Test Remote Logic)
-  if (strncasecmp(fullCmd.c_str(), "INJECT", 6) == 0) {
-    String payload = fullCmd.substring(6);
-    payload.trim();
-    LOG_PRINTLN("DBG: Injecting LoRa Packet: " + payload);
-    handleCommand(payload, CommInterface::COMM_LORA);
+  auto it = _commandRegistry.find(potentialCmd);
+  if (it != _commandRegistry.end()) {
+    // It's a registered untargeted/global command (e.g. SETWIFI, STATUS...)
+    String args = (space > 0) ? fullCmd.substring(space + 1) : "";
+    it->second(args, source);
     return;
   }
 
   // --- TARGETED COMMANDS ---
-  int space = fullCmd.indexOf(' ');
   if (space > 0) {
     String target = fullCmd.substring(0, space);
     String subCmd = fullCmd.substring(space + 1);
@@ -267,18 +148,18 @@ void CommandManager::handleCommand(const String &fullCmdIn,
       }
       // Forward to other interfaces if from local
       if (!fromRemote) {
-        lora.SendLoRa(fullCmd);
         if (ESPNowManager::getInstance().espNowActive) {
           ESPNowManager::getInstance().sendToAll(fullCmd);
         }
+        lora.SendLoRa(fullCmd);
       }
     } else {
-      // Not for us - forward to network
+      // Not for us - forward to network using reliable ACK queue
       if (!fromRemote) {
-        lora.SendLoRa(fullCmd);
         if (ESPNowManager::getInstance().espNowActive) {
           ESPNowManager::getInstance().sendToAll(fullCmd);
         }
+        lora.QueueReliableCommand(target, subCmd);
       }
     }
   } else {
@@ -292,113 +173,340 @@ void CommandManager::handleCommand(const String &fullCmdIn,
           strncasecmp(fullCmd.c_str(), "READ", 4) == 0) {
         executeLocalCommand(fullCmd, source);
       } else {
-        lora.SendLoRa(fullCmd);
         if (ESPNowManager::getInstance().espNowActive) {
           ESPNowManager::getInstance().sendToAll(fullCmd);
         }
+        lora.SendLoRa(fullCmd);
       }
     }
   }
 }
 
-void CommandManager::executeLocalCommand(const String &cmd,
-                                         CommInterface source) {
-  LOG_PRINTF("CMD: Executing [%s] (from %s)\n", cmd.c_str(),
-             interfaceName(source));
+CommandManager::CommandManager() { initRegistry(); }
 
-  bool fromLoRa = (source == CommInterface::COMM_LORA);
-  String cmdCopy = cmd;
-  cmdCopy.trim();
+void CommandManager::registerCommand(const String &cmd,
+                                     CommandHandler handler) {
+  String upperCmd = cmd;
+  upperCmd.toUpperCase();
+  _commandRegistry[upperCmd] = handler;
+}
 
-  DataManager &data = DataManager::getInstance();
-  LoRaManager &lora = LoRaManager::getInstance();
+void CommandManager::initRegistry() {
+  registerCommand("LED", [](const String &args, CommInterface source) {
+    DataManager &data = DataManager::getInstance();
+    LoRaManager &lora = LoRaManager::getInstance();
+    if (args.equalsIgnoreCase("ON")) {
+      digitalWrite(PIN_LED_BUILTIN, HIGH);
+      data.SetGpioState("LED", true);
+      lora.lastMsgReceived = "SYS: LED ON";
+    } else if (args.equalsIgnoreCase("OFF")) {
+      digitalWrite(PIN_LED_BUILTIN, LOW);
+      data.SetGpioState("LED", false);
+      lora.lastMsgReceived = "SYS: LED OFF";
+    }
+  });
 
-  if (cmdCopy.equalsIgnoreCase("LED ON")) {
-    digitalWrite(PIN_LED_BUILTIN, HIGH);
-    data.SetGpioState("LED", true);
-    lora.lastMsgReceived = "SYS: LED ON";
-  } else if (cmdCopy.equalsIgnoreCase("LED OFF")) {
-    digitalWrite(PIN_LED_BUILTIN, LOW);
-    data.SetGpioState("LED", false);
-    lora.lastMsgReceived = "SYS: LED OFF";
-  } else if (cmdCopy.equalsIgnoreCase("STATUS")) {
+  registerCommand("STATUS", [](const String &args, CommInterface source) {
+    DataManager &data = DataManager::getInstance();
+    LoRaManager &lora = LoRaManager::getInstance();
     float bat = analogRead(PIN_BAT_ADC) / 4095.0 * 3.3 * 2.0;
     String ip = (WiFi.status() == WL_CONNECTED) ? WiFi.localIP().toString()
                                                 : "DISCONNECTED";
-    String msg = "ID: " + data.myId + " (HW: [" + data.getMacSuffix() + "]) ";
-    msg += "IP: " + ip + " ";
-    msg += "BAT: " + String(bat, 2) + "V ";
-    msg += "LoRa: " + String(lora.lastRssi) + "dBm";
-    msg += " EN:" +
-           String(ESPNowManager::getInstance().espNowActive ? "ON" : "OFF");
-    if (fromLoRa) {
+    String msg =
+        "ID: " + data.myId + " (HW: [" + data.getMacSuffix() + "]) " +
+        "VER: " FIRMWARE_VERSION " IP: " + ip + " BAT: " + String(bat, 2) +
+        "V LoRa: " + String(lora.lastRssi) + "dBm EN:" +
+        String(ESPNowManager::getInstance().espNowActive ? "ON" : "OFF");
+    if (source == CommInterface::COMM_LORA)
       lora.SendLoRa(data.myId + " " + msg);
-    } else {
+    else
       LOG_PRINTLN(msg);
-    }
     lora.lastMsgReceived = "SYS: STATUS SENT";
-  } else if (cmdCopy.equalsIgnoreCase("BLINK")) {
+  });
+
+  registerCommand("BLINK", [](const String &args, CommInterface source) {
     ScheduleManager::getInstance().triggerBlink();
-    lora.lastMsgReceived = "SYS: BLINK";
-  } else if (cmdCopy.equalsIgnoreCase("READMAC")) {
+    LoRaManager::getInstance().lastMsgReceived = "SYS: BLINK";
+  });
+
+  registerCommand("READMAC", [](const String &args, CommInterface source) {
+    DataManager &data = DataManager::getInstance();
+    LoRaManager &lora = LoRaManager::getInstance();
     String mac = WiFi.macAddress();
-    if (fromLoRa)
+    data.LogMessage("READMAC", 0, "MAC: " + mac);
+    if (source == CommInterface::COMM_LORA)
       lora.SendLoRa("MAC: " + mac);
     else
       LOG_PRINTLN("MAC: " + mac);
     lora.lastMsgReceived = "SYS: MAC SENT";
-  } else if (cmdCopy.equalsIgnoreCase("RADIO")) {
+  });
+
+  registerCommand("RADIO", [](const String &args, CommInterface source) {
+    LoRaManager &lora = LoRaManager::getInstance();
     lora.DumpDiagnostics();
     lora.lastMsgReceived = "SYS: RADIO DIAG SENT";
-  } else if (cmdCopy.equalsIgnoreCase("HELP")) {
+  });
+
+  registerCommand("HELP", [](const String &args, CommInterface source) {
+    LoRaManager &lora = LoRaManager::getInstance();
     String help = "LED ON/OFF, BLINK, STATUS, READMAC, RADIO, SETNAME, "
-                  "SETWIFI, ESPNOW ON/OFF";
-    if (fromLoRa)
+                  "SETWIFI, ESPNOW ON/OFF, STREAM ON/OFF";
+    if (source == CommInterface::COMM_LORA)
       lora.SendLoRa(help);
     else
       LOG_PRINTLN(help);
-  } else if (strncasecmp(cmdCopy.c_str(), "GPIO", 4) == 0) {
-    int firstSpace = cmdCopy.indexOf(' ');
-    int secondSpace =
-        (firstSpace > 0) ? cmdCopy.indexOf(' ', firstSpace + 1) : -1;
-    if (firstSpace > 0 && secondSpace > 0) {
-      String pinName = cmdCopy.substring(firstSpace + 1, secondSpace);
+  });
+
+  registerCommand("STREAM", [](const String &args, CommInterface source) {
+    DataManager &data = DataManager::getInstance();
+    LoRaManager &lora = LoRaManager::getInstance();
+    if (args.equalsIgnoreCase("ON") || args == "1") {
+      data.streamToSerial = true;
+      String msg = "SYS: Serial Stream ON";
+      lora.lastMsgReceived = msg;
+      Serial.println("TYPE,NODE,BATTERY_V,RSSI,HOPS,MESSAGE");
+    } else if (args.equalsIgnoreCase("OFF") || args == "0") {
+      data.streamToSerial = false;
+      String msg = "SYS: Serial Stream OFF";
+      lora.lastMsgReceived = msg;
+      LOG_PRINTLN(msg);
+    }
+  });
+
+  // --- REPLACED GLOBALS ---
+
+  registerCommand("SETNAME", [](const String &args, CommInterface source) {
+    DataManager &data = DataManager::getInstance();
+    LoRaManager &lora = LoRaManager::getInstance();
+    if (args.length() > 0 && args.length() < 15) {
+      data.SetName(args);
+      lora.lastMsgReceived = "SYS: Named " + args;
+      LOG_PRINTLN("SETNAME -> " + args);
+#ifndef UNIT_TEST
+      ScheduleManager::getInstance().triggerRestart(1000);
+#endif
+    } else {
+      lora.lastMsgReceived = "ERR: Name 1-14 chars";
+    }
+  });
+
+  registerCommand("SLEEP", [](const String &args, CommInterface source) {
+    DataManager &data = DataManager::getInstance();
+    LoRaManager &lora = LoRaManager::getInstance();
+    float hours = args.toFloat();
+    if (hours > 0.0 && hours <= 24.0) {
+      uint64_t sleepUs = (uint64_t)(hours * 3600.0 * 1000000.0);
+      unsigned int mins = (unsigned int)(hours * 60.0);
+      lora.lastMsgReceived = "SYS: Sleep " + String(mins) + "min";
+      lora.SendLoRa(data.myId + " sleeping for " + String(mins) + "min");
+      delay(500);
+      digitalWrite(PIN_LED_BUILTIN, LOW);
+      Heltec.display->displayOff();
+      esp_sleep_enable_timer_wakeup(sleepUs);
+      esp_deep_sleep_start();
+    } else {
+      lora.lastMsgReceived = "ERR: SLEEP 0.01-24";
+    }
+  });
+
+  registerCommand("REPEATER", [](const String &args, CommInterface source) {
+    DataManager &data = DataManager::getInstance();
+    LoRaManager &lora = LoRaManager::getInstance();
+    if (args.equalsIgnoreCase("ON") || args == "1") {
+      data.SetRepeater(true);
+      lora.lastMsgReceived = "SYS: Repeater ON";
+    } else if (args.equalsIgnoreCase("OFF") || args == "0") {
+      data.SetRepeater(false);
+      lora.lastMsgReceived = "SYS: Repeater OFF";
+    }
+  });
+
+  registerCommand("SETWIFI", [](const String &args, CommInterface source) {
+    DataManager &data = DataManager::getInstance();
+    LoRaManager &lora = LoRaManager::getInstance();
+    int sep = args.indexOf(' ');
+    if (sep > 0) {
+      String ssid = args.substring(0, sep);
+      String pass = args.substring(sep + 1);
+      pass.trim();
+      data.SetWifi(ssid, pass);
+      lora.lastMsgReceived = "SYS: WiFi set -> " + ssid;
+#ifndef UNIT_TEST
+      ScheduleManager::getInstance().triggerRestart(1000);
+#endif
+    } else {
+      lora.lastMsgReceived = "ERR: SETWIFI ssid pass";
+    }
+  });
+
+  registerCommand("WIPECONFIG", [](const String &args, CommInterface source) {
+    DataManager::getInstance().FactoryReset();
+    LoRaManager::getInstance().lastMsgReceived = "SYS: CONFIG WIPED";
+    ScheduleManager::getInstance().triggerRestart(2000);
+  });
+
+  registerCommand("SETIP", [](const String &args, CommInterface source) {
+    DataManager &data = DataManager::getInstance();
+    if (args.equalsIgnoreCase("OFF") || args == "0") {
+      data.SetStaticIp("", "", "");
+#ifndef UNIT_TEST
+      ScheduleManager::getInstance().triggerRestart(1000);
+#endif
+      return;
+    }
+    if (WiFi.status() != WL_CONNECTED) {
+      LOG_PRINTLN("ERR: SETIP rejected. Must be connected to WiFi first.");
+      return;
+    }
+    String gw = WiFi.gatewayIP().toString();
+    String sn = WiFi.subnetMask().toString();
+    if (args.length() > 0) {
+      data.SetStaticIp(args, gw, sn);
+#ifndef UNIT_TEST
+      ScheduleManager::getInstance().triggerRestart(1000);
+#endif
+    }
+  });
+
+  registerCommand("ESPNOW", [](const String &args, CommInterface source) {
+    DataManager &data = DataManager::getInstance();
+    LoRaManager &lora = LoRaManager::getInstance();
+    if (args.equalsIgnoreCase("ON") || args == "1") {
+      data.SetESPNowEnabled(true);
+      lora.lastMsgReceived = "SYS: ESP-NOW ON (Reboot)";
+      ScheduleManager::getInstance().triggerRestart(1000);
+    } else if (args.equalsIgnoreCase("OFF") || args == "0") {
+      data.SetESPNowEnabled(false);
+      lora.lastMsgReceived = "SYS: ESP-NOW OFF (Reboot)";
+      ScheduleManager::getInstance().triggerRestart(1000);
+    }
+  });
+
+  registerCommand("RADIO", [](const String &args, CommInterface source) {
+    DataManager &data = DataManager::getInstance();
+    LoRaManager &lora = LoRaManager::getInstance();
+    if (args.equalsIgnoreCase("MODE LORA_BLE_WIFI")) {
+      data.SetWifiEnabled(true);
+      data.SetBleEnabled(true);
+      lora.lastMsgReceived = "SYS: RADIO ALL ON (Reboot)";
+      ScheduleManager::getInstance().triggerRestart(1000);
+    } else if (args.equalsIgnoreCase("MODE LORA_BLE")) {
+      data.SetWifiEnabled(false);
+      data.SetBleEnabled(true);
+      lora.lastMsgReceived = "SYS: RADIO LORA+BLE (Reboot)";
+      ScheduleManager::getInstance().triggerRestart(1000);
+    } else if (args.equalsIgnoreCase("MODE LORA_WIFI")) {
+      data.SetWifiEnabled(true);
+      data.SetBleEnabled(false);
+      lora.lastMsgReceived = "SYS: RADIO LORA+WIFI (Reboot)";
+      ScheduleManager::getInstance().triggerRestart(1000);
+    } else if (args.equalsIgnoreCase("MODE LORA_ONLY")) {
+      data.SetWifiEnabled(false);
+      data.SetBleEnabled(false);
+      lora.lastMsgReceived = "SYS: RADIO LORA ONLY (Reboot)";
+      ScheduleManager::getInstance().triggerRestart(1000);
+    }
+  });
+
+  registerCommand("SETKEY", [](const String &args, CommInterface source) {
+    DataManager &data = DataManager::getInstance();
+    LoRaManager &lora = LoRaManager::getInstance();
+    String key = args;
+    key.trim();
+    if (key.length() != 32) {
+      lora.lastMsgReceived = "ERR: Key must be 32 hex chars";
+      LOG_PRINTLN("SETKEY: Invalid length: " + String(key.length()));
+      return;
+    }
+    uint8_t testBuf[16];
+    if (!parseHexKey(key.c_str(), testBuf)) {
+      lora.lastMsgReceived = "ERR: Invalid hex characters";
+      LOG_PRINTLN("SETKEY: Bad hex");
+      return;
+    }
+    data.SetCryptoKey(key);
+    lora.lastMsgReceived = "SYS: AES Key Updated (Reboot)";
+    LOG_PRINTLN("SETKEY: Key saved to NVS");
+    ScheduleManager::getInstance().triggerRestart(1000);
+  });
+
+  registerCommand("NODES", [](const String &args, CommInterface source) {
+    DataManager &data = DataManager::getInstance();
+    LoRaManager &lora = LoRaManager::getInstance();
+    if (data.numNodes == 0) {
+      lora.lastMsgReceived = "MESH: No nodes discovered";
+      LOG_PRINTLN("MESH: No nodes discovered");
+      return;
+    }
+    unsigned long now = millis();
+    String result = "MESH: " + String(data.numNodes) + " nodes\n";
+    for (int i = 0; i < data.numNodes; i++) {
+      result += "[" + String(data.remoteNodes[i].id) + "] ";
+      result += "bat=" + String(data.remoteNodes[i].battery, 2) + "V ";
+      result += "rssi=" + String(data.remoteNodes[i].rssi) + " ";
+      result += "hops=" + String(data.remoteNodes[i].hops) + " ";
+      result += "seen=" + String((now - data.remoteNodes[i].lastSeen) / 1000) +
+                "s ago\n";
+    }
+    lora.lastMsgReceived = result;
+    LOG_PRINT(result);
+  });
+
+  registerCommand("INJECT", [this](const String &args, CommInterface source) {
+    LOG_PRINTLN("DBG: Injecting LoRa Packet: " + args);
+    handleCommand(args, CommInterface::COMM_LORA);
+  });
+
+  registerCommand("GPIO", [this](const String &args, CommInterface source) {
+    DataManager &data = DataManager::getInstance();
+    LoRaManager &lora = LoRaManager::getInstance();
+    int space = args.indexOf(' ');
+    if (space > 0) {
+      String pinName = args.substring(0, space);
       int pin = getPinFromName(pinName);
-      int val = cmdCopy.substring(secondSpace + 1).toInt();
+      int val = args.substring(space + 1).toInt();
       if (pin >= 0) {
         pinMode(pin, OUTPUT);
         digitalWrite(pin, val);
         data.SetGpioState(pinName, val == 1);
         String msg = "SYS: GPIO " + pinName + "=" + String(val);
         lora.lastMsgReceived = msg;
-        if (fromLoRa)
+        if (source == CommInterface::COMM_LORA)
           lora.SendLoRa(data.myId + " " + msg);
         else
           LOG_PRINTLN(msg);
       }
     }
-  } else if (strncasecmp(cmdCopy.c_str(), "READ", 4) == 0) {
-    int sp = cmdCopy.indexOf(' ');
-    if (sp > 0) {
-      String pinName = cmdCopy.substring(sp + 1);
-      int pin = getPinFromName(pinName);
-      if (pin >= 0) {
-        pinMode(pin, INPUT);
-        int val = digitalRead(pin);
-        String msg = "SYS: READ " + pinName + "=" + String(val);
-        lora.lastMsgReceived = msg;
-        if (fromLoRa)
-          lora.SendLoRa(data.myId + " " + msg);
-        else
-          LOG_PRINTLN(msg);
-      }
+  });
+
+  registerCommand("READ", [this](const String &args, CommInterface source) {
+    DataManager &data = DataManager::getInstance();
+    LoRaManager &lora = LoRaManager::getInstance();
+    String pinName = args;
+    pinName.trim();
+    int pin = getPinFromName(pinName);
+    if (pin >= 0) {
+      pinMode(pin, INPUT);
+      int val = digitalRead(pin);
+      String msg = "SYS: READ " + pinName + "=" + String(val);
+      lora.lastMsgReceived = msg;
+      if (source == CommInterface::COMM_LORA)
+        lora.SendLoRa(data.myId + " " + msg);
+      else
+        LOG_PRINTLN(msg);
     }
-  } else if (cmdCopy.equalsIgnoreCase("GETSCHED")) {
+  });
+
+  registerCommand("GETSCHED", [](const String &args, CommInterface source) {
+    LoRaManager &lora = LoRaManager::getInstance();
     String json = DataManager::getInstance().ReadSchedule();
     Serial.println("SCHED_JSON:" + json);
     lora.lastMsgReceived = "SYS: SCHED SENT TO SERIAL";
-  } else if (strncasecmp(cmdCopy.c_str(), "SETSCHED ", 9) == 0) {
-    String payload = cmdCopy.substring(9);
+  });
+
+  registerCommand("SETSCHED", [](const String &args, CommInterface source) {
+    LoRaManager &lora = LoRaManager::getInstance();
+    String payload = args;
     payload.trim();
     if (payload.startsWith("{")) {
       if (DataManager::getInstance().SaveSchedule(payload)) {
@@ -416,16 +524,44 @@ void CommandManager::executeLocalCommand(const String &cmd,
         lora.lastMsgReceived = "SYS: SCHED " + String(ms) + "ms";
       }
     }
-  } else if (cmdCopy.startsWith("RELAY ")) {
-    if (cmdCopy.substring(6) == "110V ON") {
+  });
+
+  registerCommand("RELAY", [](const String &args, CommInterface source) {
+    if (args.equalsIgnoreCase("110V ON")) {
       ScheduleManager::getInstance().forceRelay110V(true);
-    } else if (cmdCopy.substring(6) == "110V OFF") {
+    } else if (args.equalsIgnoreCase("110V OFF")) {
       ScheduleManager::getInstance().forceRelay110V(false);
     }
-  } else if (cmdCopy.equalsIgnoreCase("NEXTPAGE")) {
+  });
+
+  registerCommand("NEXTPAGE", [](const String &args, CommInterface source) {
+    LoRaManager &lora = LoRaManager::getInstance();
     DisplayManager::getInstance().NextPage();
     lora.lastMsgReceived = "SYS: PAGE CHANGED";
+  });
+}
+
+void CommandManager::executeLocalCommand(const String &cmd,
+                                         CommInterface source) {
+  LOG_PRINTF("CMD: Executing [%s] (from %s)\n", cmd.c_str(),
+             interfaceName(source));
+
+  String cmdCopy = cmd;
+  cmdCopy.trim();
+
+  int space = cmdCopy.indexOf(' ');
+  String verb = cmdCopy;
+  String args = "";
+  if (space > 0) {
+    verb = cmdCopy.substring(0, space);
+    args = cmdCopy.substring(space + 1);
+    args.trim();
+  }
+  verb.toUpperCase();
+
+  if (_commandRegistry.count(verb)) {
+    _commandRegistry[verb](args, source);
   } else {
-    lora.lastMsgReceived = "ERR: Unknown Local Cmd";
+    LoRaManager::getInstance().lastMsgReceived = "ERR: Unknown Local Cmd";
   }
 }
