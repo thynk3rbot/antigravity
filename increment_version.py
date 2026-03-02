@@ -2,6 +2,7 @@ Import("env")
 import re
 import os
 
+
 def increment_version(source, target, env):
     config_path = os.path.join(env.get("PROJECT_DIR"), "src", "config.h")
     if not os.path.exists(config_path):
@@ -22,7 +23,7 @@ def increment_version(source, target, env):
         suffix = match.group(4)
 
         new_patch = patch + 1
-        new_version = f'{prefix}{base}{new_patch}{suffix}'
+        new_version = f"{prefix}{base}{new_patch}{suffix}"
 
         new_content = re.sub(pattern, new_version, content)
 
@@ -33,5 +34,6 @@ def increment_version(source, target, env):
     else:
         print("Warning: Could not find FIRMWARE_VERSION pattern to increment")
 
-# Register the increment function to run before the build
-env.AddPreAction("buildprog", increment_version)
+
+# Register the increment function to run specifically during the upload process
+env.AddPreAction("upload", increment_version)
