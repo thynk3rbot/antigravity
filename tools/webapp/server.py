@@ -243,6 +243,7 @@ class DeviceState:
     serial_ok:    bool          = False
     serial_port:  Optional[str] = None
     active_node:  Optional[str] = None   # display name of active node
+    active_ip:    Optional[str]  = None   # routable IP for active WiFi/LoRa node
 
 
 # ════════════════════════════════════════════════════════════════════════════

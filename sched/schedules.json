@@ -1,0 +1,72 @@
+{
+  "schedules": [
+    {
+      "name": "System Heartbeat",
+      "type": "TOGGLE",
+      "pin": "LED",
+      "interval": 2000,
+      "enabled": true,
+      "_desc": "Provides a visual heartbeat on the built-in Heltec orange LED every 2 seconds."
+    },
+    {
+      "name": "Mains Control",
+      "type": "TOGGLE",
+      "pin": "RELAY1",
+      "interval": 3600000,
+      "enabled": false,
+      "_desc": "Simulated hourly toggle for a heavy 110V load. Disabled by default for safety."
+    },
+    {
+      "name": "Water Solenoid",
+      "type": "PULSE",
+      "pin": "RELAY2",
+      "interval": 14400000,
+      "duration": 10000,
+      "enabled": true,
+      "_desc": "Pulses Relay 2 for 10 seconds every 4 hours. Ideal for automated irrigation."
+    },
+    {
+      "name": "Accent Light",
+      "type": "PWM",
+      "pin": "IO26",
+      "interval": 60000,
+      "duration": 64,
+      "enabled": true,
+      "_desc": "Sets a 25% duty cycle (64/255) on IO26 every minute."
+    },
+    {
+      "name": "Sensor Power",
+      "type": "TOGGLE",
+      "pin": "VEXT",
+      "interval": 300000,
+      "enabled": true,
+      "_desc": "Toggles external power rail to cycle sensors every 5 minutes."
+    },
+    {
+      "name": "GPS KeepAlive",
+      "type": "PULSE",
+      "pin": "IO48",
+      "interval": 300000,
+      "duration": 500,
+      "enabled": false,
+      "_desc": "Brief 500ms pulse on GPS TX pin for wake-up synchronization."
+    },
+    {
+      "name": "Aux Toggle 1",
+      "type": "TOGGLE",
+      "pin": "IO33",
+      "interval": 10000,
+      "enabled": true,
+      "_desc": "Rapid 10-second toggle on auxiliary IO33."
+    },
+    {
+      "name": "Aux Pulse 2",
+      "type": "PULSE",
+      "pin": "IO34",
+      "interval": 60000,
+      "duration": 2000,
+      "enabled": true,
+      "_desc": "2-second pulse on auxiliary IO34 every minute."
+    }
+  ]
+}

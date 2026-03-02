@@ -1,0 +1,9 @@
+Name,Type,Pin,Interval,Duration,Enabled;
+Heartbeat, TOGGLE, LED, 2000, 0, 1;
+MainPwr, TOGGLE, RELAY1, 3600000, 0, 0;
+Pump, PULSE, RELAY2, 14400000, 10000, 1;
+Dimmer, PWM, IO26, 60000, 128, 1;
+SensorCycle, TOGGLE, VEXT, 300000, 0, 1;
+GPSWake, PULSE, IO48, 300000, 500, 0;
+Aux1, TOGGLE, IO33, 60000, 0, 1;
+Aux2, PULSE, IO34, 300000, 5000, 1
