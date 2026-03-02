@@ -18,7 +18,7 @@ CONFIGS_DIR = BASE_DIR / "tools/webapp/configs"
 DEVICES = [
     {
         "name": "Master",
-        "ip": "172.16.0.26",
+        "ip": "172.16.0.27",
         "config_file": "heltec_v3_generic.json",
         "expected_name": "LoRaLink-TestUnit-V3",
     },
