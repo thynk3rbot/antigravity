@@ -26,6 +26,19 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional, Set
 
+import threading
+import uuid
+import aiofiles
+
+# pyserial — optional, degrades gracefully
+try:
+    import serial
+    import serial.tools.list_ports
+    PYSERIAL = True
+except ImportError:
+    PYSERIAL = False
+    print("WARNING: pyserial not installed — Serial transport disabled")
+
 # ── FastAPI / WebSocket ──────────────────────────────────────────────────────
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse
@@ -53,13 +66,163 @@ except ImportError:
 STATIC_DIR    = Path(__file__).parent / "static"
 SETTINGS_FILE = Path(__file__).parent / ".settings.json"
 
+NODES_FILE     = Path(__file__).parent / ".nodes.json"
+SEQUENCES_FILE = Path(__file__).parent / ".sequences.json"
+CONFIGS_DIR    = Path(__file__).parent / "configs"
+
 _TRANSPORT_STRATEGIES = [
     "http_first",        # HTTP when reachable; BLE after 3 consecutive failures
     "ble_only",          # Always BLE; ignores HTTP entirely
     "readwrite_split",   # STATUS/MESH → HTTP; GPIO/RELAY/SCHED → BLE
     "immediate_fallback",# HTTP only when zero failures on record; else BLE
     "roundrobin",        # Alternate HTTP/BLE on every command
+    "serial_only",       # Always Serial; ignores HTTP and BLE entirely
 ]
+
+# ════════════════════════════════════════════════════════════════════════════
+# 0b. Node registry — persisted to .nodes.json
+# ════════════════════════════════════════════════════════════════════════════
+
+@dataclass
+class NodeConfig:
+    id:      str
+    name:    str
+    type:    str    # "wifi" | "serial" | "ble" | "lora"
+    address: str    # IP, COM port, BLE prefix, or gateway node name
+    active:  bool = False
+
+    def to_dict(self) -> dict:
+        return {"id": self.id, "name": self.name, "type": self.type,
+                "address": self.address, "active": self.active}
+
+    @staticmethod
+    def from_dict(d: dict) -> "NodeConfig":
+        return NodeConfig(id=d["id"], name=d["name"], type=d["type"],
+                          address=d["address"], active=d.get("active", False))
+
+
+class NodeRegistry:
+    def __init__(self) -> None:
+        self._nodes: list[NodeConfig] = []
+        self._load()
+
+    def _load(self) -> None:
+        if NODES_FILE.exists():
+            try:
+                data = json.loads(NODES_FILE.read_text())
+                self._nodes = [NodeConfig.from_dict(n) for n in data]
+            except Exception:
+                pass
+
+    def _save(self) -> None:
+        try:
+            NODES_FILE.write_text(json.dumps([n.to_dict() for n in self._nodes], indent=2))
+        except Exception as e:
+            print(f"[nodes] Save failed: {e}")
+
+    def list(self) -> list[NodeConfig]:
+        return list(self._nodes)
+
+    def add(self, name: str, type_: str, address: str) -> NodeConfig:
+        node = NodeConfig(id=str(uuid.uuid4()), name=name, type=type_, address=address)
+        self._nodes.append(node)
+        self._save()
+        return node
+
+    def remove(self, node_id: str) -> bool:
+        before = len(self._nodes)
+        self._nodes = [n for n in self._nodes if n.id != node_id]
+        if len(self._nodes) < before:
+            self._save()
+            return True
+        return False
+
+    def set_active(self, node_id: str) -> Optional[NodeConfig]:
+        target = next((n for n in self._nodes if n.id == node_id), None)
+        if not target:
+            return None
+        for n in self._nodes:
+            n.active = (n.id == node_id)
+        self._save()
+        return target
+
+    def active_node(self) -> Optional[NodeConfig]:
+        return next((n for n in self._nodes if n.active), None)
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# 0c. Sequence registry — persisted to .sequences.json
+# ════════════════════════════════════════════════════════════════════════════
+
+@dataclass
+class TaskSpec:
+    name:     str
+    type:     str
+    pin:      int
+    interval: int
+    duration: int = 0
+
+    def to_dict(self) -> dict:
+        return {"name": self.name, "type": self.type, "pin": self.pin,
+                "interval": self.interval, "duration": self.duration}
+
+    @staticmethod
+    def from_dict(d: dict) -> "TaskSpec":
+        return TaskSpec(name=d["name"], type=d["type"], pin=int(d["pin"]),
+                        interval=int(d["interval"]), duration=int(d.get("duration", 0)))
+
+
+@dataclass
+class Sequence:
+    name:  str
+    tasks: list[TaskSpec] = field(default_factory=list)
+
+    def to_dict(self) -> dict:
+        return {"name": self.name, "tasks": [t.to_dict() for t in self.tasks]}
+
+    @staticmethod
+    def from_dict(d: dict) -> "Sequence":
+        return Sequence(name=d["name"], tasks=[TaskSpec.from_dict(t) for t in d.get("tasks", [])])
+
+
+class SequenceRegistry:
+    def __init__(self) -> None:
+        self._seqs: dict[str, Sequence] = {}
+        self._load()
+
+    def _load(self) -> None:
+        if SEQUENCES_FILE.exists():
+            try:
+                data = json.loads(SEQUENCES_FILE.read_text())
+                self._seqs = {s["name"]: Sequence.from_dict(s) for s in data}
+            except Exception:
+                pass
+
+    def _save(self) -> None:
+        try:
+            SEQUENCES_FILE.write_text(
+                json.dumps([s.to_dict() for s in self._seqs.values()], indent=2)
+            )
+        except Exception as e:
+            print(f"[sequences] Save failed: {e}")
+
+    def list(self) -> list[Sequence]:
+        return list(self._seqs.values())
+
+    def save(self, seq: Sequence) -> None:
+        self._seqs[seq.name] = seq
+        self._save()
+
+    def delete(self, name: str) -> bool:
+        if name in self._seqs:
+            del self._seqs[name]
+            self._save()
+            return True
+        return False
+
+    def get(self, name: str) -> Optional[Sequence]:
+        return self._seqs.get(name)
+
 
 # ════════════════════════════════════════════════════════════════════════════
 # 1. DeviceState — shared live state
@@ -77,6 +240,9 @@ class DeviceState:
     last_update: float    = 0.0
     http_failures: int    = 0               # consecutive HTTP failures
     settings: dict        = field(default_factory=lambda: {"transport_strategy": "http_first"})
+    serial_ok:    bool          = False
+    serial_port:  Optional[str] = None
+    active_node:  Optional[str] = None   # display name of active node
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -105,6 +271,54 @@ class WebSocketManager:
 
 
 # ════════════════════════════════════════════════════════════════════════════
+# 2b. SerialLink — sync serial wrapped for asyncio
+# ════════════════════════════════════════════════════════════════════════════
+
+class SerialLink:
+    """Wraps a pyserial connection for use alongside BLE and HTTP transports."""
+
+    def __init__(self, port: str, baud: int = 115200) -> None:
+        self._port  = port
+        self._baud  = baud
+        self._ser: Optional[serial.Serial] = None if PYSERIAL else None
+        self._loop: Optional[asyncio.AbstractEventLoop] = None
+
+    async def connect(self) -> None:
+        if not PYSERIAL:
+            raise RuntimeError("pyserial not installed")
+        self._loop = asyncio.get_event_loop()
+        await self._loop.run_in_executor(None, self._open)
+        print(f"[Serial] Connected to {self._port}")
+
+    def _open(self) -> None:
+        self._ser = serial.Serial(self._port, self._baud, timeout=1)
+
+    async def disconnect(self) -> None:
+        if self._ser and self._ser.is_open:
+            self._ser.close()
+        print(f"[Serial] Disconnected from {self._port}")
+
+    async def send_command(self, cmd: str) -> bool:
+        if not self.is_connected or not self._loop:
+            return False
+        try:
+            data = (cmd.strip() + "\n").encode()
+            await self._loop.run_in_executor(None, self._ser.write, data)
+            return True
+        except Exception as e:
+            print(f"[Serial] Write error: {e}")
+            return False
+
+    @property
+    def is_connected(self) -> bool:
+        return bool(self._ser and self._ser.is_open)
+
+    @property
+    def device_name(self) -> str:
+        return self._port
+
+
+# ════════════════════════════════════════════════════════════════════════════
 # 3. TransportManager — hybrid HTTP + BLE command routing
 # ════════════════════════════════════════════════════════════════════════════
 
@@ -114,17 +328,24 @@ class TransportManager:
         state: DeviceState,
         device_ip: Optional[str],
         peers: list,              # list[BLELink] — 0, 1, or 2 peers
+        serial_link: Optional["SerialLink"] = None,
     ) -> None:
         self.state         = state
         self.device_ip     = device_ip
         self._peers        = peers
         self._session: Optional[aiohttp.ClientSession] = None
         self._round_counter: int = 0
+        self._serial: Optional[SerialLink] = serial_link
 
     # ── Public send ──────────────────────────────────────────────────────────
 
     async def send_command(self, cmd: str) -> bool:
         transport = await self.pick_transport(cmd)
+        if transport == "serial":
+            ok = await self._send_serial(cmd)
+            self.state.serial_ok  = ok
+            self.state.transport  = "serial" if ok else "disconnected"
+            return ok
         if transport == "http":
             ok = await self._send_http(cmd)
             if ok:
@@ -166,6 +387,9 @@ class TransportManager:
             self._round_counter += 1
             return ("http" if (self._round_counter % 2 == 0 and http_ok) else "ble")
 
+        elif strategy == "serial_only":
+            return "serial"
+
         else:  # http_first (default)
             # HTTP while reachable; fall back to BLE after 3 consecutive failures
             return "http" if (http_ok and self.state.http_failures < 3) else "ble"
@@ -195,6 +419,11 @@ class TransportManager:
             return_exceptions=True,
         )
         return any(r is True for r in results)
+
+    async def _send_serial(self, cmd: str) -> bool:
+        if not self._serial or not self._serial.is_connected:
+            return False
+        return await self._serial.send_command(cmd)
 
     async def _get_session(self) -> aiohttp.ClientSession:
         if self._session is None or self._session.closed:
@@ -369,6 +598,11 @@ def build_app(
     state     = DeviceState()
     ws_mgr    = WebSocketManager()
 
+    node_reg = NodeRegistry()
+    seq_reg  = SequenceRegistry()
+    CONFIGS_DIR.mkdir(parents=True, exist_ok=True)
+    _serial_link: Optional[SerialLink] = None
+
     # Singletons populated at startup
     _ble_peers: list                       = []   # up to 2 BLELink instances
     _transport: Optional[TransportManager] = None
@@ -426,7 +660,7 @@ def build_app(
                 pass
 
         # HTTP transport + status poller start immediately — no waiting for BLE
-        _transport = TransportManager(state, device_ip, _ble_peers)
+        _transport = TransportManager(state, device_ip, _ble_peers, _serial_link)
         _poller    = StatusPoller(state, ws_mgr, device_ip, _ble_peers)
         _poll_task = asyncio.create_task(_poller.run())
         port = int(os.environ.get("PORT", 8000))
@@ -447,6 +681,11 @@ def build_app(
         for ble in _ble_peers:
             try:
                 await ble.disconnect()
+            except Exception:
+                pass
+        if _serial_link:
+            try:
+                await _serial_link.disconnect()
             except Exception:
                 pass
 
@@ -506,6 +745,9 @@ def build_app(
             "peer_names":   state.peer_names,
             "http_failures":state.http_failures,
             "last_update":  round(time.time() - state.last_update, 1) if state.last_update else -1,
+            "serial_ok":    state.serial_ok,
+            "serial_port":  state.serial_port,
+            "active_node":  state.active_node,
         })
 
     # ── Device API proxy — status ─────────────────────────────────────────
@@ -598,6 +840,139 @@ def build_app(
 
         asyncio.create_task(_do_rescan())
         return JSONResponse({"ok": True, "scanning": True, "msg": "Scan started (≈10s)…"})
+
+    # ── Node registry ─────────────────────────────────────────────────────
+
+    @app.get("/api/nodes")
+    async def _nodes_list() -> JSONResponse:
+        return JSONResponse([n.to_dict() for n in node_reg.list()])
+
+    @app.post("/api/nodes")
+    async def _nodes_add(body: dict) -> JSONResponse:
+        name    = body.get("name", "").strip()
+        type_   = body.get("type", "wifi")
+        address = body.get("address", "").strip()
+        if not name or not address:
+            return JSONResponse({"ok": False, "error": "name and address required"}, status_code=400)
+        if type_ not in ("wifi", "serial", "ble", "lora"):
+            return JSONResponse({"ok": False, "error": f"Unknown type '{type_}'"}, status_code=400)
+        node = node_reg.add(name, type_, address)
+        return JSONResponse({"ok": True, "node": node.to_dict()})
+
+    @app.delete("/api/nodes/{node_id}")
+    async def _nodes_delete(node_id: str) -> JSONResponse:
+        ok = node_reg.remove(node_id)
+        return JSONResponse({"ok": ok})
+
+    @app.post("/api/nodes/{node_id}/connect")
+    async def _nodes_connect(node_id: str) -> JSONResponse:
+        nonlocal _serial_link
+        node = node_reg.set_active(node_id)
+        if not node:
+            return JSONResponse({"ok": False, "error": "Node not found"}, status_code=404)
+        state.active_node = node.name
+        print(f"[nodes] Active: {node.name} ({node.type}:{node.address})")
+        # Wire up the appropriate transport for this node type
+        if node.type == "serial" and PYSERIAL:
+            if _serial_link:
+                try:
+                    await _serial_link.disconnect()
+                except Exception:
+                    pass
+            _serial_link = SerialLink(node.address)
+            try:
+                await _serial_link.connect()
+                state.serial_ok   = _serial_link.is_connected
+                state.serial_port = node.address
+            except Exception as e:
+                print(f"[serial] Connect failed: {e}")
+                state.serial_ok = False
+            if _transport: _transport._serial = _serial_link
+        return JSONResponse({"ok": True, "node": node.to_dict()})
+
+    # ── Serial ports ──────────────────────────────────────────────────────
+
+    @app.get("/api/serial/ports")
+    async def _serial_ports() -> JSONResponse:
+        if not PYSERIAL:
+            return JSONResponse({"ports": [], "error": "pyserial not installed"})
+        ports = [p.device for p in serial.tools.list_ports.comports()]
+        return JSONResponse({"ports": ports})
+
+    # ── Test sequences ────────────────────────────────────────────────────
+
+    @app.get("/api/sequences")
+    async def _seq_list() -> JSONResponse:
+        return JSONResponse([s.to_dict() for s in seq_reg.list()])
+
+    @app.post("/api/sequences")
+    async def _seq_save(body: dict) -> JSONResponse:
+        name = body.get("name", "").strip()
+        if not name:
+            return JSONResponse({"ok": False, "error": "name required"}, status_code=400)
+        tasks = [TaskSpec.from_dict(t) for t in body.get("tasks", [])]
+        seq_reg.save(Sequence(name=name, tasks=tasks))
+        return JSONResponse({"ok": True, "name": name, "count": len(tasks)})
+
+    @app.delete("/api/sequences/{name}")
+    async def _seq_delete(name: str) -> JSONResponse:
+        ok = seq_reg.delete(name)
+        return JSONResponse({"ok": ok})
+
+    @app.post("/api/sequences/{name}/apply")
+    async def _seq_apply(name: str) -> JSONResponse:
+        seq = seq_reg.get(name)
+        if not seq:
+            return JSONResponse({"ok": False, "error": "Sequence not found"}, status_code=404)
+        if not _transport:
+            return JSONResponse({"ok": False, "error": "No transport"}, status_code=503)
+        results = []
+        for t in seq.tasks:
+            dur = f" {t.duration}" if t.duration else ""
+            cmd = f"SCHED ADD {t.name} {t.type} {t.pin} {t.interval}{dur}"
+            ok = await _transport.send_command(cmd)
+            results.append({"task": t.name, "ok": ok})
+            await asyncio.sleep(0.2)
+        # Persist to firmware flash
+        await _transport.send_command("SCHED SAVE")
+        return JSONResponse({"ok": True, "results": results})
+
+    # ── Config files ──────────────────────────────────────────────────────
+
+    @app.get("/api/files")
+    async def _files_list() -> JSONResponse:
+        files = []
+        for p in sorted(CONFIGS_DIR.iterdir()):
+            if p.suffix.lower() in (".json", ".csv") and p.is_file():
+                files.append({"name": p.name, "size": p.stat().st_size})
+        return JSONResponse({"files": files})
+
+    @app.get("/api/files/{filename}")
+    async def _files_get(filename: str) -> PlainTextResponse:
+        p = CONFIGS_DIR / filename
+        if not p.exists() or p.suffix.lower() not in (".json", ".csv"):
+            return PlainTextResponse("Not found", status_code=404)
+        async with aiofiles.open(p, "r") as f:
+            content = await f.read()
+        return PlainTextResponse(content)
+
+    @app.post("/api/files/{filename}")
+    async def _files_save(filename: str, body: dict) -> JSONResponse:
+        if not filename.endswith((".json", ".csv")):
+            return JSONResponse({"ok": False, "error": "Only .json and .csv allowed"}, status_code=400)
+        content = body.get("content", "")
+        p = CONFIGS_DIR / filename
+        async with aiofiles.open(p, "w") as f:
+            await f.write(content)
+        return JSONResponse({"ok": True, "name": filename, "size": len(content)})
+
+    @app.delete("/api/files/{filename}")
+    async def _files_delete(filename: str) -> JSONResponse:
+        p = CONFIGS_DIR / filename
+        if not p.exists():
+            return JSONResponse({"ok": False, "error": "Not found"}, status_code=404)
+        p.unlink()
+        return JSONResponse({"ok": True})
 
     return app
 
