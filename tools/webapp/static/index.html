@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LoRaLink PC Control</title>
+<style>
+/* ── Base — matches device dashboard exactly ──────────────────────────── */
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',sans-serif;background:#0f0f1a;color:#e0e0e0;min-height:100vh;display:flex;flex-direction:column}
+
+/* ── Header ───────────────────────────────────────────────────────────── */
+.hdr{background:linear-gradient(135deg,#1a1a2e,#16213e);padding:14px 20px;border-bottom:1px solid #2a2a4a;display:flex;justify-content:space-between;align-items:center;flex-shrink:0}
+.hdr h1{font-size:1.2em;color:#00d4ff;font-weight:600}
+.hdr-right{display:flex;gap:8px;align-items:center}
+
+/* ── Interface badges (LoRa / BLE / WiFi / ESP-NOW) ──────────────────── */
+.ifc{display:flex;gap:6px;padding:8px 16px;flex-wrap:wrap;background:#16213e;border-bottom:1px solid #2a2a4a;flex-shrink:0}
+.badge{padding:4px 10px;border-radius:12px;font-size:0.7em;font-weight:650;letter-spacing:0.5px;text-transform:uppercase;cursor:default}
+.badge.on{background:#00ff8822;color:#00ff88;border:1px solid #00ff8844;box-shadow:0 0 10px #00ff8811}
+.badge.off{background:#ff444422;color:#ff4444;border:1px solid #ff444444}
+.badge.mid{background:#ffaa0022;color:#ffaa00;border:1px solid #ffaa0044}
+
+/* ── Transport indicators (BLE / HTTP) ────────────────────────────────── */
+.tport{display:flex;gap:6px}
+.tp{padding:3px 10px;border-radius:10px;font-size:0.7em;font-weight:700;letter-spacing:0.5px;border:1px solid #2a2a4a;cursor:default;transition:all .3s}
+.tp.ok{background:#00ff8814;color:#00ff88;border-color:#00ff8844}
+.tp.err{background:#ff444414;color:#ff4444;border-color:#ff444444}
+.tp.unk{background:#2a2a4a22;color:#555;border-color:#333}
+
+/* ── Main 2×2 grid ────────────────────────────────────────────────────── */
+.main{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:auto auto;gap:12px;padding:12px;flex:1;min-height:0}
+
+/* ── Cards (status metrics) ───────────────────────────────────────────── */
+.card-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px}
+.card{background:#1a1a2e;border-radius:10px;padding:14px;border:1px solid #2a2a4a}
+.card .lbl{font-size:0.68em;color:#888;text-transform:uppercase;letter-spacing:1px}
+.card .val{font-size:1.3em;font-weight:700;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.card .val.ok{color:#00ff88}
+.card .val.warn{color:#ffaa00}
+.card .val.sm{font-size:0.85em}
+
+/* ── Panel wrapper ────────────────────────────────────────────────────── */
+.panel{background:#1a1a2e;border-radius:10px;border:1px solid #2a2a4a;display:flex;flex-direction:column;overflow:hidden;min-height:0}
+.panel-title{font-size:0.7em;color:#00d4ff;text-transform:uppercase;letter-spacing:1px;font-weight:700;padding:10px 14px;border-bottom:1px solid #2a2a4a;background:#16213e;flex-shrink:0}
+
+/* ── Mesh node table ──────────────────────────────────────────────────── */
+table{width:100%;border-collapse:collapse;font-size:0.82em}
+th{padding:7px 10px;text-align:left;color:#888;font-weight:600;font-size:0.72em;text-transform:uppercase;letter-spacing:0.5px;border-bottom:1px solid #2a2a4a;background:#16213e}
+td{padding:7px 10px;border-bottom:1px solid #1f1f3a}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:#1f2040}
+.rssi-ok{color:#00ff88}
+.rssi-mid{color:#ffaa00}
+.rssi-bad{color:#ff4444}
+
+/* ── Command console ──────────────────────────────────────────────────── */
+.console-log{flex:1;overflow-y:auto;padding:8px 0;font-family:monospace;font-size:0.8em;min-height:0}
+.log-entry{padding:4px 14px;border-bottom:1px solid #1f1f3a;line-height:1.4}
+.log-entry .ts{color:#888;margin-right:8px}
+.log-entry .src-tx{color:#00d4ff}
+.log-entry .src-rx{color:#00ff88}
+.log-entry .src-err{color:#ff4444}
+.cmd-bar{display:flex;gap:8px;padding:10px 12px;border-top:1px solid #2a2a4a;flex-shrink:0}
+.cmd-bar input{flex:1;background:#0f0f1a;border:1px solid #2a2a4a;border-radius:8px;padding:8px 12px;color:#fff;outline:none;font-size:0.88em;font-family:monospace}
+.cmd-bar input:focus{border-color:#00d4ff}
+.btn{background:#00d4ff;border:none;border-radius:8px;padding:8px 18px;color:#0f0f1a;cursor:pointer;font-weight:700;font-size:0.85em;transition:background .2s;flex-shrink:0}
+.btn:hover{background:#00b8d4}
+.btn.danger{background:#2a2a4a;color:#ff4444;border:1px solid #ff444444}
+.btn.danger:hover{background:#ff444422}
+.btn.sm{padding:5px 12px;font-size:0.8em}
+.btn.secondary{background:#2a2a4a;color:#e0e0e0}
+.btn.secondary:hover{background:#333355}
+
+/* ── GPIO / Relay panel ───────────────────────────────────────────────── */
+.gpio-grid{display:flex;flex-direction:column;gap:8px;padding:12px}
+.gpio-row{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:#16213e;border-radius:8px;border:1px solid #2a2a4a}
+.gpio-name{font-size:0.85em;font-weight:600;color:#e0e0e0}
+.gpio-pin{font-size:0.7em;color:#555;font-family:monospace}
+.gpio-state{font-size:0.75em;padding:3px 10px;border-radius:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px}
+.gpio-state.hi{background:#00ff8822;color:#00ff88;border:1px solid #00ff8844}
+.gpio-state.lo{background:#2a2a4a;color:#555;border:1px solid #333}
+.toggle-btn{background:#2a2a4a;border:1px solid #2a2a4a;border-radius:8px;padding:6px 16px;color:#e0e0e0;cursor:pointer;font-size:0.82em;font-weight:600;transition:all .2s}
+.toggle-btn:hover{border-color:#00d4ff;color:#00d4ff}
+.toggle-btn.active{background:#00ff8822;border-color:#00ff8844;color:#00ff88}
+
+/* ── Schedule manager ─────────────────────────────────────────────────── */
+.sched-body{flex:1;overflow-y:auto;min-height:0}
+.sched-add{padding:12px;border-top:1px solid #2a2a4a;flex-shrink:0;background:#16213e}
+.sched-form{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:8px}
+.sched-form input,.sched-form select{background:#0f0f1a;border:1px solid #2a2a4a;border-radius:6px;padding:6px 10px;color:#fff;font-size:0.8em;outline:none}
+.sched-form input:focus,.sched-form select:focus{border-color:#00d4ff}
+.sched-form select option{background:#1a1a2e}
+.sched-actions{display:flex;gap:6px;flex-wrap:wrap}
+.pill{display:inline-block;padding:2px 8px;border-radius:10px;font-size:0.68em;font-weight:700;text-transform:uppercase;letter-spacing:0.3px}
+.pill.toggle{background:#00d4ff22;color:#00d4ff;border:1px solid #00d4ff44}
+.pill.pulse{background:#ffaa0022;color:#ffaa00;border:1px solid #ffaa0044}
+.pill.on{background:#00ff8822;color:#00ff88;border:1px solid #00ff8844}
+.pill.off{background:#ff444422;color:#ff4444;border:1px solid #ff444444}
+
+/* ── GPIO bitmap footer ────────────────────────────────────────────────── */
+.gpio-bitmap{display:flex;flex-wrap:wrap;gap:2px;padding:8px 14px;border-top:1px solid #2a2a4a;flex-shrink:0}
+.gpio-bit{width:8px;height:8px;border-radius:2px;background:#222;cursor:default;position:relative}
+.gpio-bit.hi{background:#00ff88;box-shadow:0 0 4px #00ff8866}
+.gpio-bit:hover::after{content:attr(data-label);position:absolute;bottom:12px;left:50%;transform:translateX(-50%);background:#000;color:#fff;padding:2px 6px;border-radius:4px;font-size:10px;white-space:nowrap;z-index:10;pointer-events:none}
+
+/* ── Scrollbar ────────────────────────────────────────────────────────── */
+::-webkit-scrollbar{width:4px}
+::-webkit-scrollbar-track{background:#1a1a2e}
+::-webkit-scrollbar-thumb{background:#2a2a4a;border-radius:4px}
+::-webkit-scrollbar-thumb:hover{background:#3a3a5a}
+
+/* ── Responsive: stack on narrow screens ──────────────────────────────── */
+@media(max-width:820px){.main{grid-template-columns:1fr}}
+
+/* ── Transport strategy selector ─────────────────────────────────────── */
+#xport-sel{background:#1a1a2e;color:#aaa;border:1px solid #2a2a4a;border-radius:6px;
+  font-size:0.72em;padding:2px 6px;cursor:pointer;outline:none;transition:0.2s}
+#xport-sel:hover,#xport-sel:focus{border-color:#00d4ff44;color:#00d4ff}
+#xport-sel option{background:#1a1a2e;color:#e0e0e0}
+
+/* ── Peer tabs ────────────────────────────────────────────────────────── */
+.peer-tabs{display:flex;gap:6px;padding:4px 14px 0;background:#0f0f1a}
+.peer-tab{padding:4px 14px;border-radius:6px 6px 0 0;font-size:0.75em;font-weight:700;
+  letter-spacing:1px;text-transform:uppercase;cursor:pointer;border:1px solid #2a2a4a;
+  border-bottom:none;color:#555;background:#1a1a2e;transition:0.2s;user-select:none}
+.peer-tab.active{color:#00d4ff;border-color:#00d4ff44;background:#0f2030}
+.peer-tab .dot{display:inline-block;width:7px;height:7px;border-radius:50%;
+  margin-right:5px;background:#444;vertical-align:middle}
+.peer-tab .dot.ok{background:#00ff88;box-shadow:0 0 5px #00ff8866}
+.peer-tab .dot.err{background:#ff4444}
+</style>
+</head>
+<body>
+
+<!-- ── Header ────────────────────────────────────────────────────────────── -->
+<div class="hdr">
+  <h1>📡 LoRaLink PC Control <span id="fwv" style="font-size:0.75em;color:#888"></span></h1>
+  <div class="hdr-right">
+    <div class="tport">
+      <span class="tp unk" id="tp-ble-a" title="Peer A BLE">A ●</span>
+      <span class="tp unk" id="tp-ble-b" title="Peer B BLE">B ●</span>
+      <span class="tp unk" id="tp-http"  title="HTTP transport">HTTP ●</span>
+      <select id="xport-sel" title="Transport strategy" onchange="setTransport(this.value)">
+        <option value="http_first">HTTP-first</option>
+        <option value="ble_only">BLE only</option>
+        <option value="readwrite_split">R/W split</option>
+        <option value="immediate_fallback">Immediate fallback</option>
+        <option value="roundrobin">Round-robin</option>
+      </select>
+      <button id="rescan-btn" title="Re-scan for BLE devices" onclick="rescan()"
+        style="background:none;border:1px solid #2a2a4a;border-radius:6px;color:#555;
+               cursor:pointer;font-size:0.85em;padding:2px 8px;margin-left:4px;transition:0.2s"
+        onmouseover="this.style.borderColor='#00d4ff';this.style.color='#00d4ff'"
+        onmouseout="this.style.borderColor='#2a2a4a';this.style.color='#555'">⟳</button>
+    </div>
+    <span style="font-size:0.78em;color:#555" id="dev-id">—</span>
+  </div>
+</div>
+
+<!-- ── Peer tabs ─────────────────────────────────────────────────────────── -->
+<div class="peer-tabs" id="peer-tabs">
+  <div class="peer-tab active" id="tab-a" onclick="switchPeer('A')">
+    <span class="dot" id="dot-a"></span>Peer A
+  </div>
+  <div class="peer-tab" id="tab-b" onclick="switchPeer('B')">
+    <span class="dot" id="dot-b"></span>Peer B
+  </div>
+</div>
+
+<!-- ── Interface badges ────────────────────────────────────────────────────── -->
+<div class="ifc" id="ifc">
+  <span class="badge off">LoRa</span>
+  <span class="badge off">BLE</span>
+  <span class="badge off">WiFi</span>
+  <span class="badge off">ESP-NOW</span>
+  <span style="margin-left:auto;font-size:0.68em;color:#555" id="last-update">connecting...</span>
+</div>
+
+<!-- ── 2×2 grid ────────────────────────────────────────────────────────────── -->
+<div class="main">
+
+  <!-- ── Top-left: Status cards ───────────────────────────────────────────── -->
+  <div>
+    <div class="card-grid" id="cards">
+      <div class="card"><div class="lbl">Device</div><div class="val" id="c-id">—</div></div>
+      <div class="card"><div class="lbl">Uptime</div><div class="val" id="c-uptime">—</div></div>
+      <div class="card"><div class="lbl">Battery</div><div class="val" id="c-bat">—</div></div>
+      <div class="card"><div class="lbl">LoRa RSSI</div><div class="val" id="c-rssi">—</div></div>
+      <div class="card"><div class="lbl">Nodes</div><div class="val" id="c-nodes">—</div></div>
+      <div class="card"><div class="lbl">Heap</div><div class="val sm" id="c-heap">—</div></div>
+      <div class="card"><div class="lbl">Reset</div><div class="val sm" id="c-reset">—</div></div>
+      <div class="card" style="grid-column:span 2"><div class="lbl">Last Command</div><div class="val sm" id="c-last-cmd" title="">—</div></div>
+    </div>
+
+    <!-- GPIO bitmap strip -->
+    <div style="margin-top:10px;background:#1a1a2e;border-radius:10px;border:1px solid #2a2a4a">
+      <div style="font-size:0.65em;color:#555;text-transform:uppercase;letter-spacing:1px;padding:6px 14px 4px;font-weight:700">Logic Map</div>
+      <div class="gpio-bitmap" id="gpio-bitmap"></div>
+    </div>
+  </div>
+
+  <!-- ── Top-right: Mesh node table ───────────────────────────────────────── -->
+  <div class="panel" style="min-height:200px">
+    <div class="panel-title">Mesh Nodes</div>
+    <div style="flex:1;overflow-y:auto">
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th><th>Battery</th><th>RSSI</th><th>Hops</th><th>Seen</th>
+          </tr>
+        </thead>
+        <tbody id="mesh-tbody">
+          <tr><td colspan="5" style="color:#555;text-align:center;padding:20px">No nodes discovered</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── Bottom-left: Command console ─────────────────────────────────────── -->
+  <div class="panel" style="min-height:240px">
+    <div class="panel-title">Command Console</div>
+    <div class="console-log" id="console-log"></div>
+    <div class="cmd-bar">
+      <input id="cmd-input" placeholder="Command (e.g. STATUS, LED ON, GPIO 6 1)…"
+             autocomplete="off" spellcheck="false"
+             onkeydown="handleKey(event)">
+      <button class="btn" onclick="sendCmd()">Send</button>
+    </div>
+  </div>
+
+  <!-- ── Bottom-right: GPIO control + Schedule manager ───────────────────── -->
+  <div style="display:flex;flex-direction:column;gap:12px">
+
+    <!-- GPIO / Relay panel -->
+    <div class="panel">
+      <div class="panel-title">GPIO / Relay Control</div>
+      <div class="gpio-grid" id="gpio-grid">
+        <!-- Populated by buildGpioPanel() -->
+      </div>
+    </div>
+
+    <!-- Schedule manager -->
+    <div class="panel" style="flex:1;min-height:200px">
+      <div class="panel-title" style="display:flex;justify-content:space-between;align-items:center">
+        <span>Schedule Manager</span>
+        <div style="display:flex;gap:6px">
+          <button class="btn sm secondary" onclick="saveSched()">Save</button>
+          <button class="btn sm danger" onclick="clearSched()">Clear All</button>
+        </div>
+      </div>
+      <div class="sched-body">
+        <table>
+          <thead>
+            <tr><th>Name</th><th>Type</th><th>Pin</th><th>Interval</th><th>En</th><th></th></tr>
+          </thead>
+          <tbody id="sched-tbody">
+            <tr><td colspan="6" style="color:#555;text-align:center;padding:16px">No tasks</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="sched-add">
+        <div class="sched-form">
+          <input id="s-name" placeholder="Task name" maxlength="14">
+          <select id="s-type">
+            <option value="TOGGLE">TOGGLE</option>
+            <option value="PULSE">PULSE</option>
+          </select>
+          <select id="s-pin">
+            <option value="LED">LED (35)</option>
+            <option value="6">RELAY2 (6)</option>
+            <option value="7">RELAY3 (7)</option>
+          </select>
+          <input id="s-interval" type="number" placeholder="Interval (s)" min="1" value="30">
+          <input id="s-duration" type="number" placeholder="Duration (s)" min="0" value="0">
+          <select id="s-enabled">
+            <option value="1">Enabled</option>
+            <option value="0">Disabled</option>
+          </select>
+        </div>
+        <div class="sched-actions">
+          <button class="btn sm" onclick="addTask()">+ Add Task</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════════════════════════════
+// State
+// ════════════════════════════════════════════════════════════════════════════
+
+let ws = null;
+let lastStatus = {};
+let cmdHistory = [];
+let histIdx = -1;
+
+// GPIO controls — only safe relay pins are included
+// Pin 14 = LORA_DIO1: NEVER added here (hardware conflict, see config.h)
+const GPIO_CONTROLS = [
+  { label: 'LED',    pin: 'LED', pinNum: 35, nvmKey: 'LED'  },
+  { label: 'RELAY2', pin: '6',   pinNum: 6,  nvmKey: '6'    },
+  { label: 'RELAY3', pin: '7',   pinNum: 7,  nvmKey: '7'    },
+];
+
+// ════════════════════════════════════════════════════════════════════════════
+// WebSocket
+// ════════════════════════════════════════════════════════════════════════════
+
+function wsConnect() {
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  ws = new WebSocket(`${proto}://${location.host}/ws`);
+
+  ws.onmessage = (ev) => {
+    try { onStatus(JSON.parse(ev.data)); } catch(e) {}
+  };
+
+  ws.onopen = () => {
+    document.getElementById('last-update').textContent = 'connected';
+    pollTransport();
+  };
+
+  ws.onclose = () => {
+    document.getElementById('last-update').textContent = 'reconnecting…';
+    setTimeout(wsConnect, 2500);
+  };
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// Status rendering (same pattern as device dashboard up())
+// ════════════════════════════════════════════════════════════════════════════
+
+function onStatus(d) {
+  if (d.type !== 'status') return;
+  // Cache by peer label (A or B); default to A for legacy messages
+  const peer = d.peer || 'A';
+  _peerStatus[peer] = d;
+  // Only render to the DOM if this is the active peer's data
+  if (peer !== _activePeer) return;
+  lastStatus = d;
+  renderStatus(d);
+}
+
+function renderStatus(d) {
+  // Header
+  const id = d.id || '—';
+  document.getElementById('fwv').textContent = d.version ? `v${d.version}` : '';
+  document.getElementById('dev-id').textContent = id;
+
+  // Interface badges
+  document.getElementById('ifc').innerHTML =
+    badge('LoRa',    d.lora) +
+    badge('BLE',     d.ble) +
+    badge('WiFi',    d.wifi) +
+    badge('ESP-NOW', d.espnow) +
+    `<span style="margin-left:auto;font-size:0.68em;color:#555" id="last-update">${new Date().toLocaleTimeString()}</span>`;
+
+  // Metric cards
+  const bat = parseFloat(d.bat) || 0;
+  const rssi = d.rssi || 0;
+  setText('c-id',      id + (d.hw ? ` (${d.hw})` : ''));
+  setText('c-uptime',  d.uptime || '—');
+  setVal ('c-bat',     bat ? `${bat.toFixed(2)}V` : '—', bat > 3.5 ? 'ok' : 'warn');
+  setVal ('c-rssi',    rssi ? `${rssi} dBm` : '—', rssi > -100 ? '' : 'warn');
+  setText('c-nodes',   d.nodes != null ? d.nodes : '—');
+  setText('c-heap',    d.heap ? `${Math.round(d.heap/1024)}KB` : '—');
+  setText('c-reset',   d.reset || '—');
+  const lc = document.getElementById('c-last-cmd');
+  lc.textContent = d.last_cmd || '—';
+  lc.title = d.last_cmd || '';
+
+  // GPIO bitmap (48-bit hex bitmask from status.gp)
+  renderBitmap(d.gp || '0');
+
+  // Mesh table
+  renderMesh(d.mesh || []);
+
+  // GPIO panel — update pin states from pins array
+  updateGpioPinStates(d.pins || []);
+}
+
+function badge(label, on) {
+  return `<span class="badge ${on ? 'on' : 'off'}">${label}</span>`;
+}
+
+function setText(id, v) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = v;
+}
+
+function setVal(id, v, cls) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = v;
+  el.className = 'val' + (cls ? ` ${cls}` : '');
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// GPIO bitmap strip
+// ════════════════════════════════════════════════════════════════════════════
+
+function renderBitmap(gpHex) {
+  const gp = BigInt('0x' + gpHex.replace(/[^0-9a-fA-F]/g, '') || '0');
+  let html = '';
+  for (let i = 0; i < 48; i++) {
+    const hi = (gp >> BigInt(i)) & 1n;
+    html += `<div class="gpio-bit ${hi ? 'hi' : ''}" data-label="P${i}:${hi ? 'HI' : 'LO'}"></div>`;
+  }
+  document.getElementById('gpio-bitmap').innerHTML = html;
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// Mesh node table
+// ════════════════════════════════════════════════════════════════════════════
+
+function renderMesh(nodes) {
+  const tb = document.getElementById('mesh-tbody');
+  if (!nodes.length) {
+    tb.innerHTML = '<tr><td colspan="5" style="color:#555;text-align:center;padding:20px">No nodes discovered</td></tr>';
+    return;
+  }
+  tb.innerHTML = nodes.map(n => {
+    const rssiClass = n.rssi > -90 ? 'rssi-ok' : n.rssi > -105 ? 'rssi-mid' : 'rssi-bad';
+    const batColor  = n.bat > 3.5 ? '#00ff88' : n.bat > 3.2 ? '#ffaa00' : '#ff4444';
+    return `<tr>
+      <td style="font-weight:600;color:#00d4ff">${n.id}</td>
+      <td style="color:${batColor}">${n.bat ? n.bat.toFixed(2) + 'V' : '—'}</td>
+      <td class="${rssiClass}">${n.rssi || '—'} dBm</td>
+      <td>${n.hops != null ? n.hops : '—'}</td>
+      <td style="color:#888">${n.ago != null ? n.ago + 's' : '—'}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// GPIO / Relay panel
+// ════════════════════════════════════════════════════════════════════════════
+
+function buildGpioPanel() {
+  const grid = document.getElementById('gpio-grid');
+  grid.innerHTML = GPIO_CONTROLS.map(g =>
+    `<div class="gpio-row" id="gpio-row-${g.pinNum}">
+      <div>
+        <div class="gpio-name">${g.label}</div>
+        <div class="gpio-pin">pin ${g.pinNum}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <span class="gpio-state lo" id="gstate-${g.pinNum}">LO</span>
+        <button class="toggle-btn" id="gbtn-${g.pinNum}"
+                onclick="toggleGpio('${g.pin}', ${g.pinNum})">Toggle</button>
+      </div>
+    </div>`
+  ).join('');
+}
+
+function updateGpioPinStates(pins) {
+  if (!pins) return;
+  const map = {};
+  pins.forEach(p => { map[p.n] = p.v; });
+
+  GPIO_CONTROLS.forEach(g => {
+    // Match by pin name or pin number string
+    const v = map[g.label] ?? map[g.pin] ?? map[String(g.pinNum)] ?? null;
+    const stateEl = document.getElementById(`gstate-${g.pinNum}`);
+    const btnEl   = document.getElementById(`gbtn-${g.pinNum}`);
+    if (stateEl && v != null) {
+      const hi = Boolean(parseInt(v));
+      stateEl.className = `gpio-state ${hi ? 'hi' : 'lo'}`;
+      stateEl.textContent = hi ? 'HI' : 'LO';
+      if (btnEl) btnEl.className = `toggle-btn ${hi ? 'active' : ''}`;
+    }
+  });
+}
+
+async function toggleGpio(pin, pinNum) {
+  const stateEl = document.getElementById(`gstate-${pinNum}`);
+  const currentHi = stateEl && stateEl.textContent === 'HI';
+  const newVal = currentHi ? '0' : '1';
+  await sendRaw(`GPIO ${pin} ${newVal}`);
+  logConsole('tx', `GPIO ${pin} ${newVal}`);
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// Transport status polling
+// ════════════════════════════════════════════════════════════════════════════
+
+async function pollTransport() {
+  try {
+    const r = await fetch('/api/transport');
+    const d = await r.json();
+    const elA    = document.getElementById('tp-ble-a');
+    const elB    = document.getElementById('tp-ble-b');
+    const httpEl = document.getElementById('tp-http');
+    const dotA   = document.getElementById('dot-a');
+    const dotB   = document.getElementById('dot-b');
+
+    const namesA = d.peer_names && d.peer_names[0] ? d.peer_names[0] : 'Peer A';
+    const namesB = d.peer_names && d.peer_names[1] ? d.peer_names[1] : 'Peer B';
+
+    elA.className  = `tp ${d.ble1_ok ? 'ok' : 'err'}`;
+    elB.className  = `tp ${d.ble2_ok ? 'ok' : 'err'}`;
+    httpEl.className = `tp ${d.http_ok ? 'ok' : (d.http_failures > 0 ? 'err' : 'unk')}`;
+
+    elA.title    = `${namesA}: ${d.ble1_ok ? 'connected' : 'disconnected'}`;
+    elB.title    = `${namesB}: ${d.ble2_ok ? 'connected' : 'disconnected'}`;
+    httpEl.title = `HTTP: ${d.http_ok ? 'ok' : `${d.http_failures} failures`}`;
+
+    dotA.className = `dot ${d.ble1_ok ? 'ok' : 'err'}`;
+    dotB.className = `dot ${d.ble2_ok ? 'ok' : 'err'}`;
+
+    // Update tab labels with real device names
+    const tabA = document.getElementById('tab-a');
+    const tabB = document.getElementById('tab-b');
+    if (d.peer_names && d.peer_names[0]) tabA.childNodes[1].textContent = namesA;
+    if (d.peer_names && d.peer_names[1]) tabB.childNodes[1].textContent = namesB;
+  } catch (e) {}
+  setTimeout(pollTransport, 5000);
+}
+
+// ── Peer switching ──────────────────────────────────────────────────────────
+
+var _peerStatus = {A: null, B: null};
+var _activePeer = 'A';
+
+function switchPeer(p) {
+  _activePeer = p;
+  document.getElementById('tab-a').className = `peer-tab${p === 'A' ? ' active' : ''}`;
+  document.getElementById('tab-b').className = `peer-tab${p === 'B' ? ' active' : ''}`;
+  const cached = _peerStatus[p];
+  if (cached) renderStatus(cached);
+}
+
+async function rescan() {
+  const btn = document.getElementById('rescan-btn');
+  btn.textContent = '…';
+  btn.disabled = true;
+  btn.style.color = '#00d4ff';
+  try {
+    const r = await fetch('/api/rescan', {method: 'POST'});
+    const d = await r.json();
+    logConsole('rx', d.msg || (d.ok ? 'Rescan started' : `Rescan failed: ${d.error}`));
+    // Poll transport every 2s during the ~10s scan window, then revert to 5s
+    let polls = 0;
+    const interval = setInterval(async () => {
+      await pollTransport();
+      if (++polls >= 7) clearInterval(interval);  // stop after ~14s
+    }, 2000);
+  } catch (e) {
+    logConsole('err', `Rescan error: ${e.message}`);
+  }
+  setTimeout(() => {
+    btn.textContent = '⟳';
+    btn.disabled = false;
+    btn.style.color = '#555';
+  }, 12000);
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// Command console
+// ════════════════════════════════════════════════════════════════════════════
+
+function handleKey(ev) {
+  const input = document.getElementById('cmd-input');
+  if (ev.key === 'Enter') { sendCmd(); return; }
+  if (ev.key === 'ArrowUp') {
+    histIdx = Math.min(histIdx + 1, cmdHistory.length - 1);
+    input.value = cmdHistory[histIdx] || '';
+    ev.preventDefault();
+  }
+  if (ev.key === 'ArrowDown') {
+    histIdx = Math.max(histIdx - 1, -1);
+    input.value = histIdx >= 0 ? cmdHistory[histIdx] : '';
+    ev.preventDefault();
+  }
+}
+
+async function sendCmd() {
+  const input = document.getElementById('cmd-input');
+  const cmd = input.value.trim();
+  if (!cmd) return;
+  cmdHistory.unshift(cmd);
+  histIdx = -1;
+  input.value = '';
+  logConsole('tx', cmd);
+  await sendRaw(cmd);
+}
+
+async function sendRaw(cmd) {
+  try {
+    const r = await fetch('/api/cmd', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({cmd}),
+    });
+    const text = await r.text();
+    if (!r.ok || text === 'ERR') {
+      logConsole('err', `CMD failed (${r.status}): ${cmd}`);
+    }
+  } catch (e) {
+    logConsole('err', `Send error: ${e.message}`);
+  }
+}
+
+function logConsole(type, msg) {
+  const log = document.getElementById('console-log');
+  const ts  = new Date().toLocaleTimeString();
+  const cls = type === 'tx' ? 'src-tx' : type === 'err' ? 'src-err' : 'src-rx';
+  const pfx = type === 'tx' ? '→' : type === 'err' ? '✗' : '←';
+  const div = document.createElement('div');
+  div.className = 'log-entry';
+  div.innerHTML = `<span class="ts">${ts}</span><span class="${cls}">${pfx}</span> ${escHtml(msg)}`;
+  log.appendChild(div);
+  log.scrollTop = log.scrollHeight;
+  // Keep at most 200 entries
+  while (log.children.length > 200) log.removeChild(log.firstChild);
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// Schedule manager
+// ════════════════════════════════════════════════════════════════════════════
+
+async function loadSchedule() {
+  try {
+    const r = await fetch('/api/schedule');
+    const d = await r.json();
+    renderSchedule(d.schedules || []);
+  } catch(e) {}
+}
+
+function renderSchedule(tasks) {
+  const tb = document.getElementById('sched-tbody');
+  if (!tasks.length) {
+    tb.innerHTML = '<tr><td colspan="6" style="color:#555;text-align:center;padding:16px">No tasks</td></tr>';
+    return;
+  }
+  tb.innerHTML = tasks.map(t => {
+    const typePill = `<span class="pill ${t.type.toLowerCase()}">${t.type}</span>`;
+    const enPill   = `<span class="pill ${t.enabled ? 'on' : 'off'}">${t.enabled ? 'on' : 'off'}</span>`;
+    const intSec   = Math.round((t.interval || 0) / 1000);
+    return `<tr>
+      <td style="font-weight:600">${t.name}</td>
+      <td>${typePill}</td>
+      <td style="font-family:monospace;font-size:0.82em">${t.pin}</td>
+      <td>${intSec}s</td>
+      <td>${enPill}</td>
+      <td><button class="btn sm danger" onclick="removeTask('${t.name}')">✕</button></td>
+    </tr>`;
+  }).join('');
+}
+
+async function addTask() {
+  const name     = document.getElementById('s-name').value.trim();
+  const type     = document.getElementById('s-type').value;
+  const pin      = document.getElementById('s-pin').value;
+  const interval = parseInt(document.getElementById('s-interval').value) || 30;
+  const duration = parseInt(document.getElementById('s-duration').value) || 0;
+  const enabled  = document.getElementById('s-enabled').value;
+
+  if (!name) { logConsole('err', 'Task name required'); return; }
+
+  // Send via BLE command AND proxy through HTTP
+  await sendRaw(`SCHED ADD ${name} ${type} ${pin} ${interval} ${duration}`);
+  logConsole('tx', `SCHED ADD ${name} ${type} ${pin} ${interval}s`);
+
+  // Also hit HTTP schedule endpoint directly if available
+  try {
+    await fetch('/api/schedule/add', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ name, type, pin,
+        interval: interval * 1000, duration: duration * 1000, enabled }),
+    });
+  } catch(e) {}
+
+  document.getElementById('s-name').value = '';
+  setTimeout(loadSchedule, 600);
+}
+
+async function removeTask(name) {
+  await sendRaw(`SCHED REM ${name}`);
+  try {
+    await fetch('/api/schedule/remove', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({name}),
+    });
+  } catch(e) {}
+  logConsole('tx', `SCHED REM ${name}`);
+  setTimeout(loadSchedule, 400);
+}
+
+async function saveSched() {
+  await fetch('/api/schedule/save', {method:'POST'});
+  logConsole('rx', 'Schedule saved to flash');
+}
+
+async function clearSched() {
+  if (!confirm('Clear all scheduled tasks?')) return;
+  await fetch('/api/schedule/clear', {method:'POST'});
+  logConsole('rx', 'All tasks cleared');
+  setTimeout(loadSchedule, 400);
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// Transport strategy selector
+// ════════════════════════════════════════════════════════════════════════════
+
+async function loadSettings() {
+  try {
+    const r = await fetch('/api/settings');
+    const d = await r.json();
+    const sel = document.getElementById('xport-sel');
+    if (sel && d.transport_strategy) sel.value = d.transport_strategy;
+  } catch (e) {}
+}
+
+async function setTransport(strategy) {
+  try {
+    const r = await fetch('/api/settings', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({transport_strategy: strategy}),
+    });
+    const d = await r.json();
+    if (d.ok) {
+      logConsole('rx', `Transport strategy → ${d.transport_strategy}`);
+      // Confirm select reflects the server-confirmed value
+      const sel = document.getElementById('xport-sel');
+      if (sel) sel.value = d.transport_strategy;
+    }
+  } catch (e) {
+    logConsole('err', `Settings error: ${e.message}`);
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// Init
+// ════════════════════════════════════════════════════════════════════════════
+
+buildGpioPanel();
+wsConnect();
+loadSettings();
+setInterval(loadSchedule, 4000);
+loadSchedule();
+
+logConsole('rx', 'PC Control webapp ready — connecting to backend…');
+</script>
+</body>
+</html>

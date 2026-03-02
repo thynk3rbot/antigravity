@@ -405,6 +405,21 @@ bool DataManager::GetGpioState(const String &pinName) {
   return state;
 }
 
+void DataManager::SetPinName(const String &pin, const String &name) {
+  Preferences p;
+  p.begin("pin_names", false);
+  p.putString(pin.c_str(), name);
+  p.end();
+}
+
+String DataManager::GetPinName(const String &pin) {
+  Preferences p;
+  p.begin("pin_names", true);
+  String name = p.getString(pin.c_str(), "");
+  p.end();
+  return name;
+}
+
 void DataManager::FactoryReset() {
   LOG_PRINTLN("SYS: FACTORY RESET (Clearing NVS)...");
   Preferences p;

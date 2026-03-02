@@ -1,7 +1,9 @@
 #include "WiFiManager.h"
 #include "../utils/DebugMacros.h"
+#include "CommandManager.h"
 #include "ESPNowManager.h"
 #include "LoRaManager.h"
+#include "ScheduleManager.h"
 #include <Arduino.h>
 #include <ArduinoJson.h>
 
@@ -130,6 +132,12 @@ void WiFiManager::startServer() {
     serveHelp();
   });
 
+  // Scheduling page
+  server.on("/scheduling", HTTP_GET, [this]() {
+    lastApiHit = millis();
+    serveScheduling();
+  });
+
   // API
   server.on("/api/status", HTTP_GET, [this]() {
     lastApiHit = millis();
@@ -152,6 +160,32 @@ void WiFiManager::startServer() {
     serveApiRemovePeer();
   });
 
+  // Schedule API
+  server.on("/api/schedule", HTTP_GET, [this]() {
+    lastApiHit = millis();
+    serveApiSchedule();
+  });
+  server.on("/api/schedule/add", HTTP_POST, [this]() {
+    lastApiHit = millis();
+    serveApiScheduleAdd();
+  });
+  server.on("/api/schedule/remove", HTTP_POST, [this]() {
+    lastApiHit = millis();
+    serveApiScheduleRemove();
+  });
+  server.on("/api/schedule/clear", HTTP_POST, [this]() {
+    lastApiHit = millis();
+    serveApiScheduleClear();
+  });
+  server.on("/api/schedule/save", HTTP_POST, [this]() {
+    lastApiHit = millis();
+    serveApiScheduleSave();
+  });
+  server.on("/api/pins/name", HTTP_POST, [this]() {
+    lastApiHit = millis();
+    serveApiPinName();
+  });
+
   server.begin();
 }
 
@@ -161,80 +195,77 @@ void WiFiManager::startServer() {
 void WiFiManager::serveHome() {
   String html = R"rawhtml(<!DOCTYPE html><html><head><meta charset='utf-8'>
 <meta name='viewport' content='width=device-width,initial-scale=1'>
-<title>LoRaLink Dashboard )rawhtml" FIRMWARE_VERSION R"rawhtml(</title>
+<title>LoRaLink )rawhtml" FIRMWARE_VERSION R"rawhtml(</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'Segoe UI',sans-serif;background:#0f0f1a;color:#e0e0e0;min-height:100vh}
-.hdr{background:linear-gradient(135deg,#1a1a2e,#16213e);padding:16px 20px;border-bottom:1px solid #2a2a4a;display:flex;justify-content:space-between;align-items:center}
-.hdr h1{font-size:1.3em;color:#00d4ff;font-weight:600}
-.hdr a{color:#888;text-decoration:none;font-size:0.85em;padding:6px 14px;border:1px solid #2a2a4a;border-radius:6px}
-.hdr a:hover{color:#00d4ff;border-color:#00d4ff}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;padding:16px}
-.card{background:#1a1a2e;border-radius:10px;padding:14px;border:1px solid #2a2a4a}
-.card .lbl{font-size:0.7em;color:#888;text-transform:uppercase;letter-spacing:1px}
-.card .val{font-size:1.4em;font-weight:700;margin-top:4px}
-.card .val.ok{color:#00ff88}
-.card .val.warn{color:#ffaa00}
-.log{margin:12px;background:#1a1a2e;border-radius:10px;border:1px solid #2a2a4a;max-height:180px;overflow-y:auto}
-.ft{position:fixed;bottom:0;left:0;right:0;background:#1a1a2e;border-top:1px solid #2a2a4a;padding:6px;display:flex;flex-wrap:wrap;justify-content:center;gap:3px;z-index:99}
-.p{width:8px;height:8px;border-radius:1px;background:#333;cursor:crosshair}
-.p.hi{background:#00ff88;box-shadow:0 0 5px #00ff8888}
-.p:hover::after{content:attr(t);position:absolute;bottom:12px;background:#000;color:#fff;padding:2px 6px;border-radius:4px;font-size:10px;white-space:nowrap;z-index:100}
-.log .m{padding:6px 16px;font-size:0.85em;border-bottom:1px solid #1f1f3a;font-family:monospace}
-.cmd{display:flex;gap:8px;padding:16px}
-.cmd input{flex:1;background:#1a1a2e;border:1px solid #2a2a4a;border-radius:8px;padding:10px 14px;color:#fff;outline:none}
+body{font-family:'Segoe UI',sans-serif;background:#0f0f1a;color:#e0e0e0;height:100vh;display:flex;flex-direction:column;overflow:hidden}
+.hdr{background:linear-gradient(135deg,#1a1a2e,#16213e);padding:8px 12px;border-bottom:1px solid #2a2a4a;display:flex;align-items:center;gap:8px;flex-shrink:0}
+.hdr h1{font-size:0.95em;color:#00d4ff;font-weight:700;white-space:nowrap}
+.hdr h1 span{font-size:0.72em;color:#555;font-weight:400;margin-left:3px}
+.nav{margin-left:auto;display:flex;gap:4px}
+.nav a{color:#555;text-decoration:none;font-size:0.78em;padding:3px 7px;border:1px solid #2a2a4a;border-radius:4px}
+.nav a:hover{color:#00d4ff;border-color:#00d4ff}
+.ifc{display:flex;gap:4px;padding:4px 10px;background:#16213e;border-bottom:1px solid #2a2a4a;flex-shrink:0}
+.badge{padding:2px 7px;border-radius:8px;font-size:0.63em;font-weight:700;letter-spacing:0.4px;text-transform:uppercase}
+.badge.on{background:#00ff8814;color:#00ff88;border:1px solid #00ff8844}
+.badge.off{background:#ff444414;color:#ff4444;border:1px solid #ff444444}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;padding:7px;flex-shrink:0}
+.card{background:#1a1a2e;border-radius:6px;padding:6px 8px;border:1px solid #2a2a4a}
+.card .lbl{font-size:0.58em;color:#666;text-transform:uppercase;letter-spacing:0.8px}
+.card .val{font-size:1.0em;font-weight:700;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ok{color:#00ff88}
+.warn{color:#ffaa00}
+.log{flex:1;overflow-y:auto;min-height:0;border-top:1px solid #1a1a2e}
+.m{padding:3px 10px;font-size:0.73em;border-bottom:1px solid #111118;font-family:monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ts{color:#3a3a5a}
+.src{color:#00d4ff}
+.cmd{display:flex;gap:5px;padding:6px 8px;border-top:1px solid #2a2a4a;flex-shrink:0;background:#16213e}
+.cmd input{flex:1;background:#0f0f1a;border:1px solid #2a2a4a;border-radius:5px;padding:5px 9px;color:#e0e0e0;font-size:0.8em;outline:none}
 .cmd input:focus{border-color:#00d4ff}
-.cmd button{background:#00d4ff;border:none;border-radius:8px;padding:10px 20px;color:#0f0f1a;cursor:pointer;font-weight:600}
+.cmd button{background:#00d4ff;border:none;border-radius:5px;padding:5px 14px;color:#0f0f1a;font-weight:700;font-size:0.8em;cursor:pointer}
 .cmd button:hover{background:#00b8d4}
-.ifc{display:flex;gap:6px;padding:8px 16px;flex-wrap:wrap;background:#16213e;border-bottom:1px solid #2a2a4a}
-.badge{padding:4px 10px;border-radius:12px;font-size:0.7em;font-weight:650;letter-spacing:0.5px;text-transform:uppercase}
-.badge.on{background:#00ff8822;color:#00ff88;border:1px solid #00ff8844;box-shadow:0 0 10px #00ff8811}
-.badge.off{background:#ff444422;color:#ff4444;border:1px solid #ff444444}
-.pb{padding:2px 6px;border-radius:6px;font-size:0.6em;font-weight:600;border:1px solid #444;font-family:monospace}
-.pb.hi{color:#00ff88;border-color:#00ff8833;background:#00ff8808}
-.pb.lo{color:#888;border-color:#333;background:#111}
-.pb.an{color:#00d4ff;border-color:#00d4ff33;background:#00d4ff08}
-.ftl{font-size:0.6em;color:#555;margin-right:8px;text-transform:uppercase;letter-spacing:1px;font-weight:700}
 </style></head><body>
-<div class='hdr'><h1>&#x1F4E1; LoRaLink Any2Any <span id='fwv'></span></h1><div><a href='/integration'>&#x1F50C; Integrations</a> <a href='/help'>&#x2753; Help</a> <a href='/config'>&#x2699; Config</a></div></div>
+<div class='hdr'>
+  <h1>&#x1F4E1; <span id='did'>—</span><span id='fwv'></span></h1>
+  <div class='nav'>
+    <a href='/config'>&#x2699; Config</a>
+    <a href='/scheduling'>&#x23F1; Sched</a>
+    <a href='/integration'>&#x1F50C;</a>
+    <a href='/help'>?</a>
+  </div>
+</div>
 <div class='ifc' id='ifc'></div>
 <div class='grid' id='cards'></div>
-<div class='log'><div class='m' style='color:#00d4ff'>Message Log</div><div id='log'></div></div>
-<div class='ft' id='ft'></div>
-<div class='cmd'><input id='ci' placeholder='Command...' onkeydown="if(event.key==='Enter')send()"><button onclick='send()'>Send</button></div>
+<div class='log' id='log'></div>
+<div class='cmd'>
+  <input id='ci' placeholder='Command...' onkeydown="if(event.key==='Enter')send()">
+  <button onclick='send()'>Send</button>
+</div>
 <script>
-function up(){fetch('/api/status').then(r=>r.json()).then(d=>{
-document.getElementById('ifc').innerHTML=
-`<span class="badge ${d.lora?'on':'off'}">LoRa</span>`+
-`<span class="badge ${d.ble?'on':'off'}">BLE</span>`+
-`<span class="badge ${d.wifi?'on':'off'}">WiFi</span>`+
-`<span class="badge ${d.espnow?'on':'off'}">ESP-NOW</span>`;
-
-let m=BigInt("0x"+d.gp),f='<div class="ftl">Logic Map</div>';
-for(let i=0;i<48;i++){
-  let h=(m >> BigInt(i)) & 1n;
-  f+=`<div class="p ${h?'hi':''}" t="P${i}:${h?'HI':'LO'}" style="position:relative"></div>`;
-}
-document.getElementById('ft').innerHTML=f;
-
-let c=`<div class="card"><div class="lbl">Device</div><div class="val">${d.id} <span style="font-size:0.6em;color:#666">(${d.hw})</span></div></div>`;
-document.getElementById('fwv').innerText=d.version;
-c+=`<div class="card"><div class="lbl">Uptime</div><div class="val">${d.uptime}</div></div>`;
-c+=`<div class="card"><div class="lbl">Battery</div><div class="val ${d.bat>3.5?'ok':'warn'}">${d.bat}V</div></div>`;
-c+=`<div class="card"><div class="lbl">Reset</div><div class="val" style="font-size:0.9em">${d.reset}</div></div>`;
-c+=`<div class="card"><div class="lbl">LoRa RSSI</div><div class="val">${d.rssi} dBm</div></div>`;
-c+=`<div class="card"><div class="lbl">Nodes</div><div class="val">${d.nodes}</div></div>`;
-c+=`<div class="card"><div class="lbl">Heap</div><div class="val">${d.heap}</div></div>`;
-c+=`<div class="card" style="border-color:#00ff8844"><div class="lbl">ESPNOW RX/TX</div><div class="val">${d.espnow_rx} / ${d.espnow_tx}</div></div>`;
-c+=`<div class="card" style="border-color:${d.espnow_ok?'#00ff8844':'#ff444444'}"><div class="lbl">ESPNOW Status</div><div class="val ${d.espnow_ok?'ok':'warn'}">${d.espnow_ok?'OK':'FAIL'}</div></div>`;
-c+=`<div class="card"><div class="lbl">Last Command</div><div class="val" style="font-size:0.7em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${d.last_cmd}">${d.last_cmd||'-'}</div></div>`;
+function up(){fetch('/api/status').then(function(r){return r.json();}).then(function(d){
+document.getElementById('did').textContent=d.id||'—';
+document.getElementById('fwv').textContent=d.version?' v'+d.version:'';
+var ifcs=[['LoRa',d.lora],['BLE',d.ble],['WiFi',d.wifi],['EN',d.espnow]];
+document.getElementById('ifc').innerHTML=ifcs.map(function(x){
+return '<span class="badge '+(x[1]?'on':'off')+'">'+x[0]+'</span>';
+}).join('');
+var b=parseFloat(d.bat)||0;
+var c='<div class="card"><div class="lbl">Battery</div><div class="val '+(b>3.5?'ok':'warn')+'">'+(b?b.toFixed(2)+'V':'—')+'</div></div>';
+c+='<div class="card"><div class="lbl">LoRa RSSI</div><div class="val">'+(d.rssi||'—')+' dBm</div></div>';
+c+='<div class="card"><div class="lbl">Nodes</div><div class="val ok">'+(d.nodes!=null?d.nodes:'—')+'</div></div>';
+c+='<div class="card"><div class="lbl">Uptime</div><div class="val">'+(d.uptime||'—')+'</div></div>';
+c+='<div class="card"><div class="lbl">Heap</div><div class="val">'+(d.heap?Math.round(d.heap/1024)+'KB':'—')+'</div></div>';
+c+='<div class="card" style="border-color:#1f2a3a"><div class="lbl">Last CMD</div><div class="val" style="font-size:0.75em;color:#888" title="'+(d.last_cmd||'')+'">'+(d.last_cmd||'—')+'</div></div>';
 document.getElementById('cards').innerHTML=c;
-let l='';d.log.forEach(m=>{if(m)l+=`<div class="m"><span style="color:#888">[${m.ts}s]</span> <span style="color:#00d4ff">${m.src}</span>: ${m.msg}</div>`;});
+var l='';d.log.forEach(function(m){
+if(m)l+='<div class="m"><span class="ts">['+m.ts+'s]</span> <span class="src">'+m.src+'</span>: '+m.msg+'</div>';
+});
 document.getElementById('log').innerHTML=l;
-})}
+});}
 setInterval(up,3000);up();
-function send(){let v=document.getElementById('ci').value;if(!v)return;
-fetch('/api/cmd',{method:'POST',body:new URLSearchParams({'cmd':v})});document.getElementById('ci').value='';}
+function send(){var v=document.getElementById('ci').value;if(!v)return;
+fetch('/api/cmd',{method:'POST',body:new URLSearchParams({'cmd':v})});
+document.getElementById('ci').value='';}
 </script></body></html>)rawhtml";
   server.send(200, "text/html", html);
 }
@@ -279,7 +310,7 @@ body{font-family:'Segoe UI',sans-serif;background:#0f0f1a;color:#e0e0e0;min-heig
 .tag.off{background:#ff444422;color:#ff4444}
 .msg{background:#00ff8822;color:#00ff88;border:1px solid #00ff8844;border-radius:8px;padding:10px 16px;margin:16px;text-align:center;display:none}
 </style></head><body>
-<div class='hdr'><h1>&#x2699; Configuration</h1><div><a href='/'>&#x1F4E1; Dashboard</a> <a href='/integration'>&#x1F50C; Integrations</a></div></div>
+<div class='hdr'><h1>&#x2699; Configuration</h1><div><a href='/'>&#x1F4E1; Dashboard</a> <a href='/scheduling'>&#x1F4C5; Schedule</a> <a href='/integration'>&#x1F50C; Integrations</a></div></div>
 <div class='msg' id='msg'></div>
 <form method='POST' action='/config'>
 
@@ -411,10 +442,10 @@ code{font-family:monospace;color:#00ff88;background:#00ff8811;padding:2px 6px;bo
 ul{margin-left:20px;margin-bottom:15px}
 li{margin-bottom:5px;line-height:1.4}
 </style></head><body>
-<div class='hdr'><h1>&#x2753; Command Reference</h1><div><a href='/'>&#x1F4E1; Dashboard</a> <a href='/config'>&#x2699; Config</a></div></div>
+<div class='hdr'><h1>&#x2753; Command Reference</h1><div><a href='/'>&#x1F4E1; Dashboard</a> <a href='/scheduling'>&#x1F4C5; Schedule</a> <a href='/config'>&#x2699; Config</a></div></div>
 <div class='content'>
   <p>The <code>CommandManager</code> routes commands uniformly regardless of the interface they are received on (Serial, LoRa, BLE, or Web UI).</p>
-  
+
   <h2>Command Routing</h2>
   <ul>
     <li><b>Local:</b> Type the command directly (e.g., <code>STATUS</code>).</li>
@@ -736,7 +767,7 @@ body{font-family:'Segoe UI',sans-serif;background:#0f0f1a;color:#e0e0e0;min-heig
 .btn:hover{background:#00b8d4}
 .msg{background:#00ff8822;color:#00ff88;border:1px solid #00ff8844;border-radius:8px;padding:10px 16px;margin:16px;text-align:center;display:none}
 </style></head><body>
-<div class='hdr'><h1>&#x1F50C; Integrations</h1><div><a href='/'>&#x1F4E1; Dashboard</a> <a href='/config'>&#x2699; Config</a></div></div>
+<div class='hdr'><h1>&#x1F50C; Integrations</h1><div><a href='/'>&#x1F4E1; Dashboard</a> <a href='/scheduling'>&#x1F4C5; Schedule</a> <a href='/config'>&#x2699; Config</a></div></div>
 )rawhtml";
 
   if (server.hasArg("saved")) {
@@ -790,14 +821,601 @@ body{font-family:'Segoe UI',sans-serif;background:#0f0f1a;color:#e0e0e0;min-heig
   server.send(200, "text/html", html);
 }
 
+void WiFiManager::serveScheduling() {
+  DataManager &data = DataManager::getInstance();
+  String html = R"rawliteral(
+<!DOCTYPE html>
+<html>
+<head>
+    <title>LoRaLink - Scheduling</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        :root {
+            --primary: #00f2fe;
+            --secondary: #4facfe;
+            --bg: #0f172a;
+            --card: rgba(30, 41, 59, 0.7);
+            --text: #f8fafc;
+            --text-dim: #94a3b8;
+            --accent: #22d3ee;
+            --glass: rgba(255, 255, 255, 0.05);
+            --border: rgba(255, 255, 255, 0.1);
+            --success: #10b981;
+            --danger: #ef4444;
+        }
+
+        * { margin:0; padding:0; box-sizing:border-box; font-family: 'Inter', system-ui, sans-serif; }
+        body { background: var(--bg); color: var(--text); min-height: 100vh; line-height: 1.6; }
+        .glass { background: var(--card); backdrop-filter: blur(12px); border: 1px solid var(--border); border-radius: 16px; }
+
+        header {
+            padding: 2rem 1rem; text-align: center;
+            background: linear-gradient(to bottom, rgba(15,23,42,0.8), transparent);
+        }
+        .container { max-width: 1200px; margin: 0 auto; padding: 0 1rem 4rem; }
+
+        h1 { font-size: 2.5rem; font-weight: 800; background: linear-gradient(135deg, var(--primary), var(--secondary)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 0.5rem; }
+        .version { color: var(--text-dim); font-size: 0.8rem; letter-spacing: 2px; text-transform: uppercase; margin-top: 5px; }
+
+        .nav-chips { display: flex; gap: 0.75rem; justify-content: center; margin: 2rem 0; flex-wrap: wrap; }
+        .chip { padding: 0.6rem 1.2rem; border-radius: 100px; text-decoration: none; color: var(--text-dim); transition: 0.3s; font-weight: 500; font-size: 0.9rem; }
+        .chip:hover { background: var(--glass); color: var(--text); }
+        .chip.active { background: linear-gradient(135deg, var(--primary), var(--secondary)); color: var(--bg); }
+
+        .dashboard-grid { display: grid; grid-template-columns: 350px 1fr; gap: 1.5rem; }
+        @media (max-width: 900px) { .dashboard-grid { grid-template-columns: 1fr; } }
+
+        .card { padding: 1.5rem; margin-bottom: 1.5rem; box-shadow: 0 8px 32px rgba(0,0,0,0.3); position: relative; overflow: hidden; }
+        .card-header { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1.5rem; color: var(--accent); }
+        .card-header i { font-size: 1.2rem; }
+        .card-header h2 { font-size: 1rem; text-transform: uppercase; letter-spacing: 1px; }
+
+        .input-group { margin-bottom: 1.25rem; }
+        .input-group label { display: block; color: var(--text-dim); font-size: 0.75rem; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.5px; }
+        .input-group input, .input-group select {
+            width: 100%; padding: 0.8rem 1rem; background: rgba(0,0,0,0.3); border: 1px solid var(--border);
+            border-radius: 10px; color: var(--text); transition: 0.3s; font-size: 0.9rem;
+        }
+        .input-group input:focus { border-color: var(--primary); outline: none; background: rgba(0,0,0,0.4); box-shadow: 0 0 15px rgba(0, 242, 254, 0.1); }
+
+        .btn {
+            width: 100%; padding: 0.85rem; border-radius: 10px; border: none; font-weight: 600; cursor: pointer;
+            transition: 0.3s; display: flex; align-items: center; justify-content: center; gap: 0.6rem; margin-top: 0.5rem;
+            font-size: 0.9rem;
+        }
+        .btn-primary { background: linear-gradient(135deg, var(--primary), var(--secondary)); color: var(--bg); }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 5px 20px rgba(0, 242, 254, 0.4); }
+        .btn-secondary { background: var(--glass); color: var(--text); border: 1px solid var(--border); }
+        .btn-secondary:hover { background: rgba(255,255,255,0.1); border-color: var(--text-dim); }
+        .btn-danger { background: rgba(239, 68, 68, 0.1); color: var(--danger); border: 1px solid rgba(239, 68, 68, 0.2); }
+        .btn-danger:hover { background: var(--danger); color: white; }
+
+        .sched-list { display: flex; flex-direction: column; gap: 1rem; }
+        .task-item {
+            padding: 1.5rem; display: flex; justify-content: space-between; align-items: center;
+            background: rgba(255,255,255,0.02); border-radius: 16px; border: 1px solid var(--border);
+            transition: 0.3s; position: relative; overflow: hidden;
+        }
+        .task-item:hover { background: rgba(255,255,255,0.05); border-color: var(--accent); }
+
+        .task-content { flex-grow: 1; }
+        .task-header { display: flex; align-items: center; gap: 1rem; margin-bottom: 0.5rem; }
+        .task-header h3 { font-size: 1.1rem; color: var(--primary); font-weight: 700; }
+        .task-badge { padding: 0.2rem 0.6rem; border-radius: 6px; font-size: 0.65rem; background: var(--glass); color: var(--accent); text-transform: uppercase; font-weight: 700; }
+
+        .task-meta { font-size: 0.85rem; color: var(--text-dim); display: flex; gap: 1.5rem; align-items: center; }
+        .task-meta span { display: flex; align-items: center; gap: 0.4rem; }
+        .task-meta i { font-size: 0.9rem; color: var(--secondary); }
+
+        .live-indicator {
+            width: 10px; height: 10px; border-radius: 50%; display: inline-block;
+            box-shadow: 0 0 10px currentColor; position: relative;
+        }
+        .state-active { color: var(--success); background: var(--success); }
+        .state-inactive { color: var(--danger); background: var(--danger); }
+        .pulse-ring {
+            position: absolute; width: 100%; height: 100%; border-radius: 50%;
+            border: 2px solid currentColor; animation: pulse 2s infinite; opacity: 0;
+        }
+        @keyframes pulse { 0% { transform: scale(1); opacity: 0.8; } 100% { transform: scale(3); opacity: 0; } }
+
+        .next-run { background: rgba(34, 211, 238, 0.1); padding: 0.3rem 0.6rem; border-radius: 6px; font-family: monospace; font-size: 0.8rem; color: var(--accent); }
+
+        .help-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem; }
+        .help-card { padding: 1.25rem; background: rgba(0,0,0,0.2); border-radius: 12px; border: 1px solid var(--border); }
+        .help-card h4 { font-size: 0.85rem; color: var(--primary); margin-bottom: 0.75rem; text-transform: uppercase; display: flex; align-items: center; gap: 0.5rem; }
+        .help-card p { font-size: 0.8rem; color: var(--text-dim); }
+
+        .toast {
+            position: fixed; bottom: 2rem; left: 50%; transform: translate(-50%, 100px);
+            padding: 1rem 2rem; border-radius: 12px; background: var(--card); color: white;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5); border: 1px solid var(--border);
+            transition: 0.5s cubic-bezier(0.18, 0.89, 0.32, 1.28); z-index: 1000;
+            display: flex; align-items: center; gap: 0.75rem;
+        }
+        .toast.show { transform: translate(-50%, 0); }
+
+        .drop-zone {
+            width:100%; min-height:90px; padding:0.7rem;
+            background:rgba(0,0,0,0.3); border:1.5px dashed var(--border);
+            border-radius:10px; color:var(--text-dim); font-size:0.78rem;
+            resize:vertical; font-family:monospace; transition:0.3s; line-height:1.4;
+        }
+        .drop-zone.drag-over { border-color:var(--primary); background:rgba(0,242,254,0.06); box-shadow:0 0 18px rgba(0,242,254,0.15); }
+        .import-preview { margin-top:0.75rem; padding:0.6rem 0.8rem; border-radius:8px; font-size:0.78rem; line-height:1.6; display:none; }
+        .import-preview.ok { background:rgba(16,185,129,0.1); border:1px solid rgba(16,185,129,0.3); color:var(--success); }
+        .import-preview.err { background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.3); color:var(--danger); }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="version">Infrastructure Grid Status</div>
+        <h1 id="devName">)rawliteral" +
+                data.myId + R"rawliteral(</h1>
+        <div class="version">FIRMWARE )rawliteral" +
+                String(FIRMWARE_VERSION) + R"rawliteral(</div>
+    </header>
+
+    <div class="container">
+        <div class="nav-chips">
+            <a href="/" class="chip">Dashboard</a>
+            <a href="/config" class="chip">Hardware</a>
+            <a href="/scheduling" class="chip active">Scheduling</a>
+            <a href="/integration" class="chip">Integrations</a>
+        </div>
+
+        <div class="dashboard-grid">
+            <div class="left-col">
+                <div class="card glass">
+                    <div class="card-header"><i class="fas fa-calendar-plus"></i><h2>Configure Task</h2></div>
+                    <div class="input-group">
+                        <label>Identifier</label>
+                        <input type="text" id="name" placeholder="e.g. HydroPump_01">
+                    </div>
+                    <div class="input-group">
+                        <label>Operation Mode</label>
+                        <select id="type">
+                            <option value="TOGGLE">Recurring Toggle</option>
+                            <option value="PULSE">Precision Pulse</option>
+                            <option value="DHT_SAFETY">DHT Safety Interlock</option>
+                        </select>
+                    </div>
+                    <div class="input-group">
+                        <label>Hardware Pin / Alias</label>
+                        <input type="text" id="pin" placeholder="e.g. 21 or RELAY1">
+                    </div>
+                    <div class="input-group">
+                        <label>Interval (Seconds)</label>
+                        <input type="number" id="interval" value="60">
+                    </div>
+                    <div class="input-group" id="durGroup" style="display:none;">
+                        <label>Active Duration (Seconds)</label>
+                        <input type="number" id="duration" value="5">
+                    </div>
+                    <button class="btn btn-primary" onclick="addTask()"><i class="fas fa-bolt"></i> Push to Memory</button>
+                    <button class="btn btn-secondary" onclick="saveTasks()"><i class="fas fa-save"></i> Save Configuration</button>
+                    <button class="btn btn-danger" onclick="clearTasks()"><i class="fas fa-trash-alt"></i> Wipe All Tasks</button>
+                </div>
+
+                <div class="card glass">
+                    <div class="card-header"><i class="fas fa-tags"></i><h2>Friendly Names</h2></div>
+                    <p style="font-size: 0.75rem; color: var(--text-dim); margin-bottom: 1rem; padding: 0 0.5rem;">Map GPIO numbers to descriptive names permanently.</p>
+                    <div class="input-group">
+                        <label>GPIO Index</label>
+                        <input type="number" id="pinNum" placeholder="e.g. 21">
+                    </div>
+                    <div class="input-group">
+                        <label>Descriptive Label</label>
+                        <input type="text" id="friendlyName" placeholder="e.g. OxygenFan">
+                    </div>
+                    <button class="btn btn-secondary" onclick="savePinName()"><i class="fas fa-id-card"></i> Persistent Map</button>
+                </div>
+
+                <div class="card glass">
+                    <div class="card-header"><i class="fas fa-file-import"></i><h2>Bulk Import</h2></div>
+                    <p style="font-size:0.75rem;color:var(--text-dim);margin-bottom:1rem;padding:0 0.5rem;">Drop a <b>.json</b> or <b>.csv</b> file onto the box below, or paste content directly.</p>
+                    <textarea id="importBox" class="drop-zone" rows="6" placeholder='JSON: [{"name":"pump1","type":"TOGGLE","pin":6,"interval":60,"duration":0}]&#10;&#10;CSV:&#10;name,type,pin,interval,duration&#10;pump1,TOGGLE,6,60,0&#10;pump2,PULSE,7,30,5'></textarea>
+                    <div id="importPreview" class="import-preview"></div>
+                    <button class="btn btn-secondary" style="margin-top:0.75rem;" onclick="previewImport()"><i class="fas fa-search"></i> Parse &amp; Preview</button>
+                    <button class="btn btn-primary" id="importBtn" style="display:none;" onclick="importTasks()"><i class="fas fa-file-import"></i> Import <span id="importCount">0</span> Task(s)</button>
+                </div>
+            </div>
+
+            <div class="right-col">
+                <div class="card glass" style="min-height: 450px;">
+                    <div class="card-header"><i class="fas fa-wave-square"></i><h2>Active Infrastructure Grid</h2></div>
+                    <div id="taskList" class="sched-list">
+                        <!-- Loaded via JS -->
+                        <div style="text-align:center; color:var(--text-dim); margin-top:5rem;">
+                            <i class="fas fa-satellite-dish fa-spin" style="font-size: 2rem; margin-bottom: 1rem;"></i>
+                            <p>Polling node state...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card glass">
+                    <div class="card-header"><i class="fas fa-info-circle"></i><h2>Help & Syntax Reference</h2></div>
+                    <div class="help-grid">
+                        <div class="help-card">
+                            <h4><i class="fas fa-clock"></i> Time Units</h4>
+                            <p>All intervals and durations are now defined in <b>Seconds</b>. Decimal values are supported via the API.</p>
+                        </div>
+                        <div class="help-card">
+                            <h4><i class="fas fa-microchip"></i> Pin Addressing</h4>
+                            <p>Use GPIO numbers or aliases like <b>RELAY1 (21)</b>. Mapping names makes logs and UI easier to read.</p>
+                        </div>
+                        <div class="help-card">
+                            <h4><i class="fas fa-sync-alt"></i> Pulse Mode</h4>
+                            <p>Activates pin, waits for <i>duration</i>, then deactivates. Ideal for solenoid valves or momentary relays.</p>
+                        </div>
+                        <div class="help-card">
+                            <h4><i class="fas fa-shield-alt"></i> Persistence</h4>
+                            <p><b>Push</b> applies changes immediately. <b>Save</b> writes to encrypted flash for survival across power cycles.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="toast"><i class="fas fa-check-circle"></i><span id="toastMsg">Action Successful</span></div>
+
+    <script>
+        const toastEl = document.getElementById('toast');
+        const toastMsg = document.getElementById('toastMsg');
+
+        function showToast(msg, icon='check-circle', color='') {
+            toastMsg.innerText = msg;
+            toastEl.querySelector('i').className = `fas fa-${icon}`;
+            toastEl.style.borderColor = color || 'var(--border)';
+            toastEl.classList.add('show');
+            setTimeout(() => toastEl.classList.remove('show'), 3000);
+        }
+
+        async function loadTasks() {
+            try {
+                const res = await fetch('/api/schedule');
+                if(!res.ok) throw new Error();
+                const data = await res.json();
+                const list = document.getElementById('taskList');
+                // Keep _liveTasks in sync so previewImport() can deduplicate
+                _liveTasks = data.schedules.map(function(s) {
+                    return { name: s.name, pin: String(s.pin) };
+                });
+
+                if (data.schedules.length === 0) {
+                    list.innerHTML = '<div style="text-align:center; color:var(--text-dim); margin-top:5rem;"><i class="fas fa-clipboard" style="font-size:2rem; margin-bottom:1rem; opacity:0.3"></i><p>No dynamic tasks configured</p></div>';
+                    return;
+                }
+
+                let newHtml = '';
+                data.schedules.forEach(s => {
+                    const pinLabel = s.pinName ? `${s.pinName} (${s.pin})` : `GPIO ${s.pin}`;
+                    const stateClass = s.state == 1 ? 'state-active' : 'state-inactive';
+                    const stateText = s.state == 1 ? 'HIGH' : 'LOW';
+
+                    newHtml += `
+                        <div class="task-item">
+                            <div class="task-content">
+                                <div class="task-header">
+                                    <h3>${s.name}</h3>
+                                    <span class="task-badge">${s.type}</span>
+                                    <div class="live-indicator ${stateClass}">
+                                        ${s.state == 1 ? '<div class="pulse-ring"></div>' : ''}
+                                    </div>
+                                    <span style="font-size:0.7rem; font-weight:700; color:${s.state == 1 ? 'var(--success)' : 'var(--text-dim)'}">${stateText}</span>
+                                </div>
+                                <div class="task-meta">
+                                    <span><i class="fas fa-microchip"></i>${pinLabel}</span>
+                                    <span><i class="fas fa-history"></i>${s.interval}s</span>
+                                    ${s.duration > 0 ? `<span><i class="fas fa-hourglass-start"></i>${s.duration}s</span>` : ''}
+                                    <span class="next-run" title="Next Activation Countdown">
+                                        <i class="fas fa-stopwatch"></i> Run in ${Math.max(0, s.nextRun)}s
+                                    </span>
+                                </div>
+                                <div style="font-size:0.65rem; color:var(--text-dim); margin-top:0.6rem; opacity:0.6">
+                                    <i class="fas fa-user-edit"></i> ${s.updatedBy} &middot; <i class="fas fa-history"></i> ${s.lastUpdated}
+                                </div>
+                            </div>
+                            <button class="btn btn-danger" style="width:40px; height:40px; padding:0; border-radius:50%;" onclick="removeTask('${s.name}')">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    `;
+                });
+                list.innerHTML = newHtml;
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        async function addTask() {
+            const params = new URLSearchParams({
+                name: document.getElementById('name').value,
+                type: document.getElementById('type').value,
+                pin: document.getElementById('pin').value,
+                interval: document.getElementById('interval').value,
+                duration: document.getElementById('duration').value,
+                enabled: 1
+            });
+            const res = await fetch('/api/schedule/add', { method: 'POST', body: params });
+            if(res.ok) {
+                showToast('Task Injected Successfully');
+                loadTasks();
+            }
+        }
+
+        async function removeTask(name) {
+            const res = await fetch('/api/schedule/remove', { method: 'POST', body: new URLSearchParams({ name }) });
+            if(res.ok) {
+                showToast('Task Removed', 'times', 'var(--danger)');
+                loadTasks();
+            }
+        }
+
+        async function clearTasks() {
+            if(!confirm('This will wipe ALL dynamic tasks from memory. Proceed?')) return;
+            const res = await fetch('/api/schedule/clear', { method: 'POST' });
+            if(res.ok) {
+                showToast('Schedule Wiped', 'trash', 'var(--danger)');
+                loadTasks();
+            }
+        }
+
+        async function saveTasks() {
+            const res = await fetch('/api/schedule/save', { method: 'POST' });
+            if(res.ok) showToast('Configuration Written to Flash', 'cloud-upload-alt', 'var(--primary)');
+        }
+
+        async function savePinName() {
+            const pin = document.getElementById('pinNum').value;
+            const name = document.getElementById('friendlyName').value;
+            if(!pin || !name) return;
+            const res = await fetch('/api/pins/name', { method: 'POST', body: new URLSearchParams({ pin, name }) });
+            if(res.ok) {
+                showToast(`Pin ${pin} mapped to ${name}`, 'tag');
+                loadTasks();
+            }
+        }
+
+        document.getElementById('type').onchange = (e) => {
+            document.getElementById('durGroup').style.display = (e.target.value === 'PULSE') ? 'block' : 'none';
+        };
+
+        // ── Bulk Import ─────────────────────────────────────────────
+        var _importTasks = [];
+        var _liveTasks   = [];   // {name, pin} of currently-active firmware tasks
+
+        // Wire drag-and-drop onto the textarea
+        (function() {
+            var box = document.getElementById('importBox');
+            box.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                box.classList.add('drag-over');
+            });
+            box.addEventListener('dragleave', function() { box.classList.remove('drag-over'); });
+            box.addEventListener('drop', function(e) {
+                e.preventDefault();
+                box.classList.remove('drag-over');
+                var file = e.dataTransfer.files[0];
+                if (!file) return;
+                var reader = new FileReader();
+                reader.onload = function(ev) {
+                    box.value = ev.target.result;
+                    previewImport();
+                };
+                reader.readAsText(file);
+            });
+        })();
+
+        function parseImport() {
+            var raw = document.getElementById('importBox').value.trim();
+            if (!raw) return [];
+            // JSON branch
+            if (raw.charAt(0) === '[' || raw.charAt(0) === '{') {
+                try {
+                    var parsed = JSON.parse(raw);
+                    if (!Array.isArray(parsed)) parsed = [parsed];
+                    return parsed.map(function(t) {
+                        return {
+                            name:     String(t.name     || ''),
+                            type:     String(t.type     || 'TOGGLE').toUpperCase(),
+                            pin:      String(t.pin      || ''),
+                            interval: String(t.interval !== undefined ? t.interval : '60'),
+                            duration: String(t.duration !== undefined ? t.duration : '0'),
+                            enabled:  String(t.enabled  !== undefined ? t.enabled  : '1')
+                        };
+                    }).filter(function(t) { return t.name && t.pin; });
+                } catch(e) { return null; }  // null = syntax error
+            }
+            // CSV branch — first row is header
+            var lines = raw.split('\n').map(function(l) { return l.trim(); }).filter(Boolean);
+            if (lines.length < 2) return [];
+            var headers = lines[0].split(',').map(function(h) { return h.trim().toLowerCase(); });
+            var tasks = [];
+            for (var i = 1; i < lines.length; i++) {
+                var cols = lines[i].split(',').map(function(c) { return c.trim(); });
+                var t = {};
+                headers.forEach(function(h, idx) { t[h] = cols[idx] || ''; });
+                if (t.name && t.pin) {
+                    tasks.push({
+                        name:     t.name,
+                        type:     (t.type || 'TOGGLE').toUpperCase(),
+                        pin:      t.pin,
+                        interval: t.interval || '60',
+                        duration: t.duration || '0',
+                        enabled:  t.enabled  || '1'
+                    });
+                }
+            }
+            return tasks;
+        }
+
+        function previewImport() {
+            var preview = document.getElementById('importPreview');
+            var btn     = document.getElementById('importBtn');
+            var counter = document.getElementById('importCount');
+            var tasks   = parseImport();
+
+            if (tasks === null) {
+                preview.className   = 'import-preview err';
+                preview.style.display = 'block';
+                preview.innerHTML   = '<i class="fas fa-exclamation-triangle"></i> JSON syntax error — check brackets and quotes';
+                btn.style.display   = 'none';
+                return;
+            }
+            if (!tasks.length) {
+                preview.className   = 'import-preview err';
+                preview.style.display = 'block';
+                preview.innerHTML   = '<i class="fas fa-exclamation-triangle"></i> No valid tasks found — each row needs at least <b>name</b> and <b>pin</b>';
+                btn.style.display   = 'none';
+                return;
+            }
+
+            // ── Validation rules A-D ──────────────────────────────────────
+            var VALID_TYPES = ['TOGGLE', 'PULSE', 'DHT_SAFETY'];
+            var liveNames   = _liveTasks.map(function(t) { return t.name; });
+            var errors = [], warnings = [];
+            tasks.forEach(function(t) {
+                // A — pin 14 is shared with LORA_DIO1; enabling both is a hw fault
+                if (String(t.pin) === '14') {
+                    errors.push('<b>' + t.name + '</b>: pin 14 forbidden (shared with LORA_DIO1)');
+                }
+                // B — firmware stores name in a fixed 8-char buffer
+                if (t.name.length > 8) {
+                    errors.push('<b>' + t.name + '</b>: name too long (' + t.name.length + ' chars, max 8)');
+                }
+                // D — firmware only handles known task types
+                if (VALID_TYPES.indexOf(String(t.type)) === -1) {
+                    errors.push('<b>' + t.name + '</b>: unknown type &ldquo;' + t.type + '&rdquo; (allowed: ' + VALID_TYPES.join(', ') + ')');
+                }
+                // C — duplicate name vs live tasks (warning, still importable)
+                if (liveNames.indexOf(t.name) !== -1) {
+                    warnings.push('<b>' + t.name + '</b> already in live tasks — will overwrite');
+                }
+            });
+
+            if (errors.length) {
+                preview.className   = 'import-preview err';
+                preview.style.display = 'block';
+                preview.innerHTML   = '<i class="fas fa-ban"></i> <b>Import blocked — fix '
+                    + errors.length + ' error(s):</b><br>' + errors.join('<br>');
+                btn.style.display   = 'none';
+                return;
+            }
+            // ── End validation ────────────────────────────────────────────
+
+            _importTasks = tasks;
+            var MAX  = 5;  // MAX_DYNAMIC_TASKS firmware limit
+            var warn = tasks.length > MAX
+                ? ' &nbsp;<b style="color:var(--danger)">&#9888; Exceeds firmware limit of ' + MAX + '</b>'
+                : '';
+            var warnHtml = warnings.length
+                ? '<br><span style="color:var(--warning)">&#9888; ' + warnings.join(' &nbsp;&middot;&nbsp; ') + '</span>'
+                : '';
+            var rows = tasks.map(function(t) {
+                return '<span style="opacity:0.65">' + t.name + ' &middot; ' + t.type + ' pin&nbsp;' + t.pin + ' @' + t.interval + 's</span>';
+            }).join('<br>');
+            preview.className   = 'import-preview ok';
+            preview.style.display = 'block';
+            preview.innerHTML   = '<i class="fas fa-check-circle"></i> Found <b>' + tasks.length + ' task(s)</b>' + warn + warnHtml + '<br>' + rows;
+            counter.innerText   = tasks.length;
+            btn.style.display   = 'flex';
+        }
+
+        async function importTasks() {
+            if (!_importTasks.length) return;
+            var ok = 0, fail = 0;
+            for (var i = 0; i < _importTasks.length; i++) {
+                var t = _importTasks[i];
+                try {
+                    var res = await fetch('/api/schedule/add', { method: 'POST', body: new URLSearchParams(t) });
+                    if (res.ok) ok++; else fail++;
+                } catch(e) { fail++; }
+            }
+            var msg = ok + ' task(s) imported';
+            if (fail) msg += ', ' + fail + ' failed';
+            showToast(msg, fail ? 'exclamation-triangle' : 'file-import', fail ? 'var(--danger)' : '');
+            _importTasks = [];
+            document.getElementById('importPreview').style.display = 'none';
+            document.getElementById('importBtn').style.display     = 'none';
+            document.getElementById('importBox').value             = '';
+            loadTasks();
+        }
+        // ── End Bulk Import ──────────────────────────────────────────
+
+        // Auto-refresh live indicators every 2 seconds
+        setInterval(loadTasks, 2000);
+        loadTasks();
+    </script>
+</body>
+</html>
+)rawliteral";
+  server.send(200, "text/html", html);
+}
+
+void WiFiManager::serveApiSchedule() {
+  JsonDocument doc;
+  ScheduleManager::getInstance().getTaskJson(doc);
+  String out;
+  serializeJson(doc, out);
+  server.send(200, "application/json", out);
+}
+
+void WiFiManager::serveApiScheduleAdd() {
+  if (!server.hasArg("name")) {
+    server.send(400, "text/plain", "Missing name");
+    return;
+  }
+
+  String name = server.arg("name");
+  bool enabled = true;
+  if (server.hasArg("enabled"))
+    enabled = server.arg("enabled") == "true";
+
+  // If update_only is set, we just want to toggle enabled state or similar
+  if (server.hasArg("update_only")) {
+    // Logic to find task and update state
+    // For now we'll just re-add with same params if provided, or we need a more
+    // surgical update But addDynamicTask already handles updates if name
+    // exists.
+  }
+
+  String type = server.hasArg("type") ? server.arg("type") : "TOGGLE";
+  String pin = server.hasArg("pin") ? server.arg("pin") : "RELAY1";
+  unsigned long interval =
+      server.hasArg("interval") ? server.arg("interval").toInt() : 600000;
+  unsigned long duration =
+      server.hasArg("duration") ? server.arg("duration").toInt() : 0;
+
+  bool ok = ScheduleManager::getInstance().addDynamicTask(
+      name, type, pin, interval, duration, "WEB", enabled);
+  server.send(ok ? 200 : 500, "text/plain", ok ? "OK" : "Error");
+}
+
+void WiFiManager::serveApiScheduleRemove() {
+  if (!server.hasArg("name")) {
+    server.send(400, "text/plain", "Missing name");
+    return;
+  }
+  bool ok =
+      ScheduleManager::getInstance().removeDynamicTask(server.arg("name"));
+  server.send(ok ? 200 : 500, "text/plain", ok ? "OK" : "Error");
+}
+
+void WiFiManager::serveApiScheduleClear() {
+  ScheduleManager::getInstance().clearDynamicTasks();
+  server.send(200, "text/plain", "OK");
+}
+
+void WiFiManager::serveApiScheduleSave() {
+  ScheduleManager::getInstance().saveDynamicTasks();
+  server.send(200, "text/plain", "OK");
+}
+
 void WiFiManager::serveIntegrationSave() {
   DataManager &data = DataManager::getInstance();
-
-  if (server.hasArg("stream")) {
-    data.streamToSerial = server.arg("stream") == "1";
-    // Also trigger it locally in CommandManager if we are not rebooting
-    // immediately
-  }
 
   if (server.hasArg("mqtt_en")) {
     bool en = server.arg("mqtt_en") == "1";
@@ -818,4 +1436,15 @@ void WiFiManager::serveIntegrationSave() {
   // Reboot to apply changes cleanly like in serveConfigSave
   delay(1000);
   ESP.restart();
+}
+
+void WiFiManager::serveApiPinName() {
+  if (server.hasArg("pin") && server.hasArg("name")) {
+    String pin = server.arg("pin");
+    String name = server.arg("name");
+    DataManager::getInstance().SetPinName(pin, name);
+    server.send(200, "text/plain", "OK");
+  } else {
+    server.send(400, "text/plain", "Missing args");
+  }
 }

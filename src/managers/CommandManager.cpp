@@ -469,7 +469,10 @@ void CommandManager::initRegistry() {
         pinMode(pin, OUTPUT);
         digitalWrite(pin, val);
         data.SetGpioState(pinName, val == 1);
+        String friendly = data.GetPinName(String(pin));
         String msg = "SYS: GPIO " + pinName + "=" + String(val);
+        if (friendly.length() > 0)
+          msg += " (" + friendly + ")";
         lora.lastMsgReceived = msg;
         if (source == CommInterface::COMM_LORA)
           lora.SendLoRa(data.myId + " " + msg);
@@ -488,7 +491,10 @@ void CommandManager::initRegistry() {
     if (pin >= 0) {
       pinMode(pin, INPUT);
       int val = digitalRead(pin);
+      String friendly = data.GetPinName(String(pin));
       String msg = "SYS: READ " + pinName + "=" + String(val);
+      if (friendly.length() > 0)
+        msg += " (" + friendly + ")";
       lora.lastMsgReceived = msg;
       if (source == CommInterface::COMM_LORA)
         lora.SendLoRa(data.myId + " " + msg);
@@ -497,31 +503,99 @@ void CommandManager::initRegistry() {
     }
   });
 
-  registerCommand("GETSCHED", [](const String &args, CommInterface source) {
+  registerCommand("PINNAME", [](const String &args, CommInterface source) {
+    DataManager &data = DataManager::getInstance();
     LoRaManager &lora = LoRaManager::getInstance();
-    String json = DataManager::getInstance().ReadSchedule();
-    Serial.println("SCHED_JSON:" + json);
-    lora.lastMsgReceived = "SYS: SCHED SENT TO SERIAL";
+    int space = args.indexOf(' ');
+    if (space > 0) {
+      String pinStr = args.substring(0, space);
+      String name = args.substring(space + 1);
+      name.trim();
+      data.SetPinName(pinStr, name);
+      String msg = "SYS: Pin " + pinStr + " renamed to " + name;
+      lora.lastMsgReceived = msg;
+      LOG_PRINTLN(msg);
+    } else {
+      lora.lastMsgReceived = "ERR: PINNAME pin friendly_name";
+    }
   });
 
-  registerCommand("SETSCHED", [](const String &args, CommInterface source) {
+  registerCommand("SCHED", [](const String &args, CommInterface source) {
     LoRaManager &lora = LoRaManager::getInstance();
-    String payload = args;
-    payload.trim();
-    if (payload.startsWith("{")) {
-      if (DataManager::getInstance().SaveSchedule(payload)) {
-        ScheduleManager::getInstance().loadDynamicSchedules();
-        lora.lastMsgReceived = "SYS: JSON SCHED UPDATED";
+    ScheduleManager &sched = ScheduleManager::getInstance();
+
+    int splitIdx = args.indexOf(' ');
+    int nlIdx = args.indexOf('\n');
+    if (splitIdx == -1 || (nlIdx != -1 && nlIdx < splitIdx)) {
+      splitIdx = nlIdx;
+    }
+
+    String sub = (splitIdx == -1) ? args : args.substring(0, splitIdx);
+    String subArgs = (splitIdx == -1) ? "" : args.substring(splitIdx + 1);
+    sub.trim();
+    sub.toUpperCase();
+
+    if (sub == "LIST") {
+      String report = sched.getTaskReport();
+      if (source == CommInterface::COMM_LORA)
+        lora.SendLoRa(report);
+      else
+        LOG_PRINT(report);
+    } else if (sub == "ADD") {
+      // ADD name type pin interval duration
+      String parts[5];
+      int pIdx = 0;
+      int pStart = 0;
+      int pEnd = subArgs.indexOf(' ');
+      while (pIdx < 5) {
+        if (pEnd == -1)
+          pEnd = subArgs.length();
+        parts[pIdx++] = subArgs.substring(pStart, pEnd);
+        if (pEnd == (int)subArgs.length())
+          break;
+        pStart = pEnd + 1;
+        pEnd = subArgs.indexOf(' ', pStart);
       }
-    } else if (payload.indexOf(',') > 0) {
-      ScheduleManager::getInstance().loadSchedulesFromCsv(payload);
-      lora.lastMsgReceived = "SYS: CSV SCHED UPDATED";
+
+      if (pIdx >= 4) {
+        if (sched.addDynamicTask(parts[0], parts[1], parts[2], parts[3].toInt(),
+                                 (pIdx > 4) ? parts[4].toInt() : 0,
+                                 interfaceName(source))) {
+          lora.lastMsgReceived = "SCHED: Added " + parts[0];
+        } else {
+          lora.lastMsgReceived = "ERR: Sched pool full";
+        }
+      } else {
+        lora.lastMsgReceived =
+            "ERR: SCHED ADD name type pin interval(s) [dur(s)]";
+      }
+    } else if (sub == "IMPORT") {
+      sched.setStreamMode(true);
+      LOG_PRINTLN("STREAM: Ready for Excel Data Streamer...");
+      LOG_PRINTLN("STREAM: Send rows (Name,Type,Pin,Interval,Duration)");
+      LOG_PRINTLN("STREAM: Send 'END' to finish.");
+    } else if (sub == "CLEAR") {
+      sched.clearDynamicTasks();
+      lora.lastMsgReceived = "SCHED: All dynamic tasks cleared";
+    } else if (sub == "REM") {
+      if (sched.removeDynamicTask(subArgs)) {
+        lora.lastMsgReceived = "SCHED: Removed " + subArgs;
+      } else {
+        lora.lastMsgReceived = "ERR: Task not found";
+      }
+    } else if (sub == "SAVE") {
+      sched.saveDynamicTasks();
+      lora.lastMsgReceived = "SCHED: Pool saved to FS";
     } else {
-      unsigned long ms = payload.toInt();
-      if (ms > 0) {
+      // Legacy support for SETSCHED format (using seconds)
+      unsigned long s = args.toInt();
+      if (s > 0) {
+        unsigned long ms = s * 1000;
         DataManager::getInstance().SetSchedulerInterval(ms);
-        ScheduleManager::getInstance().set110VInterval(ms);
-        lora.lastMsgReceived = "SYS: SCHED " + String(ms) + "ms";
+        sched.set110VInterval(ms);
+        lora.lastMsgReceived = "SYS: SCHED " + String(s) + "s";
+      } else {
+        lora.lastMsgReceived = "HELP: SCHED LIST|ADD|REM|SAVE|IMPORT";
       }
     }
   });

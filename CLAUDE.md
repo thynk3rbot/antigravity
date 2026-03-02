@@ -1,61 +1,72 @@
-# LoRaLink-AnyToAny — AI Coding Context
+# LoRaLink-AnyToAny — AI Context [V2]
 
-> This file provides project context for AI coding assistants (Claude, Antigravity, Cursor, etc.)
+Unified ESP32-S3 firmware focused on prioritized any-to-any command routing.
 
-## Project
+- **Board:** Heltec WiFi LoRa 32 V3 (ESP32-S3) | **Radio:** SX1262 915MHz
+- **Build/Flash:** `pio run` / `pio run -t upload`
+- **Path:** `C:\Users\spw1\.platformio\penv\Scripts\pio.exe`
 
-**LoRaLink-AnyToAny** is a unified ESP32 firmware framework for the **Heltec WiFi LoRa 32 V3** board. It routes commands between any wireless interface (Serial, LoRa, BLE, WiFi, ESP-NOW) using a central `CommandManager` and priority-based `TaskScheduler`.
+## Architecture Highlights
 
-**Owner:** Steven P Williams ([spw1.com](https://spw1.com))
+- **Staggered Boot:** Core init sequence uses `delay()` to prevent brownout spikes during radio/WiFi/OLED power-up.
+- **Singleton Hierarchy:** All managers in `src/managers/` use `getInstance()` static accessors.
+- **Command Routing:** Central `CommandManager` routes messages from any `CommInterface` to any other based on target prefix.
 
-## Tech Stack
+## Core Managers
 
-- **Platform:** ESP32-S3 (Heltec WiFi LoRa 32 V3)
-- **Framework:** Arduino via PlatformIO
-- **Radio:** SX1262 LoRa @ 915MHz (RadioLib)
-- **Build:** `pio run -e heltec_wifi_lora_32_V3`
-- **Upload:** `pio run -t upload`
-- **Monitor:** `pio device monitor -b 115200`
-- **PIO Path (Windows):** `C:\Users\spw1\.platformio\penv\Scripts\pio.exe`
+| Name | Responsibility | Critical Dependency |
+| --- | --- | --- |
+| `CommandManager` | Any-to-Any Message Routing | All Interfaces |
+| `LoRaManager` | RadioLib SX1262, AES Encryption | SPI, PIN_LORA_CS |
+| `ScheduleManager` | TaskScheduler, Priority Queue | Library: TaskScheduler |
+| `WiFiManager` | Compact Web Dashboard, Config API, OTA | WebServer, LittleFS |
+| `ESPNowManager` | Peer registry, RX queue, send/broadcast, NVS persistence | WiFi STA mode, `ESPNOW_MAX_PEERS=10`, queue=8 |
+| `MQTTManager` | Telemetry & External Commands | WiFi, PubSubClient |
+| `DataManager` | NVS Persistence, Node tracking | LittleFS, Preferences |
 
-## Architecture
+## Maintained Tools
 
-```
-src/
-├── main.cpp              — Boot sequence, staggered init
-├── config.h              — Pins, LoRa params, CommInterface enum, structs
-├── crypto.h              — AES-128 encryption (mbedtls)
-├── splash.h              — OLED splash screen
-├── utils/DebugMacros.h   — Conditional LOG_PRINT/PRINTLN/PRINTF
-└── managers/
-    ├── CommandManager     — Central command router (any-to-any)
-    ├── ScheduleManager    — TaskScheduler with prioritized tasks
-    ├── DataManager        — NVS/LittleFS persistence, node tracking
-    ├── LoRaManager        — SX1262 radio, encryption, dedup, repeater
-    ├── ESPNowManager      — Peer management, queue-based RX
-    ├── WiFiManager        — Web dashboard (/), config page (/config), OTA
-    ├── BLEManager         — BLE GATT server, command queue
-    ├── DisplayManager     — SSD1306 OLED, 4 pages (Home/Net/Status/Log)
-    └── MQTTManager        — MQTT broker integration, telemetry & commands
-```
+PC-side tools in `tools/` are **first-class project artifacts** — not throwaway scripts. Any firmware change that affects a coupling point (commands, API endpoints, pins, limits) **must** also update the relevant tool file(s) in the same change.
 
-## Critical Gotchas
+| Tool | Entry Point | Purpose |
+| --- | --- | --- |
+| `tools/ble_instrument.py` | `python tools/ble_instrument.py [--device] [--ip] [--dry-run]` | BLE CLI: rotational command exercise, fills 5 SCHED slots, JSON session log |
+| `tools/webapp/server.py` | `python tools/webapp/server.py [--device] [--ip]` → `http://localhost:8000` | PC control webapp: hybrid BLE+HTTP, 4-panel dashboard, WebSocket live updates |
+| `tools/requirements.txt` | `pip install -r tools/requirements.txt` | Shared deps: bleak, rich, aiohttp, fastapi, uvicorn, websockets |
 
-1. **CommInterface enum** uses `COMM_` prefix (`COMM_SERIAL`, `COMM_LORA`, `COMM_BLE`, `COMM_WIFI`, `COMM_ESPNOW`, `COMM_INTERNAL`) because Arduino.h `#define`s `SERIAL` as `0x0`
-2. **ESP-NOW callback** uses legacy signature: `(const uint8_t *mac, const uint8_t *data, int len)` — NOT `esp_now_recv_info_t`
-3. **All managers are singletons** accessed via `ManagerName::getInstance()`
-4. **Staggered boot** prevents brownout resets — peripherals init with delays
-5. **PIN_RELAY_12V_1 and PIN_LORA_DIO1 share pin 14** — hardware conflict, only one should be active
-6. **VEXT pin (36)** must be LOW to power the OLED display
+## Change Coupling — Firmware → Tools
 
-## Commands
+When modifying firmware, check this table and update all listed tool files in the same commit.
 
-`LED ON/OFF`, `BLINK`, `STATUS`, `READMAC`, `RADIO`, `SETNAME <n>`, `SETWIFI <ssid> <pass>`, `SETIP <ip>`, `ESPNOW ON/OFF`, `REPEATER ON/OFF`, `SLEEP <hrs>`, `GPIO <pin> <0/1>`, `READ <pin>`, `SETSCHED <ms>`, `GETSCHED`, `WIPECONFIG`, `<target> <cmd>`, `ALL <cmd>`
+| Firmware file changed | What changed | Tool files that must be updated |
+| --- | --- | --- |
+| `src/managers/CommandManager.cpp` | New command registered | `ble_instrument.py` → `COMMAND_GROUPS` dict; `webapp/static/index.html` → `GPIO_CONTROLS` if pin-related |
+| `src/managers/WiFiManager.cpp` | New API endpoint or changed response field | `webapp/server.py` → add/update proxy route; `webapp/static/index.html` → JS status renderer |
+| `src/managers/ScheduleManager.h` | `MAX_DYNAMIC_TASKS` value changed | `ble_instrument.py` → `FIRMWARE_MAX_TASKS` list length; `webapp/static/index.html` → `#s-pin` select options |
+| `src/config.h` | Pin number or alias changed | `ble_instrument.py` → `FIRMWARE_MAX_TASKS` pin args (never use pin 14); `webapp/static/index.html` → `GPIO_CONTROLS` array |
+| `src/managers/BLEManager.cpp` | UUID changed, or `notify()` begins being called | `ble_instrument.py` → `BLEConstants`; `webapp/server.py` → `ResponseBuffer` handling |
+| `src/managers/ScheduleManager.cpp` | New task type added (beyond TOGGLE / PULSE) | `webapp/static/index.html` → `#s-type` `<select>` options; `ble_instrument.py` → `FIRMWARE_MAX_TASKS` if applicable |
+| `src/managers/ESPNowManager.cpp/h` | New public API, peer struct changed, queue size changed | `webapp/server.py` → proxy routes; `webapp/static/index.html` → peer management panel if added |
+| `src/managers/WiFiManager.cpp` serveHome() | Dashboard HTML changed | `webapp/static/index.html` → keep visual language in sync |
 
-## Workflows (Antigravity)
+## Integration Logic
 
-- `/build` — Compile firmware
-- `/flash` — Build + upload + monitor
-- `/monitor` — Open serial monitor
-- `/commit` — Build-verify then git commit & push
-- `/clean` — Clean rebuild
+- **ESP-NOW:** Uses MAC-based addressing; callback signature: `(mac, data, len)`.
+- **BLE:** GW-XXXX naming scheme; GATT server for raw serial terminal emulation.
+- **OLED:** I2C-based; `VEXT` pin (36) must be `LOW` for power.
+
+## Coding Standards & Gotchas
+
+- **Indentation:** 2 spaces (Enforced by `.editorconfig`).
+- **Includes:** Use bracket `<>` for global/system, quotes `""` for relative project files.
+- **CommInterface:** Always use `COMM_` prefix (prevents collision with `SERIAL`).
+- **Hardware Conflict:** Pin 14 is shared by `PIN_RELAY_12V_1` and `LORA_DIO1`—never enable both.
+
+## Shortcuts & Workflows
+
+- `/build` - `pio run -e heltec_wifi_lora_32_V3`
+- `/flash` - Build + Upload + Monitor
+- `/commit` - Verify build -> Stage -> Commit -> Push
+- `/clean` - Clean build artifacts (`rmdir /s /q .pio`)
+- `/monitor` - `pio device monitor -b 115200`
+- `/webapp` - `python tools/webapp/server.py` → open `http://localhost:8000`

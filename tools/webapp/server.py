@@ -1,0 +1,658 @@
+#!/usr/bin/env python3
+"""
+server.py — LoRaLink PC Control Webapp Backend
+
+Serves the 4-panel browser dashboard at http://localhost:8000.
+Talks to the ESP32 over HTTP (primary) and BLE (fallback).
+
+Usage:
+    # HTTP + BLE hybrid  (device on WiFi)
+    python tools/webapp/server.py --device HT-LoRa --ip 192.168.1.50
+
+    # BLE only  (no WiFi configured on device)
+    python tools/webapp/server.py --device HT-LoRa
+
+    # Then open: http://localhost:8000
+"""
+from __future__ import annotations
+
+import argparse
+import asyncio
+import json
+import os
+import sys
+import time
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Optional, Set
+
+# ── FastAPI / WebSocket ──────────────────────────────────────────────────────
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse
+from fastapi.staticfiles import StaticFiles
+import uvicorn
+
+# ── aiohttp for device HTTP ──────────────────────────────────────────────────
+try:
+    import aiohttp
+    AIOHTTP = True
+except ImportError:
+    AIOHTTP = False
+
+# ── BLE stack — import from sibling ble_instrument.py ────────────────────────
+_tools_dir = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(_tools_dir))
+try:
+    from ble_instrument import BLELink, BLEConstants, Config as BLEConfig, ResponseBuffer
+    from bleak import BleakScanner
+    BLEAK = True
+except ImportError:
+    BLEAK = False
+    print("WARNING: bleak not available — BLE transport disabled")
+
+STATIC_DIR    = Path(__file__).parent / "static"
+SETTINGS_FILE = Path(__file__).parent / ".settings.json"
+
+_TRANSPORT_STRATEGIES = [
+    "http_first",        # HTTP when reachable; BLE after 3 consecutive failures
+    "ble_only",          # Always BLE; ignores HTTP entirely
+    "readwrite_split",   # STATUS/MESH → HTTP; GPIO/RELAY/SCHED → BLE
+    "immediate_fallback",# HTTP only when zero failures on record; else BLE
+    "roundrobin",        # Alternate HTTP/BLE on every command
+]
+
+# ════════════════════════════════════════════════════════════════════════════
+# 1. DeviceState — shared live state
+# ════════════════════════════════════════════════════════════════════════════
+
+@dataclass
+class DeviceState:
+    status: dict          = field(default_factory=dict)
+    transport: str        = "disconnected"   # "http" | "ble" | "disconnected"
+    http_ok: bool         = False
+    ble_ok: bool          = False            # True if any peer connected
+    ble1_ok: bool         = False            # peer A
+    ble2_ok: bool         = False            # peer B
+    peer_names: list      = field(default_factory=list)
+    last_update: float    = 0.0
+    http_failures: int    = 0               # consecutive HTTP failures
+    settings: dict        = field(default_factory=lambda: {"transport_strategy": "http_first"})
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# 2. WebSocketManager — browser connection pool
+# ════════════════════════════════════════════════════════════════════════════
+
+class WebSocketManager:
+    def __init__(self) -> None:
+        self._connections: Set[WebSocket] = set()
+
+    async def connect(self, ws: WebSocket) -> None:
+        await ws.accept()
+        self._connections.add(ws)
+
+    def disconnect(self, ws: WebSocket) -> None:
+        self._connections.discard(ws)
+
+    async def broadcast(self, data: dict) -> None:
+        dead: Set[WebSocket] = set()
+        for ws in self._connections:
+            try:
+                await ws.send_json(data)
+            except Exception:
+                dead.add(ws)
+        self._connections -= dead
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# 3. TransportManager — hybrid HTTP + BLE command routing
+# ════════════════════════════════════════════════════════════════════════════
+
+class TransportManager:
+    def __init__(
+        self,
+        state: DeviceState,
+        device_ip: Optional[str],
+        peers: list,              # list[BLELink] — 0, 1, or 2 peers
+    ) -> None:
+        self.state         = state
+        self.device_ip     = device_ip
+        self._peers        = peers
+        self._session: Optional[aiohttp.ClientSession] = None
+        self._round_counter: int = 0
+
+    # ── Public send ──────────────────────────────────────────────────────────
+
+    async def send_command(self, cmd: str) -> bool:
+        transport = await self.pick_transport(cmd)
+        if transport == "http":
+            ok = await self._send_http(cmd)
+            if ok:
+                self.state.http_failures = 0
+                self.state.http_ok = True
+                self.state.transport = "http"
+                return True
+            self.state.http_failures += 1
+            self.state.http_ok = False
+        # BLE path (fallback or primary) — broadcasts to all connected peers
+        ok = await self._send_ble(cmd)
+        self.state.ble_ok  = ok
+        self.state.ble1_ok = len(self._peers) > 0 and self._peers[0].is_connected
+        self.state.ble2_ok = len(self._peers) > 1 and self._peers[1].is_connected
+        self.state.transport = "ble" if ok else "disconnected"
+        return ok
+
+    async def pick_transport(self, cmd: str) -> str:
+        """Dispatch to the saved transport strategy (persisted in .settings.json)."""
+        strategy = self.state.settings.get("transport_strategy", "http_first")
+        http_ok  = bool(self.device_ip and AIOHTTP)
+
+        if strategy == "ble_only":
+            # Always BLE — ignores HTTP entirely
+            return "ble"
+
+        elif strategy == "readwrite_split":
+            # STATUS / MESH queries → HTTP; mutating commands → BLE
+            read_prefixes = ("STATUS", "SCHED LIST", "MESH", "LOG")
+            is_read = any(cmd.upper().startswith(p) for p in read_prefixes)
+            return ("http" if http_ok else "ble") if is_read else "ble"
+
+        elif strategy == "immediate_fallback":
+            # HTTP only when there is a perfect track record (zero failures)
+            return "http" if (http_ok and self.state.http_failures == 0) else "ble"
+
+        elif strategy == "roundrobin":
+            # Alternate between HTTP and BLE on every command
+            self._round_counter += 1
+            return ("http" if (self._round_counter % 2 == 0 and http_ok) else "ble")
+
+        else:  # http_first (default)
+            # HTTP while reachable; fall back to BLE after 3 consecutive failures
+            return "http" if (http_ok and self.state.http_failures < 3) else "ble"
+
+    # ── Private transports ───────────────────────────────────────────────────
+
+    async def _send_http(self, cmd: str) -> bool:
+        if not AIOHTTP or not self.device_ip:
+            return False
+        try:
+            session = await self._get_session()
+            async with session.post(
+                f"http://{self.device_ip}/api/cmd",
+                data={"cmd": cmd},
+                timeout=aiohttp.ClientTimeout(total=3.0),
+            ) as r:
+                return r.status == 200
+        except Exception:
+            return False
+
+    async def _send_ble(self, cmd: str) -> bool:
+        """Broadcast command to all connected BLE peers; returns True if any succeeded."""
+        if not BLEAK or not self._peers:
+            return False
+        results = await asyncio.gather(
+            *[p.send_command(cmd) for p in self._peers if p.is_connected],
+            return_exceptions=True,
+        )
+        return any(r is True for r in results)
+
+    async def _get_session(self) -> aiohttp.ClientSession:
+        if self._session is None or self._session.closed:
+            self._session = aiohttp.ClientSession()
+        return self._session
+
+    async def close(self) -> None:
+        if self._session and not self._session.closed:
+            await self._session.close()
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# 4. StatusPoller — background task pushing device state to WS clients
+# ════════════════════════════════════════════════════════════════════════════
+
+class StatusPoller:
+    INTERVAL = 1.5  # seconds between polls
+
+    def __init__(
+        self,
+        state: DeviceState,
+        ws_manager: WebSocketManager,
+        device_ip: Optional[str],
+        peers: list,              # list[BLELink] — 0, 1, or 2 peers
+    ) -> None:
+        self.state      = state
+        self.ws_manager = ws_manager
+        self.device_ip  = device_ip
+        self._peers     = peers
+        self._session: Optional[aiohttp.ClientSession] = None
+        self._running   = False
+
+    async def run(self) -> None:
+        self._running = True
+        while self._running:
+            # HTTP poll (primary — returns full status JSON)
+            status = await self._poll_http()
+            if status:
+                self.state.status      = status
+                self.state.last_update = time.time()
+                await self.ws_manager.broadcast({
+                    "type": "status", "peer": "A",
+                    "transport": self.state.transport,
+                    "http_ok":   self.state.http_ok,
+                    "ble_ok":    self.state.ble_ok,
+                    **status,
+                })
+
+            # BLE poll — all peers in parallel; each broadcast tagged with peer label
+            if self._peers:
+                ble_results = await asyncio.gather(
+                    *[self._poll_ble_peer(ble, i) for i, ble in enumerate(self._peers)],
+                    return_exceptions=True,
+                )
+                for i, result in enumerate(ble_results):
+                    if isinstance(result, dict) and result:
+                        peer_label = chr(ord("A") + i)
+                        if not status:   # only update primary status if HTTP missed
+                            self.state.status      = result
+                            self.state.last_update = time.time()
+                        await self.ws_manager.broadcast({
+                            "type": "status", "peer": peer_label,
+                            "transport": "ble",
+                            "http_ok":   self.state.http_ok,
+                            "ble_ok":    self.state.ble_ok,
+                            **result,
+                        })
+
+            await asyncio.sleep(self.INTERVAL)
+
+    def stop(self) -> None:
+        self._running = False
+
+    async def _poll_http(self) -> Optional[dict]:
+        if not AIOHTTP or not self.device_ip:
+            return None
+        try:
+            session = await self._get_session()
+            async with session.get(
+                f"http://{self.device_ip}/api/status",
+                timeout=aiohttp.ClientTimeout(total=2.5),
+            ) as r:
+                if r.status == 200:
+                    data = await r.json(content_type=None)
+                    self.state.http_ok       = True
+                    self.state.http_failures = 0
+                    self.state.transport     = "http"
+                    return data
+        except Exception:
+            pass
+        self.state.http_ok = False
+        self.state.http_failures += 1
+        return None
+
+    async def _poll_ble_peer(self, ble: "BLELink", idx: int) -> Optional[dict]:
+        """Poll a single BLE peer, update per-peer connection state."""
+        if not BLEAK or not ble.is_connected:
+            if idx == 0:
+                self.state.ble1_ok = False
+            elif idx == 1:
+                self.state.ble2_ok = False
+            self.state.ble_ok = self.state.ble1_ok or self.state.ble2_ok
+            if not self.state.ble_ok:
+                self.state.transport = "disconnected"
+            return None
+        await ble.send_command("STATUS")
+        if idx == 0:
+            self.state.ble1_ok = True
+        elif idx == 1:
+            self.state.ble2_ok = True
+        self.state.ble_ok    = True
+        self.state.transport = "ble"
+        existing = self.state.status or {}
+        return {**existing, "_via": "ble", "_peer": ble.device_name}
+
+    async def _get_session(self) -> aiohttp.ClientSession:
+        if self._session is None or self._session.closed:
+            self._session = aiohttp.ClientSession()
+        return self._session
+
+    async def close(self) -> None:
+        if self._session and not self._session.closed:
+            await self._session.close()
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# 5. HTTP proxy helpers (device API → browser)
+# ════════════════════════════════════════════════════════════════════════════
+
+async def _proxy_get(device_ip: Optional[str], path: str) -> Optional[dict]:
+    if not AIOHTTP or not device_ip:
+        return None
+    try:
+        async with aiohttp.ClientSession() as s:
+            async with s.get(
+                f"http://{device_ip}{path}",
+                timeout=aiohttp.ClientTimeout(total=3.0),
+            ) as r:
+                return await r.json(content_type=None)
+    except Exception:
+        return None
+
+
+async def _proxy_post(
+    device_ip: Optional[str], path: str, data: dict
+) -> bool:
+    if not AIOHTTP or not device_ip:
+        return False
+    try:
+        async with aiohttp.ClientSession() as s:
+            async with s.post(
+                f"http://{device_ip}{path}",
+                data=data,
+                timeout=aiohttp.ClientTimeout(total=3.0),
+            ) as r:
+                return r.status == 200
+    except Exception:
+        return False
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# 6. App factory
+# ════════════════════════════════════════════════════════════════════════════
+
+def build_app(
+    device_name:  str,
+    device_ip:    Optional[str],
+    device_name2: Optional[str] = None,
+    no_ble:       bool = False,
+) -> FastAPI:
+    app       = FastAPI(title="LoRaLink PC Control")
+    state     = DeviceState()
+    ws_mgr    = WebSocketManager()
+
+    # Singletons populated at startup
+    _ble_peers: list                       = []   # up to 2 BLELink instances
+    _transport: Optional[TransportManager] = None
+    _poller:    Optional[StatusPoller]     = None
+    _poll_task: Optional[asyncio.Task]     = None
+
+    # ── Startup / Shutdown ────────────────────────────────────────────────
+
+    async def _ble_scan() -> None:
+        """Background BLE scan — runs after HTTP is already serving."""
+        try:
+            prefixes = [p for p in [device_name, device_name2] if p]
+            print(f"[BLE] Scanning for {prefixes} (10s)…")
+            all_devs = await BleakScanner.discover(timeout=10.0)
+            matched_addrs: set = set()
+            matches: list = []
+            for prefix in prefixes:
+                for d in all_devs:
+                    if d.name and d.name.startswith(prefix) and d.address not in matched_addrs:
+                        matches.append(d)
+                        matched_addrs.add(d.address)
+                        break
+            print(f"[BLE] Found {len(matches)} matching device(s)")
+            for i, dev in enumerate(matches[:2]):
+                buf = ResponseBuffer()
+                cfg = BLEConfig(device_name_prefix=device_name)
+                ble = BLELink(cfg, buf)
+                try:
+                    await ble.connect(dev)
+                    _ble_peers.append(ble)
+                    state.peer_names = state.peer_names + [dev.name]
+                    print(f"[BLE] Peer {chr(65+i)}: {dev.name} ✓")
+                except Exception as e:
+                    print(f"[BLE] Peer {i+1} ({dev.name}) failed: {e}")
+            state.ble1_ok = len(_ble_peers) >= 1 and _ble_peers[0].is_connected
+            state.ble2_ok = len(_ble_peers) >= 2 and _ble_peers[1].is_connected
+            state.ble_ok  = bool(_ble_peers)
+            if _poller:    _poller._peers    = list(_ble_peers)
+            if _transport: _transport._peers = list(_ble_peers)
+        except Exception as e:
+            print(f"[BLE] Scan failed: {e} — BLE disabled")
+
+    @app.on_event("startup")
+    async def _startup() -> None:
+        nonlocal _ble_peers, _transport, _poller, _poll_task
+
+        # Load persisted transport strategy
+        if SETTINGS_FILE.exists():
+            try:
+                saved = json.loads(SETTINGS_FILE.read_text())
+                if saved.get("transport_strategy") in _TRANSPORT_STRATEGIES:
+                    state.settings["transport_strategy"] = saved["transport_strategy"]
+                    print(f"[settings] Transport strategy: {state.settings['transport_strategy']}")
+            except Exception:
+                pass
+
+        # HTTP transport + status poller start immediately — no waiting for BLE
+        _transport = TransportManager(state, device_ip, _ble_peers)
+        _poller    = StatusPoller(state, ws_mgr, device_ip, _ble_peers)
+        _poll_task = asyncio.create_task(_poller.run())
+        port = int(os.environ.get("PORT", 8000))
+        print(f"[server] Listening at http://localhost:{port}")
+
+        # BLE scan deferred to background task — won't block first HTTP poll
+        if BLEAK and not no_ble:
+            asyncio.create_task(_ble_scan())
+
+    @app.on_event("shutdown")
+    async def _shutdown() -> None:
+        if _poller:
+            _poller.stop()
+        if _poll_task:
+            _poll_task.cancel()
+        if _transport:
+            await _transport.close()
+        for ble in _ble_peers:
+            try:
+                await ble.disconnect()
+            except Exception:
+                pass
+
+    # ── Static files ──────────────────────────────────────────────────────
+
+    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+    @app.get("/", response_class=FileResponse)
+    async def _root() -> FileResponse:
+        return FileResponse(STATIC_DIR / "index.html")
+
+    # ── WebSocket ─────────────────────────────────────────────────────────
+
+    @app.websocket("/ws")
+    async def _ws_endpoint(ws: WebSocket) -> None:
+        await ws_mgr.connect(ws)
+        # Push current state immediately on connect
+        if state.status:
+            await ws.send_json({
+                "type": "status", "peer": "A",
+                "transport": state.transport,
+                "http_ok":   state.http_ok,
+                "ble_ok":    state.ble_ok,
+                "ble1_ok":   state.ble1_ok,
+                "ble2_ok":   state.ble2_ok,
+                "peer_names": state.peer_names,
+                **state.status,
+            })
+        try:
+            while True:
+                await ws.receive_text()   # keep connection alive; ignore client pings
+        except WebSocketDisconnect:
+            ws_mgr.disconnect(ws)
+
+    # ── Command endpoint ──────────────────────────────────────────────────
+
+    @app.post("/api/cmd")
+    async def _cmd(body: dict) -> PlainTextResponse:
+        cmd = (body.get("cmd") or "").strip()
+        if not cmd:
+            return PlainTextResponse("Missing cmd", status_code=400)
+        if _transport is None:
+            return PlainTextResponse("No transport available", status_code=503)
+        ok = await _transport.send_command(cmd)
+        return PlainTextResponse("OK" if ok else "ERR", status_code=200 if ok else 502)
+
+    # ── Transport status ──────────────────────────────────────────────────
+
+    @app.get("/api/transport")
+    async def _transport_status() -> JSONResponse:
+        return JSONResponse({
+            "transport":    state.transport,
+            "http_ok":      state.http_ok,
+            "ble_ok":       state.ble_ok,
+            "ble1_ok":      state.ble1_ok,
+            "ble2_ok":      state.ble2_ok,
+            "peer_names":   state.peer_names,
+            "http_failures":state.http_failures,
+            "last_update":  round(time.time() - state.last_update, 1) if state.last_update else -1,
+        })
+
+    # ── Device API proxy — status ─────────────────────────────────────────
+
+    @app.get("/api/status")
+    async def _status() -> JSONResponse:
+        if state.status:
+            return JSONResponse(state.status)
+        data = await _proxy_get(device_ip, "/api/status")
+        return JSONResponse(data or {})
+
+    # ── Device API proxy — schedule ───────────────────────────────────────
+
+    @app.get("/api/schedule")
+    async def _sched_get() -> JSONResponse:
+        data = await _proxy_get(device_ip, "/api/schedule")
+        return JSONResponse(data or {"schedules": []})
+
+    @app.post("/api/schedule/add")
+    async def _sched_add(body: dict) -> PlainTextResponse:
+        ok = await _proxy_post(device_ip, "/api/schedule/add", body)
+        return PlainTextResponse("OK" if ok else "ERR", status_code=200 if ok else 502)
+
+    @app.post("/api/schedule/remove")
+    async def _sched_remove(body: dict) -> PlainTextResponse:
+        ok = await _proxy_post(device_ip, "/api/schedule/remove", body)
+        return PlainTextResponse("OK" if ok else "ERR", status_code=200 if ok else 502)
+
+    @app.post("/api/schedule/save")
+    async def _sched_save() -> PlainTextResponse:
+        ok = await _proxy_post(device_ip, "/api/schedule/save", {})
+        # Also send via BLE in case HTTP is down
+        if _transport:
+            await _transport.send_command("SCHED SAVE")
+        return PlainTextResponse("OK")
+
+    @app.post("/api/schedule/clear")
+    async def _sched_clear() -> PlainTextResponse:
+        await _proxy_post(device_ip, "/api/schedule/clear", {})
+        if _transport:
+            await _transport.send_command("SCHED SAVE")
+        return PlainTextResponse("OK")
+
+    # ── Transport settings ────────────────────────────────────────────────
+
+    @app.get("/api/settings")
+    async def _settings_get() -> JSONResponse:
+        return JSONResponse({
+            "transport_strategy": state.settings.get("transport_strategy", "http_first"),
+            "options": _TRANSPORT_STRATEGIES,
+        })
+
+    @app.post("/api/settings")
+    async def _settings_post(body: dict) -> JSONResponse:
+        strategy = body.get("transport_strategy", "")
+        if strategy not in _TRANSPORT_STRATEGIES:
+            return JSONResponse(
+                {"ok": False, "error": f"Unknown strategy '{strategy}'"},
+                status_code=400,
+            )
+        state.settings["transport_strategy"] = strategy
+        # Reset round-robin counter on strategy change
+        if _transport:
+            _transport._round_counter = 0
+        try:
+            SETTINGS_FILE.write_text(json.dumps({"transport_strategy": strategy}, indent=2))
+        except Exception as e:
+            print(f"[settings] Failed to persist: {e}")
+        print(f"[settings] Transport strategy → {strategy}")
+        return JSONResponse({"ok": True, "transport_strategy": strategy})
+
+    # ── BLE rescan ────────────────────────────────────────────────────────
+
+    @app.post("/api/rescan")
+    async def _rescan() -> JSONResponse:
+        """Disconnect existing BLE peers, re-scan, reconnect. Runs in background."""
+        if not BLEAK:
+            return JSONResponse({"ok": False, "error": "BLE not available"}, status_code=503)
+
+        async def _do_rescan() -> None:
+            for ble in list(_ble_peers):
+                try:
+                    await ble.disconnect()
+                except Exception:
+                    pass
+            _ble_peers.clear()
+            state.ble_ok = state.ble1_ok = state.ble2_ok = False
+            state.peer_names = []
+            await _ble_scan()   # reuse shared scan helper
+
+        asyncio.create_task(_do_rescan())
+        return JSONResponse({"ok": True, "scanning": True, "msg": "Scan started (≈10s)…"})
+
+    return app
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# 7. CLI entry point
+# ════════════════════════════════════════════════════════════════════════════
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="LoRaLink PC Control Webapp",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=__doc__,
+    )
+    parser.add_argument(
+        "--device", default="HT-LoRa", metavar="PREFIX",
+        help="BLE name prefix for peer A  (default: HT-LoRa)",
+    )
+    parser.add_argument(
+        "--device2", default=None, metavar="PREFIX2",
+        help="BLE name prefix for peer B  (optional; omit for single-device mode)",
+    )
+    parser.add_argument(
+        "--ip", default=None, metavar="ADDRESS",
+        help="Device IP for HTTP transport  (optional)",
+    )
+    parser.add_argument(
+        "--port", type=int, default=None, metavar="PORT",
+        help="Local port to serve on  (default: $PORT env var, then 8000)",
+    )
+    parser.add_argument(
+        "--no-ble", action="store_true",
+        help="Disable BLE scanning entirely (HTTP-only mode)",
+    )
+    args = parser.parse_args()
+
+    # Honour PORT env var injected by preview tools / CI; CLI flag overrides it.
+    port = args.port or int(os.environ.get("PORT", 8000))
+
+    print("LoRaLink PC Control Webapp")
+    print(f"  Peer A     : {args.device}")
+    print(f"  Peer B     : {args.device2 or '(single-device mode)'}")
+    print(f"  Device IP  : {args.ip or 'not set (BLE only)'}")
+    print(f"  BLE        : {'disabled (--no-ble)' if args.no_ble else 'enabled (background scan)'}")
+    print(f"  Serving at : http://localhost:{port}")
+    print()
+
+    app = build_app(
+        device_name=args.device,
+        device_ip=args.ip,
+        device_name2=args.device2,
+        no_ble=args.no_ble,
+    )
+    uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
+
+
+if __name__ == "__main__":
+    main()

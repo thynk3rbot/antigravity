@@ -1,0 +1,22 @@
+# LoRaLink Coding Style & AI Rules
+
+## C++ Coding Standards
+- **Indentation:** 2 spaces.
+- **Braces:** Same line for `if`, `for`, `while`, `switch`.
+- **Naming:**
+  - Classes: `PascalCase` (e.g., `DataManager`).
+  - Functions: `camelCase` (e.g., `handlePacket`).
+  - Variables: `camelCase` (e.g., `lastUpdate`).
+  - Constants/Macros: `UPPER_CASE` (e.g., `PIN_LORA_CS`).
+- **Singleton Pattern:** Always use `static T& getInstance()` and private constructor.
+
+## AI Assistant Guidelines
+- ALWAYS check `CLAUDE.md` and `AGENTS.md` before starting work.
+- Use `LOG_PRINTLN` and `LOG_PRINTF` from `utils/DebugMacros.h` instead of raw `Serial.println`.
+- Never suggest code that instantiates a singleton Manager directly.
+- Ensure all headers have loop guards.
+- When adding new Manager files, update `CLAUDE.md` architecture section.
+
+## CommInterface Rules
+- Never use `SERIAL` (collides with Arduino core). Use `COMM_SERIAL`.
+- Ensure all switch statements handling `CommInterface` have a `default:` case.

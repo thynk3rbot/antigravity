@@ -168,11 +168,17 @@ void ScheduleManager::loraTask() {
 void ScheduleManager::wifiTask() { WiFiManager::getInstance().handle(); }
 
 void ScheduleManager::serialTask() {
+  ScheduleManager &inst = getInstance();
   if (Serial.available()) {
     String input = Serial.readStringUntil('\n');
-    if (input.length() > 0 && input.length() < 128) {
-      CommandManager::getInstance().handleCommand(input,
-                                                  CommInterface::COMM_SERIAL);
+    input.trim();
+    if (input.length() > 0) {
+      if (inst.isStreaming) {
+        inst.processStreamLine(input, CommInterface::COMM_SERIAL);
+      } else {
+        CommandManager::getInstance().handleCommand(input,
+                                                    CommInterface::COMM_SERIAL);
+      }
     }
   }
 }
@@ -302,14 +308,14 @@ void ScheduleManager::loadDynamicSchedules() {
   DataManager &data = DataManager::getInstance();
   String json = data.ReadSchedule();
 
-  StaticJsonDocument<2048> doc;
+  JsonDocument doc;
   DeserializationError error = deserializeJson(doc, json);
   if (error) {
     LOG_PRINTLN("SCHED: JSON Parse Fail");
     return;
   }
 
-  JsonArray schedules = doc["schedules"];
+  JsonArray schedules = doc["schedules"].as<JsonArray>();
   activeDynamicTasks = 0;
 
   for (int i = 0; i < MAX_DYNAMIC_TASKS; i++) {
@@ -327,6 +333,8 @@ void ScheduleManager::loadDynamicSchedules() {
     dynamicConfigs[i].interval = s["interval"] | 0;
     dynamicConfigs[i].duration = s["duration"] | 0;
     dynamicConfigs[i].enabled = s["enabled"] | true;
+    dynamicConfigs[i].updatedBy = s["updatedBy"] | "UNKNOWN";
+    dynamicConfigs[i].lastUpdated = s["lastUpdated"] | "---";
 
     if (dynamicConfigs[i].pin >= 0 && dynamicConfigs[i].interval > 0) {
       tDynamicPool[i].setInterval(dynamicConfigs[i].interval);
@@ -377,8 +385,8 @@ void ScheduleManager::dynamicTaskCallback() {
 void ScheduleManager::loadSchedulesFromCsv(const String &csv) {
   LOG_PRINTLN("SCHED: Parsing CSV schedule...");
 
-  StaticJsonDocument<2048> doc;
-  JsonArray schedules = doc.createNestedArray("schedules");
+  JsonDocument doc;
+  JsonArray schedules = doc["schedules"].to<JsonArray>();
 
   int start = 0;
   int end = csv.indexOf(';');
@@ -402,7 +410,7 @@ void ScheduleManager::loadSchedulesFromCsv(const String &csv) {
     }
 
     if (pIdx >= 4) {
-      JsonObject obj = schedules.createNestedObject();
+      JsonObject obj = schedules.add<JsonObject>();
       obj["name"] = parts[0];
       obj["type"] = parts[1];
       obj["pin"] = parts[2];
@@ -441,5 +449,223 @@ void ScheduleManager::batteryMonitorCallback() {
     }
     esp_sleep_enable_timer_wakeup(6ULL * 60 * 60 * 1000000ULL); // 6 Hours
     esp_deep_sleep_start();
+  }
+}
+
+void ScheduleManager::getTaskJson(JsonDocument &doc) {
+  JsonArray schedules = doc["schedules"].to<JsonArray>();
+  for (int i = 0; i < MAX_DYNAMIC_TASKS; i++) {
+    if (tDynamicPool[i].isEnabled() || dynamicConfigs[i].name.length() > 0) {
+      JsonObject obj = schedules.add<JsonObject>();
+      obj["name"] = dynamicConfigs[i].name;
+      obj["type"] = dynamicConfigs[i].type;
+      obj["pin"] = String(dynamicConfigs[i].pin);
+      String friendly =
+          DataManager::getInstance().GetPinName(String(dynamicConfigs[i].pin));
+      if (friendly.length() > 0) {
+        obj["pinName"] = friendly;
+      }
+      obj["interval"] = dynamicConfigs[i].interval / 1000;
+      obj["duration"] = dynamicConfigs[i].duration / 1000;
+      obj["enabled"] = dynamicConfigs[i].enabled;
+
+      // Live Status
+      obj["state"] = digitalRead(dynamicConfigs[i].pin);
+      obj["nextRun"] = runner.timeUntilNextIteration(tDynamicPool[i]) / 1000;
+
+      obj["updatedBy"] = dynamicConfigs[i].updatedBy;
+      obj["lastUpdated"] = dynamicConfigs[i].lastUpdated;
+    }
+  }
+}
+
+String ScheduleManager::getTaskReport() {
+  String out = "--- SYSTEM TASKS ---\n";
+  Task *tasks[] = {&tLoRa, &tWiFi,   &tSerial, &tHeartbeat,
+                   &tBLE,  &tESPNow, &tButton, &tDisplay,
+                   &t110V, &t12V,    &tBlink,  &tBatteryMonitor};
+  const char *names[] = {"LoRa", "WiFi",      "Serial", "HEARTBEAT",
+                         "BLE",  "ESP-NOW",   "Button", "Display",
+                         "110V", "12V_Pulse", "Blink",  "Battery"};
+
+  for (int i = 0; i < 12; i++) {
+    out += String(names[i]) + ": " + (tasks[i]->isEnabled() ? "ON" : "OFF");
+    out += " (" + String(tasks[i]->getInterval() / 1000.0, 1) + "s)\n";
+  }
+
+  out += "\n--- DYNAMIC SCHEDULES (" + String(activeDynamicTasks) + "/" +
+         String(MAX_DYNAMIC_TASKS) + ") ---\n";
+  for (int i = 0; i < MAX_DYNAMIC_TASKS; i++) {
+    if (tDynamicPool[i].isEnabled()) {
+      out += "[" + String(i) + "] " + dynamicConfigs[i].name + " (" +
+             dynamicConfigs[i].type + ") ";
+      String friendly =
+          DataManager::getInstance().GetPinName(String(dynamicConfigs[i].pin));
+      out += "Pin:" + String(dynamicConfigs[i].pin);
+      if (friendly.length() > 0)
+        out += " (" + friendly + ")";
+      out += " Int:" + String(dynamicConfigs[i].interval / 1000) + "s\n";
+      out += "    [AUDIT] By:" + dynamicConfigs[i].updatedBy + " @ " +
+             dynamicConfigs[i].lastUpdated + "\n";
+    }
+  }
+  return out;
+}
+
+bool ScheduleManager::addDynamicTask(const String &name, const String &type,
+                                     const String &pin, unsigned long interval,
+                                     unsigned long duration,
+                                     const String &source, bool enabled) {
+  int slot = -1;
+  // Use existing slot if name matches
+  for (int i = 0; i < MAX_DYNAMIC_TASKS; i++) {
+    if (activeDynamicTasks > 0 && dynamicConfigs[i].name == name) {
+      slot = i;
+      break;
+    }
+  }
+  // Otherwise find empty slot
+  if (slot == -1) {
+    for (int i = 0; i < MAX_DYNAMIC_TASKS; i++) {
+      if (!tDynamicPool[i].isEnabled()) {
+        slot = i;
+        break;
+      }
+    }
+  }
+
+  if (slot != -1) {
+    unsigned long interval_ms = interval * 1000;
+    unsigned long duration_ms = duration * 1000;
+
+    dynamicConfigs[slot].name = name;
+    dynamicConfigs[slot].type = type;
+    dynamicConfigs[slot].pin =
+        CommandManager::getInstance().getPinFromName(pin);
+    dynamicConfigs[slot].interval = interval_ms;
+    dynamicConfigs[slot].duration = duration_ms;
+    dynamicConfigs[slot].enabled = enabled;
+    dynamicConfigs[slot].updatedBy = source;
+
+    unsigned long uptimeS = millis() / 1000;
+    dynamicConfigs[slot].lastUpdated =
+        String(uptimeS / 3600) + "h " + String((uptimeS % 3600) / 60) + "m";
+
+    tDynamicPool[slot].setInterval(interval_ms);
+    if (enabled) {
+      tDynamicPool[slot].enable();
+    } else {
+      tDynamicPool[slot].disable();
+    }
+    if (slot >= activeDynamicTasks)
+      activeDynamicTasks++;
+    return true;
+  }
+  return false;
+}
+
+bool ScheduleManager::removeDynamicTask(const String &name) {
+  for (int i = 0; i < MAX_DYNAMIC_TASKS; i++) {
+    if (dynamicConfigs[i].name == name) {
+      tDynamicPool[i].disable();
+      dynamicConfigs[i].name = "";
+      activeDynamicTasks--;
+      return true;
+    }
+  }
+  return false;
+}
+
+void ScheduleManager::clearDynamicTasks() {
+  LOG_PRINTLN("SCHED: Clearing all dynamic tasks");
+  for (int i = 0; i < activeDynamicTasks; i++) {
+    tDynamicPool[i].disable();
+  }
+  activeDynamicTasks = 0;
+}
+
+void ScheduleManager::saveDynamicTasks() {
+  JsonDocument doc;
+  JsonArray schedules = doc["schedules"].to<JsonArray>();
+
+  for (int i = 0; i < MAX_DYNAMIC_TASKS; i++) {
+    if (tDynamicPool[i].isEnabled()) {
+      JsonObject obj = schedules.add<JsonObject>();
+      obj["name"] = dynamicConfigs[i].name;
+      obj["type"] = dynamicConfigs[i].type;
+      obj["pin"] = String(dynamicConfigs[i].pin);
+      obj["interval"] = dynamicConfigs[i].interval;
+      obj["duration"] = dynamicConfigs[i].duration;
+      obj["enabled"] = true;
+      obj["updatedBy"] = dynamicConfigs[i].updatedBy;
+      obj["lastUpdated"] = dynamicConfigs[i].lastUpdated;
+    }
+  }
+
+  String json;
+  serializeJson(doc, json);
+  DataManager::getInstance().SaveSchedule(json);
+  LOG_PRINTLN("SCHED: Dynamic tasks saved to FS with Audit info");
+}
+
+void ScheduleManager::processStreamLine(const String &line,
+                                        CommInterface source) {
+  // Expected format: name,type,pin,interval,duration (or tab-separated from
+  // Excel)
+
+  if (line.equalsIgnoreCase("END") || line.equalsIgnoreCase("STOP")) {
+    isStreaming = false;
+    LOG_PRINTLN("STREAM: Import Finished");
+    return;
+  }
+
+  // Detect delimiter
+  char delim = ',';
+  if (line.indexOf('\t') != -1)
+    delim = '\t';
+  else if (line.indexOf(',') == -1) {
+    if (!line.startsWith("NAME") && !line.startsWith("#")) {
+      // Ignore lines that don't look like data
+    }
+    return;
+  }
+
+  // Skip headers
+  if (line.startsWith("NAME") || line.startsWith("#"))
+    return;
+
+  String parts[6];
+  int pIdx = 0;
+  int pStart = 0;
+  int pEnd = line.indexOf(delim);
+  while (pIdx < 6) {
+    if (pEnd == -1)
+      pEnd = line.length();
+    parts[pIdx++] = line.substring(pStart, pEnd);
+    if (pEnd == (int)line.length())
+      break;
+    pStart = pEnd + 1;
+    pEnd = line.indexOf(delim, pStart);
+  }
+
+  if (pIdx >= 4) {
+    String name = parts[0];
+    name.trim();
+    String type = parts[1];
+    type.trim();
+    String pin = parts[2];
+    pin.trim();
+    unsigned long interval = parts[3].toInt(); // Now treated as seconds
+    unsigned long duration =
+        (pIdx > 4) ? parts[4].toInt() : 0; // Now treated as seconds
+    bool enabled = (pIdx > 5)
+                       ? (parts[5].trim(), parts[5].equalsIgnoreCase("true") ||
+                                               parts[5].toInt() == 1)
+                       : true;
+
+    if (addDynamicTask(name, type, pin, interval, duration,
+                       CommandManager::interfaceName(source), enabled)) {
+      LOG_PRINTF("STREAM: Imported %s\n", name.c_str());
+    }
   }
 }

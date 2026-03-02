@@ -29,7 +29,7 @@ void setup() {
   Serial.begin(115200);
   delay(1000);
   Serial.println("\n\n########################################");
-  Serial.println("#  LORALINK-ANYTOANY " FIRMWARE_VERSION "             #");
+  Serial.println("#  LORALINK-ANY2ANY " FIRMWARE_VERSION "             #");
   Serial.println("#  Unified Wireless Gateway            #");
   Serial.println("########################################");
 

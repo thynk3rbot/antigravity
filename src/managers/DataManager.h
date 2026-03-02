@@ -7,8 +7,6 @@
 #include <LittleFS.h>
 #include <Preferences.h>
 
-#include <Preferences.h>
-
 struct LogEntry {
   uint32_t timestamp;
   String source;
@@ -89,6 +87,8 @@ public:
   // Persistence: GPIO States
   void SetGpioState(const String &pinName, bool state);
   bool GetGpioState(const String &pinName);
+  void SetPinName(const String &pin, const String &name);
+  String GetPinName(const String &pin);
   void FactoryReset();
 
   // Node & Log Methods

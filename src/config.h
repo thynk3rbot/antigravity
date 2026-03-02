@@ -7,7 +7,7 @@
 // ============================================================================
 //   FIRMWARE & FEATURE FLAGS
 // ============================================================================
-#define FIRMWARE_VERSION "v1.3"
+#define FIRMWARE_VERSION "v1.4.1"
 #define FIRMWARE_NAME "LoRaLink Any2Any"
 #define ALLOW_GPIO_CONTROL true
 

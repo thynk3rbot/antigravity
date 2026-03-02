@@ -2,8 +2,9 @@
 #define SCHEDULE_MANAGER_H
 
 #include "../config.h"
+#include <ArduinoJson.h>
 #include <DHT.h>
-#include <TaskSchedulerDeclarations.h>
+#include <TaskScheduler.h>
 
 class ScheduleManager {
 public:
@@ -25,6 +26,17 @@ public:
   // JSON/CSV Dynamic Scheduling
   void loadDynamicSchedules();
   void loadSchedulesFromCsv(const String &csv);
+  String getTaskReport();
+  void getTaskJson(JsonDocument &doc);
+  bool addDynamicTask(const String &name, const String &type, const String &pin,
+                      unsigned long interval, unsigned long duration,
+                      const String &source = "INTERNAL", bool enabled = true);
+  bool removeDynamicTask(const String &name);
+  void clearDynamicTasks();
+  void saveDynamicTasks();
+  void setStreamMode(bool mode) { isStreaming = mode; }
+  bool isInStreamMode() const { return isStreaming; }
+  void processStreamLine(const String &line, CommInterface source);
   static void dynamicTaskCallback();
 
   struct DynamicTaskConfig {
@@ -34,9 +46,12 @@ public:
     unsigned long interval;
     unsigned long duration;
     bool enabled;
+    String updatedBy;
+    String lastUpdated;
   };
 
 private:
+  bool isStreaming = false;
   ScheduleManager();
 
   Scheduler runner;

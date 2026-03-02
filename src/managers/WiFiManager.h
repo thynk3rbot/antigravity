@@ -37,11 +37,18 @@ private:
   void serveIntegration();
   void serveIntegrationSave();
   void serveHelp();
+  void serveScheduling();
   void serveApiStatus();
   void serveApiCmd();
   void serveApiPeers();
   void serveApiAddPeer();
   void serveApiRemovePeer();
+  void serveApiSchedule();
+  void serveApiScheduleAdd();
+  void serveApiScheduleRemove();
+  void serveApiScheduleClear();
+  void serveApiScheduleSave();
+  void serveApiPinName();
 };
 
 #endif // WIFI_MANAGER_H
