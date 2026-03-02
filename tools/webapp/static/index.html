@@ -553,15 +553,34 @@
           <div
             class="panel-title panel-title-flex flex-shrink-0"
           >
-            <span id="cfg-filename" class="text-dim"
-              >— no file selected —</span
-            >
+            <div style="display:flex;align-items:center;gap:8px">
+              <span id="cfg-filename" class="text-dim"
+                >— no file selected —</span
+              >
+              <span id="json-status" style="font-size:0.7em;padding:2px 6px;border-radius:4px;display:none"></span>
+            </div>
             <div class="flex-row-sm">
+              <button
+                class="btn btn-secondary btn-sm"
+                onclick="loadFromDevice()"
+                id="cfg-load-btn"
+                style="display:none"
+              >
+                📥 Load from Device
+              </button>
+              <button
+                class="btn btn-secondary btn-sm"
+                onclick="prettifyJson()"
+                id="cfg-pretty-btn"
+                style="display:none"
+              >
+                { } Prettify
+              </button>
               <button
                 class="btn btn-secondary btn-sm"
                 onclick="deleteFile()"
                 id="cfg-del-btn"
-                class="hidden"
+                style="display:none"
               >
                 Delete
               </button>
@@ -569,7 +588,7 @@
                 class="btn btn-sm"
                 onclick="saveFile()"
                 id="cfg-save-btn"
-                class="hidden"
+                style="display:none"
               >
                 Save to Disk
               </button>
@@ -577,8 +596,7 @@
                 class="btn btn-sm"
                 onclick="applyFileTasks()"
                 id="cfg-apply-btn"
-                class="hidden"
-                class="bg-pill-on"
+                style="display:none"
               >
                 Apply to Device
               </button>
@@ -588,6 +606,7 @@
             id="cfg-editor"
             placeholder="Select a file or click + New to start editing…"
             spellcheck="false"
+            oninput="onConfigEditorInput()"
           ></textarea>
         </div>
       </div>
@@ -1400,6 +1419,33 @@
               `Active node → ${d.node.name} (${d.node.type}:${d.node.address})`,
             );
             await loadNodes();
+
+            // NVS Preload: fetch device config for WiFi/LoRa nodes
+            if (d.node.type === "wifi" || d.node.type === "lora") {
+              try {
+                const snapR = await fetch(`/api/nodes/${id}/snapshot`);
+                const snap = await snapR.json();
+                if (snap.ok) {
+                  const schedCount = (snap.schedule.schedules || []).length;
+                  logConsole(
+                    "rx",
+                    `Snapshot: ${d.node.name} — ${schedCount} scheduled tasks`,
+                  );
+
+                  // Save schedule to Config Files as {node_name}_schedule.json
+                  const fname = `${d.node.name.toLowerCase().replace(/\s+/g, "_")}_schedule.json`;
+                  const content = JSON.stringify(snap.schedule.schedules || [], null, 2);
+                  await fetch(`/api/files/${encodeURIComponent(fname)}`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ content }),
+                  });
+                  logConsole("rx", `Schedule saved as ${fname}`);
+                }
+              } catch (snapErr) {
+                logConsole("warn", `Snapshot failed: ${snapErr.message}`);
+              }
+            }
           }
         } catch (e) {
           logConsole("err", `connectNode: ${e.message}`);
@@ -1575,13 +1621,10 @@
             return;
           }
           el.innerHTML = d.files
-            .map(
-              (f) => `
-      <div class="file-item${_activeFile === f.name ? " active-file" : ""}" onclick="openFile('${escHtml(f.name)}')">
-        <span class="text-sm font-mono">${escHtml(f.name)}</span>
-        <span class="file-size">${f.size}B</span>
-      </div>`,
-            )
+            .map((f) => {
+              const icon = f.name.endsWith('.json') ? '📄' : '📊';
+              return `<div class="file-item${_activeFile === f.name ? " active-file" : ""}" onclick="openFile('${escHtml(f.name)}')"><span>${icon}</span><span class="text-sm font-mono" style="flex:1">${escHtml(f.name)}</span><span class="file-size">${f.size}B</span></div>`;
+            })
             .join("");
         } catch (e) {}
       }
@@ -1593,11 +1636,13 @@
           _activeFile = name;
           document.getElementById("cfg-editor").value = text;
           document.getElementById("cfg-filename").textContent = name;
-          document.getElementById("cfg-save-btn").classList.remove("hidden");
-          document.getElementById("cfg-del-btn").classList.remove("hidden");
-          document.getElementById("cfg-apply-btn").style.display =
-            name.endsWith(".json") ? "inline-flex" : "none";
+          document.getElementById("cfg-save-btn").style.display = "inline-flex";
+          document.getElementById("cfg-del-btn").style.display = "inline-flex";
+          document.getElementById("cfg-pretty-btn").style.display = name.endsWith(".json") ? "inline-flex" : "none";
+          document.getElementById("cfg-load-btn").style.display = "inline-flex";
+          document.getElementById("cfg-apply-btn").style.display = name.endsWith(".json") ? "inline-flex" : "none";
           await loadFiles();
+          if (name.endsWith(".json")) validateJson();
         } catch (e) {
           logConsole("err", `openFile: ${e.message}`);
         }
@@ -1680,11 +1725,70 @@
           document.getElementById("cfg-editor").value = "";
           document.getElementById("cfg-filename").textContent =
             "— no file selected —";
-          document.getElementById("cfg-save-btn").classList.add("hidden");
-          document.getElementById("cfg-del-btn").classList.add("hidden");
-          document.getElementById("cfg-apply-btn").classList.add("hidden");
+          document.getElementById("cfg-save-btn").style.display = "none";
+          document.getElementById("cfg-del-btn").style.display = "none";
+          document.getElementById("cfg-apply-btn").style.display = "none";
+          document.getElementById("json-status").style.display = "none";
           await loadFiles();
         } catch (e) {}
+      }
+
+      var _jsonDebounce = null;
+
+      function onConfigEditorInput() {
+        clearTimeout(_jsonDebounce);
+        _jsonDebounce = setTimeout(validateJson, 350);
+      }
+
+      function validateJson() {
+        const ta = document.getElementById("cfg-editor");
+        const ind = document.getElementById("json-status");
+        if (!_activeFile || !_activeFile.endsWith('.json') || !ind) return;
+        ind.style.display = 'inline';
+        try {
+          JSON.parse(ta.value);
+          ind.textContent = '✓ valid JSON';
+          ind.style.color = '#00ff88';
+          ind.style.background = '#00ff8811';
+        } catch (e) {
+          ind.textContent = '✗ ' + e.message.slice(0, 40);
+          ind.style.color = '#ff4444';
+          ind.style.background = '#ff444411';
+        }
+      }
+
+      function prettifyJson() {
+        const ta = document.getElementById("cfg-editor");
+        try {
+          ta.value = JSON.stringify(JSON.parse(ta.value), null, 2);
+          validateJson();
+        } catch (e) {
+          logConsole("err", `Cannot prettify: invalid JSON — ${e.message}`);
+        }
+      }
+
+      async function loadFromDevice() {
+        if (!_activeFile) { logConsole("err", "No file open"); return; }
+        logConsole("tx", "Fetching schedule from active node…");
+        try {
+          // Get active node ID from the current state
+          const nodesR = await fetch("/api/nodes");
+          const nodes = await nodesR.json();
+          const activeNode = nodes.find(n => n.active);
+          if (!activeNode) { logConsole("err", "No node connected"); return; }
+
+          const snapR = await fetch(`/api/nodes/${activeNode.id}/snapshot`);
+          const snap = await snapR.json();
+          if (!snap.ok) { logConsole("err", `Snapshot failed: ${snap.error}`); return; }
+
+          const schedules = snap.schedule.schedules || [];
+          const content = JSON.stringify(schedules, null, 2);
+          document.getElementById("cfg-editor").value = content;
+          validateJson();
+          logConsole("rx", `Loaded ${schedules.length} tasks from ${snap.node_name}`);
+        } catch (e) {
+          logConsole("err", `loadFromDevice: ${e.message}`);
+        }
       }
 
       // ── APC / Registry / Transport Mode ─────────────────────────────────
