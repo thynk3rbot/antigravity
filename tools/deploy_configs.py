@@ -15,16 +15,18 @@ from pathlib import Path
 BASE_DIR = Path(__file__).parent.parent
 CONFIGS_DIR = BASE_DIR / "tools/webapp/configs"
 
+WEBAPP_BASE = "http://localhost:8000"
+
 DEVICES = [
     {
         "name": "Master",
-        "ip": "172.16.0.27",
+        "id": "3c11206a-2909-47f2-b357-ee0937b6b396",
         "config_file": "heltec_v3_generic.json",
         "expected_name": "LoRaLink-TestUnit-V3",
     },
     {
         "name": "Slave",
-        "ip": "172.16.0.26",
+        "id": "683e5fef-5377-4c7a-9e01-9fffc6e41ef2",
         "config_file": "heltec_v3_farm_automation.json",
         "expected_name": "FarmGateway-North",
     },
@@ -38,16 +40,26 @@ async def deploy_config(session, device):
         return {"ok": False, "error": f"Config file not found: {config_path}"}
 
     try:
+        # Step 1: Connect to the device via webapp
+        print(f"\n[{device['name']}] Connecting...")
+        connect_url = f"{WEBAPP_BASE}/api/nodes/{device['id']}/connect"
+        async with session.post(connect_url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+            if resp.status != 200:
+                return {"ok": False, "error": f"Failed to connect: HTTP {resp.status}"}
+
+        await asyncio.sleep(1)
+
+        # Step 2: Deploy config via webapp proxy
         with open(config_path) as f:
             config = json.load(f)
 
-        url = f"http://{device['ip']}/api/configapply"
-        print(f"\n[{device['name']}] Deploying {device['config_file']}...")
-        print(f"  → Target device name: {device['expected_name']}")
+        print(f"  > Deploying {device['config_file']}...")
+        print(f"  > Target device name: {device['expected_name']}")
 
+        url = f"{WEBAPP_BASE}/api/device/config/apply"
         async with session.post(url, json=config, timeout=aiohttp.ClientTimeout(total=30)) as resp:
             if resp.status == 200:
-                print(f"  ✓ Config applied successfully")
+                print(f"  [OK] Config applied successfully")
 
                 # Wait for reboot and verify
                 await asyncio.sleep(3)
@@ -64,14 +76,14 @@ async def deploy_config(session, device):
 async def verify_config(session, device):
     """Verify config was applied by exporting and checking device name"""
     try:
-        url = f"http://{device['ip']}/api/config"
+        url = f"{WEBAPP_BASE}/api/device/config"
         async with session.get(url, timeout=aiohttp.ClientTimeout(total=30)) as resp:
             if resp.status == 200:
                 exported = await resp.json()
                 actual_name = exported.get("settings", {}).get("dev_name", "UNKNOWN")
 
                 if actual_name == device["expected_name"]:
-                    print(f"  ✓ Verified: device name is '{actual_name}'")
+                    print(f"  [OK] Verified: device name is '{actual_name}'")
                     return {"ok": True, "device_name": actual_name}
                 else:
                     return {
@@ -101,7 +113,7 @@ async def main():
             results.append(result)
 
             if not result["ok"]:
-                print(f"  ✗ FAILED: {result.get('error', 'Unknown error')}")
+                print(f"  [FAIL] FAILED: {result.get('error', 'Unknown error')}")
 
             # Wait between devices
             await asyncio.sleep(2)
@@ -112,7 +124,7 @@ async def main():
     print("=" * 70)
 
     for result in results:
-        status = "✓ SUCCESS" if result["ok"] else "✗ FAILED"
+        status = "[OK] SUCCESS" if result["ok"] else "[FAIL] FAILED"
         device_name = result.get("device_name", "N/A")
         print(f"\n{result['device']}: {status}")
         if result["ok"]:
@@ -123,14 +135,14 @@ async def main():
     all_ok = all(r["ok"] for r in results)
     print("\n" + "=" * 70)
     if all_ok:
-        print("✓ All devices deployed successfully!")
+        print("[OK] All devices deployed successfully!")
         print("\nNext steps:")
         print("1. Open webapp: python tools/webapp/server.py --ip 172.16.0.26")
         print("2. Load task schedules:")
         print("   - Master: import tasks_generic_toggle.json")
         print("   - Slave: import tasks_farm_scenario.json")
     else:
-        print("✗ Some devices failed. Check errors above.")
+        print("[FAIL] Some devices failed. Check errors above.")
         sys.exit(1)
 
 
