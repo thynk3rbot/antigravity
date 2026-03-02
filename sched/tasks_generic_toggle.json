@@ -1,0 +1,50 @@
+{
+  "schedules": [
+    {
+      "name": "Heartbeat",
+      "type": "TOGGLE",
+      "pin": "LED",
+      "interval": 2000,
+      "enabled": true,
+      "_comment": "Visual heartbeat every 2 seconds - always running to confirm device is alive"
+    },
+    {
+      "name": "MainRelay_Test",
+      "type": "PULSE",
+      "pin": "RL12_2",
+      "interval": 30000,
+      "duration": 5000,
+      "enabled": false,
+      "_comment": "Test relay activation - activates for 5s every 30s (DISABLED - enable manually for testing)"
+    },
+    {
+      "name": "PowerCycle_Test",
+      "type": "TOGGLE",
+      "pin": "RL12_3",
+      "interval": 60000,
+      "duration": 0,
+      "enabled": false,
+      "_comment": "External power control - toggles every 60s (DISABLED - requires careful planning)"
+    },
+    {
+      "name": "SensorRead",
+      "type": "TOGGLE",
+      "pin": "BatSensor",
+      "interval": 5000,
+      "enabled": false,
+      "_comment": "Battery voltage ADC read simulation - every 5s (DISABLED for bench testing)"
+    }
+  ],
+  "_metadata": {
+    "configuration": "heltec_v3_generic",
+    "purpose": "Basic GPIO testing - verify TOGGLE and PULSE task types work correctly",
+    "test_procedures": [
+      "Enable 'Heartbeat' task - LED should blink every 2 seconds",
+      "Enable 'MainRelay_Test' - RELAY2 should pulse high for 5s every 30s",
+      "Enable 'PowerCycle_Test' with caution - RELAY3 toggles every 60s",
+      "Observe task execution times and relay response times"
+    ],
+    "interval_units": "milliseconds",
+    "task_types_used": ["TOGGLE", "PULSE"]
+  }
+}

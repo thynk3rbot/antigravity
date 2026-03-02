@@ -1,0 +1,79 @@
+{
+  "schedules": [
+    {
+      "name": "IrrigationCycle",
+      "type": "PULSE",
+      "pin": "IrrigationPump",
+      "interval": 86400000,
+      "duration": 1800000,
+      "enabled": false,
+      "_comment": "Water delivery - 30min pulse once per 24h (DISABLED - enable when ready, ~6AM daily)"
+    },
+    {
+      "name": "GrowhouseLighting",
+      "type": "TOGGLE",
+      "pin": "GrowLight",
+      "interval": 3600000,
+      "duration": 0,
+      "enabled": false,
+      "_comment": "Day/night cycle lighting - toggles every hour (DISABLED - requires time-based scheduling)"
+    },
+    {
+      "name": "HeatingControl",
+      "type": "TOGGLE",
+      "pin": "Heater",
+      "interval": 300000,
+      "duration": 0,
+      "enabled": false,
+      "_comment": "Climate control - temperature-based toggle every 5min (DISABLED - requires DHT sensor feedback)"
+    },
+    {
+      "name": "SystemHeartbeat",
+      "type": "TOGGLE",
+      "pin": "SystemLED",
+      "interval": 10000,
+      "duration": 0,
+      "enabled": true,
+      "_comment": "Device alive indicator - LED blinks every 10 seconds (ALWAYS ON for monitoring)"
+    },
+    {
+      "name": "SensorPowerCycle",
+      "type": "PULSE",
+      "pin": "PowerRail",
+      "interval": 600000,
+      "duration": 500,
+      "enabled": false,
+      "_comment": "Sensor wake-up pulse - 0.5s power pulse every 10min to trigger readings (DISABLED)"
+    },
+    {
+      "name": "MoistureCheck",
+      "type": "TOGGLE",
+      "pin": "SoilMoisture",
+      "interval": 60000,
+      "duration": 0,
+      "enabled": false,
+      "_comment": "ADC soil moisture read - every minute (DISABLED - for monitoring integration)"
+    }
+  ],
+  "_metadata": {
+    "configuration": "heltec_v3_farm_automation",
+    "scenario": "Multi-crop greenhouse with automated irrigation, climate, and monitoring",
+    "deployment_context": "Remote field deployment with WiFi gateway and MQTT telemetry",
+    "safety_notes": [
+      "All dangerous operations (irrigation pump, heater) are DISABLED by default",
+      "Enable only after verifying device connections and sensor calibration",
+      "Monitor first run in manual mode before relying on automation",
+      "Irrigation scheduled for early morning (86400ms = 24h interval)"
+    ],
+    "interval_units": "milliseconds",
+    "task_types_used": ["TOGGLE", "PULSE"],
+    "typical_timeline": {
+      "daily": "IrrigationCycle at ~6AM (1h 30min duration)",
+      "hourly": "GrowhouseLighting toggles (day/night extension)",
+      "5min": "HeatingControl checks temperature feedback",
+      "10sec": "SystemHeartbeat runs continuously",
+      "10min": "SensorPowerCycle pulses sensors for readings",
+      "1min": "MoistureCheck samples soil ADC"
+    }
+  }
+}
