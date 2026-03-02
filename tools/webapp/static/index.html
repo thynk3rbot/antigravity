@@ -1745,29 +1745,78 @@
       }
 
       async function applyFileTasks() {
-        if (!_activeFile) return;
+        if (!_activeFile) {
+          logConsole("err", "No file selected");
+          return;
+        }
         const content = document.getElementById("cfg-editor").value;
-        let tasks;
+        let data;
         try {
-          tasks = JSON.parse(content);
+          data = JSON.parse(content);
         } catch (e) {
           logConsole("err", "JSON parse error — fix syntax first");
           return;
         }
+
+        // Detect file type: device config vs. task schedule
+        if (data.schema && data.hardware_id && data.settings) {
+          // Device configuration file
+          logConsole("tx", `Device config detected: hardware=${data.hardware_id}, device=${data.settings.dev_name}`);
+          await applyDeviceConfig(data);
+        } else if (Array.isArray(data) || (data.schedules && Array.isArray(data.schedules))) {
+          // Task schedule file (array or object with schedules array)
+          const tasks = Array.isArray(data) ? data : data.schedules;
+          logConsole("tx", `Task schedule detected: ${tasks.length} task(s)`);
+          await applyTaskSchedule(tasks);
+        } else {
+          logConsole("err", "File format not recognized. Expected device config (schema+hardware_id+settings) or task schedule (array).");
+        }
+      }
+
+      async function applyDeviceConfig(config) {
+        try {
+          const devName = config.settings.dev_name || "unknown";
+          logConsole("tx", `Sending device config to device…`);
+          const r = await fetch("/api/device/config/apply", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(config),
+          });
+
+          if (r.status === 200) {
+            logConsole("rx", `Config applied! Device '${devName}' is rebooting…`);
+            // Wait for device to come back online
+            await new Promise((res) => setTimeout(res, 3000));
+          } else {
+            const err = await r.text();
+            logConsole("err", `Config apply failed (HTTP ${r.status}): ${err}`);
+          }
+        } catch (e) {
+          logConsole("err", `Apply config error: ${e.message}`);
+        }
+      }
+
+      async function applyTaskSchedule(tasks) {
         if (!Array.isArray(tasks)) {
           logConsole("err", "Expected a JSON array of tasks");
           return;
         }
-        logConsole("tx", `Applying ${tasks.length} tasks from ${_activeFile}…`);
+        logConsole("tx", `Applying ${tasks.length} task(s)…`);
+        let applied = 0;
         for (const t of tasks) {
+          if (!t.name || !t.type || !t.pin || t.interval === undefined) {
+            logConsole("err", `Task missing required field: ${JSON.stringify(t)}`);
+            continue;
+          }
           const dur = t.duration ? ` ${t.duration}` : "";
           await sendRaw(
             `SCHED ADD ${t.name} ${t.type} ${t.pin} ${t.interval}${dur}`,
           );
+          applied++;
           await new Promise((res) => setTimeout(res, 250));
         }
         await sendRaw("SCHED SAVE");
-        logConsole("rx", `Applied ${tasks.length} tasks to device`);
+        logConsole("rx", `Applied ${applied}/${tasks.length} tasks to device`);
       }
 
       async function deleteFile() {

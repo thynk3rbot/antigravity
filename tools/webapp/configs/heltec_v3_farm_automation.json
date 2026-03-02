@@ -2,9 +2,9 @@
   "schema": "1.0",
   "hardware_id": "Heltec ESP32 LoRa V3",
   "settings": {
-    "dev_name": "FarmGateway-North",
-    "wifi_ssid": "FarmNetwork",
-    "wifi_pass": "ChangeMe123!",
+    "dev_name": "Tent1",
+    "wifi_ssid": "spw1-5g",
+    "wifi_pass": "OPTMyxlpyx99!",
     "static_ip": "192.168.1.50",
     "gateway": "192.168.1.1",
     "subnet": "255.255.255.0",

@@ -2,7 +2,7 @@
   "schema": "1.0",
   "hardware_id": "Heltec ESP32 LoRa V3",
   "settings": {
-    "dev_name": "LoRaLinkAny2Any-1",
+    "dev_name": "LoRaLink1",
     "wifi_ssid": "spw1-5g",
     "wifi_pass": "OPTMyxlpyx99!",
     "static_ip": "",
