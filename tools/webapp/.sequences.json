@@ -1,0 +1,14 @@
+[
+  {
+    "name": "test_sequence",
+    "tasks": [
+      {
+        "name": "LED_Task",
+        "type": "TOGGLE",
+        "pin": 6,
+        "interval": 30,
+        "duration": 0
+      }
+    ]
+  }
+]

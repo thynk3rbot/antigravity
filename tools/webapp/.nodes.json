@@ -4,13 +4,13 @@
     "name": "Master",
     "type": "wifi",
     "address": "172.16.0.26",
-    "active": true
+    "active": false
   },
   {
     "id": "683e5fef-5377-4c7a-9e01-9fffc6e41ef2",
     "name": "Slave",
     "type": "wifi",
     "address": "172.16.0.26",
-    "active": false
+    "active": true
   }
 ]

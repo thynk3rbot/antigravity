@@ -46,6 +46,7 @@ public:
   uint8_t espNowChannel;
   bool wifiEnabled;
   bool bleEnabled;
+  char transportMode; // 'J'=JSON, 'C'=CSV, 'K'=KV, 'B'=BIN
 
   // State
   int bootCount;
@@ -89,6 +90,12 @@ public:
   bool GetGpioState(const String &pinName);
   void SetPinName(const String &pin, const String &name);
   String GetPinName(const String &pin);
+  void SetPinEnabled(int pin, bool enabled);
+  bool GetPinEnabled(int pin);
+  void SetTransportMode(char mode);
+  char GetTransportMode();
+  void AddToRegistry(const String &id, const String &hwType);
+  String GetRegistryJson();
   void FactoryReset();
 
   // Node & Log Methods
@@ -98,6 +105,8 @@ public:
   void SawNode(const char *id, int rssi, uint8_t hops);
   void PruneStaleNodes();
   void LogMessage(const String &source, int rssi, const String &msg);
+  bool ImportConfig(const String &json);
+  String ExportConfig();
 
   // Filesystem Search/Load
   bool SaveSchedule(const String &json);

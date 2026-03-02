@@ -39,6 +39,10 @@ private:
   void serveHelp();
   void serveScheduling();
   void serveApiStatus();
+  void serveApiConfig();
+  void serveApiConfigApply();
+  void serveApiFileList();
+  void serveApiFileRead();
   void serveApiCmd();
   void serveApiPeers();
   void serveApiAddPeer();
@@ -49,6 +53,9 @@ private:
   void serveApiScheduleClear();
   void serveApiScheduleSave();
   void serveApiPinName();
+  void serveApiPinEnable();
+  void serveApiTransportMode();
+  void serveApiRegistry();
 };
 
 #endif // WIFI_MANAGER_H

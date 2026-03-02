@@ -1,11 +1,11 @@
 #include "WiFiManager.h"
-#include "../utils/DebugMacros.h"
-#include "CommandManager.h"
 #include "ESPNowManager.h"
 #include "LoRaManager.h"
 #include "ScheduleManager.h"
 #include <Arduino.h>
 #include <ArduinoJson.h>
+#include <WebServer.h>
+#include <WiFi.h>
 
 WebServer server(80);
 
@@ -143,6 +143,22 @@ void WiFiManager::startServer() {
     lastApiHit = millis();
     serveApiStatus();
   });
+  server.on("/api/config", HTTP_GET, [this]() {
+    lastApiHit = millis();
+    serveApiConfig();
+  });
+  server.on("/api/config/apply", HTTP_POST, [this]() {
+    lastApiHit = millis();
+    serveApiConfigApply();
+  });
+  server.on("/api/files/list", HTTP_GET, [this]() {
+    lastApiHit = millis();
+    serveApiFileList();
+  });
+  server.on("/api/files/read", HTTP_GET, [this]() {
+    lastApiHit = millis();
+    serveApiFileRead();
+  });
   server.on("/api/cmd", HTTP_POST, [this]() {
     lastApiHit = millis();
     serveApiCmd();
@@ -184,6 +200,18 @@ void WiFiManager::startServer() {
   server.on("/api/pins/name", HTTP_POST, [this]() {
     lastApiHit = millis();
     serveApiPinName();
+  });
+  server.on("/api/pins/enable", HTTP_POST, [this]() {
+    lastApiHit = millis();
+    serveApiPinEnable();
+  });
+  server.on("/api/transport/mode", HTTP_POST, [this]() {
+    lastApiHit = millis();
+    serveApiTransportMode();
+  });
+  server.on("/api/registry", HTTP_GET, [this]() {
+    lastApiHit = millis();
+    serveApiRegistry();
   });
 
   server.begin();
@@ -250,22 +278,42 @@ document.getElementById('ifc').innerHTML=ifcs.map(function(x){
 return '<span class="badge '+(x[1]?'on':'off')+'">'+x[0]+'</span>';
 }).join('');
 var b=parseFloat(d.bat)||0;
-var c='<div class="card"><div class="lbl">Battery</div><div class="val '+(b>3.5?'ok':'warn')+'">'+(b?b.toFixed(2)+'V':'—')+'</div></div>';
-c+='<div class="card"><div class="lbl">LoRa RSSI</div><div class="val">'+(d.rssi||'—')+' dBm</div></div>';
+var c='<div class="card"><div class="lbl">Batteries</div><div class="val '+(b>3.5?'ok':'warn')+'">'+(b?b.toFixed(2)+'V':'—')+'</div></div>';
+c+='<div class="card"><div class="lbl">LoRa RSSI</div><div class="val">'+(d.rssi||'—')+'</div></div>';
 c+='<div class="card"><div class="lbl">Nodes</div><div class="val ok">'+(d.nodes!=null?d.nodes:'—')+'</div></div>';
-c+='<div class="card"><div class="lbl">Uptime</div><div class="val">'+(d.uptime||'—')+'</div></div>';
-c+='<div class="card"><div class="lbl">Heap</div><div class="val">'+(d.heap?Math.round(d.heap/1024)+'KB':'—')+'</div></div>';
-c+='<div class="card" style="border-color:#1f2a3a"><div class="lbl">Last CMD</div><div class="val" style="font-size:0.75em;color:#888" title="'+(d.last_cmd||'')+'">'+(d.last_cmd||'—')+'</div></div>';
 document.getElementById('cards').innerHTML=c;
+
 var l='';d.log.forEach(function(m){
 if(m)l+='<div class="m"><span class="ts">['+m.ts+'s]</span> <span class="src">'+m.src+'</span>: '+m.msg+'</div>';
 });
 document.getElementById('log').innerHTML=l;
+
+// Compact Pin Monitor
+if(d.pins && d.pins.length > 0) {
+  var phtml = '<div style="padding:10px;display:grid;grid-template-columns:1fr 1fr;gap:5px;">';
+  d.pins.forEach(function(p){
+    var isRelay = p.n.indexOf('RL') === 0 || p.n === 'LED';
+    phtml += '<div class="card" style="padding:5px 8px;border-color:'+(p.v?'#00ff8844':'#2a2a4a')+'">';
+    phtml += '<div class="lbl" style="font-size:0.5em">'+p.n+'</div>';
+    phtml += '<div style="display:flex;justify-content:space-between;align-items:center">';
+    phtml += '<span style="font-size:0.8em;color:'+(p.v?'#00ff88':'#666')+'">'+(p.v?'HIGH':'LOW')+'</span>';
+    if(isRelay) phtml += '<button onclick="tgl(\''+p.n+'\','+p.v+')" style="padding:2px 8px;font-size:0.6em;background:#2a2a4a;color:#fff;border:1px solid #444;border-radius:3px">Toggle</button>';
+    phtml += '</div></div>';
+  });
+  phtml += '</div>';
+  document.getElementById('log').insertAdjacentHTML('beforebegin', phtml);
+}
 });}
 setInterval(up,3000);up();
 function send(){var v=document.getElementById('ci').value;if(!v)return;
 fetch('/api/cmd',{method:'POST',body:new URLSearchParams({'cmd':v})});
 document.getElementById('ci').value='';}
+function tgl(n,v){
+  if(confirm('Toggle '+n+'?')) {
+    fetch('/api/cmd',{method:'POST',body:new URLSearchParams({'cmd':'GPIO '+n+' '+(v?0:1)})});
+    setTimeout(up, 500);
+  }
+}
 </script></body></html>)rawhtml";
   server.send(200, "text/html", html);
 }
@@ -574,12 +622,13 @@ void WiFiManager::serveApiStatus() {
   json += "\"rssi\":" + String(lora.lastRssi) + ",";
   json += "\"nodes\":" + String(data.numNodes) + ",";
   json += "\"heap\":" + String(ESP.getFreeHeap()) + ",";
+  json += "\"tp_mode\":\"" + String(data.transportMode) + "\",";
   json += "\"lora\":" + String(lora.loraActive ? "true" : "false") + ",";
   json += "\"ble\":true,";
   json += "\"wifi\":true,";
   json += "\"espnow\":" + String(espnow.espNowActive ? "true" : "false") + ",";
 
-  // Standard pins array for labeled diagnostics
+  // Standard pins array for labeled diagnostics - FILTERED to "Usable" only
   json += "\"pins\":[";
   struct PinDef {
     const char *n;
@@ -589,16 +638,31 @@ void WiFiManager::serveApiStatus() {
   PinDef pins[] = {
       {"LED", PIN_LED_BUILTIN, false},    {"PRG", PIN_BUTTON_PRG, false},
       {"VEXT", PIN_VEXT_CTRL, false},     {"BAT", PIN_BAT_ADC, true},
-      {"RLY1", PIN_RELAY_110V, false},    {"RL12_1", PIN_RELAY_12V_1, false},
+      {"RL110", PIN_RELAY_110V, false},   {"RL12_1", PIN_RELAY_12V_1, false},
       {"RL12_2", PIN_RELAY_12V_2, false}, {"RL12_3", PIN_RELAY_12V_3, false}};
+
+  bool pinFirst = true;
   for (int i = 0; i < 8; i++) {
-    if (i > 0)
+    // Failsafe: only show pins that are enabled via APC OR are critical system
+    // pins
+    String friendlyName = data.GetPinName(String(pins[i].p));
+    bool isEnabled = data.GetPinEnabled(pins[i].p);
+    bool isUsable =
+        isEnabled ||
+        (i < 4); // Always show LED, PRG, VEXT, BAT regardless of APC
+
+    if (!isUsable)
+      continue;
+
+    if (!pinFirst)
       json += ",";
-    json += "{\"n\":\"" + String(pins[i].n) +
+    json += "{\"n\":\"" +
+            (friendlyName.length() ? friendlyName : String(pins[i].n)) +
             "\",\"v\":" + String(digitalRead(pins[i].p));
     if (pins[i].a)
       json += ",\"a\":" + String(analogRead(pins[i].p));
     json += "}";
+    pinFirst = false;
   }
   json += "],";
 
@@ -662,6 +726,34 @@ void WiFiManager::serveApiStatus() {
   }
   json += "]}";
 
+  server.send(200, "application/json", json);
+}
+
+void WiFiManager::serveApiPinEnable() {
+  if (server.hasArg("pin") && server.hasArg("en")) {
+    int pin = server.arg("pin").toInt();
+    bool en = server.arg("en") == "1";
+    DataManager::getInstance().SetPinEnabled(pin, en);
+    server.send(200, "text/plain", "OK");
+  } else {
+    server.send(400, "text/plain", "Missing pin or en");
+  }
+}
+
+void WiFiManager::serveApiTransportMode() {
+  if (server.hasArg("mode")) {
+    String mode = server.arg("mode");
+    if (mode.length() == 1) {
+      DataManager::getInstance().SetTransportMode(mode.charAt(0));
+      server.send(200, "text/plain", "OK");
+      return;
+    }
+  }
+  server.send(400, "text/plain", "Invalid mode");
+}
+
+void WiFiManager::serveApiRegistry() {
+  String json = DataManager::getInstance().GetRegistryJson();
   server.send(200, "application/json", json);
 }
 
@@ -1446,5 +1538,58 @@ void WiFiManager::serveApiPinName() {
     server.send(200, "text/plain", "OK");
   } else {
     server.send(400, "text/plain", "Missing args");
+  }
+}
+
+void WiFiManager::serveApiConfig() {
+  String json = DataManager::getInstance().ExportConfig();
+  server.send(200, "application/json", json);
+}
+
+void WiFiManager::serveApiConfigApply() {
+  if (server.hasArg("plain")) {
+    String body = server.arg("plain");
+    if (DataManager::getInstance().ImportConfig(body)) {
+      server.send(200, "text/plain", "OK");
+    } else {
+      server.send(400, "text/plain",
+                  "ERR: Invalid config or hardware mismatch");
+    }
+  } else {
+    server.send(400, "text/plain", "ERR: Missing body");
+  }
+}
+
+void WiFiManager::serveApiFileList() {
+  String json = "{\"files\":[";
+  File root = LittleFS.open("/");
+  File file = root.openNextFile();
+  bool first = true;
+  while (file) {
+    if (!first)
+      json += ",";
+    json += "{\"name\":\"" + String(file.name()) +
+            "\",\"size\":" + String(file.size()) + "}";
+    first = false;
+    file = root.openNextFile();
+  }
+  json += "]}";
+  server.send(200, "application/json", json);
+}
+
+void WiFiManager::serveApiFileRead() {
+  if (server.hasArg("path")) {
+    String path = server.arg("path");
+    if (!path.startsWith("/"))
+      path = "/" + path;
+    if (LittleFS.exists(path)) {
+      File file = LittleFS.open(path, "r");
+      server.streamFile(file, "text/plain");
+      file.close();
+    } else {
+      server.send(404, "text/plain", "Not found");
+    }
+  } else {
+    server.send(400, "text/plain", "Missing path");
   }
 }

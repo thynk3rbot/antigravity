@@ -9,6 +9,8 @@
 // ============================================================================
 #define FIRMWARE_VERSION "v1.4.1"
 #define FIRMWARE_NAME "LoRaLink Any2Any"
+#define HARDWARE_ID "Heltec ESP32 LoRa V3"
+#define CONFIG_SCHEMA "1.0"
 #define ALLOW_GPIO_CONTROL true
 
 // ============================================================================

@@ -19,6 +19,7 @@ DataManager::DataManager() {
   streamToSerial = false;
   mqttEnabled = false;
   mqttPort = 1883;
+  transportMode = 'J';
 }
 
 String DataManager::getHardwareSuffix() {
@@ -142,6 +143,7 @@ void DataManager::LoadSettings() {
   mqttPort = p.getInt("mqtt_prt", 1883);
   mqttUser = p.getString("mqtt_usr", "");
   mqttPass = p.getString("mqtt_pwd", "");
+  transportMode = p.getString("tp_mode", "J").charAt(0);
 
   p.end();
 
@@ -458,4 +460,152 @@ String DataManager::getResetReason() {
   default:
     return "Unknown";
   }
+}
+
+bool DataManager::ImportConfig(const String &json) {
+  JsonDocument doc;
+  DeserializationError error = deserializeJson(doc, json);
+  if (error)
+    return false;
+
+  // 1. Validate Hardware ID
+  const char *hw = doc["hardware_id"];
+  if (!hw || strcmp(hw, HARDWARE_ID) != 0) {
+    LOG_PRINTF("CFG: Hardware mismatch (Got: %s, Expected: %s)\n",
+               hw ? hw : "NULL", HARDWARE_ID);
+    return false;
+  }
+
+  // 2. Apply settings
+  JsonObject s = doc["settings"];
+  if (s.isNull())
+    return false;
+
+  if (s.containsKey("dev_name"))
+    SetName(s["dev_name"].as<String>());
+  if (s.containsKey("wifi_ssid"))
+    SetWifi(s["wifi_ssid"].as<String>(), s["wifi_pass"] | "");
+  if (s.containsKey("static_ip"))
+    SetStaticIp(s["static_ip"].as<String>(), s["gateway"] | "",
+                s["subnet"] | "");
+  if (s.containsKey("repeater"))
+    SetRepeater(s["repeater"].as<bool>());
+  if (s.containsKey("mqtt_en"))
+    SetMqtt(s["mqtt_en"].as<bool>(), s["mqtt_srv"] | "", s["mqtt_prt"] | 1883,
+            s["mqtt_usr"] | "", s["mqtt_pwd"] | "");
+  if (s.containsKey("espnow_en"))
+    SetESPNowEnabled(s["espnow_en"].as<bool>());
+  if (s.containsKey("wifi_en"))
+    SetWifiEnabled(s["wifi_en"].as<bool>());
+  if (s.containsKey("ble_en"))
+    SetBleEnabled(s["ble_en"].as<bool>());
+  if (s.containsKey("crypto_key"))
+    SetCryptoKey(s["crypto_key"].as<String>());
+
+  if (doc.containsKey("pins")) {
+    JsonObject pins = doc["pins"];
+    for (JsonPair p : pins) {
+      int pin = atoi(p.key().c_str());
+      JsonObject pinData = p.value().as<JsonObject>();
+      if (pinData.containsKey("name")) {
+        SetPinName(String(pin), pinData["name"].as<String>());
+      }
+      if (pinData.containsKey("en")) {
+        SetPinEnabled(pin, pinData["en"].as<bool>());
+      }
+    }
+  }
+
+  return true;
+}
+
+String DataManager::ExportConfig() {
+  JsonDocument doc;
+  doc["schema"] = CONFIG_SCHEMA;
+  doc["hardware_id"] = HARDWARE_ID;
+  JsonObject s = doc.createNestedObject("settings");
+
+  s["dev_name"] = myId;
+  s["wifi_ssid"] = wifiSsid;
+  s["wifi_pass"] = wifiPass;
+  s["static_ip"] = staticIp;
+  s["gateway"] = gateway;
+  s["subnet"] = subnet;
+  s["repeater"] = repeaterEnabled;
+  s["mqtt_en"] = mqttEnabled;
+  s["mqtt_srv"] = mqttServer;
+  s["mqtt_prt"] = mqttPort;
+  s["mqtt_usr"] = mqttUser;
+  s["mqtt_pwd"] = mqttPass;
+  s["espnow_en"] = espNowEnabled;
+  s["wifi_en"] = wifiEnabled;
+  s["ble_en"] = bleEnabled;
+  s["crypto_key"] = cryptoKey;
+
+  JsonObject pins = doc.createNestedObject("pins");
+  for (int i = 0; i < 48; i++) {
+    // Only export if customized (name exists or enabled)
+    String name = GetPinName(String(i));
+    bool en = GetPinEnabled(i);
+    if (name.length() > 0 || en) {
+      JsonObject p = pins.createNestedObject(String(i));
+      if (name.length() > 0)
+        p["name"] = name;
+      if (en)
+        p["en"] = en;
+    }
+  }
+
+  String out;
+  serializeJson(doc, out);
+  return out;
+}
+
+void DataManager::SetPinEnabled(int pin, bool enabled) {
+  Preferences p;
+  p.begin("loralink", false);
+  String key = "en_" + String(pin);
+  p.putBool(key.c_str(), enabled);
+  p.end();
+}
+
+bool DataManager::GetPinEnabled(int pin) {
+  Preferences p;
+  p.begin("loralink", true);
+  String key = "en_" + String(pin);
+  bool state = p.getBool(key.c_str(), false);
+  p.end();
+  return state;
+}
+
+void DataManager::SetTransportMode(char mode) {
+  transportMode = mode;
+  Preferences p;
+  p.begin("loralink", false);
+  p.putString("tp_mode", String(mode));
+  p.end();
+}
+
+char DataManager::GetTransportMode() { return transportMode; }
+
+void DataManager::AddToRegistry(const String &id, const String &hwType) {
+  JsonDocument doc;
+  if (LittleFS.exists("/hw_reg.json")) {
+    File f = LittleFS.open("/hw_reg.json", "r");
+    deserializeJson(doc, f);
+    f.close();
+  }
+  doc[id] = hwType;
+  File f = LittleFS.open("/hw_reg.json", "w");
+  serializeJson(doc, f);
+  f.close();
+}
+
+String DataManager::GetRegistryJson() {
+  if (!LittleFS.exists("/hw_reg.json"))
+    return "{}";
+  File f = LittleFS.open("/hw_reg.json", "r");
+  String s = f.readString();
+  f.close();
+  return s;
 }

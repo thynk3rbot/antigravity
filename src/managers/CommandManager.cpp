@@ -613,6 +613,42 @@ void CommandManager::initRegistry() {
     DisplayManager::getInstance().NextPage();
     lora.lastMsgReceived = "SYS: PAGE CHANGED";
   });
+
+  registerCommand("APC", [this](const String &args, CommInterface source) {
+    DataManager &data = DataManager::getInstance();
+    LoRaManager &lora = LoRaManager::getInstance();
+    int space = args.indexOf(' ');
+    if (space > 0) {
+      String pinName = args.substring(0, space);
+      int pin = getPinFromName(pinName);
+      int en = args.substring(space + 1).toInt();
+      if (pin >= 0) {
+        data.SetPinEnabled(pin, en == 1);
+        String msg = "APC: Pin " + pinName + (en ? " ENABLED" : " DISABLED");
+        lora.lastMsgReceived = msg;
+        LOG_PRINTLN(msg);
+      }
+    }
+  });
+
+  registerCommand("TRANS", [](const String &args, CommInterface source) {
+    DataManager &data = DataManager::getInstance();
+    LoRaManager &lora = LoRaManager::getInstance();
+    String mode = args;
+    mode.trim();
+    mode.toUpperCase();
+    if (mode.length() == 1) {
+      char m = mode.charAt(0);
+      if (m == 'J' || m == 'C' || m == 'K' || m == 'B') {
+        data.SetTransportMode(m);
+        String msg = "TRANS: Mode set to " + mode;
+        lora.lastMsgReceived = msg;
+        LOG_PRINTLN(msg);
+        return;
+      }
+    }
+    lora.lastMsgReceived = "ERR: TRANS J|C|K|B";
+  });
 }
 
 void CommandManager::executeLocalCommand(const String &cmd,

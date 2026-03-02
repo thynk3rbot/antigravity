@@ -122,6 +122,21 @@
       .slider:before { position: absolute; content: ""; height: 14px; width: 14px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }
       input:checked + .slider { background-color: var(--accent); }
       input:checked + .slider:before { transform: translateX(20px); }
+      .multi-apply-panel {
+        display: none;
+        background: #16213e;
+        border: 1px solid #2a4a2a;
+        border-radius: 6px;
+        padding: 8px 10px;
+        margin-top: 4px;
+        font-size: 0.8em;
+      }
+      .multi-apply-panel.open { display: block; }
+      .multi-apply-panel label {
+        display: flex; align-items: center; gap: 6px;
+        padding: 3px 0; cursor: pointer; color: #aaa;
+      }
+      .multi-apply-panel label input[type=checkbox] { accent-color: #00d4ff; }
     </style>
   </head>
   <body>
@@ -1476,16 +1491,7 @@
             return;
           }
           el.innerHTML = seqs
-            .map(
-              (s) => `
-      <div class="seq-item">
-        <span class="flex-1 text-bold">${escHtml(s.name)}</span>
-        <span class="seq-count">${s.tasks.length} tasks</span>
-        <button class="btn btn-sm" onclick="loadSequenceIntoEditor('${escHtml(s.name)}')" class="ml-1">Edit</button>
-        <button class="btn btn-sm" onclick="applySequence('${escHtml(s.name)}')" class="btn-apply-success">▶ Apply</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteSequence('${escHtml(s.name)}')" class="ml-1">✕</button>
-      </div>`,
-            )
+            .map((s) => `<div class="seq-item" style="flex-direction:column;align-items:stretch"><div style="display:flex;align-items:center;gap:8px"><span style="flex:1;font-weight:600;font-size:0.88em">${escHtml(s.name)}</span><span class="seq-count">${s.tasks.length} tasks</span><button class="btn btn-sm" onclick="loadSequenceIntoEditor('${escHtml(s.name)}')" style="margin-left:4px">Edit</button><button class="btn btn-sm" onclick="applySequence('${escHtml(s.name)}')" style="margin-left:4px;background:#00884422;border-color:#00884444;color:#00ff88">▶ Apply</button><button class="btn btn-sm btn-secondary" onclick="toggleMultiApplyPanel('${escHtml(s.name)}')" style="margin-left:4px">▾ Apply to…</button><button class="btn btn-danger btn-sm" onclick="deleteSequence('${escHtml(s.name)}')" style="margin-left:4px">✕</button></div><div class="multi-apply-panel" id="map-${escHtml(s.name)}"><div id="map-nodes-${escHtml(s.name)}" style="margin-bottom:6px">Loading nodes…</div><button class="btn btn-sm" onclick="applyMultiSequence('${escHtml(s.name)}')" style="background:#00884422;border-color:#00884444;color:#00ff88">Apply to Selected</button></div></div>`)
             .join("");
         } catch (e) {
           logConsole("err", `loadSequences: ${e.message}`);
@@ -1602,6 +1608,55 @@
         await sendRaw("SCHED CLEAR");
         await sendRaw("SCHED SAVE");
         logConsole("rx", "Device tasks cleared");
+      }
+
+      async function toggleMultiApplyPanel(seqName) {
+        const panel = document.getElementById(`map-${seqName}`);
+        if (!panel) return;
+        const isOpen = panel.classList.contains("open");
+        if (!isOpen) {
+          try {
+            const r = await fetch("/api/nodes");
+            const all = await r.json();
+            const wifi = all.filter(n => n.type === "wifi" || n.type === "lora");
+            const nodesEl = document.getElementById(`map-nodes-${seqName}`);
+            if (!wifi.length) {
+              nodesEl.innerHTML = '<span style="color:#555">No WiFi/LoRa nodes configured</span>';
+            } else {
+              nodesEl.innerHTML = wifi.map(n => `<label><input type="checkbox" value="${n.id}" checked><span class="node-type ${n.type}" style="font-size:0.7em">${n.type}</span>${escHtml(n.name)}<span style="color:#555;font-family:monospace">${escHtml(n.address)}</span></label>`).join("");
+            }
+          } catch (e) {
+            document.getElementById(`map-nodes-${seqName}`).textContent = `Error: ${e.message}`;
+          }
+        }
+        panel.classList.toggle("open", !isOpen);
+      }
+
+      async function applyMultiSequence(seqName) {
+        const panel = document.getElementById(`map-${seqName}`);
+        const checked = panel ? [...panel.querySelectorAll("input[type=checkbox]:checked")].map(x => x.value) : [];
+        if (!checked.length) { logConsole("err", "Select at least one node"); return; }
+
+        logConsole("tx", `Applying "${seqName}" to ${checked.length} node(s)…`);
+        try {
+          const r = await fetch(`/api/sequences/${encodeURIComponent(seqName)}/apply-multi`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ node_ids: checked }),
+          });
+          const d = await r.json();
+          if (d.nodes) {
+            d.nodes.forEach(n => {
+              const msg = n.ok
+                ? `${n.node_name}: ${n.tasks_ok}/${n.tasks_total} tasks applied`
+                : `${n.node_name}: ${n.error || "failed"}`;
+              logConsole(n.ok ? "rx" : "err", msg);
+            });
+          }
+          panel.classList.remove("open");
+        } catch (e) {
+          logConsole("err", `applyMultiSequence: ${e.message}`);
+        }
       }
 
       // ════════════════════════════════════════════════════════════════════════════
