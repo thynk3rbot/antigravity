@@ -137,6 +137,201 @@
         padding: 3px 0; cursor: pointer; color: #aaa;
       }
       .multi-apply-panel label input[type=checkbox] { accent-color: #00d4ff; }
+
+/* ═══════════════════════════════════════════════════════════
+   WEBAPP UX ENHANCEMENTS
+   ═══════════════════════════════════════════════════════════ */
+
+/* Health Score Badge */
+.health-badge {
+  display: inline-block; padding: 2px 10px; border-radius: 12px;
+  font-size: 0.78em; font-weight: 700; letter-spacing: 0.5px;
+}
+.health-ok   { background: rgba(0,255,136,0.12); color: var(--ok);   border: 1px solid rgba(0,255,136,0.3); }
+.health-warn { background: rgba(255,170,0,0.12); color: var(--warn); border: 1px solid rgba(255,170,0,0.3); }
+.health-bad  { background: rgba(255,68,68,0.12);  color: var(--err);  border: 1px solid rgba(255,68,68,0.3); }
+
+/* Time on Air Warning */
+.toa-warn {
+  font-size: 0.72em; color: var(--err);
+  background: rgba(255,68,68,0.08); border: 1px solid rgba(255,68,68,0.25);
+  border-radius: 5px; padding: 4px 8px; margin-top: 4px; width: 100%;
+}
+
+/* Global Override Buttons */
+.override-btns { display: flex; gap: 6px; margin-left: auto; margin-right: 8px; align-items: center; }
+.btn-override {
+  padding: 3px 10px; border-radius: 12px; font-size: 0.65em; font-weight: 800;
+  letter-spacing: 0.5px; text-transform: uppercase; cursor: pointer;
+  border: 1px solid transparent; transition: 0.2s; background: none;
+}
+.btn-override.danger { background: rgba(255,68,68,0.15); color: var(--err); border-color: rgba(255,68,68,0.4); }
+.btn-override.danger:hover { background: rgba(255,68,68,0.3); }
+.btn-override.warn   { background: rgba(255,170,0,0.12); color: var(--warn); border-color: rgba(255,170,0,0.35); }
+.btn-override.warn:hover   { background: rgba(255,170,0,0.25); }
+
+/* Command Palette */
+.palette-overlay {
+  display: none; position: fixed; inset: 0; z-index: 2000;
+  background: rgba(0,0,0,0.7); backdrop-filter: blur(4px);
+  align-items: flex-start; justify-content: center; padding-top: 12vh;
+}
+.palette-box {
+  background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px;
+  width: 520px; max-width: 94vw; box-shadow: 0 20px 60px rgba(0,0,0,0.6); overflow: hidden;
+}
+.palette-input {
+  width: 100%; background: var(--bg-main); border: none;
+  border-bottom: 1px solid var(--border); color: var(--text);
+  font-size: 1em; padding: 14px 16px; outline: none; box-sizing: border-box;
+}
+.palette-list { max-height: 340px; overflow-y: auto; }
+.palette-item {
+  display: flex; flex-direction: column; gap: 2px; padding: 9px 16px; cursor: pointer;
+  border-bottom: 1px solid rgba(255,255,255,0.04); transition: background 0.1s;
+}
+.palette-item:hover, .palette-item-active { background: rgba(0,212,255,0.08); }
+.palette-cmd  { font-family: monospace; font-size: 0.85em; color: var(--accent); font-weight: 700; }
+.palette-desc { font-size: 0.72em; color: #888; }
+
+/* RSSI Sparkline */
+.rssi-spark { display: inline-block; vertical-align: middle; background: rgba(0,0,0,0.2); border-radius: 3px; }
+
+/* GPIO Pending / Confirm / Mismatch */
+.gpio-pending {
+  background: rgba(255,170,0,0.15) !important; border-color: rgba(255,170,0,0.4) !important;
+  color: var(--warn) !important;
+}
+.gpio-confirm {
+  background: rgba(0,255,136,0.15) !important; border-color: rgba(0,255,136,0.4) !important;
+  color: var(--ok) !important; transition: all 0.3s;
+}
+.gpio-mismatch {
+  background: rgba(255,68,68,0.15) !important; border-color: rgba(255,68,68,0.5) !important;
+  color: var(--err) !important;
+}
+
+/* ── Test Bench Swarm Enhancements ───────────────────────────── */
+
+/* Run controls strip */
+.bench-meta {
+  display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+  padding: 6px 12px; background: rgba(0,0,0,0.18);
+  border-bottom: 1px solid var(--border); font-size: 0.8em;
+}
+.bench-meta label { color: #888; white-space: nowrap; display: flex; align-items: center; gap: 4px; }
+.bench-meta input[type=number] {
+  width: 72px; background: var(--bg-main); border: 1px solid var(--border);
+  color: var(--text); border-radius: 5px; padding: 2px 6px; font-size: 0.9em;
+}
+.bench-dry-lbl { color: var(--warn) !important; font-weight: 700; }
+
+/* Duty cycle panel */
+.duty-panel {
+  margin-top: 10px; padding: 8px 10px; background: rgba(0,0,0,0.2);
+  border-radius: 6px; border: 1px solid var(--border);
+}
+.duty-bar-bg { height: 8px; background: rgba(255,255,255,0.06); border-radius: 4px; overflow: hidden; margin: 4px 0; }
+.duty-bar-fill { height: 100%; border-radius: 4px; transition: width 0.3s, background 0.3s; min-width: 2px; }
+.duty-ok   { background: var(--ok); }
+.duty-warn { background: var(--warn); }
+.duty-err  { background: var(--err); }
+.duty-row  { font-size: 0.72em; color: #888; display: flex; justify-content: space-between; }
+
+/* Swarm progress */
+.swarm-prog {
+  margin-top: 8px; padding: 7px 10px;
+  background: rgba(0,212,255,0.05); border: 1px solid rgba(0,212,255,0.2);
+  border-radius: 6px; display: none;
+}
+.swarm-prog.active { display: block; }
+.swarm-prog-bar { height: 6px; background: rgba(255,255,255,0.06); border-radius: 3px; overflow: hidden; margin: 4px 0; }
+.swarm-prog-fill { height: 100%; background: var(--ok); border-radius: 3px; transition: width 0.2s; }
+.swarm-prog-row { font-size: 0.7em; color: #888; display: flex; justify-content: space-between; }
+
+/* Node filter chips */
+.node-filter-btns { display: flex; gap: 4px; margin-bottom: 7px; flex-wrap: wrap; }
+.nf-btn {
+  padding: 2px 9px; border-radius: 10px; font-size: 0.65em; font-weight: 700;
+  cursor: pointer; border: 1px solid var(--border); background: rgba(255,255,255,0.05);
+  color: #777; transition: 0.15s; text-transform: uppercase; letter-spacing: 0.3px;
+}
+.nf-btn.active { background: rgba(0,212,255,0.15); border-color: rgba(0,212,255,0.4); color: var(--accent); }
+
+/* ═══════════════════════════════════════════════════════════
+   ADMIN PAGE ENHANCEMENTS
+   ═══════════════════════════════════════════════════════════ */
+
+/* Board Variant bar */
+.board-variant-bar {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 8px 12px; background: rgba(0,0,0,0.18);
+  border-bottom: 1px solid var(--border); font-size: 0.8em;
+}
+.board-variant-bar select {
+  background: var(--bg-main); border: 1px solid var(--border);
+  color: var(--text); border-radius: 5px; padding: 3px 8px; font-size: 0.9em;
+}
+.toa-chip {
+  padding: 2px 10px; border-radius: 10px; font-size: 0.75em; font-weight: 700;
+  letter-spacing: 0.3px;
+}
+.hazard-chip {
+  padding: 2px 10px; border-radius: 10px; font-size: 0.72em;
+  background: rgba(255,68,68,0.12); color: var(--err);
+  border: 1px solid rgba(255,68,68,0.3);
+}
+
+/* Config settings table */
+.cfg-settings-table {
+  width: 100%; border-collapse: collapse; font-size: 0.83em;
+}
+.cfg-settings-table th {
+  text-align: left; padding: 5px 8px; color: #666;
+  font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.5px;
+  border-bottom: 1px solid var(--border);
+}
+.cfg-settings-table td { padding: 4px 8px; border-bottom: 1px solid rgba(255,255,255,0.04); }
+.cfg-settings-table tr:hover td { background: rgba(255,255,255,0.02); }
+.cfg-input {
+  background: var(--bg-main); border: 1px solid var(--border);
+  color: var(--text); border-radius: 4px; padding: 3px 7px;
+  font-size: 0.9em; width: 100%; box-sizing: border-box;
+}
+.cfg-input:focus { outline: none; border-color: var(--accent); }
+.cfg-input.dirty { border-color: var(--warn); }
+.cfg-reported { color: #555; font-family: monospace; font-size: 0.85em; }
+
+/* Config state dots */
+.cfg-dot {
+  display: inline-block; width: 10px; height: 10px; border-radius: 50%;
+  margin-right: 4px; vertical-align: middle; flex-shrink: 0;
+}
+.cfg-state-ok      { color: var(--ok); }
+.cfg-state-pending { color: var(--warn); }
+.cfg-state-mismatch{ color: var(--err); }
+.cfg-dot-ok      { background: var(--ok); }
+.cfg-dot-pending { background: var(--warn); animation: pulse 1s infinite; }
+.cfg-dot-mismatch{ background: var(--err); }
+
+/* Validation error banner */
+.cfg-validation-err {
+  background: rgba(255,68,68,0.1); border: 1px solid rgba(255,68,68,0.3);
+  border-radius: 6px; padding: 6px 10px; margin: 6px 0;
+  font-size: 0.78em; color: var(--err); display: none;
+}
+
+/* Golden image panel */
+.golden-panel {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 8px 12px; background: rgba(0,212,255,0.04);
+  border: 1px solid rgba(0,212,255,0.15); border-radius: 6px; margin-top: 10px;
+}
+.golden-badge {
+  font-size: 0.72em; color: var(--accent); font-weight: 700; letter-spacing: 0.3px;
+  white-space: nowrap;
+}
+.golden-name { font-family: monospace; font-size: 0.8em; color: #888; flex: 1; }
     </style>
   </head>
   <body>
@@ -193,6 +388,10 @@
       <a class="nav-link" onclick="showPage('testbench')">🧪 Test Bench</a>
       <a class="nav-link" onclick="showPage('config')">📁 Config Files</a>
       <a class="nav-link" onclick="showPage('admin')">🛡️ Admin</a>
+      <div class="override-btns">
+        <button class="btn-override danger" onclick="globalAllOff()" title="Turn off all GPIO outputs">⚡ All OFF</button>
+        <button class="btn-override warn" onclick="globalLowPower()" title="Switch to BLE-only low power mode">🌙 Low Power</button>
+      </div>
       <span id="nav-node">—</span>
     </nav>
 
@@ -246,6 +445,10 @@
             <div class="card span-2">
               <div class="lbl">Last Command</div>
               <div class="val sm" id="c-last-cmd" title="">—</div>
+            </div>
+            <div class="card span-2">
+              <div class="lbl">Health Score</div>
+              <div class="val" id="health-score">—</div>
             </div>
           </div>
 
@@ -373,7 +576,9 @@
                   placeholder="Interval (s)"
                   min="1"
                   value="30"
+                  oninput="checkToaWarning()"
                 />
+                <div id="toa-warn" class="toa-warn" style="display:none"></div>
                 <input
                   id="s-duration"
                   type="number"
@@ -524,6 +729,12 @@
             />
             <button class="btn btn-sm" onclick="saveSequence()">Save</button>
           </div>
+          <!-- Test Bench run controls -->
+          <div class="bench-meta">
+            <label>🔁 Repeat <input type="number" id="seq-repeat" value="1" min="1" max="1000" title="Repeat full sequence N times per node"></label>
+            <label>⏱ Stagger (ms) <input type="number" id="seq-stagger" value="0" min="0" max="60000" title="Delay between nodes during swarm apply"></label>
+            <label class="bench-dry-lbl"><input type="checkbox" id="seq-dryrun" style="accent-color:var(--warn);margin-right:3px">🧪 Dry Run</label>
+          </div>
           <div
             class="flex-1 overflow-y-auto p-3 min-h-0"
           >
@@ -535,6 +746,8 @@
                   <th>Pin</th>
                   <th>Interval(s)</th>
                   <th>Duration(s)</th>
+                  <th title="Retry count if step fails">Retry</th>
+                  <th title="Stop sequence if this step fails">⛔</th>
                   <th></th>
                 </tr>
               </thead>
@@ -547,6 +760,12 @@
             >
               + Add Row
             </button>
+            <!-- Aggregated Duty Cycle -->
+            <div class="duty-panel" id="duty-panel">
+              <div class="duty-row"><span>Aggregated LoRa Duty Cycle</span><span id="duty-pct" style="font-weight:700;color:var(--ok)">—</span></div>
+              <div class="duty-bar-bg"><div class="duty-bar-fill duty-ok" id="duty-fill" style="width:0%"></div></div>
+              <div class="duty-row" id="duty-detail" style="color:#555">Add tasks to calculate airtime usage</div>
+            </div>
           </div>
         </div>
       </div>
@@ -641,26 +860,70 @@
     <!-- ── Page: Admin ────────────────────────────────────────────────────────── -->
     <div class="page" id="pg-admin">
       <div class="main">
+
+        <!-- Board Variant + LoRa Summary Bar -->
+        <div class="panel" style="padding:0;overflow:hidden">
+          <div class="board-variant-bar">
+            <label style="color:#888;font-size:0.8em">Board</label>
+            <select id="board-variant" onchange="onBoardVariantChange()">
+              <option value="heltec_v3" selected>Heltec WiFi LoRa 32 V3 (ESP32-S3)</option>
+              <option value="heltec_v4" disabled>Heltec V4 — coming soon</option>
+            </select>
+            <span style="color:#555;font-size:0.75em">LoRa:</span>
+            <span id="admin-toa-chip" class="toa-chip duty-ok" style="background:rgba(0,255,136,0.1);border:1px solid rgba(0,255,136,0.3)">SF10 · 250kHz · ~330ms ToA</span>
+            <span class="hazard-chip" title="Pin 14 is shared between LoRa DIO1 and RELAY_12V_1 — never enable both">⚠ Pin 14 hazard</span>
+            <span style="color:#555;font-size:0.75em;margin-left:auto">Restricted: 8,9,10,11,12,13,14 (LoRa/SPI)</span>
+          </div>
+        </div>
+
+        <!-- Device Config Settings Panel (3-state: Desired / Pending / Confirmed) -->
+        <div class="panel">
+          <div class="panel-title flex-row-sb">
+            <span>Device Configuration</span>
+            <div style="display:flex;gap:6px">
+              <button class="btn btn-sm btn-secondary" onclick="refreshConfigSettings()">↺ Refresh</button>
+              <button class="btn btn-sm" onclick="applyConfigChanges()" style="background:#00884422;border-color:#00884444;color:#00ff88">Apply Changes</button>
+            </div>
+          </div>
+          <div id="cfg-validation-err" class="cfg-validation-err" style="margin:0 12px 0 12px"></div>
+          <div style="overflow-x:auto;padding:4px 0">
+            <table class="cfg-settings-table">
+              <thead>
+                <tr>
+                  <th style="width:160px">Setting</th>
+                  <th style="width:140px">Reported</th>
+                  <th>Desired</th>
+                  <th style="width:90px;text-align:center">State</th>
+                </tr>
+              </thead>
+              <tbody id="cfg-settings-body">
+                <tr><td colspan="4" style="text-align:center;color:#555;padding:12px">Loading…</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <!-- Golden Image Rollback -->
+          <div class="golden-panel" id="golden-panel" style="margin:8px 12px 12px">
+            <span class="golden-badge">🛡 GOLDEN IMAGE</span>
+            <span class="golden-name" id="golden-name">No backup on file</span>
+            <button class="btn btn-sm btn-secondary" onclick="backupDeviceNvs()">Create Backup</button>
+            <button class="btn btn-sm" id="golden-restore-btn" onclick="restoreGoldenImage()" disabled
+                    style="background:rgba(255,170,0,0.12);border-color:rgba(255,170,0,0.4);color:var(--warn)"
+                    title="Apply the most recent backup to the device">↩ Restore Golden</button>
+          </div>
+        </div>
+
+        <!-- Smart Pin Map -->
         <div class="panel">
           <div class="panel-title flex-row-sb">
             <span>Smart Pin Map (Heltec V3)</span>
-            <button class="btn btn-sm btn-secondary" onclick="backupDeviceNvs()">Backup Device NVS</button>
           </div>
-          <p class="text-xs text-dim p-3">Interactive diagram for visual pin configuration. Click a pin to label or toggle APC.</p>
-
+          <p class="text-xs text-dim p-3">Interactive diagram. Click a GPIO pin to label it or toggle status-report visibility. Red border = LoRa/SPI reserved.</p>
           <div class="board-container">
-            <!-- J3 Header (Left) -->
             <div id="pin-header-j3" class="header-col"></div>
-
-            <!-- Visual Board Center -->
             <div class="board-visual">
               <div class="oled-placeholder">0.96" OLED</div>
-              <div class="board-logo">
-                LoRaLink<br/>V3 Gateway
-              </div>
+              <div class="board-logo">LoRaLink<br/>V3 Gateway</div>
             </div>
-
-            <!-- J2 Header (Right) -->
             <div id="pin-header-j2" class="header-col"></div>
           </div>
         </div>
@@ -669,31 +932,31 @@
         <div class="panel">
           <div class="panel-title">Administrative Pin Configuration (APC)</div>
           <p class="text-xs text-dim p-3">Toggle pin visibility in the device status report (Interest List).</p>
-          <div id="apc-list" class="flex-col-sm p-3">
-             <!-- Populated by JS -->
-          </div>
+          <div id="apc-list" class="flex-col-sm p-3"></div>
         </div>
+
         <!-- Hardware Registry Section -->
         <div class="panel">
-          <div class="panel-title">Hardware Registry</div>
+          <div class="panel-title flex-row-sb">
+            <span>Hardware Registry</span>
+            <button class="btn sm btn-secondary" onclick="refreshRegistry()">Refresh</button>
+          </div>
           <p class="text-xs text-dim p-3">Discovered hardware types across the mesh.</p>
           <div class="flex-1 overflow-y-auto p-3">
-             <table class="w-full">
-               <thead>
-                 <tr class="text-left text-xs uppercase text-dim border-b border-dim">
-                   <th class="p-1">Device ID</th>
-                   <th class="p-1">Hardware Type</th>
-                 </tr>
-               </thead>
-               <tbody id="registry-tbody" class="text-sm">
-                 <tr><td colspan="2" class="text-center text-dim p-4">No hardware registered</td></tr>
-               </tbody>
-             </table>
-          </div>
-          <div class="p-3">
-            <button class="btn sm" onclick="refreshRegistry()">Refresh Registry</button>
+            <table class="w-full">
+              <thead>
+                <tr class="text-left text-xs uppercase text-dim border-b border-dim">
+                  <th class="p-1">Device ID</th>
+                  <th class="p-1">Hardware Type</th>
+                </tr>
+              </thead>
+              <tbody id="registry-tbody" class="text-sm">
+                <tr><td colspan="2" class="text-center text-dim p-4">No hardware registered</td></tr>
+              </tbody>
+            </table>
           </div>
         </div>
+
       </div>
     </div>
 
@@ -799,33 +1062,46 @@
 
   function updateFieldUI(data) {
     const gridEl = document.getElementById('field-grid');
-    if (!data.mesh) return;
-
-    // The gateway itself is a node
+    if (!gridEl || !data) return;
     const nodes = [
-      { id: data.id, bat: parseFloat(data.bat), rssi: 0, hops: 0, ago: 0, isLocal: true },
-      ...data.mesh
+      { id: data.id, bat: parseFloat(data.bat) || 0, rssi: null, hops: 0, ago: 0, isLocal: true },
+      ...(data.mesh || [])
     ];
-
+    // Update RSSI history ring buffer
+    nodes.forEach(n => {
+      if (n.rssi != null) {
+        if (!_rssiHistory[n.id]) _rssiHistory[n.id] = [];
+        _rssiHistory[n.id].push(n.rssi);
+        if (_rssiHistory[n.id].length > RSSI_HISTORY_LEN) _rssiHistory[n.id].shift();
+      }
+    });
+    // Persist to sessionStorage so sparklines survive page refresh
+    try { sessionStorage.setItem(RSSI_SS_KEY, JSON.stringify(_rssiHistory)); } catch { /* quota */ }
+    const now = Date.now();
     gridEl.innerHTML = nodes.map(n => {
-      const isStale = n.ago > 300; // 5 mins
-      const statusClass = n.ago < 120 ? 'online' : 'offline';
-      return `
-        <div class="node-card ${isStale ? 'stale' : ''}">
-          <div class="status-dot ${statusClass}"></div>
-          <div class="card-title-accent">${n.id}</div>
-          <div class="text-xs text-dim">
-            ${n.isLocal ? '📍 Gateway' : '📡 Hop: ' + n.hops}
-          </div>
-          <div class="flex-between mt-2 text-sm">
-            <span>🔋 ${n.bat ? n.bat.toFixed(2)+'V' : '—'}</span>
-            <span>📶 ${n.rssi || '—'} dBm</span>
-          </div>
-          <div class="text-xs text-muted mt-1">
-            Seen: ${n.ago}s ago
-          </div>
+      const stale = n.ago > 300;
+      const statusCls = n.isLocal ? 'online' : (n.ago < 120 ? 'online' : 'offline');
+      const hist = n.isLocal ? [] : (_rssiHistory[n.id] || []);
+      const spark = buildRssiSparkline(hist);
+      // 2-factor health (bat + rssi) for field cards
+      const batS = (n.bat||0) <= 0 ? 0 : (n.bat >= 4.2 ? 100 : (n.bat <= 3.3 ? (n.bat/3.3)*50 : 50+((n.bat-3.3)/0.9)*50));
+      const rssiS = n.rssi != null ? Math.max(0, Math.min(100, ((n.rssi + 120)/60)*100)) : 0;
+      const fScore = n.isLocal ? null : Math.round((batS*0.3 + rssiS*0.4) / 0.7);
+      const fCls   = !fScore ? '' : (fScore>=80?'health-ok':fScore>=50?'health-warn':'health-bad');
+      return `<div class="node-card${stale?' stale':''}">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span class="status-dot ${statusCls}"></span>
+          <strong>${n.id}</strong>
+          ${fScore!=null ? `<span class="health-badge ${fCls}" style="font-size:0.7em">~${fScore}%</span>` : ''}
         </div>
-      `;
+        <div style="font-size:0.75em;color:#888;margin-top:2px">${n.isLocal?'Gateway':'Hop '+n.hops}</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">
+          <span style="font-size:0.8em">🔋 ${n.bat?n.bat.toFixed(2)+'V':'—'}</span>
+          <span style="font-size:0.8em;color:#888">${n.rssi!=null?n.rssi+' dBm':'local'}</span>
+          ${spark}
+        </div>
+        <div style="font-size:0.7em;color:#666;margin-top:4px">Seen: ${n.ago!=null?n.ago+'s ago':'now'}</div>
+      </div>`;
     }).join('');
   }
 
@@ -935,6 +1211,11 @@
         if (typeof updatePinMap === "function") {
           updatePinMap(d.pins || []);
         }
+
+        // Health Score badge
+        const hs = computeHealthScore(d);
+        const hsEl = document.getElementById('health-score');
+        if (hsEl) { hsEl.textContent = hs.score + '%'; hsEl.className = 'val health-badge ' + hs.cls; }
       }
 
       function badge(label, on) {
@@ -1039,13 +1320,37 @@
             stateEl.textContent = hi ? "HI" : "LO";
             if (btnEl) btnEl.className = `toggle-btn ${hi ? "active" : ""}`;
           }
+          // Desired vs. Reported reconciliation
+          if (v != null && _pendingGpio[g.pinNum] !== undefined) {
+            const pending = _pendingGpio[g.pinNum];
+            const reported = Boolean(parseInt(v));
+            const btnEl2 = document.getElementById('gbtn-' + g.pinNum);
+            if (reported === Boolean(pending.desired)) {
+              delete _pendingGpio[g.pinNum];
+              if (btnEl2) {
+                btnEl2.classList.remove('gpio-pending','gpio-mismatch');
+                btnEl2.textContent = 'Toggle';
+                btnEl2.classList.add('gpio-confirm');
+                setTimeout(() => btnEl2 && btnEl2.classList.remove('gpio-confirm'), 1200);
+              }
+            } else if (Date.now() - pending.sentAt > GPIO_PENDING_TIMEOUT) {
+              if (btnEl2) {
+                btnEl2.classList.remove('gpio-pending');
+                btnEl2.classList.add('gpio-mismatch');
+                btnEl2.textContent = '⚠';
+              }
+            }
+          }
         });
       }
 
       async function toggleGpio(pin, pinNum) {
         const stateEl = document.getElementById(`gstate-${pinNum}`);
+        const btnEl = document.getElementById(`gbtn-${pinNum}`);
         const currentHi = stateEl && stateEl.textContent === "HI";
         const newVal = currentHi ? "0" : "1";
+        _pendingGpio[pinNum] = { desired: parseInt(newVal), sentAt: Date.now() };
+        if (btnEl) { btnEl.classList.add('gpio-pending'); btnEl.textContent = '…'; }
         await sendRaw(`GPIO ${pin} ${newVal}`);
         logConsole("tx", `GPIO ${pin} ${newVal}`);
       }
@@ -1557,13 +1862,37 @@
           const seqs = await r.json();
           const el = document.getElementById("seq-list");
           if (!seqs.length) {
-            el.innerHTML =
-              '<div class="text-muted text-center p-4">No sequences saved</div>';
+            el.innerHTML = '<div class="text-muted text-center p-4">No sequences saved</div>';
             return;
           }
-          el.innerHTML = seqs
-            .map((s) => `<div class="seq-item" style="flex-direction:column;align-items:stretch"><div style="display:flex;align-items:center;gap:8px"><span style="flex:1;font-weight:600;font-size:0.88em">${escHtml(s.name)}</span><span class="seq-count">${s.tasks.length} tasks</span><button class="btn btn-sm" onclick="loadSequenceIntoEditor('${escHtml(s.name)}')" style="margin-left:4px">Edit</button><button class="btn btn-sm" onclick="applySequence('${escHtml(s.name)}')" style="margin-left:4px;background:#00884422;border-color:#00884444;color:#00ff88">▶ Apply</button><button class="btn btn-sm btn-secondary" onclick="toggleMultiApplyPanel('${escHtml(s.name)}')" style="margin-left:4px">▾ Apply to…</button><button class="btn btn-danger btn-sm" onclick="deleteSequence('${escHtml(s.name)}')" style="margin-left:4px">✕</button></div><div class="multi-apply-panel" id="map-${escHtml(s.name)}"><div id="map-nodes-${escHtml(s.name)}" style="margin-bottom:6px">Loading nodes…</div><button class="btn btn-sm" onclick="applyMultiSequence('${escHtml(s.name)}')" style="background:#00884422;border-color:#00884444;color:#00ff88">Apply to Selected</button></div></div>`)
-            .join("");
+          el.innerHTML = seqs.map((s) => {
+            const sn = escHtml(s.name);
+            return `<div class="seq-item" style="flex-direction:column;align-items:stretch">
+              <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+                <span style="flex:1;font-weight:600;font-size:0.88em">${sn}</span>
+                <span class="seq-count">${s.tasks.length} tasks</span>
+                <button class="btn btn-sm" onclick="loadSequenceIntoEditor('${sn}')">Edit</button>
+                <button class="btn btn-sm" onclick="applySequence('${sn}')" style="background:#00884422;border-color:#00884444;color:#00ff88">▶ Apply</button>
+                <button class="btn btn-sm btn-secondary" onclick="toggleMultiApplyPanel('${sn}')">▾ Swarm…</button>
+                <button class="btn btn-danger btn-sm" onclick="deleteSequence('${sn}')">✕</button>
+              </div>
+              <div class="multi-apply-panel" id="map-${sn}">
+                <div class="node-filter-btns">
+                  <button class="nf-btn active" onclick="filterNodes('${sn}','all',this)">All</button>
+                  <button class="nf-btn" onclick="filterNodes('${sn}','wifi',this)">WiFi</button>
+                  <button class="nf-btn" onclick="filterNodes('${sn}','lora',this)">LoRa</button>
+                  <button class="nf-btn" onclick="filterNodes('${sn}','active',this)">Active</button>
+                </div>
+                <div id="map-nodes-${sn}" style="margin-bottom:6px">Loading nodes…</div>
+                <div class="swarm-prog" id="swarm-prog-${sn}">
+                  <div class="swarm-prog-row"><span id="swarm-label-${sn}">Preparing…</span><span id="swarm-rate-${sn}"></span></div>
+                  <div class="swarm-prog-bar"><div class="swarm-prog-fill" id="swarm-fill-${sn}" style="width:0%"></div></div>
+                  <div class="swarm-prog-row"><span id="swarm-detail-${sn}" style="color:#555"></span></div>
+                </div>
+                <button class="btn btn-sm" onclick="applyMultiSequence('${sn}')" style="background:#00884422;border-color:#00884444;color:#00ff88;margin-top:4px">▶▶ Apply to Selected</button>
+              </div>
+            </div>`;
+          }).join("");
         } catch (e) {
           logConsole("err", `loadSequences: ${e.message}`);
         }
@@ -1587,26 +1916,23 @@
         const tr = document.createElement("tr");
         const pins = [6, 7]; // safe pins only — never pin 14
         const pinOpts = pins
-          .map(
-            (p) =>
-              `<option value="${p}"${task && task.pin == p ? " selected" : ""}>${p}</option>`,
-          )
+          .map((p) => `<option value="${p}"${task && task.pin == p ? " selected" : ""}>${p}</option>`)
           .join("");
-        const types = ["TOGGLE", "PULSE", "DHT_SAFETY"];
+        const types = ["TOGGLE", "PULSE", "WAIT", "DHT_SAFETY"];
         const typeOpts = types
-          .map(
-            (t) =>
-              `<option${task && task.type === t ? " selected" : ""}>${t}</option>`,
-          )
+          .map((t) => `<option${task && task.type === t ? " selected" : ""}>${t}</option>`)
           .join("");
         tr.innerHTML = `
-    <td><input type="text" value="${task ? escHtml(task.name) : ""}" placeholder="taskName" maxlength="8"></td>
-    <td><select>${typeOpts}</select></td>
+    <td><input type="text" value="${task ? escHtml(task.name) : ""}" placeholder="{{NODE_ID}}" maxlength="16" oninput="recalcDutyCycle()"></td>
+    <td><select onchange="recalcDutyCycle()">${typeOpts}</select></td>
     <td><select>${pinOpts}</select></td>
-    <td><input type="number" value="${task ? task.interval : 30}" min="1" max="3600"></td>
-    <td><input type="number" value="${task ? task.duration : 0}" min="0" max="3600"></td>
-    <td><button class="btn btn-danger btn-sm" onclick="this.closest('tr').remove()">✕</button></td>`;
+    <td><input type="number" value="${task ? task.interval : 30}" min="1" max="86400" oninput="recalcDutyCycle()"></td>
+    <td><input type="number" value="${task ? (task.duration||0) : 0}" min="0" max="86400" oninput="recalcDutyCycle()"></td>
+    <td><input type="number" value="${task && task.retry != null ? task.retry : 1}" min="1" max="10" style="width:44px"></td>
+    <td style="text-align:center"><input type="checkbox" ${task && task.critical ? "checked" : ""} title="Stop on fail" style="accent-color:var(--err)"></td>
+    <td><button class="btn btn-danger btn-sm" onclick="this.closest('tr').remove();recalcDutyCycle()">✕</button></td>`;
         tbody.appendChild(tr);
+        recalcDutyCycle();
       }
 
       async function saveSequence() {
@@ -1626,6 +1952,8 @@
               pin: parseInt(inputs[2].value),
               interval: parseInt(inputs[3].value),
               duration: parseInt(inputs[4].value) || 0,
+              retry: parseInt(inputs[5].value) || 1,
+              critical: inputs[6].checked,
             });
           }
         });
@@ -1681,6 +2009,8 @@
         logConsole("rx", "Device tasks cleared");
       }
 
+      const _nodeCache = {};
+
       async function toggleMultiApplyPanel(seqName) {
         const panel = document.getElementById(`map-${seqName}`);
         if (!panel) return;
@@ -1689,13 +2019,8 @@
           try {
             const r = await fetch("/api/nodes");
             const all = await r.json();
-            const wifi = all.filter(n => n.type === "wifi" || n.type === "lora");
-            const nodesEl = document.getElementById(`map-nodes-${seqName}`);
-            if (!wifi.length) {
-              nodesEl.innerHTML = '<span style="color:#555">No WiFi/LoRa nodes configured</span>';
-            } else {
-              nodesEl.innerHTML = wifi.map(n => `<label><input type="checkbox" value="${n.id}" checked><span class="node-type ${n.type}" style="font-size:0.7em">${n.type}</span>${escHtml(n.name)}<span style="color:#555;font-family:monospace">${escHtml(n.address)}</span></label>`).join("");
-            }
+            _nodeCache[seqName] = all.filter(n => n.type === "wifi" || n.type === "lora");
+            renderNodeCheckboxes(seqName, 'all');
           } catch (e) {
             document.getElementById(`map-nodes-${seqName}`).textContent = `Error: ${e.message}`;
           }
@@ -1703,31 +2028,147 @@
         panel.classList.toggle("open", !isOpen);
       }
 
+      function renderNodeCheckboxes(seqName, filter) {
+        const all = _nodeCache[seqName] || [];
+        let nodes = all;
+        if (filter === 'wifi') nodes = all.filter(n => n.type === 'wifi');
+        else if (filter === 'lora') nodes = all.filter(n => n.type === 'lora');
+        else if (filter === 'active') nodes = all.filter(n => n.active !== false);
+        const el = document.getElementById(`map-nodes-${seqName}`);
+        if (!nodes.length) {
+          el.innerHTML = '<span style="color:#555">No nodes match filter</span>';
+          return;
+        }
+        el.innerHTML = nodes.map(n => {
+          const activeDot = n.active !== false ? '🟢' : '🔴';
+          return `<label style="display:flex;align-items:center;gap:5px;margin:2px 0">
+            <input type="checkbox" value="${n.id}" checked>
+            <span class="node-type ${n.type}" style="font-size:0.7em">${n.type}</span>
+            ${activeDot} ${escHtml(n.name)}
+            <span style="color:#555;font-family:monospace;font-size:0.8em">${escHtml(n.address)}</span>
+          </label>`;
+        }).join("");
+      }
+
+      function filterNodes(seqName, filter, btn) {
+        document.querySelectorAll(`#map-${seqName} .nf-btn`).forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        renderNodeCheckboxes(seqName, filter);
+      }
+
       async function applyMultiSequence(seqName) {
-        const panel = document.getElementById(`map-${seqName}`);
-        const checked = panel ? [...panel.querySelectorAll("input[type=checkbox]:checked")].map(x => x.value) : [];
+        const panel    = document.getElementById(`map-${seqName}`);
+        const progEl   = document.getElementById(`swarm-prog-${seqName}`);
+        const fillEl   = document.getElementById(`swarm-fill-${seqName}`);
+        const labelEl  = document.getElementById(`swarm-label-${seqName}`);
+        const rateEl   = document.getElementById(`swarm-rate-${seqName}`);
+        const detailEl = document.getElementById(`swarm-detail-${seqName}`);
+
+        const checked  = panel ? [...panel.querySelectorAll("input[type=checkbox]:checked")].map(x => x.value) : [];
         if (!checked.length) { logConsole("err", "Select at least one node"); return; }
 
-        logConsole("tx", `Applying "${seqName}" to ${checked.length} node(s)…`);
+        const repeat  = Math.max(1, parseInt(document.getElementById('seq-repeat')?.value) || 1);
+        const stagger = Math.max(0, parseInt(document.getElementById('seq-stagger')?.value) || 0);
+        const dryRun  = document.getElementById('seq-dryrun')?.checked || false;
+
+        // Show progress bar
+        if (progEl) { progEl.classList.add('active'); }
+        const total  = checked.length * repeat;
+        let   done   = 0, ok = 0, fail = 0;
+
+        const updateProgress = (detail) => {
+          const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+          if (fillEl)   fillEl.style.width = pct + '%';
+          if (labelEl)  labelEl.textContent = dryRun ? '🧪 Dry Run — ' + done + '/' + total : done + '/' + total + ' nodes';
+          if (rateEl)   rateEl.textContent  = `✅ ${ok}  ❌ ${fail}`;
+          if (detailEl && detail) detailEl.textContent = detail;
+        };
+        updateProgress('Starting…');
+
+        // Fetch sequence tasks for {{NODE_ID}} substitution
+        let seqTasks = [];
         try {
-          const r = await fetch(`/api/sequences/${encodeURIComponent(seqName)}/apply-multi`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ node_ids: checked }),
-          });
-          const d = await r.json();
-          if (d.nodes) {
-            d.nodes.forEach(n => {
-              const msg = n.ok
-                ? `${n.node_name}: ${n.tasks_ok}/${n.tasks_total} tasks applied`
-                : `${n.node_name}: ${n.error || "failed"}`;
-              logConsole(n.ok ? "rx" : "err", msg);
-            });
-          }
-          panel.classList.remove("open");
-        } catch (e) {
-          logConsole("err", `applyMultiSequence: ${e.message}`);
+          const sr = await fetch('/api/sequences');
+          const seqs = await sr.json();
+          const seq = seqs.find(s => s.name === seqName);
+          seqTasks = seq ? seq.tasks : [];
+        } catch {}
+
+        // Helper to substitute {{NODE_ID}} / {{NODE_NAME}} in task name
+        function injectVars(taskName, nodeId, nodeName) {
+          return (taskName || '')
+            .replace(/\{\{NODE_ID\}\}/gi, nodeId)
+            .replace(/\{\{NODE_NAME\}\}/gi, nodeName || nodeId);
         }
+
+        logConsole("tx", `${dryRun ? '[DRY RUN] ' : ''}Swarm apply "${seqName}" → ${checked.length} node(s), ×${repeat}, stagger ${stagger}ms`);
+
+        let halted = false;
+        for (let rep = 0; rep < repeat; rep++) {
+          if (halted) break;
+          for (let i = 0; i < checked.length; i++) {
+            if (halted) break;
+            const nodeId   = checked[i];
+            const nodeInfo = (_nodeCache[seqName] || []).find(n => n.id === nodeId);
+            const nodeName = nodeInfo ? nodeInfo.name : nodeId;
+
+            updateProgress(`Rep ${rep+1}/${repeat} — ${nodeName}`);
+
+            if (dryRun) {
+              seqTasks.forEach(t => {
+                const name = injectVars(t.name, nodeId, nodeName);
+                logConsole("tx", `[DRY RUN] → ${nodeName}: SCHED ADD ${name} ${t.type} ${t.pin} ${t.interval}${t.duration ? ' '+t.duration : ''}`);
+              });
+              ok++; done++;
+            } else {
+              try {
+                const body = {
+                  node_ids: [nodeId],
+                  tasks: seqTasks.map(t => ({
+                    ...t, name: injectVars(t.name, nodeId, nodeName)
+                  }))
+                };
+                const r = await fetch(`/api/sequences/${encodeURIComponent(seqName)}/apply-multi`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify(body),
+                });
+                const d = await r.json();
+                const nodeResult = d.nodes && d.nodes[0];
+                if (nodeResult && nodeResult.ok) {
+                  logConsole("rx", `${nodeName}: ${nodeResult.tasks_ok}/${nodeResult.tasks_total} tasks`);
+                  ok++;
+                } else {
+                  logConsole("err", `${nodeName}: ${nodeResult ? nodeResult.error : 'failed'}`);
+                  fail++;
+                  // Check if critical step failure — stop sequence
+                  const hasCritical = seqTasks.some(t => t.critical);
+                  if (hasCritical) {
+                    logConsole("err", `Critical failure on ${nodeName} — swarm halted`);
+                    done++;
+                    updateProgress(`⛔ Halted at ${nodeName}`);
+                    halted = true;
+                    break;
+                  }
+                }
+                done++;
+              } catch (e) {
+                logConsole("err", `${nodeName}: ${e.message}`);
+                fail++; done++;
+              }
+            }
+
+            updateProgress();
+            // Stagger delay between nodes (not after last one)
+            if (stagger > 0 && !(i === checked.length - 1 && rep === repeat - 1)) {
+              await new Promise(res => setTimeout(res, stagger));
+            }
+          }
+        }
+
+        updateProgress(dryRun ? 'Dry run complete — no packets sent' : `Done: ${ok} ok, ${fail} failed`);
+        logConsole(fail ? "err" : "rx", `Swarm apply complete: ${ok}/${total} ok${dryRun ? ' (dry run)' : ''}`);
+        if (!dryRun) panel.classList.remove("open");
       }
 
       // ════════════════════════════════════════════════════════════════════════════
@@ -2051,6 +2492,227 @@
       }
 
 
+      // ═══════════════════════════════════════════════════════════════════
+      //  UX ENHANCEMENT FEATURES
+      // ═══════════════════════════════════════════════════════════════════
+
+      // ── Health Score ─────────────────────────────────────────────────
+      function computeHealthScore(d) {
+        const bat  = parseFloat(d.bat) || 0;
+        const rssi = d.rssi || -120;
+        const heap = d.heap || 0;
+        const batScore = bat <= 0 ? 0 : bat >= 4.2 ? 100
+          : bat <= 3.3 ? (bat / 3.3) * 50
+          : 50 + ((bat - 3.3) / 0.9) * 50;
+        const rssiScore = Math.max(0, Math.min(100, ((rssi + 120) / 60) * 100));
+        const heapScore = Math.min(100, (heap / 327680) * 100);
+        let uptimeMins = 0;
+        if (d.uptime) {
+          const hm = d.uptime.match(/(\d+)h\s*(\d+)m/);
+          const m  = d.uptime.match(/(\d+)m/);
+          if (hm) uptimeMins = parseInt(hm[1]) * 60 + parseInt(hm[2]);
+          else if (m) uptimeMins = parseInt(m[1]);
+        }
+        const uptimeScore = Math.min(100, (uptimeMins / 1440) * 100);
+        const score = Math.round(batScore * 0.3 + rssiScore * 0.4 + heapScore * 0.2 + uptimeScore * 0.1);
+        const cls   = score >= 80 ? 'health-ok' : score >= 50 ? 'health-warn' : 'health-bad';
+        return { score, cls };
+      }
+
+      // ── Time on Air ──────────────────────────────────────────────────
+      const LORA_SF = 10, LORA_BW_HZ = 250000, LORA_PAYLOAD_BYTES = 20;
+
+      function calcToaMs(payloadBytes) {
+        const Tsym = (1 << LORA_SF) / LORA_BW_HZ * 1000;
+        const payloadSymbols = Math.ceil((8 * payloadBytes - 4 * LORA_SF + 28 + 16) / (4 * LORA_SF)) * 5;
+        return (8 + 4.25 + payloadSymbols) * Tsym;
+      }
+
+      function checkToaWarning() {
+        const intervalSec = parseInt(document.getElementById('s-interval').value) || 0;
+        const toaMs       = calcToaMs(LORA_PAYLOAD_BYTES);
+        const warn        = document.getElementById('toa-warn');
+        if (!warn) return;
+        if (intervalSec > 0 && (intervalSec * 1000) / toaMs < 10) {
+          const ratio = ((intervalSec * 1000) / toaMs).toFixed(1);
+          warn.textContent = `⚠ ToA ~${Math.round(toaMs)}ms — duty ratio ${ratio}× (min 10× recommended)`;
+          warn.style.display = 'block';
+        } else {
+          warn.style.display = 'none';
+        }
+      }
+
+      // ── Global Overrides ─────────────────────────────────────────────
+      async function globalAllOff() {
+        if (!confirm('Send GPIO OFF to all outputs — this turns off all relays and LEDs. Continue?')) return;
+        const pins = ['LED', '6', '7', '5', '36'];
+        for (const p of pins) { await sendRaw(`GPIO ${p} 0`); await new Promise(r => setTimeout(r, 100)); }
+        logConsole('tx', 'Global ALL OFF sent');
+      }
+
+      async function globalLowPower() {
+        if (!confirm('Enter Low Power mode — LoRa TX disabled, BLE only. Continue?')) return;
+        await sendRaw('RADIO BLE_ONLY');
+        logConsole('tx', 'Low Power mode activated');
+      }
+
+      // ── Command Palette ──────────────────────────────────────────────
+      const PALETTE_COMMANDS = [
+        { cmd: 'STATUS',              desc: 'Request full device status' },
+        { cmd: 'ALL STATUS',          desc: 'Broadcast status request to all mesh nodes' },
+        { cmd: 'GPIO LED 1',          desc: 'Turn LED on' },
+        { cmd: 'GPIO LED 0',          desc: 'Turn LED off' },
+        { cmd: 'GPIO 6 1',            desc: 'RELAY2 on (pin 6)' },
+        { cmd: 'GPIO 6 0',            desc: 'RELAY2 off (pin 6)' },
+        { cmd: 'GPIO 7 1',            desc: 'RELAY3 on (pin 7)' },
+        { cmd: 'GPIO 7 0',            desc: 'RELAY3 off (pin 7)' },
+        { cmd: 'SCHED LIST',          desc: 'List all scheduled tasks' },
+        { cmd: 'SCHED CLEAR',         desc: 'Clear all scheduled tasks' },
+        { cmd: 'SCHED SAVE',          desc: 'Save current schedule to flash' },
+        { cmd: 'CONFIG GET DEV_NAME', desc: 'Get current device name' },
+        { cmd: 'CONFIG GET WIFI_SSID',desc: 'Get configured WiFi SSID' },
+        { cmd: 'CONFIG GET ESPNOW',   desc: 'Get ESP-NOW enabled state' },
+        { cmd: 'CONFIG GET REPEATER', desc: 'Get repeater mode state' },
+        { cmd: 'ESPNOW ADDPEER',      desc: 'Add ESP-NOW peer (requires MAC + name)' },
+        { cmd: 'RADIO BLE_ONLY',      desc: 'Low power: disable LoRa TX, use BLE only' },
+        { cmd: 'MESH STATUS',         desc: 'Request mesh network topology' },
+        { cmd: 'REBOOT',              desc: 'Reboot the device immediately' },
+        { cmd: 'WIPECONFIG',          desc: 'Factory reset — clears all NVS settings' },
+      ];
+      let _paletteOpen = false, _paletteIdx = -1;
+
+      function openPalette() {
+        const overlay = document.getElementById('cmd-palette');
+        if (!overlay) return;
+        _paletteOpen = true; _paletteIdx = -1;
+        overlay.style.display = 'flex';
+        const inp = document.getElementById('palette-search');
+        inp.value = '';
+        filterPalette('');
+        setTimeout(() => inp.focus(), 30);
+      }
+
+      function closePalette(event) {
+        if (event && event.target !== document.getElementById('cmd-palette')) return;
+        _closePalette();
+      }
+
+      function _closePalette() {
+        const o = document.getElementById('cmd-palette');
+        if (o) o.style.display = 'none';
+        _paletteOpen = false;
+      }
+
+      function filterPalette(q) {
+        const list = document.getElementById('palette-list');
+        _paletteIdx = -1;
+        const term = q.toLowerCase();
+        const matches = PALETTE_COMMANDS.filter(c =>
+          c.cmd.toLowerCase().includes(term) || c.desc.toLowerCase().includes(term));
+        list.innerHTML = matches.map((c, i) =>
+          `<div class="palette-item" data-cmd="${c.cmd}" onclick="paletteSelect('${c.cmd.replace(/'/g,"\\'")}')">
+            <span class="palette-cmd">${c.cmd}</span>
+            <span class="palette-desc">${c.desc}</span>
+          </div>`).join('');
+      }
+
+      function paletteKeyNav(ev) {
+        const items = document.querySelectorAll('.palette-item');
+        if (ev.key === 'Escape') { _closePalette(); ev.preventDefault(); return; }
+        if (ev.key === 'ArrowDown') { _paletteIdx = Math.min(_paletteIdx + 1, items.length - 1); ev.preventDefault(); }
+        else if (ev.key === 'ArrowUp') { _paletteIdx = Math.max(_paletteIdx - 1, 0); ev.preventDefault(); }
+        else if (ev.key === 'Enter' && _paletteIdx >= 0) {
+          const cmd = items[_paletteIdx]?.dataset.cmd;
+          if (cmd) paletteSelect(cmd);
+          ev.preventDefault(); return;
+        }
+        items.forEach((el, i) => el.classList.toggle('palette-item-active', i === _paletteIdx));
+        if (items[_paletteIdx]) items[_paletteIdx].scrollIntoView({ block: 'nearest' });
+      }
+
+      async function paletteSelect(cmd) {
+        _closePalette();
+        logConsole('tx', cmd);
+        await sendRaw(cmd);
+      }
+
+      // ── RSSI Sparklines ──────────────────────────────────────────────
+      const RSSI_HISTORY_LEN = 10;
+      const RSSI_SS_KEY = 'loralink_rssi_history';
+      // Restore ring buffers from sessionStorage so sparklines survive page refresh
+      let _rssiHistory = (() => {
+        try { return JSON.parse(sessionStorage.getItem(RSSI_SS_KEY)) || {}; }
+        catch { return {}; }
+      })();
+
+      function buildRssiSparkline(history) {
+        if (!history || history.length < 2)
+          return '<svg width="60" height="20" class="rssi-spark"><text x="4" y="14" fill="#444" font-size="8">—</text></svg>';
+        const W = 60, H = 20, PAD = 2, MIN_R = -120, MAX_R = -30;
+        const pts = history.map((v, i) => {
+          const x = PAD + (i / (history.length - 1)) * (W - PAD * 2);
+          const y = H - PAD - ((Math.max(MIN_R, Math.min(MAX_R, v)) - MIN_R) / (MAX_R - MIN_R)) * (H - PAD * 2);
+          return `${x.toFixed(1)},${y.toFixed(1)}`;
+        }).join(' ');
+        const last = history[history.length - 1];
+        const col  = last > -90 ? '#00ff88' : last > -105 ? '#ffaa00' : '#ff4444';
+        return `<svg width="${W}" height="${H}" class="rssi-spark" title="RSSI trend (${history.length} pts)">
+          <polyline points="${pts}" fill="none" stroke="${col}" stroke-width="1.5" stroke-linejoin="round"/>
+        </svg>`;
+      }
+
+      // ── Aggregated Duty Cycle Calculator ─────────────────────────────
+      function recalcDutyCycle() {
+        const rows = document.querySelectorAll('#seq-tasks tr');
+        const toaMs = calcToaMs(LORA_PAYLOAD_BYTES); // reuse existing constant
+        let totalDuty = 0;
+        let taskCount = 0;
+        rows.forEach(row => {
+          const inputs = row.querySelectorAll('input,select');
+          if (!inputs[0] || !inputs[0].value.trim()) return;
+          const type = inputs[1] ? inputs[1].value : '';
+          if (type === 'WAIT') return; // WAIT steps don't transmit
+          const intervalSec = parseFloat(inputs[3] ? inputs[3].value : 0) || 0;
+          if (intervalSec > 0) {
+            totalDuty += toaMs / (intervalSec * 1000);
+            taskCount++;
+          }
+        });
+
+        const pct    = totalDuty * 100;
+        const pctEl  = document.getElementById('duty-pct');
+        const fillEl = document.getElementById('duty-fill');
+        const detEl  = document.getElementById('duty-detail');
+        if (!pctEl) return;
+
+        // Thresholds: >1% legal limit (EU), warn at >0.5%
+        const cls    = pct > 1 ? 'duty-err' : pct > 0.5 ? 'duty-warn' : 'duty-ok';
+        const color  = pct > 1 ? 'var(--err)' : pct > 0.5 ? 'var(--warn)' : 'var(--ok)';
+        const fillW  = Math.min(100, (pct / 1) * 100); // scale to 1% = full bar
+
+        pctEl.textContent  = pct.toFixed(3) + '%';
+        pctEl.style.color  = color;
+        fillEl.className   = 'duty-bar-fill ' + cls;
+        fillEl.style.width = fillW + '%';
+        if (pct > 1) {
+          detEl.textContent = `⚠ Exceeds 1% legal limit (EU) — reduce task frequency or count`;
+          detEl.style.color = 'var(--err)';
+        } else if (pct > 0.5) {
+          detEl.textContent = `${taskCount} task(s), ToA=${Math.round(toaMs)}ms — approaching limit`;
+          detEl.style.color = 'var(--warn)';
+        } else if (taskCount > 0) {
+          detEl.textContent = `${taskCount} task(s), ToA≈${Math.round(toaMs)}ms — well within limits`;
+          detEl.style.color = '#555';
+        } else {
+          detEl.textContent = 'Add tasks to calculate airtime usage';
+          detEl.style.color = '#555';
+        }
+      }
+
+      // ── Desired vs. Reported GPIO ────────────────────────────────────
+      const _pendingGpio = {};
+      const GPIO_PENDING_TIMEOUT = 5000;
+
       // ════════════════════════════════════════════════════════════════════════════
       // Init
       // ════════════════════════════════════════════════════════════════════════════
@@ -2063,8 +2725,19 @@
       refreshRegistry();
       logConsole("rx", "PC Control webapp ready — connecting to backend…");
 
+      // Ctrl+K / Cmd+K: Command Palette
+      document.addEventListener('keydown', function(e) {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+          e.preventDefault();
+          _paletteOpen ? _closePalette() : openPalette();
+        }
+        if (e.key === 'Escape' && _paletteOpen) _closePalette();
+      });
+
       buildPinMap();
       loadDeviceCustomizations();
+      refreshConfigSettings();
+      loadGoldenImage();
     </script>
 
     <!-- ── Pin Config Modal ────────────────────────────────────────────────── -->
@@ -2268,5 +2941,17 @@
       // Initialize Map
       buildPinMap();
     </script>
+
+    <!-- Command Palette (Ctrl+K) -->
+    <div id="cmd-palette" class="palette-overlay" onclick="closePalette(event)">
+      <div class="palette-box">
+        <input id="palette-search" class="palette-input"
+               placeholder="⌘ Search commands… (ESC to close)"
+               oninput="filterPalette(this.value)"
+               onkeydown="paletteKeyNav(event)" />
+        <div class="palette-list" id="palette-list"></div>
+      </div>
+    </div>
+    <script src="/static/js/admin-config.js"></script>
   </body>
 </html>

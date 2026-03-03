@@ -1,16 +1,16 @@
 [
   {
-    "id": "227808e3-a417-48a8-bafc-4c2c26d62d46",
-    "name": "GW-C8E6",
-    "type": "wifi",
-    "address": "172.16.0.27",
-    "active": false
-  },
-  {
     "id": "354d7f93-1bbb-49be-b0a6-1a068f6f6171",
     "name": "GW-C4FC",
     "type": "wifi",
     "address": "172.16.0.26",
     "active": true
+  },
+  {
+    "id": "597631da-a4b7-43ce-95bd-2d806f6ecff9",
+    "name": "Master",
+    "type": "wifi",
+    "address": "172.16.0.27",
+    "active": false
   }
 ]
