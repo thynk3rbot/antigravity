@@ -895,6 +895,8 @@
         if (_rssiHistory[n.id].length > RSSI_HISTORY_LEN) _rssiHistory[n.id].shift();
       }
     });
+    // Persist to sessionStorage so sparklines survive page refresh
+    try { sessionStorage.setItem(RSSI_SS_KEY, JSON.stringify(_rssiHistory)); } catch { /* quota */ }
     const now = Date.now();
     gridEl.innerHTML = nodes.map(n => {
       const stale = n.ago > 300;
@@ -2319,8 +2321,13 @@
       }
 
       // ── RSSI Sparklines ──────────────────────────────────────────────
-      const _rssiHistory = {};
       const RSSI_HISTORY_LEN = 10;
+      const RSSI_SS_KEY = 'loralink_rssi_history';
+      // Restore ring buffers from sessionStorage so sparklines survive page refresh
+      let _rssiHistory = (() => {
+        try { return JSON.parse(sessionStorage.getItem(RSSI_SS_KEY)) || {}; }
+        catch { return {}; }
+      })();
 
       function buildRssiSparkline(history) {
         if (!history || history.length < 2)
