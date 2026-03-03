@@ -143,14 +143,7 @@ void DisplayManager::drawHome(DataManager &data) {
   // Device Name (Large 16pt)
   Heltec.display->setFont(ArialMT_Plain_16);
   Heltec.display->setTextAlignment(TEXT_ALIGN_CENTER);
-  Heltec.display->drawString(64, 20, data.myId);
-
-  Heltec.display->setTextAlignment(TEXT_ALIGN_LEFT);
-  int y = 35;
-  for (int i = 0; i < data.numNodes && i < 2; i++) {
-    Heltec.display->drawString(0, y, "Node: " + String(data.remoteNodes[i].id));
-    y += 10;
-  }
+  Heltec.display->drawString(64, 30, data.myId);
 }
 
 void DisplayManager::drawNetwork(DataManager &data) {
