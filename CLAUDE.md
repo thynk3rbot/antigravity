@@ -74,7 +74,7 @@ This project lives inside the `spw1` personal monorepo on GitHub. The **default 
 **Rules for agents:**
 - **Never commit directly to `main`** — always work on `feature/<topic>` branches
 - **Always PR feature branches → `main`** — use `/commit-push-pr` skill
-- **OTA deploy targets:** MASTER = 172.16.0.27, SLAVE = 172.16.0.26
+- **OTA deploy targets:** use mDNS — `pio run -e ota_master` or `pio run -e ota_slave` (resolves via `loralink-<id>.local`, no hardcoded IPs)
 - **Versioning is manual** — update `FIRMWARE_VERSION` in `src/config.h` only for meaningful releases, never auto-increment
 - **Single build, multi-flash** — build once, OTA to all devices; never build separately per device
 

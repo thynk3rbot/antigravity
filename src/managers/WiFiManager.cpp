@@ -4,6 +4,7 @@
 #include "ScheduleManager.h"
 #include <Arduino.h>
 #include <ArduinoJson.h>
+#include <ESPmDNS.h>
 #include <WebServer.h>
 #include <WiFi.h>
 
@@ -215,6 +216,14 @@ void WiFiManager::startServer() {
   });
 
   server.begin();
+
+  // mDNS: advertise HTTP on <hostname>.local (same name as OTA)
+  String mdnsName = "LoRaLink-" + DataManager::getInstance().myId;
+  mdnsName.toLowerCase();
+  if (MDNS.begin(mdnsName.c_str())) {
+    MDNS.addService("http", "tcp", 80);
+    Serial.println("mDNS: http://" + mdnsName + ".local");
+  }
 }
 
 // ============================================================================
