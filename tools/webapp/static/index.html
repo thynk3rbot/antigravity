@@ -137,6 +137,79 @@
         padding: 3px 0; cursor: pointer; color: #aaa;
       }
       .multi-apply-panel label input[type=checkbox] { accent-color: #00d4ff; }
+
+/* ═══════════════════════════════════════════════════════════
+   WEBAPP UX ENHANCEMENTS
+   ═══════════════════════════════════════════════════════════ */
+
+/* Health Score Badge */
+.health-badge {
+  display: inline-block; padding: 2px 10px; border-radius: 12px;
+  font-size: 0.78em; font-weight: 700; letter-spacing: 0.5px;
+}
+.health-ok   { background: rgba(0,255,136,0.12); color: var(--ok);   border: 1px solid rgba(0,255,136,0.3); }
+.health-warn { background: rgba(255,170,0,0.12); color: var(--warn); border: 1px solid rgba(255,170,0,0.3); }
+.health-bad  { background: rgba(255,68,68,0.12);  color: var(--err);  border: 1px solid rgba(255,68,68,0.3); }
+
+/* Time on Air Warning */
+.toa-warn {
+  font-size: 0.72em; color: var(--err);
+  background: rgba(255,68,68,0.08); border: 1px solid rgba(255,68,68,0.25);
+  border-radius: 5px; padding: 4px 8px; margin-top: 4px; width: 100%;
+}
+
+/* Global Override Buttons */
+.override-btns { display: flex; gap: 6px; margin-left: auto; margin-right: 8px; align-items: center; }
+.btn-override {
+  padding: 3px 10px; border-radius: 12px; font-size: 0.65em; font-weight: 800;
+  letter-spacing: 0.5px; text-transform: uppercase; cursor: pointer;
+  border: 1px solid transparent; transition: 0.2s; background: none;
+}
+.btn-override.danger { background: rgba(255,68,68,0.15); color: var(--err); border-color: rgba(255,68,68,0.4); }
+.btn-override.danger:hover { background: rgba(255,68,68,0.3); }
+.btn-override.warn   { background: rgba(255,170,0,0.12); color: var(--warn); border-color: rgba(255,170,0,0.35); }
+.btn-override.warn:hover   { background: rgba(255,170,0,0.25); }
+
+/* Command Palette */
+.palette-overlay {
+  display: none; position: fixed; inset: 0; z-index: 2000;
+  background: rgba(0,0,0,0.7); backdrop-filter: blur(4px);
+  align-items: flex-start; justify-content: center; padding-top: 12vh;
+}
+.palette-box {
+  background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px;
+  width: 520px; max-width: 94vw; box-shadow: 0 20px 60px rgba(0,0,0,0.6); overflow: hidden;
+}
+.palette-input {
+  width: 100%; background: var(--bg-main); border: none;
+  border-bottom: 1px solid var(--border); color: var(--text);
+  font-size: 1em; padding: 14px 16px; outline: none; box-sizing: border-box;
+}
+.palette-list { max-height: 340px; overflow-y: auto; }
+.palette-item {
+  display: flex; flex-direction: column; gap: 2px; padding: 9px 16px; cursor: pointer;
+  border-bottom: 1px solid rgba(255,255,255,0.04); transition: background 0.1s;
+}
+.palette-item:hover, .palette-item-active { background: rgba(0,212,255,0.08); }
+.palette-cmd  { font-family: monospace; font-size: 0.85em; color: var(--accent); font-weight: 700; }
+.palette-desc { font-size: 0.72em; color: #888; }
+
+/* RSSI Sparkline */
+.rssi-spark { display: inline-block; vertical-align: middle; background: rgba(0,0,0,0.2); border-radius: 3px; }
+
+/* GPIO Pending / Confirm / Mismatch */
+.gpio-pending {
+  background: rgba(255,170,0,0.15) !important; border-color: rgba(255,170,0,0.4) !important;
+  color: var(--warn) !important;
+}
+.gpio-confirm {
+  background: rgba(0,255,136,0.15) !important; border-color: rgba(0,255,136,0.4) !important;
+  color: var(--ok) !important; transition: all 0.3s;
+}
+.gpio-mismatch {
+  background: rgba(255,68,68,0.15) !important; border-color: rgba(255,68,68,0.5) !important;
+  color: var(--err) !important;
+}
     </style>
   </head>
   <body>
@@ -193,6 +266,10 @@
       <a class="nav-link" onclick="showPage('testbench')">🧪 Test Bench</a>
       <a class="nav-link" onclick="showPage('config')">📁 Config Files</a>
       <a class="nav-link" onclick="showPage('admin')">🛡️ Admin</a>
+      <div class="override-btns">
+        <button class="btn-override danger" onclick="globalAllOff()" title="Turn off all GPIO outputs">⚡ All OFF</button>
+        <button class="btn-override warn" onclick="globalLowPower()" title="Switch to BLE-only low power mode">🌙 Low Power</button>
+      </div>
       <span id="nav-node">—</span>
     </nav>
 
@@ -246,6 +323,10 @@
             <div class="card span-2">
               <div class="lbl">Last Command</div>
               <div class="val sm" id="c-last-cmd" title="">—</div>
+            </div>
+            <div class="card span-2">
+              <div class="lbl">Health Score</div>
+              <div class="val" id="health-score">—</div>
             </div>
           </div>
 
@@ -373,7 +454,9 @@
                   placeholder="Interval (s)"
                   min="1"
                   value="30"
+                  oninput="checkToaWarning()"
                 />
+                <div id="toa-warn" class="toa-warn" style="display:none"></div>
                 <input
                   id="s-duration"
                   type="number"
@@ -799,33 +882,44 @@
 
   function updateFieldUI(data) {
     const gridEl = document.getElementById('field-grid');
-    if (!data.mesh) return;
-
-    // The gateway itself is a node
+    if (!gridEl || !data) return;
     const nodes = [
-      { id: data.id, bat: parseFloat(data.bat), rssi: 0, hops: 0, ago: 0, isLocal: true },
-      ...data.mesh
+      { id: data.id, bat: parseFloat(data.bat) || 0, rssi: null, hops: 0, ago: 0, isLocal: true },
+      ...(data.mesh || [])
     ];
-
+    // Update RSSI history ring buffer
+    nodes.forEach(n => {
+      if (n.rssi != null) {
+        if (!_rssiHistory[n.id]) _rssiHistory[n.id] = [];
+        _rssiHistory[n.id].push(n.rssi);
+        if (_rssiHistory[n.id].length > RSSI_HISTORY_LEN) _rssiHistory[n.id].shift();
+      }
+    });
+    const now = Date.now();
     gridEl.innerHTML = nodes.map(n => {
-      const isStale = n.ago > 300; // 5 mins
-      const statusClass = n.ago < 120 ? 'online' : 'offline';
-      return `
-        <div class="node-card ${isStale ? 'stale' : ''}">
-          <div class="status-dot ${statusClass}"></div>
-          <div class="card-title-accent">${n.id}</div>
-          <div class="text-xs text-dim">
-            ${n.isLocal ? '📍 Gateway' : '📡 Hop: ' + n.hops}
-          </div>
-          <div class="flex-between mt-2 text-sm">
-            <span>🔋 ${n.bat ? n.bat.toFixed(2)+'V' : '—'}</span>
-            <span>📶 ${n.rssi || '—'} dBm</span>
-          </div>
-          <div class="text-xs text-muted mt-1">
-            Seen: ${n.ago}s ago
-          </div>
+      const stale = n.ago > 300;
+      const statusCls = n.isLocal ? 'online' : (n.ago < 120 ? 'online' : 'offline');
+      const hist = n.isLocal ? [] : (_rssiHistory[n.id] || []);
+      const spark = buildRssiSparkline(hist);
+      // 2-factor health (bat + rssi) for field cards
+      const batS = (n.bat||0) <= 0 ? 0 : (n.bat >= 4.2 ? 100 : (n.bat <= 3.3 ? (n.bat/3.3)*50 : 50+((n.bat-3.3)/0.9)*50));
+      const rssiS = n.rssi != null ? Math.max(0, Math.min(100, ((n.rssi + 120)/60)*100)) : 0;
+      const fScore = n.isLocal ? null : Math.round((batS*0.3 + rssiS*0.4) / 0.7);
+      const fCls   = !fScore ? '' : (fScore>=80?'health-ok':fScore>=50?'health-warn':'health-bad');
+      return `<div class="node-card${stale?' stale':''}">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span class="status-dot ${statusCls}"></span>
+          <strong>${n.id}</strong>
+          ${fScore!=null ? `<span class="health-badge ${fCls}" style="font-size:0.7em">~${fScore}%</span>` : ''}
         </div>
-      `;
+        <div style="font-size:0.75em;color:#888;margin-top:2px">${n.isLocal?'Gateway':'Hop '+n.hops}</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">
+          <span style="font-size:0.8em">🔋 ${n.bat?n.bat.toFixed(2)+'V':'—'}</span>
+          <span style="font-size:0.8em;color:#888">${n.rssi!=null?n.rssi+' dBm':'local'}</span>
+          ${spark}
+        </div>
+        <div style="font-size:0.7em;color:#666;margin-top:4px">Seen: ${n.ago!=null?n.ago+'s ago':'now'}</div>
+      </div>`;
     }).join('');
   }
 
@@ -935,6 +1029,11 @@
         if (typeof updatePinMap === "function") {
           updatePinMap(d.pins || []);
         }
+
+        // Health Score badge
+        const hs = computeHealthScore(d);
+        const hsEl = document.getElementById('health-score');
+        if (hsEl) { hsEl.textContent = hs.score + '%'; hsEl.className = 'val health-badge ' + hs.cls; }
       }
 
       function badge(label, on) {
@@ -1039,13 +1138,37 @@
             stateEl.textContent = hi ? "HI" : "LO";
             if (btnEl) btnEl.className = `toggle-btn ${hi ? "active" : ""}`;
           }
+          // Desired vs. Reported reconciliation
+          if (v != null && _pendingGpio[g.pinNum] !== undefined) {
+            const pending = _pendingGpio[g.pinNum];
+            const reported = Boolean(parseInt(v));
+            const btnEl2 = document.getElementById('gbtn-' + g.pinNum);
+            if (reported === Boolean(pending.desired)) {
+              delete _pendingGpio[g.pinNum];
+              if (btnEl2) {
+                btnEl2.classList.remove('gpio-pending','gpio-mismatch');
+                btnEl2.textContent = 'Toggle';
+                btnEl2.classList.add('gpio-confirm');
+                setTimeout(() => btnEl2 && btnEl2.classList.remove('gpio-confirm'), 1200);
+              }
+            } else if (Date.now() - pending.sentAt > GPIO_PENDING_TIMEOUT) {
+              if (btnEl2) {
+                btnEl2.classList.remove('gpio-pending');
+                btnEl2.classList.add('gpio-mismatch');
+                btnEl2.textContent = '⚠';
+              }
+            }
+          }
         });
       }
 
       async function toggleGpio(pin, pinNum) {
         const stateEl = document.getElementById(`gstate-${pinNum}`);
+        const btnEl = document.getElementById(`gbtn-${pinNum}`);
         const currentHi = stateEl && stateEl.textContent === "HI";
         const newVal = currentHi ? "0" : "1";
+        _pendingGpio[pinNum] = { desired: parseInt(newVal), sentAt: Date.now() };
+        if (btnEl) { btnEl.classList.add('gpio-pending'); btnEl.textContent = '…'; }
         await sendRaw(`GPIO ${pin} ${newVal}`);
         logConsole("tx", `GPIO ${pin} ${newVal}`);
       }
@@ -2051,6 +2174,174 @@
       }
 
 
+      // ═══════════════════════════════════════════════════════════════════
+      //  UX ENHANCEMENT FEATURES
+      // ═══════════════════════════════════════════════════════════════════
+
+      // ── Health Score ─────────────────────────────────────────────────
+      function computeHealthScore(d) {
+        const bat  = parseFloat(d.bat) || 0;
+        const rssi = d.rssi || -120;
+        const heap = d.heap || 0;
+        const batScore = bat <= 0 ? 0 : bat >= 4.2 ? 100
+          : bat <= 3.3 ? (bat / 3.3) * 50
+          : 50 + ((bat - 3.3) / 0.9) * 50;
+        const rssiScore = Math.max(0, Math.min(100, ((rssi + 120) / 60) * 100));
+        const heapScore = Math.min(100, (heap / 327680) * 100);
+        let uptimeMins = 0;
+        if (d.uptime) {
+          const hm = d.uptime.match(/(\d+)h\s*(\d+)m/);
+          const m  = d.uptime.match(/(\d+)m/);
+          if (hm) uptimeMins = parseInt(hm[1]) * 60 + parseInt(hm[2]);
+          else if (m) uptimeMins = parseInt(m[1]);
+        }
+        const uptimeScore = Math.min(100, (uptimeMins / 1440) * 100);
+        const score = Math.round(batScore * 0.3 + rssiScore * 0.4 + heapScore * 0.2 + uptimeScore * 0.1);
+        const cls   = score >= 80 ? 'health-ok' : score >= 50 ? 'health-warn' : 'health-bad';
+        return { score, cls };
+      }
+
+      // ── Time on Air ──────────────────────────────────────────────────
+      const LORA_SF = 10, LORA_BW_HZ = 250000, LORA_PAYLOAD_BYTES = 20;
+
+      function calcToaMs(payloadBytes) {
+        const Tsym = (1 << LORA_SF) / LORA_BW_HZ * 1000;
+        const payloadSymbols = Math.ceil((8 * payloadBytes - 4 * LORA_SF + 28 + 16) / (4 * LORA_SF)) * 5;
+        return (8 + 4.25 + payloadSymbols) * Tsym;
+      }
+
+      function checkToaWarning() {
+        const intervalSec = parseInt(document.getElementById('s-interval').value) || 0;
+        const toaMs       = calcToaMs(LORA_PAYLOAD_BYTES);
+        const warn        = document.getElementById('toa-warn');
+        if (!warn) return;
+        if (intervalSec > 0 && (intervalSec * 1000) / toaMs < 10) {
+          const ratio = ((intervalSec * 1000) / toaMs).toFixed(1);
+          warn.textContent = `⚠ ToA ~${Math.round(toaMs)}ms — duty ratio ${ratio}× (min 10× recommended)`;
+          warn.style.display = 'block';
+        } else {
+          warn.style.display = 'none';
+        }
+      }
+
+      // ── Global Overrides ─────────────────────────────────────────────
+      async function globalAllOff() {
+        if (!confirm('Send GPIO OFF to all outputs — this turns off all relays and LEDs. Continue?')) return;
+        const pins = ['LED', '6', '7', '5', '36'];
+        for (const p of pins) { await sendRaw(`GPIO ${p} 0`); await new Promise(r => setTimeout(r, 100)); }
+        logConsole('tx', 'Global ALL OFF sent');
+      }
+
+      async function globalLowPower() {
+        if (!confirm('Enter Low Power mode — LoRa TX disabled, BLE only. Continue?')) return;
+        await sendRaw('RADIO BLE_ONLY');
+        logConsole('tx', 'Low Power mode activated');
+      }
+
+      // ── Command Palette ──────────────────────────────────────────────
+      const PALETTE_COMMANDS = [
+        { cmd: 'STATUS',              desc: 'Request full device status' },
+        { cmd: 'ALL STATUS',          desc: 'Broadcast status request to all mesh nodes' },
+        { cmd: 'GPIO LED 1',          desc: 'Turn LED on' },
+        { cmd: 'GPIO LED 0',          desc: 'Turn LED off' },
+        { cmd: 'GPIO 6 1',            desc: 'RELAY2 on (pin 6)' },
+        { cmd: 'GPIO 6 0',            desc: 'RELAY2 off (pin 6)' },
+        { cmd: 'GPIO 7 1',            desc: 'RELAY3 on (pin 7)' },
+        { cmd: 'GPIO 7 0',            desc: 'RELAY3 off (pin 7)' },
+        { cmd: 'SCHED LIST',          desc: 'List all scheduled tasks' },
+        { cmd: 'SCHED CLEAR',         desc: 'Clear all scheduled tasks' },
+        { cmd: 'SCHED SAVE',          desc: 'Save current schedule to flash' },
+        { cmd: 'CONFIG GET DEV_NAME', desc: 'Get current device name' },
+        { cmd: 'CONFIG GET WIFI_SSID',desc: 'Get configured WiFi SSID' },
+        { cmd: 'CONFIG GET ESPNOW',   desc: 'Get ESP-NOW enabled state' },
+        { cmd: 'CONFIG GET REPEATER', desc: 'Get repeater mode state' },
+        { cmd: 'ESPNOW ADDPEER',      desc: 'Add ESP-NOW peer (requires MAC + name)' },
+        { cmd: 'RADIO BLE_ONLY',      desc: 'Low power: disable LoRa TX, use BLE only' },
+        { cmd: 'MESH STATUS',         desc: 'Request mesh network topology' },
+        { cmd: 'REBOOT',              desc: 'Reboot the device immediately' },
+        { cmd: 'WIPECONFIG',          desc: 'Factory reset — clears all NVS settings' },
+      ];
+      let _paletteOpen = false, _paletteIdx = -1;
+
+      function openPalette() {
+        const overlay = document.getElementById('cmd-palette');
+        if (!overlay) return;
+        _paletteOpen = true; _paletteIdx = -1;
+        overlay.style.display = 'flex';
+        const inp = document.getElementById('palette-search');
+        inp.value = '';
+        filterPalette('');
+        setTimeout(() => inp.focus(), 30);
+      }
+
+      function closePalette(event) {
+        if (event && event.target !== document.getElementById('cmd-palette')) return;
+        _closePalette();
+      }
+
+      function _closePalette() {
+        const o = document.getElementById('cmd-palette');
+        if (o) o.style.display = 'none';
+        _paletteOpen = false;
+      }
+
+      function filterPalette(q) {
+        const list = document.getElementById('palette-list');
+        _paletteIdx = -1;
+        const term = q.toLowerCase();
+        const matches = PALETTE_COMMANDS.filter(c =>
+          c.cmd.toLowerCase().includes(term) || c.desc.toLowerCase().includes(term));
+        list.innerHTML = matches.map((c, i) =>
+          `<div class="palette-item" data-cmd="${c.cmd}" onclick="paletteSelect('${c.cmd.replace(/'/g,"\\'")}')">
+            <span class="palette-cmd">${c.cmd}</span>
+            <span class="palette-desc">${c.desc}</span>
+          </div>`).join('');
+      }
+
+      function paletteKeyNav(ev) {
+        const items = document.querySelectorAll('.palette-item');
+        if (ev.key === 'Escape') { _closePalette(); ev.preventDefault(); return; }
+        if (ev.key === 'ArrowDown') { _paletteIdx = Math.min(_paletteIdx + 1, items.length - 1); ev.preventDefault(); }
+        else if (ev.key === 'ArrowUp') { _paletteIdx = Math.max(_paletteIdx - 1, 0); ev.preventDefault(); }
+        else if (ev.key === 'Enter' && _paletteIdx >= 0) {
+          const cmd = items[_paletteIdx]?.dataset.cmd;
+          if (cmd) paletteSelect(cmd);
+          ev.preventDefault(); return;
+        }
+        items.forEach((el, i) => el.classList.toggle('palette-item-active', i === _paletteIdx));
+        if (items[_paletteIdx]) items[_paletteIdx].scrollIntoView({ block: 'nearest' });
+      }
+
+      async function paletteSelect(cmd) {
+        _closePalette();
+        logConsole('tx', cmd);
+        await sendRaw(cmd);
+      }
+
+      // ── RSSI Sparklines ──────────────────────────────────────────────
+      const _rssiHistory = {};
+      const RSSI_HISTORY_LEN = 10;
+
+      function buildRssiSparkline(history) {
+        if (!history || history.length < 2)
+          return '<svg width="60" height="20" class="rssi-spark"><text x="4" y="14" fill="#444" font-size="8">—</text></svg>';
+        const W = 60, H = 20, PAD = 2, MIN_R = -120, MAX_R = -30;
+        const pts = history.map((v, i) => {
+          const x = PAD + (i / (history.length - 1)) * (W - PAD * 2);
+          const y = H - PAD - ((Math.max(MIN_R, Math.min(MAX_R, v)) - MIN_R) / (MAX_R - MIN_R)) * (H - PAD * 2);
+          return `${x.toFixed(1)},${y.toFixed(1)}`;
+        }).join(' ');
+        const last = history[history.length - 1];
+        const col  = last > -90 ? '#00ff88' : last > -105 ? '#ffaa00' : '#ff4444';
+        return `<svg width="${W}" height="${H}" class="rssi-spark" title="RSSI trend (${history.length} pts)">
+          <polyline points="${pts}" fill="none" stroke="${col}" stroke-width="1.5" stroke-linejoin="round"/>
+        </svg>`;
+      }
+
+      // ── Desired vs. Reported GPIO ────────────────────────────────────
+      const _pendingGpio = {};
+      const GPIO_PENDING_TIMEOUT = 5000;
+
       // ════════════════════════════════════════════════════════════════════════════
       // Init
       // ════════════════════════════════════════════════════════════════════════════
@@ -2062,6 +2353,15 @@
       loadSchedule();
       refreshRegistry();
       logConsole("rx", "PC Control webapp ready — connecting to backend…");
+
+      // Ctrl+K / Cmd+K: Command Palette
+      document.addEventListener('keydown', function(e) {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+          e.preventDefault();
+          _paletteOpen ? _closePalette() : openPalette();
+        }
+        if (e.key === 'Escape' && _paletteOpen) _closePalette();
+      });
 
       buildPinMap();
       loadDeviceCustomizations();
@@ -2268,5 +2568,16 @@
       // Initialize Map
       buildPinMap();
     </script>
+
+    <!-- Command Palette (Ctrl+K) -->
+    <div id="cmd-palette" class="palette-overlay" onclick="closePalette(event)">
+      <div class="palette-box">
+        <input id="palette-search" class="palette-input"
+               placeholder="⌘ Search commands… (ESC to close)"
+               oninput="filterPalette(this.value)"
+               onkeydown="paletteKeyNav(event)" />
+        <div class="palette-list" id="palette-list"></div>
+      </div>
+    </div>
   </body>
 </html>
