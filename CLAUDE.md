@@ -62,6 +62,22 @@ When modifying firmware, check this table and update all listed tool files in th
 - **CommInterface:** Always use `COMM_` prefix (prevents collision with `SERIAL`).
 - **Hardware Conflict:** Pin 14 is shared by `PIN_RELAY_12V_1` and `LORA_DIO1`—never enable both.
 
+## Git Workflow — Agent Contribution Rules
+
+This project lives inside the `spw1` personal monorepo on GitHub. The **default branch for this project is `main`**.
+
+| Branch | Purpose |
+| --- | --- |
+| `main` | Stable, tested, deployed firmware — **PR target** |
+| `feature/<topic>` | Where agents and contributors work — always branch from `main` |
+
+**Rules for agents:**
+- **Never commit directly to `main`** — always work on `feature/<topic>` branches
+- **Always PR feature branches → `main`** — use `/commit-push-pr` skill
+- **OTA deploy targets:** MASTER = 172.16.0.27, SLAVE = 172.16.0.26
+- **Versioning is manual** — update `FIRMWARE_VERSION` in `src/config.h` only for meaningful releases, never auto-increment
+- **Single build, multi-flash** — build once, OTA to all devices; never build separately per device
+
 ## Shortcuts & Workflows
 
 - `/build` - `pio run -e heltec_wifi_lora_32_V3`
