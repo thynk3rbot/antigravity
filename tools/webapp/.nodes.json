@@ -1,16 +1,16 @@
 [
   {
-    "id": "3c11206a-2909-47f2-b357-ee0937b6b396",
-    "name": "Master",
+    "id": "227808e3-a417-48a8-bafc-4c2c26d62d46",
+    "name": "GW-C8E6",
     "type": "wifi",
-    "address": "master.local",
-    "active": true
+    "address": "172.16.0.27",
+    "active": false
   },
   {
-    "id": "683e5fef-5377-4c7a-9e01-9fffc6e41ef2",
-    "name": "Slave",
+    "id": "354d7f93-1bbb-49be-b0a6-1a068f6f6171",
+    "name": "GW-C4FC",
     "type": "wifi",
-    "address": "slave.local",
-    "active": false
+    "address": "172.16.0.26",
+    "active": true
   }
 ]
