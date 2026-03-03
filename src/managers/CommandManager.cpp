@@ -339,6 +339,90 @@ void CommandManager::initRegistry() {
     }
   });
 
+  registerCommand("CONFIG", [](const String &args, CommInterface source) {
+    DataManager &data = DataManager::getInstance();
+    LoRaManager &lora = LoRaManager::getInstance();
+
+    String argsCopy = args;
+    argsCopy.trim();
+
+    int space = argsCopy.indexOf(' ');
+    if (space <= 0) {
+      lora.lastMsgReceived = "ERR: CONFIG SET|GET key [value]";
+      return;
+    }
+
+    String operation = argsCopy.substring(0, space);
+    operation.toUpperCase();
+    String remainder = argsCopy.substring(space + 1);
+    remainder.trim();
+
+    if (operation == "SET") {
+      int sep = remainder.indexOf(' ');
+      if (sep <= 0) {
+        lora.lastMsgReceived = "ERR: CONFIG SET key value";
+        return;
+      }
+      String key = remainder.substring(0, sep);
+      String value = remainder.substring(sep + 1);
+      key.toUpperCase();
+      value.trim();
+
+      // Handle various config keys
+      if (key == "DEV_NAME" || key == "DEVICE_NAME") {
+        data.SetName(value);
+        lora.lastMsgReceived = "CONFIG: dev_name -> " + value;
+      } else if (key == "WIFI_SSID") {
+        data.SetWifi(value, data.wifiPass);
+        lora.lastMsgReceived = "CONFIG: wifi_ssid -> " + value;
+      } else if (key == "WIFI_PASS") {
+        data.SetWifi(data.wifiSsid, value);
+        lora.lastMsgReceived = "CONFIG: wifi_pass -> ****";
+      } else if (key == "WIFI_EN") {
+        bool enable = value.equalsIgnoreCase("1") || value.equalsIgnoreCase("true") || value.equalsIgnoreCase("on");
+        data.SetWifiEnabled(enable);
+        lora.lastMsgReceived = "CONFIG: wifi_en -> " + String(enable ? "1" : "0");
+      } else if (key == "STATIC_IP") {
+        data.SetStaticIp(value, "", "");
+        lora.lastMsgReceived = "CONFIG: static_ip -> " + value;
+      } else if (key == "REPEATER") {
+        bool enable = value.equalsIgnoreCase("1") || value.equalsIgnoreCase("true") || value.equalsIgnoreCase("on");
+        data.SetRepeater(enable);
+        lora.lastMsgReceived = "CONFIG: repeater -> " + String(enable ? "1" : "0");
+      } else {
+        lora.lastMsgReceived = "ERR: Unknown config key: " + key;
+        return;
+      }
+
+      // Trigger restart for WiFi/IP changes
+      if (key == "WIFI_SSID" || key == "WIFI_PASS" || key == "WIFI_EN" || key == "STATIC_IP") {
+#ifndef UNIT_TEST
+        ScheduleManager::getInstance().triggerRestart(1000);
+#endif
+      }
+
+    } else if (operation == "GET") {
+      String key = remainder;
+      key.toUpperCase();
+
+      if (key == "DEV_NAME" || key == "DEVICE_NAME") {
+        lora.lastMsgReceived = "CONFIG: dev_name = " + data.myId;
+      } else if (key == "WIFI_SSID") {
+        lora.lastMsgReceived = "CONFIG: wifi_ssid = " + data.wifiSsid;
+      } else if (key == "WIFI_EN") {
+        lora.lastMsgReceived = "CONFIG: wifi_en = " + String(data.wifiEnabled ? "1" : "0");
+      } else if (key == "STATIC_IP") {
+        lora.lastMsgReceived = "CONFIG: static_ip = " + data.staticIp;
+      } else if (key == "REPEATER") {
+        lora.lastMsgReceived = "CONFIG: repeater = " + String(data.repeaterEnabled ? "1" : "0");
+      } else {
+        lora.lastMsgReceived = "ERR: Unknown config key: " + key;
+      }
+    } else {
+      lora.lastMsgReceived = "ERR: CONFIG SET|GET";
+    }
+  });
+
   registerCommand("WIPECONFIG", [](const String &args, CommInterface source) {
     DataManager::getInstance().FactoryReset();
     LoRaManager::getInstance().lastMsgReceived = "SYS: CONFIG WIPED";
