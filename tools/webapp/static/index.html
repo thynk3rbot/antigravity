@@ -210,6 +210,53 @@
   background: rgba(255,68,68,0.15) !important; border-color: rgba(255,68,68,0.5) !important;
   color: var(--err) !important;
 }
+
+/* ── Test Bench Swarm Enhancements ───────────────────────────── */
+
+/* Run controls strip */
+.bench-meta {
+  display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+  padding: 6px 12px; background: rgba(0,0,0,0.18);
+  border-bottom: 1px solid var(--border); font-size: 0.8em;
+}
+.bench-meta label { color: #888; white-space: nowrap; display: flex; align-items: center; gap: 4px; }
+.bench-meta input[type=number] {
+  width: 72px; background: var(--bg-main); border: 1px solid var(--border);
+  color: var(--text); border-radius: 5px; padding: 2px 6px; font-size: 0.9em;
+}
+.bench-dry-lbl { color: var(--warn) !important; font-weight: 700; }
+
+/* Duty cycle panel */
+.duty-panel {
+  margin-top: 10px; padding: 8px 10px; background: rgba(0,0,0,0.2);
+  border-radius: 6px; border: 1px solid var(--border);
+}
+.duty-bar-bg { height: 8px; background: rgba(255,255,255,0.06); border-radius: 4px; overflow: hidden; margin: 4px 0; }
+.duty-bar-fill { height: 100%; border-radius: 4px; transition: width 0.3s, background 0.3s; min-width: 2px; }
+.duty-ok   { background: var(--ok); }
+.duty-warn { background: var(--warn); }
+.duty-err  { background: var(--err); }
+.duty-row  { font-size: 0.72em; color: #888; display: flex; justify-content: space-between; }
+
+/* Swarm progress */
+.swarm-prog {
+  margin-top: 8px; padding: 7px 10px;
+  background: rgba(0,212,255,0.05); border: 1px solid rgba(0,212,255,0.2);
+  border-radius: 6px; display: none;
+}
+.swarm-prog.active { display: block; }
+.swarm-prog-bar { height: 6px; background: rgba(255,255,255,0.06); border-radius: 3px; overflow: hidden; margin: 4px 0; }
+.swarm-prog-fill { height: 100%; background: var(--ok); border-radius: 3px; transition: width 0.2s; }
+.swarm-prog-row { font-size: 0.7em; color: #888; display: flex; justify-content: space-between; }
+
+/* Node filter chips */
+.node-filter-btns { display: flex; gap: 4px; margin-bottom: 7px; flex-wrap: wrap; }
+.nf-btn {
+  padding: 2px 9px; border-radius: 10px; font-size: 0.65em; font-weight: 700;
+  cursor: pointer; border: 1px solid var(--border); background: rgba(255,255,255,0.05);
+  color: #777; transition: 0.15s; text-transform: uppercase; letter-spacing: 0.3px;
+}
+.nf-btn.active { background: rgba(0,212,255,0.15); border-color: rgba(0,212,255,0.4); color: var(--accent); }
     </style>
   </head>
   <body>
@@ -607,6 +654,12 @@
             />
             <button class="btn btn-sm" onclick="saveSequence()">Save</button>
           </div>
+          <!-- Test Bench run controls -->
+          <div class="bench-meta">
+            <label>🔁 Repeat <input type="number" id="seq-repeat" value="1" min="1" max="1000" title="Repeat full sequence N times per node"></label>
+            <label>⏱ Stagger (ms) <input type="number" id="seq-stagger" value="0" min="0" max="60000" title="Delay between nodes during swarm apply"></label>
+            <label class="bench-dry-lbl"><input type="checkbox" id="seq-dryrun" style="accent-color:var(--warn);margin-right:3px">🧪 Dry Run</label>
+          </div>
           <div
             class="flex-1 overflow-y-auto p-3 min-h-0"
           >
@@ -618,6 +671,8 @@
                   <th>Pin</th>
                   <th>Interval(s)</th>
                   <th>Duration(s)</th>
+                  <th title="Retry count if step fails">Retry</th>
+                  <th title="Stop sequence if this step fails">⛔</th>
                   <th></th>
                 </tr>
               </thead>
@@ -630,6 +685,12 @@
             >
               + Add Row
             </button>
+            <!-- Aggregated Duty Cycle -->
+            <div class="duty-panel" id="duty-panel">
+              <div class="duty-row"><span>Aggregated LoRa Duty Cycle</span><span id="duty-pct" style="font-weight:700;color:var(--ok)">—</span></div>
+              <div class="duty-bar-bg"><div class="duty-bar-fill duty-ok" id="duty-fill" style="width:0%"></div></div>
+              <div class="duty-row" id="duty-detail" style="color:#555">Add tasks to calculate airtime usage</div>
+            </div>
           </div>
         </div>
       </div>
@@ -1682,13 +1743,37 @@
           const seqs = await r.json();
           const el = document.getElementById("seq-list");
           if (!seqs.length) {
-            el.innerHTML =
-              '<div class="text-muted text-center p-4">No sequences saved</div>';
+            el.innerHTML = '<div class="text-muted text-center p-4">No sequences saved</div>';
             return;
           }
-          el.innerHTML = seqs
-            .map((s) => `<div class="seq-item" style="flex-direction:column;align-items:stretch"><div style="display:flex;align-items:center;gap:8px"><span style="flex:1;font-weight:600;font-size:0.88em">${escHtml(s.name)}</span><span class="seq-count">${s.tasks.length} tasks</span><button class="btn btn-sm" onclick="loadSequenceIntoEditor('${escHtml(s.name)}')" style="margin-left:4px">Edit</button><button class="btn btn-sm" onclick="applySequence('${escHtml(s.name)}')" style="margin-left:4px;background:#00884422;border-color:#00884444;color:#00ff88">▶ Apply</button><button class="btn btn-sm btn-secondary" onclick="toggleMultiApplyPanel('${escHtml(s.name)}')" style="margin-left:4px">▾ Apply to…</button><button class="btn btn-danger btn-sm" onclick="deleteSequence('${escHtml(s.name)}')" style="margin-left:4px">✕</button></div><div class="multi-apply-panel" id="map-${escHtml(s.name)}"><div id="map-nodes-${escHtml(s.name)}" style="margin-bottom:6px">Loading nodes…</div><button class="btn btn-sm" onclick="applyMultiSequence('${escHtml(s.name)}')" style="background:#00884422;border-color:#00884444;color:#00ff88">Apply to Selected</button></div></div>`)
-            .join("");
+          el.innerHTML = seqs.map((s) => {
+            const sn = escHtml(s.name);
+            return `<div class="seq-item" style="flex-direction:column;align-items:stretch">
+              <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+                <span style="flex:1;font-weight:600;font-size:0.88em">${sn}</span>
+                <span class="seq-count">${s.tasks.length} tasks</span>
+                <button class="btn btn-sm" onclick="loadSequenceIntoEditor('${sn}')">Edit</button>
+                <button class="btn btn-sm" onclick="applySequence('${sn}')" style="background:#00884422;border-color:#00884444;color:#00ff88">▶ Apply</button>
+                <button class="btn btn-sm btn-secondary" onclick="toggleMultiApplyPanel('${sn}')">▾ Swarm…</button>
+                <button class="btn btn-danger btn-sm" onclick="deleteSequence('${sn}')">✕</button>
+              </div>
+              <div class="multi-apply-panel" id="map-${sn}">
+                <div class="node-filter-btns">
+                  <button class="nf-btn active" onclick="filterNodes('${sn}','all',this)">All</button>
+                  <button class="nf-btn" onclick="filterNodes('${sn}','wifi',this)">WiFi</button>
+                  <button class="nf-btn" onclick="filterNodes('${sn}','lora',this)">LoRa</button>
+                  <button class="nf-btn" onclick="filterNodes('${sn}','active',this)">Active</button>
+                </div>
+                <div id="map-nodes-${sn}" style="margin-bottom:6px">Loading nodes…</div>
+                <div class="swarm-prog" id="swarm-prog-${sn}">
+                  <div class="swarm-prog-row"><span id="swarm-label-${sn}">Preparing…</span><span id="swarm-rate-${sn}"></span></div>
+                  <div class="swarm-prog-bar"><div class="swarm-prog-fill" id="swarm-fill-${sn}" style="width:0%"></div></div>
+                  <div class="swarm-prog-row"><span id="swarm-detail-${sn}" style="color:#555"></span></div>
+                </div>
+                <button class="btn btn-sm" onclick="applyMultiSequence('${sn}')" style="background:#00884422;border-color:#00884444;color:#00ff88;margin-top:4px">▶▶ Apply to Selected</button>
+              </div>
+            </div>`;
+          }).join("");
         } catch (e) {
           logConsole("err", `loadSequences: ${e.message}`);
         }
@@ -1712,26 +1797,23 @@
         const tr = document.createElement("tr");
         const pins = [6, 7]; // safe pins only — never pin 14
         const pinOpts = pins
-          .map(
-            (p) =>
-              `<option value="${p}"${task && task.pin == p ? " selected" : ""}>${p}</option>`,
-          )
+          .map((p) => `<option value="${p}"${task && task.pin == p ? " selected" : ""}>${p}</option>`)
           .join("");
-        const types = ["TOGGLE", "PULSE", "DHT_SAFETY"];
+        const types = ["TOGGLE", "PULSE", "WAIT", "DHT_SAFETY"];
         const typeOpts = types
-          .map(
-            (t) =>
-              `<option${task && task.type === t ? " selected" : ""}>${t}</option>`,
-          )
+          .map((t) => `<option${task && task.type === t ? " selected" : ""}>${t}</option>`)
           .join("");
         tr.innerHTML = `
-    <td><input type="text" value="${task ? escHtml(task.name) : ""}" placeholder="taskName" maxlength="8"></td>
-    <td><select>${typeOpts}</select></td>
+    <td><input type="text" value="${task ? escHtml(task.name) : ""}" placeholder="{{NODE_ID}}" maxlength="16" oninput="recalcDutyCycle()"></td>
+    <td><select onchange="recalcDutyCycle()">${typeOpts}</select></td>
     <td><select>${pinOpts}</select></td>
-    <td><input type="number" value="${task ? task.interval : 30}" min="1" max="3600"></td>
-    <td><input type="number" value="${task ? task.duration : 0}" min="0" max="3600"></td>
-    <td><button class="btn btn-danger btn-sm" onclick="this.closest('tr').remove()">✕</button></td>`;
+    <td><input type="number" value="${task ? task.interval : 30}" min="1" max="86400" oninput="recalcDutyCycle()"></td>
+    <td><input type="number" value="${task ? (task.duration||0) : 0}" min="0" max="86400" oninput="recalcDutyCycle()"></td>
+    <td><input type="number" value="${task && task.retry != null ? task.retry : 1}" min="1" max="10" style="width:44px"></td>
+    <td style="text-align:center"><input type="checkbox" ${task && task.critical ? "checked" : ""} title="Stop on fail" style="accent-color:var(--err)"></td>
+    <td><button class="btn btn-danger btn-sm" onclick="this.closest('tr').remove();recalcDutyCycle()">✕</button></td>`;
         tbody.appendChild(tr);
+        recalcDutyCycle();
       }
 
       async function saveSequence() {
@@ -1751,6 +1833,8 @@
               pin: parseInt(inputs[2].value),
               interval: parseInt(inputs[3].value),
               duration: parseInt(inputs[4].value) || 0,
+              retry: parseInt(inputs[5].value) || 1,
+              critical: inputs[6].checked,
             });
           }
         });
@@ -1806,6 +1890,8 @@
         logConsole("rx", "Device tasks cleared");
       }
 
+      const _nodeCache = {};
+
       async function toggleMultiApplyPanel(seqName) {
         const panel = document.getElementById(`map-${seqName}`);
         if (!panel) return;
@@ -1814,13 +1900,8 @@
           try {
             const r = await fetch("/api/nodes");
             const all = await r.json();
-            const wifi = all.filter(n => n.type === "wifi" || n.type === "lora");
-            const nodesEl = document.getElementById(`map-nodes-${seqName}`);
-            if (!wifi.length) {
-              nodesEl.innerHTML = '<span style="color:#555">No WiFi/LoRa nodes configured</span>';
-            } else {
-              nodesEl.innerHTML = wifi.map(n => `<label><input type="checkbox" value="${n.id}" checked><span class="node-type ${n.type}" style="font-size:0.7em">${n.type}</span>${escHtml(n.name)}<span style="color:#555;font-family:monospace">${escHtml(n.address)}</span></label>`).join("");
-            }
+            _nodeCache[seqName] = all.filter(n => n.type === "wifi" || n.type === "lora");
+            renderNodeCheckboxes(seqName, 'all');
           } catch (e) {
             document.getElementById(`map-nodes-${seqName}`).textContent = `Error: ${e.message}`;
           }
@@ -1828,31 +1909,147 @@
         panel.classList.toggle("open", !isOpen);
       }
 
+      function renderNodeCheckboxes(seqName, filter) {
+        const all = _nodeCache[seqName] || [];
+        let nodes = all;
+        if (filter === 'wifi') nodes = all.filter(n => n.type === 'wifi');
+        else if (filter === 'lora') nodes = all.filter(n => n.type === 'lora');
+        else if (filter === 'active') nodes = all.filter(n => n.active !== false);
+        const el = document.getElementById(`map-nodes-${seqName}`);
+        if (!nodes.length) {
+          el.innerHTML = '<span style="color:#555">No nodes match filter</span>';
+          return;
+        }
+        el.innerHTML = nodes.map(n => {
+          const activeDot = n.active !== false ? '🟢' : '🔴';
+          return `<label style="display:flex;align-items:center;gap:5px;margin:2px 0">
+            <input type="checkbox" value="${n.id}" checked>
+            <span class="node-type ${n.type}" style="font-size:0.7em">${n.type}</span>
+            ${activeDot} ${escHtml(n.name)}
+            <span style="color:#555;font-family:monospace;font-size:0.8em">${escHtml(n.address)}</span>
+          </label>`;
+        }).join("");
+      }
+
+      function filterNodes(seqName, filter, btn) {
+        document.querySelectorAll(`#map-${seqName} .nf-btn`).forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        renderNodeCheckboxes(seqName, filter);
+      }
+
       async function applyMultiSequence(seqName) {
-        const panel = document.getElementById(`map-${seqName}`);
-        const checked = panel ? [...panel.querySelectorAll("input[type=checkbox]:checked")].map(x => x.value) : [];
+        const panel    = document.getElementById(`map-${seqName}`);
+        const progEl   = document.getElementById(`swarm-prog-${seqName}`);
+        const fillEl   = document.getElementById(`swarm-fill-${seqName}`);
+        const labelEl  = document.getElementById(`swarm-label-${seqName}`);
+        const rateEl   = document.getElementById(`swarm-rate-${seqName}`);
+        const detailEl = document.getElementById(`swarm-detail-${seqName}`);
+
+        const checked  = panel ? [...panel.querySelectorAll("input[type=checkbox]:checked")].map(x => x.value) : [];
         if (!checked.length) { logConsole("err", "Select at least one node"); return; }
 
-        logConsole("tx", `Applying "${seqName}" to ${checked.length} node(s)…`);
+        const repeat  = Math.max(1, parseInt(document.getElementById('seq-repeat')?.value) || 1);
+        const stagger = Math.max(0, parseInt(document.getElementById('seq-stagger')?.value) || 0);
+        const dryRun  = document.getElementById('seq-dryrun')?.checked || false;
+
+        // Show progress bar
+        if (progEl) { progEl.classList.add('active'); }
+        const total  = checked.length * repeat;
+        let   done   = 0, ok = 0, fail = 0;
+
+        const updateProgress = (detail) => {
+          const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+          if (fillEl)   fillEl.style.width = pct + '%';
+          if (labelEl)  labelEl.textContent = dryRun ? '🧪 Dry Run — ' + done + '/' + total : done + '/' + total + ' nodes';
+          if (rateEl)   rateEl.textContent  = `✅ ${ok}  ❌ ${fail}`;
+          if (detailEl && detail) detailEl.textContent = detail;
+        };
+        updateProgress('Starting…');
+
+        // Fetch sequence tasks for {{NODE_ID}} substitution
+        let seqTasks = [];
         try {
-          const r = await fetch(`/api/sequences/${encodeURIComponent(seqName)}/apply-multi`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ node_ids: checked }),
-          });
-          const d = await r.json();
-          if (d.nodes) {
-            d.nodes.forEach(n => {
-              const msg = n.ok
-                ? `${n.node_name}: ${n.tasks_ok}/${n.tasks_total} tasks applied`
-                : `${n.node_name}: ${n.error || "failed"}`;
-              logConsole(n.ok ? "rx" : "err", msg);
-            });
-          }
-          panel.classList.remove("open");
-        } catch (e) {
-          logConsole("err", `applyMultiSequence: ${e.message}`);
+          const sr = await fetch('/api/sequences');
+          const seqs = await sr.json();
+          const seq = seqs.find(s => s.name === seqName);
+          seqTasks = seq ? seq.tasks : [];
+        } catch {}
+
+        // Helper to substitute {{NODE_ID}} / {{NODE_NAME}} in task name
+        function injectVars(taskName, nodeId, nodeName) {
+          return (taskName || '')
+            .replace(/\{\{NODE_ID\}\}/gi, nodeId)
+            .replace(/\{\{NODE_NAME\}\}/gi, nodeName || nodeId);
         }
+
+        logConsole("tx", `${dryRun ? '[DRY RUN] ' : ''}Swarm apply "${seqName}" → ${checked.length} node(s), ×${repeat}, stagger ${stagger}ms`);
+
+        let halted = false;
+        for (let rep = 0; rep < repeat; rep++) {
+          if (halted) break;
+          for (let i = 0; i < checked.length; i++) {
+            if (halted) break;
+            const nodeId   = checked[i];
+            const nodeInfo = (_nodeCache[seqName] || []).find(n => n.id === nodeId);
+            const nodeName = nodeInfo ? nodeInfo.name : nodeId;
+
+            updateProgress(`Rep ${rep+1}/${repeat} — ${nodeName}`);
+
+            if (dryRun) {
+              seqTasks.forEach(t => {
+                const name = injectVars(t.name, nodeId, nodeName);
+                logConsole("tx", `[DRY RUN] → ${nodeName}: SCHED ADD ${name} ${t.type} ${t.pin} ${t.interval}${t.duration ? ' '+t.duration : ''}`);
+              });
+              ok++; done++;
+            } else {
+              try {
+                const body = {
+                  node_ids: [nodeId],
+                  tasks: seqTasks.map(t => ({
+                    ...t, name: injectVars(t.name, nodeId, nodeName)
+                  }))
+                };
+                const r = await fetch(`/api/sequences/${encodeURIComponent(seqName)}/apply-multi`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify(body),
+                });
+                const d = await r.json();
+                const nodeResult = d.nodes && d.nodes[0];
+                if (nodeResult && nodeResult.ok) {
+                  logConsole("rx", `${nodeName}: ${nodeResult.tasks_ok}/${nodeResult.tasks_total} tasks`);
+                  ok++;
+                } else {
+                  logConsole("err", `${nodeName}: ${nodeResult ? nodeResult.error : 'failed'}`);
+                  fail++;
+                  // Check if critical step failure — stop sequence
+                  const hasCritical = seqTasks.some(t => t.critical);
+                  if (hasCritical) {
+                    logConsole("err", `Critical failure on ${nodeName} — swarm halted`);
+                    done++;
+                    updateProgress(`⛔ Halted at ${nodeName}`);
+                    halted = true;
+                    break;
+                  }
+                }
+                done++;
+              } catch (e) {
+                logConsole("err", `${nodeName}: ${e.message}`);
+                fail++; done++;
+              }
+            }
+
+            updateProgress();
+            // Stagger delay between nodes (not after last one)
+            if (stagger > 0 && !(i === checked.length - 1 && rep === repeat - 1)) {
+              await new Promise(res => setTimeout(res, stagger));
+            }
+          }
+        }
+
+        updateProgress(dryRun ? 'Dry run complete — no packets sent' : `Done: ${ok} ok, ${fail} failed`);
+        logConsole(fail ? "err" : "rx", `Swarm apply complete: ${ok}/${total} ok${dryRun ? ' (dry run)' : ''}`);
+        if (!dryRun) panel.classList.remove("open");
       }
 
       // ════════════════════════════════════════════════════════════════════════════
@@ -2343,6 +2540,54 @@
         return `<svg width="${W}" height="${H}" class="rssi-spark" title="RSSI trend (${history.length} pts)">
           <polyline points="${pts}" fill="none" stroke="${col}" stroke-width="1.5" stroke-linejoin="round"/>
         </svg>`;
+      }
+
+      // ── Aggregated Duty Cycle Calculator ─────────────────────────────
+      function recalcDutyCycle() {
+        const rows = document.querySelectorAll('#seq-tasks tr');
+        const toaMs = calcToaMs(LORA_PAYLOAD_BYTES); // reuse existing constant
+        let totalDuty = 0;
+        let taskCount = 0;
+        rows.forEach(row => {
+          const inputs = row.querySelectorAll('input,select');
+          if (!inputs[0] || !inputs[0].value.trim()) return;
+          const type = inputs[1] ? inputs[1].value : '';
+          if (type === 'WAIT') return; // WAIT steps don't transmit
+          const intervalSec = parseFloat(inputs[3] ? inputs[3].value : 0) || 0;
+          if (intervalSec > 0) {
+            totalDuty += toaMs / (intervalSec * 1000);
+            taskCount++;
+          }
+        });
+
+        const pct    = totalDuty * 100;
+        const pctEl  = document.getElementById('duty-pct');
+        const fillEl = document.getElementById('duty-fill');
+        const detEl  = document.getElementById('duty-detail');
+        if (!pctEl) return;
+
+        // Thresholds: >1% legal limit (EU), warn at >0.5%
+        const cls    = pct > 1 ? 'duty-err' : pct > 0.5 ? 'duty-warn' : 'duty-ok';
+        const color  = pct > 1 ? 'var(--err)' : pct > 0.5 ? 'var(--warn)' : 'var(--ok)';
+        const fillW  = Math.min(100, (pct / 1) * 100); // scale to 1% = full bar
+
+        pctEl.textContent  = pct.toFixed(3) + '%';
+        pctEl.style.color  = color;
+        fillEl.className   = 'duty-bar-fill ' + cls;
+        fillEl.style.width = fillW + '%';
+        if (pct > 1) {
+          detEl.textContent = `⚠ Exceeds 1% legal limit (EU) — reduce task frequency or count`;
+          detEl.style.color = 'var(--err)';
+        } else if (pct > 0.5) {
+          detEl.textContent = `${taskCount} task(s), ToA=${Math.round(toaMs)}ms — approaching limit`;
+          detEl.style.color = 'var(--warn)';
+        } else if (taskCount > 0) {
+          detEl.textContent = `${taskCount} task(s), ToA≈${Math.round(toaMs)}ms — well within limits`;
+          detEl.style.color = '#555';
+        } else {
+          detEl.textContent = 'Add tasks to calculate airtime usage';
+          detEl.style.color = '#555';
+        }
       }
 
       // ── Desired vs. Reported GPIO ────────────────────────────────────
