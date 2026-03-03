@@ -1360,10 +1360,22 @@ def main() -> None:
     # Honour PORT env var injected by preview tools / CI; CLI flag overrides it.
     port = args.port or int(os.environ.get("PORT", 8000))
 
+    # Resolve DNS hostname to IP if provided
+    device_ip = args.ip
+    if device_ip and "." not in device_ip:  # Likely a hostname (no dots)
+        try:
+            import socket
+            resolved_ip = socket.gethostbyname(device_ip)
+            print(f"[DNS] Resolved '{device_ip}' → {resolved_ip}")
+            device_ip = resolved_ip
+        except Exception as e:
+            print(f"[DNS] Failed to resolve '{device_ip}': {e}")
+            print(f"[DNS] Will retry during operation...")
+
     print("LoRaLink PC Control Webapp")
     print(f"  Peer A     : {args.device}")
     print(f"  Peer B     : {args.device2 or '(single-device mode)'}")
-    print(f"  Device IP  : {args.ip or 'not set (BLE only)'}")
+    print(f"  Device IP  : {device_ip or 'not set (BLE only)'}")
     print(
         f"  BLE        : {'disabled (--no-ble)' if args.no_ble else 'enabled (background scan)'}"
     )
@@ -1372,7 +1384,7 @@ def main() -> None:
 
     app = build_app(
         device_name=args.device,
-        device_ip=args.ip,
+        device_ip=device_ip,
         device_name2=args.device2,
         no_ble=args.no_ble,
     )
