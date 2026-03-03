@@ -389,6 +389,10 @@ void CommandManager::initRegistry() {
         bool enable = value.equalsIgnoreCase("1") || value.equalsIgnoreCase("true") || value.equalsIgnoreCase("on");
         data.SetRepeater(enable);
         lora.lastMsgReceived = "CONFIG: repeater -> " + String(enable ? "1" : "0");
+      } else if (key == "ESPNOW") {
+        bool enable = value.equalsIgnoreCase("1") || value.equalsIgnoreCase("true") || value.equalsIgnoreCase("on");
+        data.SetESPNowEnabled(enable);
+        lora.lastMsgReceived = "CONFIG: espnow_en -> " + String(enable ? "1" : "0");
       } else {
         lora.lastMsgReceived = "ERR: Unknown config key: " + key;
         return;
@@ -415,6 +419,8 @@ void CommandManager::initRegistry() {
         lora.lastMsgReceived = "CONFIG: static_ip = " + data.staticIp;
       } else if (key == "REPEATER") {
         lora.lastMsgReceived = "CONFIG: repeater = " + String(data.repeaterEnabled ? "1" : "0");
+      } else if (key == "ESPNOW") {
+        lora.lastMsgReceived = "CONFIG: espnow_en = " + String(data.espNowEnabled ? "1" : "0");
       } else {
         lora.lastMsgReceived = "ERR: Unknown config key: " + key;
       }
