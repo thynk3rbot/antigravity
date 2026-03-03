@@ -387,14 +387,9 @@
 
     <!-- ── Top nav ───────────────────────────────────────────────────────────── -->
     <nav class="page-nav">
-      <a class="nav-link active" onclick="showPage('dashboard')"
-        >📊 Dashboard</a
-      >
-      <a class="nav-link" onclick="showPage('field')">🌐 Field Monitor</a>
-      <a class="nav-link" onclick="showPage('topo')">🗺️ Topology</a>
-      <a class="nav-link" onclick="showPage('nodes')">🔌 Nodes</a>
+      <a class="nav-link active" onclick="showPage('dashboard')">📊 Dashboard</a>
+      <a class="nav-link" onclick="showPage('network')">🌐 Network</a>
       <a class="nav-link" onclick="showPage('testbench')">🧪 Test Bench</a>
-      <a class="nav-link" onclick="showPage('config')">📁 Config Files</a>
       <a class="nav-link" onclick="showPage('admin')">🛡️ Admin</a>
       <div class="override-btns">
         <button class="btn-override danger" onclick="globalAllOff()" title="Turn off all GPIO outputs">⚡ All OFF</button>
@@ -606,114 +601,89 @@
           </div>
         </div>
       </div>
+
+      <!-- ── Inline Field Monitor ─────────────────────────────────────────────── -->
+      <div style="border-top:1px solid var(--border);margin:0 0 4px">
+        <div class="flex-between" style="padding:6px 16px 2px">
+          <div class="card-title-sm" style="margin:0">
+            Mesh Field
+            <span id="sync-timer" class="text-dim text-xs" style="font-weight:normal">(60s)</span>
+          </div>
+          <div id="sync-status" class="badge" style="font-size:0.7em">Idle</div>
+        </div>
+        <div class="field-grid" id="field-grid" style="padding:8px 16px 12px;gap:10px"></div>
+      </div>
     </div>
     <!-- end pg-dashboard -->
 
-    <!-- ── Page: Field Monitor ────────────────────────────────────────────────── -->
-    <div class="page" id="pg-field">
-      <div
-        class="flex-between p-3"
-      >
-        <h2
-          class="text-sm text-accent uppercase"
-        >
-          Field Monitor
-          <span id="sync-timer" class="text-sm text-dim"
-            >(60s)</span
-          >
-        </h2>
-        <div id="sync-status" class="badge">Idle</div>
-      </div>
-      <div class="field-grid" id="field-grid">
-        <!-- Populated by field poller -->
+    <!-- ── Page: Network (Topology + Node Registry) ────────────────────────── -->
+    <div class="page" id="pg-network">
+      <div class="network-layout">
+        <!-- Left: Topology graph -->
+        <div class="flex-col" style="min-width:0">
+          <div class="panel" style="padding:0;overflow:hidden">
+            <div class="panel-title flex-between">
+              <span>Mesh Topology</span>
+              <div style="display:flex;align-items:center;gap:8px">
+                <span id="topo-status" class="text-xs text-dim">Waiting for data…</span>
+                <button class="btn btn-sm btn-secondary" onclick="buildTopoGraph(lastStatus)">↺</button>
+              </div>
+            </div>
+            <div class="topo-wrap">
+              <svg id="topo-svg" class="topo-svg" style="height:360px"></svg>
+              <div class="topo-legend">
+                <span><span class="topo-legend-dot" style="background:#00ff88"></span>GW</span>
+                <span><span class="topo-legend-dot" style="background:#00aaff"></span>Online</span>
+                <span><span class="topo-legend-dot" style="background:#555"></span>Stale</span>
+                <span style="color:#555">━<span style="color:#00ff88">━</span>&gt;-75 <span style="color:#ffaa00">━</span>&gt;-90 <span style="color:#ff4455">━</span>weak</span>
+              </div>
+            </div>
+          </div>
+          <div id="topo-detail" class="topo-detail-panel" style="display:none"></div>
+        </div>
+
+        <!-- Right: Node registry -->
+        <div class="flex-col" style="min-width:0">
+          <div class="panel">
+            <div class="panel-title">Configured Nodes</div>
+            <div class="py-2" id="node-list"><!-- Populated by JS --></div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-title flex-between">
+              <span>Discover</span>
+              <button class="btn btn-sm" onclick="startDiscovery()">Scan</button>
+            </div>
+            <div id="discovery-results" class="py-2" style="max-height:160px;overflow-y:auto;display:none"></div>
+            <div id="discovery-status" class="text-xs text-dim mt-2" style="display:none">Scanning…</div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-title">Add Node</div>
+            <div class="flex-col-sm py-2">
+              <div>
+                <label class="text-xs text-dim uppercase">Name</label>
+                <input id="node-name" placeholder="e.g. Master" class="input-styled w-full mt-1"/>
+              </div>
+              <div>
+                <label class="text-xs text-dim uppercase">Interface Type</label>
+                <select id="node-type" class="input-styled w-full mt-1" onchange="onNodeTypeChange()">
+                  <option value="wifi">WiFi / HTTP</option>
+                  <option value="serial">Serial / USB</option>
+                  <option value="ble">BLE</option>
+                  <option value="lora">LoRa Gateway</option>
+                </select>
+              </div>
+              <div>
+                <label id="node-addr-label" class="text-xs text-dim uppercase">IP Address</label>
+                <input id="node-address" placeholder="e.g. 172.16.0.26" class="input-styled w-full mt-1"/>
+              </div>
+              <button class="btn" onclick="addNode()">+ Add Node</button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
-
-    <!-- ── Page: Network Topology ───────────────────────────────────────────── -->
-    <div class="page" id="pg-topo">
-      <div class="flex-between p-3">
-        <h2 class="text-sm text-accent uppercase">Network Topology</h2>
-        <div style="display:flex;align-items:center;gap:10px">
-          <span id="topo-status" class="text-xs text-dim">Waiting for data…</span>
-          <button class="btn btn-sm btn-secondary" onclick="buildTopoGraph(lastStatus)">↺ Refresh</button>
-        </div>
-      </div>
-      <div class="p-3">
-        <div class="topo-wrap">
-          <svg id="topo-svg" class="topo-svg" style="height:420px"></svg>
-          <div class="topo-legend">
-            <span><span class="topo-legend-dot" style="background:#00ff88"></span>Gateway</span>
-            <span><span class="topo-legend-dot" style="background:#00aaff"></span>Online node</span>
-            <span><span class="topo-legend-dot" style="background:#555"></span>Stale (&gt;2 min)</span>
-            <span>Lines: <span style="color:#00ff88">━</span> strong &gt;-75  <span style="color:#ffaa00">━</span> medium &gt;-90  <span style="color:#ff4455">━</span> weak</span>
-          </div>
-        </div>
-        <div id="topo-detail" class="topo-detail-panel" style="display:none"></div>
-      </div>
-    </div>
-
-    <!-- ── Page: Nodes ───────────────────────────────────────────────────────── -->
-<div class="page" id="pg-nodes">
-  <div class="nodes-layout" class="nodes-layout">
-    <!-- Left: node list and form -->
-    <div class="flex-col">
-        <div class="panel">
-          <div class="panel-title">Configured Nodes</div>
-          <div class="py-2" id="node-list">
-             <!-- Populated by JS -->
-          </div>
-        </div>
-
-        <div class="panel" class="p-3">
-          <div class="panel-title flex-row-sb">
-            <span>Discover Devices</span>
-            <button class="btn btn-sm" onclick="startDiscovery()">Scan</button>
-          </div>
-          <div id="discovery-results" class="py-2" style="max-height: 200px; overflow-y: auto; display: none;">
-            <!-- Populated by discovery -->
-          </div>
-          <div id="discovery-status" class="text-xs text-dim mt-2" style="display: none;">Scanning...</div>
-        </div>
-
-        <div class="panel" class="p-3">
-          <div class="panel-title">Add Node</div>
-          <div class="flex-col-sm py-2">
-            <div>
-              <label class="text-xs text-dim uppercase">Name</label>
-              <input id="node-name" placeholder="e.g. Master" class="input-styled w-full mt-1"/>
-            </div>
-            <div>
-              <label class="text-xs text-dim uppercase">Interface Type</label>
-              <select id="node-type" class="input-styled w-full mt-1" onchange="onNodeTypeChange()">
-                <option value="wifi">WiFi / HTTP</option>
-                <option value="serial">Serial / USB</option>
-                <option value="ble">BLE</option>
-                <option value="lora">LoRa Gateway</option>
-              </select>
-            </div>
-            <div>
-              <label id="node-addr-label" class="text-xs text-dim uppercase">IP Address</label>
-              <input id="node-address" placeholder="e.g. 172.16.0.26" class="input-styled w-full mt-1"/>
-            </div>
-            <button class="btn" onclick="addNode()">+ Add Node</button>
-          </div>
-        </div>
-    </div>
-
-    <!-- Right: Pinmap -->
-    <div class="panel">
-        <div class="panel-title">Hardware Context (Heltec V3)</div>
-        <div class="p-3 text-center">
-            <img src="/static/media/Heltec_pinmap.jpg" alt="Pinmap" class="img-fluid-bordered">
-            <div class="mt-3 text-xs text-dim" class="text-relaxed">
-                <p><b>Enabled GPIOs:</b> Only "Named" pins are visible in the device UI.</p>
-                <p><b>Failsafes:</b> All relay/LED toggles require confirmation.</p>
-                <p><b>Field Sync:</b> Broadcasts heartbeat every 60s via priority transport.</p>
-            </div>
-        </div>
-    </div>
-  </div>
-</div>
 
     <!-- ── Page: Test Bench ───────────────────────────────────────────────────── -->
     <div class="page" id="pg-testbench">
@@ -802,93 +772,7 @@
       </div>
     </div>
 
-    <!-- ── Page: Config Files ─────────────────────────────────────────────────── -->
-    <div class="page" id="pg-config">
-      <div class="config-layout">
-        <!-- Left: file list -->
-        <div
-          class="panel"
-          class="flex-col overflow-hidden"
-        >
-          <div
-            class="panel-title panel-title-flex"
-          >
-            <span>Config Files</span>
-            <button class="btn btn-sm" onclick="newFile()">+ New</button>
-          </div>
-          <div class="flex-1 overflow-y-auto p-2" id="file-list">
-            <div
-              class="list-empty"
-            >
-              No files
-            </div>
-          </div>
-        </div>
-        <!-- Right: file editor -->
-        <div class="panel config-editor">
-          <div
-            class="panel-title panel-title-flex flex-shrink-0"
-          >
-            <div style="display:flex;align-items:center;gap:8px">
-              <span id="cfg-filename" class="text-dim"
-                >— no file selected —</span
-              >
-              <span id="json-status" style="font-size:0.7em;padding:2px 6px;border-radius:4px;display:none"></span>
-            </div>
-            <div class="flex-row-sm">
-              <button
-                class="btn btn-secondary btn-sm"
-                onclick="loadFromDevice()"
-                id="cfg-load-btn"
-                style="display:none"
-              >
-                📥 Load from Device
-              </button>
-              <button
-                class="btn btn-secondary btn-sm"
-                onclick="prettifyJson()"
-                id="cfg-pretty-btn"
-                style="display:none"
-              >
-                { } Prettify
-              </button>
-              <button
-                class="btn btn-secondary btn-sm"
-                onclick="deleteFile()"
-                id="cfg-del-btn"
-                style="display:none"
-              >
-                Delete
-              </button>
-              <button
-                class="btn btn-sm"
-                onclick="saveFile()"
-                id="cfg-save-btn"
-                style="display:none"
-              >
-                Save to Disk
-              </button>
-              <button
-                class="btn btn-sm"
-                onclick="applyFileTasks()"
-                id="cfg-apply-btn"
-                style="display:none"
-              >
-                Apply to Device
-              </button>
-            </div>
-          </div>
-          <textarea
-            id="cfg-editor"
-            placeholder="Select a file or click + New to start editing…"
-            spellcheck="false"
-            oninput="onConfigEditorInput()"
-          ></textarea>
-        </div>
-      </div>
-    </div>
-
-    <!-- ── Page: Admin ────────────────────────────────────────────────────────── -->
+    <!-- ── Page: Admin (Device Config + Files + Pin Map + APC) ──────────────── -->
     <div class="page" id="pg-admin">
       <div class="main">
 
@@ -989,6 +873,36 @@
         </div>
 
       </div>
+
+      <!-- ── Config Files (merged from Config tab) ──────────────────────────── -->
+      <div class="config-layout" style="padding:12px;flex:1;min-height:300px">
+        <div class="panel flex-col overflow-hidden">
+          <div class="panel-title panel-title-flex">
+            <span>Config Files</span>
+            <button class="btn btn-sm" onclick="newFile()">+ New</button>
+          </div>
+          <div class="flex-1 overflow-y-auto p-2" id="file-list">
+            <div class="list-empty">No files</div>
+          </div>
+        </div>
+        <div class="panel config-editor">
+          <div class="panel-title panel-title-flex flex-shrink-0">
+            <div style="display:flex;align-items:center;gap:8px">
+              <span id="cfg-filename" class="text-dim">— no file selected —</span>
+              <span id="json-status" style="font-size:0.7em;padding:2px 6px;border-radius:4px;display:none"></span>
+            </div>
+            <div class="flex-row-sm">
+              <button class="btn btn-secondary btn-sm" onclick="loadFromDevice()" id="cfg-load-btn" style="display:none">📥 Load from Device</button>
+              <button class="btn btn-secondary btn-sm" onclick="prettifyJson()" id="cfg-pretty-btn" style="display:none">{ } Prettify</button>
+              <button class="btn btn-secondary btn-sm" onclick="deleteFile()" id="cfg-del-btn" style="display:none">Delete</button>
+              <button class="btn btn-sm" onclick="saveFile()" id="cfg-save-btn" style="display:none">Save to Disk</button>
+              <button class="btn btn-sm" onclick="applyFileTasks()" id="cfg-apply-btn" style="display:none">Apply to Device</button>
+            </div>
+          </div>
+          <textarea id="cfg-editor" placeholder="Select a file or click + New to start editing…" spellcheck="false" oninput="onConfigEditorInput()"></textarea>
+        </div>
+      </div>
+
     </div>
 
     <script>
@@ -1163,6 +1077,7 @@
         ws.onopen = () => {
           document.getElementById("last-update").textContent = "connected";
           pollTransport();
+          startFieldMonitor(); // Dashboard always shows Mesh Field — start immediately
         };
 
         ws.onclose = () => {
@@ -1248,8 +1163,8 @@
         const hsEl = document.getElementById('health-score');
         if (hsEl) { hsEl.textContent = hs.score + '%'; hsEl.className = 'val health-badge ' + hs.cls; }
 
-        // Live-update topology if that tab is active
-        if (document.getElementById('pg-topo') && document.getElementById('pg-topo').classList.contains('active')) {
+        // Live-update topology if the Network tab is active
+        if (document.getElementById('pg-network') && document.getElementById('pg-network').classList.contains('active')) {
           buildTopoGraph(d);
         }
       }
@@ -1274,14 +1189,28 @@
       // GPIO bitmap strip
       // ════════════════════════════════════════════════════════════════════════════
 
+      // Friendly name lookup for well-known GPIO pins
+      const GPIO_PIN_NAMES = { 35: 'LED', 6: 'RL2', 7: 'RL3', 36: 'VEX', 0: 'PRG', 21: 'RST' };
+
       function renderBitmap(gpHex) {
         const gp = BigInt("0x" + gpHex.replace(/[^0-9a-fA-F]/g, "") || "0");
-        let html = "";
+        const el = document.getElementById("gpio-bitmap");
+        if (!el) return;
+        el.innerHTML = "";
         for (let i = 0; i < 48; i++) {
-          const hi = (gp >> BigInt(i)) & 1n;
-          html += `<div class="gpio-bit ${hi ? "hi" : ""}" data-label="P${i}:${hi ? "HI" : "LO"}"></div>`;
+          // Skip SPI flash range (26-32) — reserved, always read 0
+          if (i >= 26 && i <= 32) continue;
+          const hi = Boolean((gp >> BigInt(i)) & 1n);
+          const name = GPIO_PIN_NAMES[i];
+          const tipState = hi ? "HI" : "LO";
+          const tip = name ? name + " (GPIO" + i + "): " + tipState : "GPIO" + i + ": " + tipState;
+          const bit = document.createElement("div");
+          bit.className = "gpio-bit" + (hi ? " hi" : "");
+          bit.dataset.pin = i < 10 ? " " + i : String(i);
+          bit.title = tip;
+          if (name) bit.classList.add("gpio-named");
+          el.appendChild(bit);
         }
-        document.getElementById("gpio-bitmap").innerHTML = html;
       }
 
       // ════════════════════════════════════════════════════════════════════════════
@@ -1682,18 +1611,15 @@
             l.classList.add("active");
         });
         // Lazy-load page data
-        if (name === "nodes") {
+        if (name === "network") {
           loadNodes();
-          loadSerialPorts();
+          buildTopoGraph(lastStatus);
         }
         if (name === "testbench") {
           loadSequences();
         }
-        if (name === "config") {
+        if (name === "admin") {
           loadFiles();
-        }
-        if (name === "topo") {
-          buildTopoGraph(lastStatus);
         }
       }
 

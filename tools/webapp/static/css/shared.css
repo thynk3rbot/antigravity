@@ -277,14 +277,36 @@ body {
 .pill.off { background: rgba(255, 68, 68, 0.1); color: var(--err); border: 1px solid rgba(255, 68, 68, 0.3); }
 
 .gpio-bit {
-    width: 8px;
-    height: 8px;
+    width: 9px;
+    height: 26px;
     border-radius: 2px;
-    background: #222;
+    background: #1e1e1e;
+    border: 1px solid #2a2a2a;
     cursor: default;
     position: relative;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding-top: 2px;
 }
-.gpio-bit.hi { background: var(--ok); box-shadow: 0 0 4px rgba(0, 255, 136, 0.4); }
+.gpio-bit::after {
+    content: attr(data-pin);
+    position: absolute;
+    bottom: 2px;
+    font-size: 5px;
+    line-height: 1;
+    color: #383838;
+    font-family: monospace;
+    font-weight: bold;
+}
+.gpio-bit.hi {
+    background: var(--ok);
+    border-color: rgba(0, 255, 136, 0.5);
+    box-shadow: 0 0 5px rgba(0, 255, 136, 0.35);
+}
+.gpio-bit.hi::after { color: #003322; }
+.gpio-bit.gpio-named { border-color: rgba(0, 212, 255, 0.25); }
+.gpio-bit.gpio-named.hi { border-color: rgba(0, 255, 136, 0.7); }
 
 .nav-link {
     padding: 6px 14px;
@@ -358,6 +380,16 @@ body {
 }
 .status-dot.online { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
 .status-dot.offline { background: var(--err); }
+
+/* ── Network Page ──────────────────────────────────────────────────── */
+.network-layout {
+    display: grid;
+    grid-template-columns: 1fr 300px;
+    gap: 12px;
+    padding: 12px;
+    flex: 1;
+    min-height: 0;
+}
 
 /* ── Config & Bench Pages ────────────────────────────────────────── */
 .config-layout, .bench-layout {
