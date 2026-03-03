@@ -2220,7 +2220,7 @@
       }
 
       function _cfgDesiredValue(key) {
-        const inp = document.getElementById(\`cfg-inp-\${key}\`);
+        const inp = document.getElementById(`cfg-inp-\${key}`);
         if (!inp) return null;
         const s = CONFIG_SETTINGS.find(s => s.key === key);
         if (!s) return null;
@@ -2241,8 +2241,8 @@
           });
           renderConfigSettings();
         } catch (e) {
-          logConsole('err', \`Config load: \${e.message}\`);
-          tbody.innerHTML = \`<tr><td colspan="4" style="color:var(--err);text-align:center;padding:12px">⚠ \${escHtml(e.message)}</td></tr>\`;
+          logConsole('err', `Config load: \${e.message}`);
+          tbody.innerHTML = `<tr><td colspan="4" style="color:var(--err);text-align:center;padding:12px">⚠ \${escHtml(e.message)}</td></tr>`;
         }
       }
 
@@ -2255,41 +2255,41 @@
           let inputHtml;
           if (s.type === 'bool') {
             const checked = (reported === true || reported === 'true' || reported === 1) ? 'checked' : '';
-            inputHtml = \`<label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+            inputHtml = `<label style="display:flex;align-items:center;gap:6px;cursor:pointer">
               <input type="checkbox" id="cfg-inp-\${s.key}" \${checked}
                      onchange="onCfgInputChange('\${s.key}')"
                      style="accent-color:var(--accent);width:16px;height:16px">
               <span style="font-size:0.8em;color:#888">\${checked ? 'Enabled' : 'Disabled'}</span>
-            </label>\`;
+            </label>`;
           } else {
             const val = reported !== null && reported !== undefined ? escHtml(String(reported)) : '';
             const t = s.type === 'password' ? 'password' : (s.type === 'number' ? 'number' : 'text');
-            const extra = s.max ? \`maxlength="\${s.max}"\` : '';
+            const extra = s.max ? `maxlength="\${s.max}"` : '';
             const placeholder = s.hint ? s.hint : '';
-            inputHtml = \`<input type="\${t}" id="cfg-inp-\${s.key}" value="\${val}"
+            inputHtml = `<input type="\${t}" id="cfg-inp-\${s.key}" value="\${val}"
                                 class="cfg-input" placeholder="\${escHtml(placeholder)}" \${extra}
                                 oninput="onCfgInputChange('\${s.key}')"
-                                \${s.min !== undefined ? \`min="\${s.min}"\` : ''}
-                                \${s.max !== undefined && s.type === 'number' ? \`max="\${s.max}"\` : ''}>\`;
+                                \${s.min !== undefined ? `min="\${s.min}"` : ''}
+                                \${s.max !== undefined && s.type === 'number' ? `max="\${s.max}"` : ''}>`;
           }
-          return \`<tr id="cfg-row-\${s.key}">
+          return `<tr id="cfg-row-\${s.key}">
             <td style="color:#aaa;font-weight:500">\${s.label}</td>
             <td class="cfg-reported">\${repDisplay}</td>
             <td>\${inputHtml}</td>
             <td style="text-align:center;white-space:nowrap" id="cfg-state-\${s.key}">\${_cfgStateHtml(s.key)}</td>
-          </tr>\`;
+          </tr>`;
         }).join('');
       }
 
       function onCfgInputChange(key) {
         const s = CONFIG_SETTINGS.find(s => s.key === key);
-        const inp = document.getElementById(\`cfg-inp-\${key}\`);
+        const inp = document.getElementById(`cfg-inp-\${key}`);
         if (!inp || !s) return;
         if (s.type === 'bool') {
           const label = inp.nextElementSibling;
           if (label) label.textContent = inp.checked ? 'Enabled' : 'Disabled';
         }
-        const stateEl = document.getElementById(\`cfg-state-\${key}\`);
+        const stateEl = document.getElementById(`cfg-state-\${key}`);
         if (stateEl) stateEl.innerHTML = _cfgStateHtml(key);
       }
 
@@ -2300,16 +2300,16 @@
           if (val === null) return;
           if (s.validate) {
             const err = s.validate(val);
-            if (err) errors.push(\`\${s.label}: \${err}\`);
+            if (err) errors.push(`\${s.label}: \${err}`);
           }
           if (s.type === 'text' && s.max && val.length > s.max) {
-            errors.push(\`\${s.label}: max \${s.max} characters\`);
+            errors.push(`\${s.label}: max \${s.max} characters`);
           }
           if (s.type === 'number') {
             const n = parseInt(val);
-            if (isNaN(n)) errors.push(\`\${s.label}: must be a number\`);
-            else if (s.min !== undefined && n < s.min) errors.push(\`\${s.label}: min \${s.min}\`);
-            else if (s.max !== undefined && n > s.max) errors.push(\`\${s.label}: max \${s.max}\`);
+            if (isNaN(n)) errors.push(`\${s.label}: must be a number`);
+            else if (s.min !== undefined && n < s.min) errors.push(`\${s.label}: min \${s.min}`);
+            else if (s.max !== undefined && n > s.max) errors.push(`\${s.label}: max \${s.max}`);
           }
         });
         return errors;
@@ -2336,13 +2336,13 @@
           return;
         }
 
-        logConsole('tx', \`Applying \${dirty.length} config change(s)…\`);
+        logConsole('tx', `Applying \${dirty.length} config change(s)…`);
         for (const s of dirty) {
           const val = _cfgDesiredValue(s.key);
           _pendingConfig[s.key] = { desired: val, sentAt: Date.now() };
-          const stateEl = document.getElementById(\`cfg-state-\${s.key}\`);
+          const stateEl = document.getElementById(`cfg-state-\${s.key}`);
           if (stateEl) stateEl.innerHTML = _cfgStateHtml(s.key);
-          await sendRaw(\`CONFIG SET \${s.key} \${val}\`);
+          await sendRaw(`CONFIG SET \${s.key} \${val}`);
           await new Promise(r => setTimeout(r, 200));
         }
         logConsole('rx', 'Config commands sent — refresh in 3s to confirm…');
@@ -2353,13 +2353,13 @@
         Object.keys(_pendingConfig).forEach(key => {
           const reported = String(_reportedConfig[key] ?? '');
           const desired  = String(_pendingConfig[key].desired);
-          const stateEl  = document.getElementById(\`cfg-state-\${key}\`);
+          const stateEl  = document.getElementById(`cfg-state-\${key}`);
           if (reported === desired) {
             delete _pendingConfig[key];
-            if (stateEl) stateEl.innerHTML = \`<span class="cfg-dot cfg-dot-ok"></span><span class="cfg-state-ok">✓</span>\`;
+            if (stateEl) stateEl.innerHTML = `<span class="cfg-dot cfg-dot-ok"></span><span class="cfg-state-ok">✓</span>`;
           } else {
-            if (stateEl) stateEl.innerHTML = \`<span class="cfg-dot cfg-dot-mismatch"></span><span class="cfg-state-mismatch">⚠</span>\`;
-            logConsole('err', \`Mismatch on \${key}\`);
+            if (stateEl) stateEl.innerHTML = `<span class="cfg-dot cfg-dot-mismatch"></span><span class="cfg-state-mismatch">⚠</span>`;
+            logConsole('err', `Mismatch on \${key}`);
           }
         });
       }
@@ -2385,10 +2385,10 @@
 
       async function restoreGoldenImage() {
         if (!_goldenFile) return;
-        if (!confirm(\`Restore \${_goldenFile}?\`)) return;
+        if (!confirm(`Restore \${_goldenFile}?`)) return;
         try {
-          logConsole('tx', \`Restoring: \${_goldenFile}…\`);
-          const fr = await fetch(\`/api/files/\${encodeURIComponent(_goldenFile)}\`);
+          logConsole('tx', `Restoring: \${_goldenFile}…`);
+          const fr = await fetch(`/api/files/\${encodeURIComponent(_goldenFile)}`);
           const txt = await fr.text();
           const config = JSON.parse(txt);
           const r = await fetch('/api/device/config/apply', {
@@ -2397,19 +2397,19 @@
             body: JSON.stringify(config),
           });
           if (r.ok) {
-            logConsole('rx', \`Golden image applied — rebooting…\`);
+            logConsole('rx', `Golden image applied — rebooting…`);
             setTimeout(refreshConfigSettings, 5000);
           } else {
-            logConsole('err', \`Restore failed: \${await r.text()}\`);
+            logConsole('err', `Restore failed: \${await r.text()}`);
           }
         } catch (e) {
-          logConsole('err', \`Restore error: \${e.message}\`);
+          logConsole('err', `Restore error: \${e.message}`);
         }
       }
 
       function onBoardVariantChange() {
         const v = document.getElementById('board-variant')?.value;
-        logConsole('rx', \`Board variant: \${v}\`);
+        logConsole('rx', `Board variant: \${v}`);
       }
 
       // ════════════════════════════════════════════════════════════════════════════
