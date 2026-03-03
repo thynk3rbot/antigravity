@@ -289,6 +289,8 @@ class DeviceState:
     serial_port: Optional[str] = None
     active_node: Optional[str] = None  # display name of active node
     active_ip: Optional[str] = None  # routable IP for active WiFi/LoRa node
+    discovered_devices: list = field(default_factory=list)  # from network scan
+    discovery_time: float = 0.0  # timestamp of last discovery scan
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -947,6 +949,78 @@ def build_app(
         asyncio.create_task(_do_rescan())
         return JSONResponse(
             {"ok": True, "scanning": True, "msg": "Scan started (≈10s)…"}
+        )
+
+    @app.get("/api/discover")
+    async def _discover() -> JSONResponse:
+        """Network discovery: scan subnet for LoRaLink devices. Runs in background."""
+        if not AIOHTTP:
+            return JSONResponse(
+                {"ok": False, "error": "aiohttp not available"}, status_code=503
+            )
+
+        async def _scan_subnet() -> None:
+            """Scan 172.16.0.1-254 for devices responding to /api/status."""
+            found = []
+            base_ip = "172.16.0"
+
+            async with aiohttp.ClientSession() as session:
+                tasks = []
+                for i in range(1, 255):
+                    ip = f"{base_ip}.{i}"
+                    tasks.append(_probe_device(session, ip))
+
+                results = await asyncio.gather(*tasks, return_exceptions=True)
+                found = [r for r in results if r is not None]
+
+            # Save discovery results
+            state.discovered_devices = found
+            state.discovery_time = time.time()
+
+        async def _probe_device(session: aiohttp.ClientSession, ip: str) -> Optional[dict]:
+            """Probe a single IP and return device info if it's a LoRaLink device."""
+            try:
+                async with session.get(
+                    f"http://{ip}/api/status",
+                    timeout=aiohttp.ClientTimeout(total=1.0),
+                ) as r:
+                    if r.status == 200:
+                        data = await r.json()
+                        if "myId" in data or "id" in data:  # LoRaLink device
+                            return {
+                                "ip": ip,
+                                "name": data.get("myId") or data.get("id", "Unknown"),
+                                "rssi": data.get("rssi"),
+                                "bat": data.get("bat"),
+                                "uptime": data.get("uptime"),
+                            }
+            except Exception:
+                pass
+            return None
+
+        # Start scan in background
+        asyncio.create_task(_scan_subnet())
+        return JSONResponse(
+            {"ok": True, "scanning": True, "msg": "Network scan started (≈15s)…"}
+        )
+
+    @app.get("/api/discover/results")
+    async def _discover_results() -> JSONResponse:
+        """Get results from the last network discovery scan."""
+        if not hasattr(state, "discovered_devices"):
+            return JSONResponse(
+                {
+                    "ok": False,
+                    "devices": [],
+                    "msg": "No scan performed yet. Start with /api/discover",
+                }
+            )
+        return JSONResponse(
+            {
+                "ok": True,
+                "devices": state.discovered_devices or [],
+                "timestamp": state.discovery_time if hasattr(state, "discovery_time") else None,
+            }
         )
 
     # ── Node registry ─────────────────────────────────────────────────────
