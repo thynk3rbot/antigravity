@@ -14,7 +14,7 @@
     "mqtt_prt": 1883,
     "mqtt_usr": "",
     "mqtt_pwd": "",
-    "espnow_en": false,
+    "espnow_en": true,
     "wifi_en": true,
     "ble_en": true,
     "crypto_key": "00112233445566778899AABBCCDDEEFF"
