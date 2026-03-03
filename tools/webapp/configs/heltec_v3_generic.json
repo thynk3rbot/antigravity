@@ -17,6 +17,7 @@
     "espnow_en": false,
     "wifi_en": false,
     "ble_en": true,
+    "wifi_en": true,
     "crypto_key": "00112233445566778899AABBCCDDEEFF"
   },
   "pins": {
