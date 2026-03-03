@@ -332,6 +332,13 @@
   white-space: nowrap;
 }
 .golden-name { font-family: monospace; font-size: 0.8em; color: #888; flex: 1; }
+/* ── Topology Map ──────────────────────────────────────────────────────── */
+.topo-wrap { position: relative; width: 100%; background: rgba(255,255,255,0.02); border-radius: 8px; overflow: hidden; }
+.topo-svg { display: block; width: 100%; }
+.topo-legend { display: flex; gap: 14px; flex-wrap: wrap; padding: 6px 14px; border-top: 1px solid rgba(255,255,255,0.06); font-size: 0.72em; color: #666; }
+.topo-legend span { display: flex; align-items: center; gap: 5px; }
+.topo-legend-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+.topo-detail-panel { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 12px; margin-top: 10px; }
     </style>
   </head>
   <body>
@@ -384,6 +391,7 @@
         >📊 Dashboard</a
       >
       <a class="nav-link" onclick="showPage('field')">🌐 Field Monitor</a>
+      <a class="nav-link" onclick="showPage('topo')">🗺️ Topology</a>
       <a class="nav-link" onclick="showPage('nodes')">🔌 Nodes</a>
       <a class="nav-link" onclick="showPage('testbench')">🧪 Test Bench</a>
       <a class="nav-link" onclick="showPage('config')">📁 Config Files</a>
@@ -618,6 +626,29 @@
       </div>
       <div class="field-grid" id="field-grid">
         <!-- Populated by field poller -->
+      </div>
+    </div>
+
+    <!-- ── Page: Network Topology ───────────────────────────────────────────── -->
+    <div class="page" id="pg-topo">
+      <div class="flex-between p-3">
+        <h2 class="text-sm text-accent uppercase">Network Topology</h2>
+        <div style="display:flex;align-items:center;gap:10px">
+          <span id="topo-status" class="text-xs text-dim">Waiting for data…</span>
+          <button class="btn btn-sm btn-secondary" onclick="buildTopoGraph(lastStatus)">↺ Refresh</button>
+        </div>
+      </div>
+      <div class="p-3">
+        <div class="topo-wrap">
+          <svg id="topo-svg" class="topo-svg" style="height:420px"></svg>
+          <div class="topo-legend">
+            <span><span class="topo-legend-dot" style="background:#00ff88"></span>Gateway</span>
+            <span><span class="topo-legend-dot" style="background:#00aaff"></span>Online node</span>
+            <span><span class="topo-legend-dot" style="background:#555"></span>Stale (&gt;2 min)</span>
+            <span>Lines: <span style="color:#00ff88">━</span> strong &gt;-75  <span style="color:#ffaa00">━</span> medium &gt;-90  <span style="color:#ff4455">━</span> weak</span>
+          </div>
+        </div>
+        <div id="topo-detail" class="topo-detail-panel" style="display:none"></div>
       </div>
     </div>
 
@@ -1216,6 +1247,11 @@
         const hs = computeHealthScore(d);
         const hsEl = document.getElementById('health-score');
         if (hsEl) { hsEl.textContent = hs.score + '%'; hsEl.className = 'val health-badge ' + hs.cls; }
+
+        // Live-update topology if that tab is active
+        if (document.getElementById('pg-topo') && document.getElementById('pg-topo').classList.contains('active')) {
+          buildTopoGraph(d);
+        }
       }
 
       function badge(label, on) {
@@ -1655,6 +1691,9 @@
         }
         if (name === "config") {
           loadFiles();
+        }
+        if (name === "topo") {
+          buildTopoGraph(lastStatus);
         }
       }
 
@@ -2712,6 +2751,175 @@
       // ── Desired vs. Reported GPIO ────────────────────────────────────
       const _pendingGpio = {};
       const GPIO_PENDING_TIMEOUT = 5000;
+
+      // ════════════════════════════════════════════════════════════════════════════
+      // Network Topology Map
+      // ════════════════════════════════════════════════════════════════════════════
+
+      function buildTopoGraph(data) {
+        const svg = document.getElementById('topo-svg');
+        if (!svg) return;
+        const ns = 'http://www.w3.org/2000/svg';
+        svg.innerHTML = '';
+        if (!data || !data.id) {
+          const msg = document.createElementNS(ns, 'text');
+          msg.setAttribute('x', '50%'); msg.setAttribute('y', '50%');
+          msg.setAttribute('text-anchor', 'middle'); msg.setAttribute('fill', '#555');
+          msg.setAttribute('font-size', '14'); msg.setAttribute('dominant-baseline', 'middle');
+          msg.textContent = 'No device data — connect a device first';
+          svg.appendChild(msg);
+          return;
+        }
+        const W = svg.clientWidth || 700;
+        const H = parseInt(svg.style.height) || 420;
+        const cx = W / 2, cy = H / 2;
+
+        function svgEl(tag, attrs, text) {
+          const e = document.createElementNS(ns, tag);
+          Object.entries(attrs).forEach(([k, v]) => e.setAttribute(k, v));
+          if (text !== undefined) e.textContent = text;
+          return e;
+        }
+
+        const remote = data.mesh || [];
+        const gwNode = { id: data.id, bat: parseFloat(data.bat) || 0, rssi: null, hops: 0, ago: 0, isLocal: true };
+        const R = Math.min(W * 0.42, H * 0.42);
+        const nodeR = 24;
+
+        // Background ring guide
+        svg.appendChild(svgEl('circle', { cx, cy, r: R, fill: 'none', stroke: 'rgba(255,255,255,0.04)', 'stroke-width': 1 }));
+
+        // Remote nodes
+        remote.forEach((n, i) => {
+          const angle = remote.length === 1
+            ? -Math.PI / 2
+            : (2 * Math.PI * i / remote.length) - Math.PI / 2;
+          const rssiNorm = n.rssi != null ? Math.max(0, Math.min(1, (n.rssi + 110) / 50)) : 0.5;
+          const dist = R * 0.35 + R * 0.65 * (1 - rssiNorm);
+          const nx = cx + dist * Math.cos(angle);
+          const ny = cy + dist * Math.sin(angle);
+          const stale = n.ago > 120;
+          const lineColor = stale ? '#333' : (n.rssi > -75 ? '#00ff88' : n.rssi > -90 ? '#ffaa00' : '#ff4455');
+
+          const lineAttr = { x1: cx, y1: cy, x2: nx, y2: ny, stroke: lineColor, 'stroke-width': stale ? 1 : 2, 'stroke-opacity': stale ? 0.4 : 0.7 };
+          if (stale) lineAttr['stroke-dasharray'] = '5,4';
+          svg.appendChild(svgEl('line', lineAttr));
+
+          if (n.rssi != null && !stale) {
+            const lx = cx + dist * 0.5 * Math.cos(angle);
+            const ly = cy + dist * 0.5 * Math.sin(angle) - 5;
+            svg.appendChild(svgEl('text', { x: lx, y: ly, 'text-anchor': 'middle', fill: '#666', 'font-size': 9 }, n.rssi + ' dBm'));
+          }
+
+          svg.appendChild(svgEl('circle', { cx: nx + 1, cy: ny + 1, r: nodeR, fill: 'rgba(0,0,0,0.4)' }));
+          const circle = svgEl('circle', { cx: nx, cy: ny, r: nodeR, fill: stale ? '#2a2a2a' : '#004477', stroke: lineColor, 'stroke-width': 2, 'stroke-opacity': stale ? 0.3 : 1, style: 'cursor:pointer' });
+          circle.addEventListener('click', () => showTopoDetail(n));
+          svg.appendChild(circle);
+
+          svg.appendChild(svgEl('text', { x: nx, y: ny - 3, 'text-anchor': 'middle', fill: stale ? '#555' : '#88ccff', 'font-size': 10, 'font-weight': 'bold' }, n.hops > 1 ? 'H' + n.hops : '1'));
+          if (n.bat && n.bat > 0) {
+            svg.appendChild(svgEl('text', { x: nx, y: ny + 9, 'text-anchor': 'middle', fill: stale ? '#444' : '#668', 'font-size': 8 }, n.bat.toFixed(1) + 'V'));
+          }
+
+          // Node ID — textContent is safe (no innerHTML)
+          const idLabel = svgEl('text', { x: nx, y: ny + nodeR + 14, 'text-anchor': 'middle', fill: stale ? '#444' : '#aaa', 'font-size': 11, 'font-weight': '600' });
+          idLabel.textContent = n.id;
+          svg.appendChild(idLabel);
+
+          if (n.ago != null) {
+            const agoColor = n.ago < 30 ? '#00cc66' : n.ago < 120 ? '#888' : '#555';
+            svg.appendChild(svgEl('text', { x: nx, y: ny + nodeR + 26, 'text-anchor': 'middle', fill: agoColor, 'font-size': 9 }, n.ago + 's ago'));
+          }
+        });
+
+        // Gateway (drawn last, on top)
+        svg.appendChild(svgEl('circle', { cx: cx + 2, cy: cy + 2, r: 32, fill: 'rgba(0,0,0,0.5)' }));
+        const gw = svgEl('circle', { cx, cy, r: 32, fill: '#003322', stroke: '#00ff88', 'stroke-width': 2.5, style: 'cursor:pointer' });
+        gw.addEventListener('click', () => showTopoDetail(gwNode));
+        svg.appendChild(gw);
+        svg.appendChild(svgEl('text', { x: cx, y: cy - 5, 'text-anchor': 'middle', fill: '#00ff88', 'font-size': 10, 'font-weight': 'bold' }, 'GW'));
+        const gwIdLabel = svgEl('text', { x: cx, y: cy + 8, 'text-anchor': 'middle', fill: '#00cc66', 'font-size': 9 });
+        gwIdLabel.textContent = data.id || '';
+        svg.appendChild(gwIdLabel);
+
+        const statusEl = document.getElementById('topo-status');
+        if (statusEl) {
+          const staleCount = remote.filter(n => n.ago > 120).length;
+          statusEl.textContent = remote.length
+            ? remote.length + ' node' + (remote.length > 1 ? 's' : '') + (staleCount ? ', ' + staleCount + ' stale' : '') + ' · ' + new Date().toLocaleTimeString()
+            : 'Gateway only — no mesh peers · ' + new Date().toLocaleTimeString();
+        }
+      }
+
+      function showTopoDetail(n) {
+        const panel = document.getElementById('topo-detail');
+        if (!panel) return;
+        panel.style.display = 'block';
+
+        // Build detail panel safely via DOM — no innerHTML with untrusted data
+        while (panel.firstChild) panel.removeChild(panel.firstChild);
+
+        const header = document.createElement('div');
+        header.style.cssText = 'display:flex;justify-content:space-between;align-items:center';
+
+        const title = document.createElement('strong');
+        title.style.color = n.isLocal ? '#00ff88' : '#0af';
+        title.textContent = n.id + (n.isLocal ? ' (Gateway)' : '');
+        header.appendChild(title);
+
+        const closeBtn = document.createElement('button');
+        closeBtn.className = 'btn btn-sm';
+        closeBtn.style.fontSize = '0.75em';
+        closeBtn.textContent = '✕';
+        closeBtn.onclick = () => { panel.style.display = 'none'; };
+        header.appendChild(closeBtn);
+        panel.appendChild(header);
+
+        const metrics = document.createElement('div');
+        metrics.style.cssText = 'display:flex;gap:20px;flex-wrap:wrap;margin-top:8px;font-size:0.8em';
+
+        function metric(label, value) {
+          const d = document.createElement('div');
+          const l = document.createElement('span');
+          l.style.color = '#555';
+          l.textContent = label;
+          const v = document.createElement('br');
+          const s = document.createElement('strong');
+          s.textContent = value;
+          d.appendChild(l); d.appendChild(v); d.appendChild(s);
+          return d;
+        }
+
+        metrics.appendChild(metric('Hops', String(n.hops ?? 0)));
+        metrics.appendChild(metric('Battery', (n.bat && n.bat > 0) ? n.bat.toFixed(2) + 'V' : '—'));
+        metrics.appendChild(metric('RSSI', n.rssi != null ? n.rssi + ' dBm' : 'local'));
+        metrics.appendChild(metric('Last seen', n.ago != null ? n.ago + 's ago' : 'now'));
+        panel.appendChild(metrics);
+
+        // RSSI bar
+        if (n.rssi != null) {
+          const barWrap = document.createElement('div');
+          barWrap.style.marginTop = '6px';
+          const barLabel = document.createElement('div');
+          barLabel.style.cssText = 'font-size:0.75em;color:#666;margin-bottom:3px';
+          barLabel.textContent = 'Signal strength';
+          barWrap.appendChild(barLabel);
+
+          const track = document.createElement('div');
+          track.style.cssText = 'background:#111;border-radius:4px;overflow:hidden;height:6px;width:180px';
+          const fill = document.createElement('div');
+          const pct = Math.round(Math.max(5, Math.min(100, ((n.rssi + 110) / 50) * 100)));
+          fill.style.cssText = 'height:6px;border-radius:4px;width:' + pct + '%;background:' + (n.rssi > -75 ? '#00ff88' : n.rssi > -90 ? '#ffaa00' : '#ff4455');
+          track.appendChild(fill);
+          barWrap.appendChild(track);
+
+          const dBmLabel = document.createElement('div');
+          dBmLabel.style.cssText = 'font-size:0.72em;color:#888;margin-top:2px';
+          dBmLabel.textContent = n.rssi + ' dBm';
+          barWrap.appendChild(dBmLabel);
+          panel.appendChild(barWrap);
+        }
+      }
 
       // ════════════════════════════════════════════════════════════════════════════
       // Init

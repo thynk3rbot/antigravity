@@ -667,7 +667,8 @@ void WiFiManager::serveApiStatus() {
       json += ",";
     json += "{\"n\":\"" +
             (friendlyName.length() ? friendlyName : String(pins[i].n)) +
-            "\",\"v\":" + String(digitalRead(pins[i].p));
+            "\",\"p\":" + String(pins[i].p) +
+            ",\"v\":" + String(digitalRead(pins[i].p));
     if (pins[i].a)
       json += ",\"a\":" + String(analogRead(pins[i].p));
     json += "}";
