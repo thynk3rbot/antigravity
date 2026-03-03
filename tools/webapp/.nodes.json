@@ -4,13 +4,13 @@
     "name": "GW-C4FC",
     "type": "wifi",
     "address": "172.16.0.26",
-    "active": true
+    "active": false
   },
   {
     "id": "597631da-a4b7-43ce-95bd-2d806f6ecff9",
     "name": "Master",
     "type": "wifi",
     "address": "172.16.0.27",
-    "active": false
+    "active": true
   }
 ]

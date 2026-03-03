@@ -387,9 +387,9 @@
 
     <!-- ── Top nav ───────────────────────────────────────────────────────────── -->
     <nav class="page-nav">
-      <a class="nav-link active" onclick="showPage('dashboard')">📊 Dashboard</a>
+      <a class="nav-link active" onclick="showPage('fleet')">📡 Fleet</a>
       <a class="nav-link" onclick="showPage('network')">🌐 Network</a>
-      <a class="nav-link" onclick="showPage('testbench')">🧪 Test Bench</a>
+      <a class="nav-link" onclick="showPage('deploy')">🚀 Deploy</a>
       <a class="nav-link" onclick="showPage('admin')">🛡️ Admin</a>
       <div class="override-btns">
         <button class="btn-override danger" onclick="globalAllOff()" title="Turn off all GPIO outputs">⚡ All OFF</button>
@@ -398,223 +398,128 @@
       <span id="nav-node">—</span>
     </nav>
 
-    <!-- ── Page: Dashboard ───────────────────────────────────────────────────── -->
-    <div class="page active" id="pg-dashboard">
-      <!-- ── Interface badges ──────────────────────────────────────────────────── -->
-      <div class="ifc" id="ifc">
-        <span class="badge off">LoRa</span>
-        <span class="badge off">BLE</span>
-        <span class="badge off">WiFi</span>
-        <span class="badge off">ESP-NOW</span>
-        <span
-          class="text-muted text-xs ml-auto" id="last-update"
-          >connecting...</span
-        >
+    <!-- ── Page: FLEET ──────────────────────────────────────────────────────── -->
+    <div class="page active" id="pg-fleet">
+
+      <!-- Interface strip: badges + gpio bitmap + health score -->
+      <div class="iface-strip">
+        <div id="ifc" style="display:flex;align-items:center;gap:6px;flex:1;min-width:0">
+          <span class="badge off">LoRa</span>
+          <span class="badge off">BLE</span>
+          <span class="badge off">WiFi</span>
+          <span class="badge off">ESP-NOW</span>
+          <span class="ml-auto text-xs text-muted" id="last-update">connecting...</span>
+        </div>
+        <div id="gpio-bitmap" style="display:flex;gap:2px;align-items:center;padding:0 6px"></div>
+        <span id="health-score" class="health-badge" style="margin-left:4px">—</span>
       </div>
 
-      <!-- ── 2×2 grid ────────────────────────────────────────────────────────────── -->
-      <div class="main">
-        <!-- ── Top-left: Status cards ───────────────────────────────────────────── -->
-        <div>
-          <div class="card-grid" id="cards">
-            <div class="card">
-              <div class="lbl">Device</div>
-              <div class="val" id="c-id">—</div>
-            </div>
-            <div class="card">
-              <div class="lbl">Uptime</div>
-              <div class="val" id="c-uptime">—</div>
-            </div>
-            <div class="card">
-              <div class="lbl">Battery</div>
-              <div class="val" id="c-bat">—</div>
-            </div>
-            <div class="card">
-              <div class="lbl">LoRa RSSI</div>
-              <div class="val" id="c-rssi">—</div>
-            </div>
-            <div class="card">
-              <div class="lbl">Nodes</div>
-              <div class="val" id="c-nodes">—</div>
-            </div>
-            <div class="card">
-              <div class="lbl">Heap</div>
-              <div class="val sm" id="c-heap">—</div>
-            </div>
-            <div class="card">
-              <div class="lbl">Reset</div>
-              <div class="val sm" id="c-reset">—</div>
-            </div>
-            <div class="card span-2">
-              <div class="lbl">Last Command</div>
-              <div class="val sm" id="c-last-cmd" title="">—</div>
-            </div>
-            <div class="card span-2">
-              <div class="lbl">Health Score</div>
-              <div class="val" id="health-score">—</div>
+      <!-- Stat grid: 4 cols × 2 rows = 8 metrics in ~72px -->
+      <div class="stat-grid">
+        <div class="stat-cell"><span class="stat-label">Device</span><span class="stat-value" id="c-id">—</span></div>
+        <div class="stat-cell"><span class="stat-label">Uptime</span><span class="stat-value" id="c-uptime">—</span></div>
+        <div class="stat-cell"><span class="stat-label">Battery</span><span class="stat-value" id="c-bat">—</span></div>
+        <div class="stat-cell"><span class="stat-label">LoRa RSSI</span><span class="stat-value" id="c-rssi">—</span></div>
+        <div class="stat-cell"><span class="stat-label">Nodes</span><span class="stat-value" id="c-nodes">—</span></div>
+        <div class="stat-cell"><span class="stat-label">Heap</span><span class="stat-value" id="c-heap">—</span></div>
+        <div class="stat-cell"><span class="stat-label">Reset</span><span class="stat-value" id="c-reset">—</span></div>
+        <div class="stat-cell"><span class="stat-label">Last Cmd</span><span class="stat-value" id="c-last-cmd" title="">—</span></div>
+      </div>
+
+      <!-- Fleet 2-col layout: roster | controls -->
+      <div class="fleet-layout">
+
+        <!-- LEFT: Node Roster -->
+        <div class="panel" style="overflow:hidden;padding:0;display:flex;flex-direction:column">
+          <div class="panel-title flex-between" style="flex-shrink:0">
+            <span>Node Roster</span>
+            <div class="flex-row-sm">
+              <span id="sync-timer" class="text-dim text-xs">(60s)</span>
+              <span id="sync-status" class="badge">Idle</span>
             </div>
           </div>
-
-          <!-- GPIO bitmap strip -->
-          <div
-            class="card mt-2"
-          >
-            <div
-              class="card-title-sm"
-            >
-              Logic Map
-            </div>
-            <div class="gpio-bitmap" id="gpio-bitmap"></div>
+          <div class="roster-cols" style="flex-shrink:0">
+            <span></span>
+            <span>ID</span>
+            <span>BAT</span>
+            <span>RSSI</span>
+            <span>HP</span>
+            <span>AGO</span>
+            <span></span>
+          </div>
+          <div id="roster-body" style="overflow-y:auto;flex:1">
+            <div style="padding:12px;text-align:center;color:var(--muted);font-size:0.82em">Waiting for data…</div>
           </div>
         </div>
 
-        <!-- ── Top-right: Mesh node table ───────────────────────────────────────── -->
-        <div class="panel panel-h-sm">
-          <div class="panel-title">Mesh Nodes</div>
-          <div class="flex-1 overflow-y-auto">
-            <table>
-              <thead>
-                <tr>
-                  <th>ID</th>
-                  <th>Battery</th>
-                  <th>RSSI</th>
-                  <th>Hops</th>
-                  <th>Seen</th>
-                </tr>
-              </thead>
-              <tbody id="mesh-tbody">
-                <tr>
-                  <td
-                    colspan="5"
-                    class="text-muted text-center p-4"
-                  >
-                    No nodes discovered
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <!-- RIGHT: GPIO chips + Schedule + Console -->
+        <div style="display:flex;flex-direction:column;gap:8px;min-width:0">
 
-        <!-- ── Bottom-left: Command console ─────────────────────────────────────── -->
-        <div class="panel panel-h-md">
-          <div class="panel-title">Command Console</div>
-          <div class="console-log" id="console-log"></div>
-          <div class="cmd-bar">
-            <input
-              id="cmd-input"
-              placeholder="Command (e.g. STATUS, LED ON, GPIO 6 1)…"
-              autocomplete="off"
-              spellcheck="false"
-              onkeydown="handleKey(event)"
-            />
-            <button class="btn" onclick="sendCmd()">Send</button>
-          </div>
-        </div>
-
-        <!-- ── Bottom-right: GPIO control + Schedule manager ───────────────────── -->
-        <div class="flex-col">
-          <!-- GPIO / Relay panel -->
-          <div class="panel">
-            <div class="panel-title">GPIO / Relay Control</div>
-            <div class="gpio-grid" id="gpio-grid">
-              <!-- Populated by buildGpioPanel() -->
-            </div>
+          <!-- GPIO chip row -->
+          <div class="panel" style="padding:0;overflow:hidden;flex-shrink:0">
+            <div class="panel-title">GPIO / Relay</div>
+            <div class="gpio-chip-row" id="gpio-grid"><!-- Populated by buildGpioChips() --></div>
           </div>
 
           <!-- Schedule manager -->
-          <div class="panel flex-1 min-h-200">
-            <div
-              class="panel-title flex-between"
-            >
-              <span>Schedule Manager</span>
+          <div class="panel" style="flex:1;overflow:hidden;padding:0;display:flex;flex-direction:column;min-height:0">
+            <div class="panel-title flex-between" style="flex-shrink:0">
+              <span>Schedule</span>
               <div class="flex-row-sm">
-                <button class="btn sm secondary" onclick="saveSched()">
-                  Save
-                </button>
-                <button class="btn sm danger" onclick="clearSched()">
-                  Clear All
-                </button>
+                <button class="btn sm secondary" onclick="saveSched()">Save</button>
+                <button class="btn sm danger" onclick="clearSched()">Clear</button>
               </div>
             </div>
-            <div class="sched-body">
+            <div class="sched-body" style="overflow-y:auto;flex:1;min-height:0">
               <table>
                 <thead>
-                  <tr>
-                    <th>Name</th>
-                    <th>Type</th>
-                    <th>Pin</th>
-                    <th>Interval</th>
-                    <th>En</th>
-                    <th></th>
-                  </tr>
+                  <tr><th>Name</th><th>Type</th><th>Pin</th><th>Int(s)</th><th>En</th><th></th></tr>
                 </thead>
                 <tbody id="sched-tbody">
-                  <tr>
-                    <td
-                      colspan="6"
-                      class="text-muted text-center p-3"
-                    >
-                      No tasks
-                    </td>
-                  </tr>
+                  <tr><td colspan="6" class="text-muted text-center p-3">No tasks</td></tr>
                 </tbody>
               </table>
             </div>
-            <div class="sched-add">
+            <div class="sched-add" style="flex-shrink:0">
               <div class="sched-form">
-                <input id="s-name" placeholder="Task name" maxlength="14" />
-                <select id="s-type" title="Task Type">
+                <input id="s-name" placeholder="Name" maxlength="14" />
+                <select id="s-type" title="Type">
                   <option value="TOGGLE">TOGGLE</option>
                   <option value="PULSE">PULSE</option>
                 </select>
-                <select id="s-pin" title="GPIO Pin">
+                <select id="s-pin" title="Pin">
                   <option value="LED">LED (35)</option>
                   <option value="6">RELAY2 (6)</option>
                   <option value="7">RELAY3 (7)</option>
                 </select>
-                <input
-                  id="s-interval"
-                  type="number"
-                  placeholder="Interval (s)"
-                  min="1"
-                  value="30"
-                  oninput="checkToaWarning()"
-                />
+                <input id="s-interval" type="number" placeholder="Interval (s)" min="1" value="30" oninput="checkToaWarning()" />
                 <div id="toa-warn" class="toa-warn" style="display:none"></div>
-                <input
-                  id="s-duration"
-                  type="number"
-                  placeholder="Duration (s)"
-                  min="0"
-                  value="0"
-                />
+                <input id="s-duration" type="number" placeholder="Duration (s)" min="0" value="0" />
                 <select id="s-enabled" title="Status">
                   <option value="1">Enabled</option>
                   <option value="0">Disabled</option>
                 </select>
               </div>
               <div class="sched-actions">
-                <button class="btn sm" onclick="addTask()">+ Add Task</button>
+                <button class="btn sm" onclick="addTask()">+ Add</button>
               </div>
             </div>
           </div>
-        </div>
-      </div>
 
-      <!-- ── Inline Field Monitor ─────────────────────────────────────────────── -->
-      <div style="border-top:1px solid var(--border);margin:0 0 4px">
-        <div class="flex-between" style="padding:6px 16px 2px">
-          <div class="card-title-sm" style="margin:0">
-            Mesh Field
-            <span id="sync-timer" class="text-dim text-xs" style="font-weight:normal">(60s)</span>
+          <!-- Command console -->
+          <div class="panel" style="flex-shrink:0;padding:0;overflow:hidden">
+            <div class="panel-title">Console</div>
+            <div class="console-log" id="console-log" style="max-height:72px"></div>
+            <div class="cmd-bar">
+              <input id="cmd-input" placeholder="e.g. STATUS, GPIO LED 1, SCHED LIST…" autocomplete="off" spellcheck="false" onkeydown="handleKey(event)" />
+              <button class="btn" onclick="sendCmd()">Send</button>
+            </div>
           </div>
-          <div id="sync-status" class="badge" style="font-size:0.7em">Idle</div>
+
         </div>
-        <div class="field-grid" id="field-grid" style="padding:8px 16px 12px;gap:10px"></div>
       </div>
     </div>
-    <!-- end pg-dashboard -->
+    <!-- end pg-fleet -->
 
     <!-- ── Page: Network (Topology + Node Registry) ────────────────────────── -->
     <div class="page" id="pg-network">
@@ -630,7 +535,7 @@
               </div>
             </div>
             <div class="topo-wrap">
-              <svg id="topo-svg" class="topo-svg" style="height:360px"></svg>
+              <svg id="topo-svg" class="topo-svg" style="height:220px"></svg>
               <div class="topo-legend">
                 <span><span class="topo-legend-dot" style="background:#00ff88"></span>GW</span>
                 <span><span class="topo-legend-dot" style="background:#00aaff"></span>Online</span>
@@ -643,131 +548,196 @@
         </div>
 
         <!-- Right: Node registry -->
-        <div class="flex-col" style="min-width:0">
-          <div class="panel">
-            <div class="panel-title">Configured Nodes</div>
-            <div class="py-2" id="node-list"><!-- Populated by JS --></div>
-          </div>
-
-          <div class="panel">
+        <div class="flex-col" style="min-width:0;gap:8px">
+          <!-- Configured nodes — roster-row style -->
+          <div class="panel" style="padding:0;overflow:hidden">
             <div class="panel-title flex-between">
-              <span>Discover</span>
-              <button class="btn btn-sm" onclick="startDiscovery()">Scan</button>
+              <span>Configured Nodes</span>
+              <div style="display:flex;gap:6px">
+                <button class="btn btn-sm btn-secondary" onclick="startDiscovery()">⊕ Scan</button>
+              </div>
             </div>
-            <div id="discovery-results" class="py-2" style="max-height:160px;overflow-y:auto;display:none"></div>
-            <div id="discovery-status" class="text-xs text-dim mt-2" style="display:none">Scanning…</div>
+            <!-- Node roster header -->
+            <div style="display:grid;grid-template-columns:56px 1fr 110px 68px 56px;padding:3px 10px;gap:6px;font-size:0.6em;color:var(--text-dim);text-transform:uppercase;background:var(--bg-hdr);border-bottom:1px solid var(--border)">
+              <span>Type</span><span>Name</span><span>Address</span><span></span><span></span>
+            </div>
+            <div id="node-list" style="overflow-y:auto;max-height:160px"><!-- Populated by JS --></div>
+            <div id="discovery-results" class="py-2" style="max-height:120px;overflow-y:auto;display:none;border-top:1px solid var(--border);padding:4px 10px;font-size:0.78em"></div>
+            <div id="discovery-status" class="text-xs text-dim" style="display:none;padding:4px 10px">Scanning…</div>
           </div>
 
+          <!-- Add Node — inline label/input form -->
           <div class="panel">
             <div class="panel-title">Add Node</div>
-            <div class="flex-col-sm py-2">
-              <div>
+            <div style="display:flex;flex-direction:column;gap:5px;padding:6px 10px">
+              <div style="display:grid;grid-template-columns:80px 1fr;align-items:center;gap:6px">
                 <label class="text-xs text-dim uppercase">Name</label>
-                <input id="node-name" placeholder="e.g. Master" class="input-styled w-full mt-1"/>
+                <input id="node-name" placeholder="e.g. Master" class="input-styled" style="padding:3px 7px"/>
               </div>
-              <div>
-                <label class="text-xs text-dim uppercase">Interface Type</label>
-                <select id="node-type" class="input-styled w-full mt-1" onchange="onNodeTypeChange()">
+              <div style="display:grid;grid-template-columns:80px 1fr;align-items:center;gap:6px">
+                <label class="text-xs text-dim uppercase">Interface</label>
+                <select id="node-type" class="input-styled" style="padding:3px 7px" onchange="onNodeTypeChange()">
                   <option value="wifi">WiFi / HTTP</option>
                   <option value="serial">Serial / USB</option>
                   <option value="ble">BLE</option>
                   <option value="lora">LoRa Gateway</option>
                 </select>
               </div>
-              <div>
+              <div style="display:grid;grid-template-columns:80px 1fr;align-items:center;gap:6px">
                 <label id="node-addr-label" class="text-xs text-dim uppercase">IP Address</label>
-                <input id="node-address" placeholder="e.g. 172.16.0.26" class="input-styled w-full mt-1"/>
+                <input id="node-address" placeholder="e.g. 172.16.0.26" class="input-styled" style="padding:3px 7px"/>
               </div>
-              <button class="btn" onclick="addNode()">+ Add Node</button>
+              <button class="btn btn-sm" style="align-self:flex-end;margin-top:2px" onclick="addNode()">+ Add</button>
             </div>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- ── Page: Test Bench ───────────────────────────────────────────────────── -->
-    <div class="page" id="pg-testbench">
-      <div class="bench-layout">
-        <!-- Left: saved sequences -->
-        <div
-          class="panel"
-          class="flex-col overflow-hidden"
-        >
-          <div
-            class="panel-title panel-title-flex"
-          >
-            <span>Saved Sequences</span>
-            <button
-              class="btn btn-danger btn-sm"
-              onclick="clearDeviceTasks()"
-              title="Clear all tasks on device"
-            >
-              Clear Device
-            </button>
-          </div>
-          <div class="flex-1 overflow-y-auto p-2" id="seq-list">
-            <div
-              class="list-empty"
-            >
-              No sequences saved
+    <!-- ── Page: Deploy (Product Burn-in + Sequences + Audit) ──────────────── -->
+    <div class="page" id="pg-deploy">
+      <div class="deploy-layout">
+
+        <!-- LEFT 200px: Products + Sequences lists -->
+        <div class="flex-col" style="min-width:0;overflow:hidden">
+          <div class="panel" style="padding:0;display:flex;flex-direction:column;overflow:hidden;flex:1">
+            <div class="panel-title flex-between">
+              <span>Products</span>
+              <button class="btn btn-sm" onclick="newProduct()" title="New product profile">+</button>
+            </div>
+            <div id="product-list" style="overflow-y:auto;flex:1;min-height:50px"></div>
+            <div style="border-top:1px solid var(--border);padding:3px 10px;font-size:0.6em;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.8px;background:var(--bg-hdr);flex-shrink:0;display:flex;justify-content:space-between;align-items:center">
+              <span>Sequences</span>
+              <button class="btn btn-sm btn-secondary" onclick="clearDeviceTasks()" style="padding:1px 5px;font-size:0.85em" title="Clear all tasks on device">⊗</button>
+            </div>
+            <div class="flex-1 overflow-y-auto p-2" id="seq-list" style="min-height:50px">
+              <div class="list-empty">No sequences saved</div>
             </div>
           </div>
         </div>
-        <!-- Right: sequence editor -->
-        <div class="panel bench-editor overflow-hidden">
-          <div class="panel-title">Sequence Editor</div>
-          <div
-            class="editor-toolbar"
-          >
-            <label
-              class="label-caps"
-              >Sequence Name</label
-            >
-            <input
-              id="seq-name"
-              placeholder="e.g. smoke_test"
-              class="input-styled flex-1"
-            />
-            <button class="btn btn-sm" onclick="saveSequence()">Save</button>
+
+        <!-- CENTER 1fr: Product editor + Sequence editor -->
+        <div class="flex-col" style="min-width:0;overflow:hidden;gap:8px">
+
+          <!-- Product editor panel (hidden until product selected/created) -->
+          <div id="product-editor" class="panel" style="display:none;padding:0;overflow:visible;flex-shrink:0">
+            <div class="panel-title flex-between">
+              <span id="prod-editor-title">Product Profile</span>
+              <div style="display:flex;gap:5px">
+                <button class="btn btn-sm btn-secondary" onclick="saveProduct()">Save</button>
+                <button class="btn btn-sm" onclick="deployProductUI()" id="deploy-btn">Deploy ▾</button>
+              </div>
+            </div>
+            <!-- Inline product form -->
+            <div style="display:flex;flex-direction:column;gap:3px;padding:5px 10px;flex-shrink:0">
+              <div style="display:grid;grid-template-columns:64px 1fr;align-items:center;gap:5px">
+                <label class="stat-label" style="text-align:right">Name</label>
+                <input id="prod-name" class="input-styled" style="padding:2px 6px;font-size:0.82em" placeholder="FarmGateway v1"/>
+              </div>
+              <div style="display:grid;grid-template-columns:64px 1fr;align-items:center;gap:5px">
+                <label class="stat-label" style="text-align:right">HW</label>
+                <input id="prod-hw" class="input-styled" style="padding:2px 6px;font-size:0.82em" placeholder="Heltec V3"/>
+              </div>
+              <div style="display:grid;grid-template-columns:64px 1fr;align-items:center;gap:5px">
+                <label class="stat-label" style="text-align:right">Config</label>
+                <input id="prod-cfg" class="input-styled" style="padding:2px 6px;font-size:0.82em" placeholder="heltec_v3_farm.json"/>
+              </div>
+              <div style="display:grid;grid-template-columns:64px 1fr;align-items:center;gap:5px">
+                <label class="stat-label" style="text-align:right">Schedule</label>
+                <input id="prod-sched" class="input-styled" style="padding:2px 6px;font-size:0.82em" placeholder="tasks_farm.json"/>
+              </div>
+              <div style="display:grid;grid-template-columns:64px 1fr;align-items:center;gap:5px">
+                <label class="stat-label" style="text-align:right">Version</label>
+                <input id="prod-ver" class="input-styled" style="padding:2px 6px;font-size:0.82em" placeholder="1.0"/>
+              </div>
+              <div style="display:grid;grid-template-columns:64px 1fr;align-items:center;gap:5px">
+                <label class="stat-label" style="text-align:right">Notes</label>
+                <input id="prod-notes" class="input-styled" style="padding:2px 6px;font-size:0.82em" placeholder="Field gateways"/>
+              </div>
+              <!-- Transport selector -->
+              <div style="display:flex;align-items:center;gap:4px;margin-top:3px;flex-wrap:wrap">
+                <span class="stat-label" style="flex-shrink:0;margin-right:2px">Transport</span>
+                <button class="proto-btn" id="proto-http" onclick="selectProto('http',this)" title="HTTP REST — fully implemented">HTTP ●</button>
+                <button class="proto-btn" id="proto-ble" onclick="selectProto('ble',this)" title="BLE serial — fully implemented">BLE ●</button>
+                <button class="proto-btn stub" title="LoRa relay deploy: planned — requires node-targeted routing in firmware">LoRa ○*</button>
+                <button class="proto-btn stub" title="MQTT deploy: planned — requires server.py MQTT client (paho-mqtt)">MQTT ○*</button>
+              </div>
+              <!-- Format selector -->
+              <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap">
+                <span class="stat-label" style="flex-shrink:0;margin-right:2px">Format</span>
+                <button class="proto-btn" id="fmt-J" onclick="selectFmt('J',this)" title="JSON — active">J ●</button>
+                <button class="proto-btn stub" title="CSV — requires firmware TRANS support">C ○*</button>
+                <button class="proto-btn stub" title="Key=Value — requires firmware TRANS support">K ○*</button>
+                <button class="proto-btn stub" title="Binary — future firmware feature">B ○*</button>
+              </div>
+            </div>
+            <!-- Deploy node checklist -->
+            <div id="deploy-checklist" style="display:none;border-top:1px solid var(--border);padding:5px 10px">
+              <div class="stat-label" style="margin-bottom:3px">Target Nodes</div>
+              <div id="deploy-node-items" style="display:flex;flex-direction:column;gap:3px;font-size:0.78em;margin-bottom:5px"></div>
+              <button class="btn btn-sm" id="confirm-deploy-btn" onclick="confirmDeploy()" style="width:100%">✓ Confirm Deploy</button>
+            </div>
+            <!-- Deploy result -->
+            <div id="deploy-result" style="display:none;padding:4px 10px;font-size:0.78em;border-top:1px solid var(--border)"></div>
           </div>
-          <!-- Test Bench run controls -->
-          <div class="bench-meta">
-            <label>🔁 Repeat <input type="number" id="seq-repeat" value="1" min="1" max="1000" title="Repeat full sequence N times per node"></label>
-            <label>⏱ Stagger (ms) <input type="number" id="seq-stagger" value="0" min="0" max="60000" title="Delay between nodes during swarm apply"></label>
-            <label class="bench-dry-lbl"><input type="checkbox" id="seq-dryrun" style="accent-color:var(--warn);margin-right:3px">🧪 Dry Run</label>
-          </div>
-          <div
-            class="flex-1 overflow-y-auto p-3 min-h-0"
-          >
-            <table class="task-edit-table">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Type</th>
-                  <th>Pin</th>
-                  <th>Interval(s)</th>
-                  <th>Duration(s)</th>
-                  <th title="Retry count if step fails">Retry</th>
-                  <th title="Stop sequence if this step fails">⛔</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody id="seq-tasks"></tbody>
-            </table>
-            <button
-              class="btn btn-secondary btn-sm"
-              onclick="addTaskRow()"
-              class="mt-2"
-            >
-              + Add Row
-            </button>
-            <!-- Aggregated Duty Cycle -->
-            <div class="duty-panel" id="duty-panel">
-              <div class="duty-row"><span>Aggregated LoRa Duty Cycle</span><span id="duty-pct" style="font-weight:700;color:var(--ok)">—</span></div>
-              <div class="duty-bar-bg"><div class="duty-bar-fill duty-ok" id="duty-fill" style="width:0%"></div></div>
-              <div class="duty-row" id="duty-detail" style="color:#555">Add tasks to calculate airtime usage</div>
+
+          <!-- Sequence editor (existing, always visible) -->
+          <div class="panel bench-editor overflow-hidden" style="flex:1">
+            <div class="panel-title">Sequence Editor</div>
+            <div class="editor-toolbar">
+              <label class="label-caps">Sequence Name</label>
+              <input id="seq-name" placeholder="e.g. smoke_test" class="input-styled flex-1"/>
+              <button class="btn btn-sm" onclick="saveSequence()">Save</button>
+            </div>
+            <div class="bench-meta">
+              <label>🔁 Repeat <input type="number" id="seq-repeat" value="1" min="1" max="1000" title="Repeat full sequence N times per node"></label>
+              <label>⏱ Stagger (ms) <input type="number" id="seq-stagger" value="0" min="0" max="60000" title="Delay between nodes during swarm apply"></label>
+              <label class="bench-dry-lbl"><input type="checkbox" id="seq-dryrun" style="accent-color:var(--warn);margin-right:3px">🧪 Dry Run</label>
+            </div>
+            <div class="flex-1 overflow-y-auto p-3 min-h-0">
+              <table class="task-edit-table">
+                <thead>
+                  <tr>
+                    <th>Name</th><th>Type</th><th>Pin</th><th>Interval(s)</th><th>Duration(s)</th>
+                    <th title="Retry count if step fails">Retry</th>
+                    <th title="Stop sequence if this step fails">⛔</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="seq-tasks"></tbody>
+              </table>
+              <button class="btn btn-secondary btn-sm" onclick="addTaskRow()" style="margin-top:6px">+ Add Row</button>
+              <div class="duty-panel" id="duty-panel">
+                <div class="duty-row"><span>Aggregated LoRa Duty Cycle</span><span id="duty-pct" style="font-weight:700;color:var(--ok)">—</span></div>
+                <div class="duty-bar-bg"><div class="duty-bar-fill duty-ok" id="duty-fill" style="width:0%"></div></div>
+                <div class="duty-row" id="duty-detail" style="color:#555">Add tasks to calculate airtime usage</div>
+              </div>
             </div>
           </div>
+        </div>
+
+        <!-- RIGHT 200px: Audit log -->
+        <div class="flex-col" style="min-width:0;overflow:hidden">
+          <div class="panel" style="padding:0;flex:1;display:flex;flex-direction:column;overflow:hidden">
+            <div class="panel-title flex-between">
+              <span>Audit Log</span>
+              <button class="btn btn-sm btn-secondary" onclick="_auditLog=[];try{sessionStorage.removeItem('ll_audit')}catch(e){}renderAuditLog()" style="padding:1px 5px;font-size:0.75em" title="Clear audit log">✕</button>
+            </div>
+            <div id="audit-log" class="audit-log"></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Deploy confirmation modal -->
+    <div id="deploy-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:1000;display:none;align-items:center;justify-content:center">
+      <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:20px 24px;min-width:320px;max-width:480px">
+        <div style="font-size:0.95em;font-weight:700;margin-bottom:8px;color:var(--accent)">Confirm Deploy</div>
+        <div id="deploy-modal-msg" style="font-size:0.82em;color:var(--text-dim);margin-bottom:16px;line-height:1.5"></div>
+        <div style="display:flex;gap:8px;justify-content:flex-end">
+          <button class="btn btn-secondary btn-sm" onclick="document.getElementById('deploy-modal').style.display='none'">Cancel</button>
+          <button class="btn btn-sm" id="deploy-modal-ok" style="min-width:100px">Deploy</button>
         </div>
       </div>
     </div>
@@ -791,6 +761,18 @@
           </div>
         </div>
 
+        <!-- Golden Image — PRIORITY RECOVERY at top -->
+        <div class="panel" style="padding:0;overflow:hidden">
+          <div class="golden-panel" id="golden-panel" style="margin:0;border-radius:0;border:none">
+            <span class="golden-badge">🛡 GOLDEN IMAGE</span>
+            <span class="golden-name" id="golden-name">No backup on file</span>
+            <button class="btn btn-sm btn-secondary" onclick="backupDeviceNvs()">Create Backup</button>
+            <button class="btn btn-sm" id="golden-restore-btn" onclick="restoreGoldenImage()" disabled
+                    style="background:rgba(255,170,0,0.12);border-color:rgba(255,170,0,0.4);color:var(--warn)"
+                    title="Apply the most recent backup to the device">↩ Restore Golden</button>
+          </div>
+        </div>
+
         <!-- Device Config Settings Panel (3-state: Desired / Pending / Confirmed) -->
         <div class="panel">
           <div class="panel-title flex-row-sb">
@@ -802,7 +784,7 @@
           </div>
           <div id="cfg-validation-err" class="cfg-validation-err" style="margin:0 12px 0 12px"></div>
           <div style="overflow-x:auto;padding:4px 0">
-            <table class="cfg-settings-table">
+            <table class="cfg-settings-table" style="font-size:0.82em">
               <thead>
                 <tr>
                   <th style="width:160px">Setting</th>
@@ -816,23 +798,15 @@
               </tbody>
             </table>
           </div>
-          <!-- Golden Image Rollback -->
-          <div class="golden-panel" id="golden-panel" style="margin:8px 12px 12px">
-            <span class="golden-badge">🛡 GOLDEN IMAGE</span>
-            <span class="golden-name" id="golden-name">No backup on file</span>
-            <button class="btn btn-sm btn-secondary" onclick="backupDeviceNvs()">Create Backup</button>
-            <button class="btn btn-sm" id="golden-restore-btn" onclick="restoreGoldenImage()" disabled
-                    style="background:rgba(255,170,0,0.12);border-color:rgba(255,170,0,0.4);color:var(--warn)"
-                    title="Apply the most recent backup to the device">↩ Restore Golden</button>
-          </div>
         </div>
 
-        <!-- Smart Pin Map -->
-        <div class="panel">
-          <div class="panel-title flex-row-sb">
+        <!-- Smart Pin Map — collapsible -->
+        <details class="panel" style="padding:0" open>
+          <summary class="panel-title flex-row-sb" style="cursor:pointer;list-style:none;display:flex">
             <span>Smart Pin Map (Heltec V3)</span>
-          </div>
-          <p class="text-xs text-dim p-3">Interactive diagram. Click a GPIO pin to label it or toggle status-report visibility. Red border = LoRa/SPI reserved.</p>
+            <span style="font-size:0.75em;color:var(--text-dim)">▼</span>
+          </summary>
+          <p class="text-xs text-dim" style="padding:4px 10px 2px">Interactive diagram. Click a GPIO pin to label it or toggle status-report visibility. Red border = LoRa/SPI reserved.</p>
           <div class="board-container">
             <div id="pin-header-j3" class="header-col"></div>
             <div class="board-visual">
@@ -841,35 +815,43 @@
             </div>
             <div id="pin-header-j2" class="header-col"></div>
           </div>
+        </details>
+
+        <!-- APC Section — compact gpio-chip-row style -->
+        <div class="panel" style="padding:0;overflow:hidden">
+          <div class="panel-title">APC — Interest List Pins</div>
+          <p class="text-xs text-dim" style="padding:2px 10px 4px">Toggle pin visibility in the device status report.</p>
+          <div id="apc-list" class="gpio-chip-row" style="padding:4px 10px 8px"></div>
         </div>
 
-        <!-- APC Section -->
-        <div class="panel">
-          <div class="panel-title">Administrative Pin Configuration (APC)</div>
-          <p class="text-xs text-dim p-3">Toggle pin visibility in the device status report (Interest List).</p>
-          <div id="apc-list" class="flex-col-sm p-3"></div>
-        </div>
-
-        <!-- Hardware Registry Section -->
-        <div class="panel">
+        <!-- Hardware Registry Section — compact -->
+        <div class="panel" style="padding:0;overflow:hidden">
           <div class="panel-title flex-row-sb">
             <span>Hardware Registry</span>
-            <button class="btn sm btn-secondary" onclick="refreshRegistry()">Refresh</button>
+            <button class="btn btn-sm btn-secondary" onclick="refreshRegistry()" style="padding:1px 8px">↺</button>
           </div>
-          <p class="text-xs text-dim p-3">Discovered hardware types across the mesh.</p>
-          <div class="flex-1 overflow-y-auto p-3">
-            <table class="w-full">
+          <div style="overflow-x:auto">
+            <table class="w-full" style="font-size:0.78em">
               <thead>
-                <tr class="text-left text-xs uppercase text-dim border-b border-dim">
-                  <th class="p-1">Device ID</th>
-                  <th class="p-1">Hardware Type</th>
+                <tr style="background:var(--bg-hdr);border-bottom:1px solid var(--border)">
+                  <th style="padding:3px 10px;text-align:left;color:var(--text-dim);font-size:0.85em;text-transform:uppercase">Device ID</th>
+                  <th style="padding:3px 10px;text-align:left;color:var(--text-dim);font-size:0.85em;text-transform:uppercase">Hardware Type</th>
                 </tr>
               </thead>
-              <tbody id="registry-tbody" class="text-sm">
-                <tr><td colspan="2" class="text-center text-dim p-4">No hardware registered</td></tr>
+              <tbody id="registry-tbody">
+                <tr><td colspan="2" style="text-align:center;color:#555;padding:6px 10px">No hardware registered</td></tr>
               </tbody>
             </table>
           </div>
+        </div>
+
+        <!-- Product Profiles index — read-only list with Edit links -->
+        <div class="panel" style="padding:0;overflow:hidden">
+          <div class="panel-title flex-between">
+            <span>Product Profiles</span>
+            <button class="btn btn-sm" onclick="showPage('deploy');newProduct()" style="padding:1px 8px">+ New</button>
+          </div>
+          <div id="product-index-list" style="min-height:28px"></div>
         </div>
 
       </div>
@@ -1138,8 +1120,9 @@
         // GPIO bitmap (48-bit hex bitmask from status.gp)
         renderBitmap(d.gp || "0");
 
-        // Mesh table
+        // Mesh table (legacy) + FLEET roster
         renderMesh(d.mesh || []);
+        updateRoster(d);
 
         // GPIO panel — update pin states from pins array
         updateGpioPinStates(d.pins || []);
@@ -1171,6 +1154,121 @@
 
       function badge(label, on) {
         return `<span class="badge ${on ? "on" : "off"}">${label}</span>`;
+      }
+
+      // ════════════════════════════════════════════════════════════════════════════
+      // FLEET Roster
+      // ════════════════════════════════════════════════════════════════════════════
+
+      function updateRoster(data) {
+        const body = document.getElementById('roster-body');
+        if (!body || !data) return;
+        const nodes = [
+          { id: data.id || '—', bat: parseFloat(data.bat)||0, rssi: null, hops: 0, ago: 0, isLocal: true },
+          ...(data.mesh || [])
+        ];
+        // Build rows using safe DOM — textContent for all device-provided strings
+        body.innerHTML = '';
+        nodes.forEach(n => {
+          const stale = !n.isLocal && n.ago > 300;
+          const row = document.createElement('div');
+          row.className = 'roster-row' + (stale ? ' stale' : '') + (n.isLocal ? ' local' : '');
+
+          const dot = document.createElement('span');
+          dot.className = 'status-dot ' + (n.isLocal ? 'online' : (n.ago < 120 ? 'online' : 'offline'));
+          dot.style.cssText = 'width:6px;height:6px;border-radius:50%;flex-shrink:0;background:' +
+            (n.isLocal || n.ago < 120 ? 'var(--ok)' : 'var(--err)') + ';box-shadow:' +
+            (n.isLocal || n.ago < 120 ? '0 0 4px var(--ok)' : 'none');
+
+          const idSpan = document.createElement('span');
+          idSpan.style.cssText = 'font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:monospace;font-size:0.9em';
+          idSpan.textContent = n.id;
+
+          const bat = document.createElement('span');
+          bat.style.cssText = 'font-family:monospace;color:' + (!n.bat ? 'var(--muted)' : n.bat > 3.5 ? 'var(--ok)' : n.bat > 3.2 ? 'var(--warn)' : 'var(--err)');
+          bat.textContent = n.bat ? n.bat.toFixed(2)+'V' : '—';
+
+          const rssi = document.createElement('span');
+          const rssiV = n.rssi;
+          rssi.style.cssText = 'font-family:monospace;color:' + (!rssiV ? 'var(--muted)' : rssiV > -75 ? 'var(--ok)' : rssiV > -90 ? 'var(--warn)' : 'var(--err)');
+          rssi.textContent = rssiV != null ? rssiV+'dB' : '—';
+
+          const hops = document.createElement('span');
+          hops.style.color = 'var(--text-dim)';
+          hops.textContent = n.isLocal ? 'GW' : String(n.hops);
+
+          const ago = document.createElement('span');
+          ago.style.color = 'var(--text-dim)';
+          ago.textContent = n.isLocal ? '—' : n.ago+'s';
+
+          const btn = document.createElement('button');
+          btn.className = 'btn sm btn-secondary';
+          btn.style.cssText = 'padding:1px 6px;font-size:0.7em;line-height:1';
+          btn.textContent = '⋯';
+          btn.title = 'Actions';
+          const nodeId = n.id; // captured for closure
+          btn.addEventListener('click', e => { e.stopPropagation(); rosterAction(nodeId); });
+
+          [dot, idSpan, bat, rssi, hops, ago, btn].forEach(el => row.appendChild(el));
+          row.addEventListener('click', () => onRosterClick(nodeId));
+          body.appendChild(row);
+        });
+      }
+
+      function onRosterClick(nodeId) {
+        // Highlight selected row
+        document.querySelectorAll('#roster-body .roster-row').forEach(r => r.classList.remove('selected'));
+        const rows = document.querySelectorAll('#roster-body .roster-row');
+        rows.forEach(r => { if (r.children[1] && r.children[1].textContent === nodeId) r.classList.add('selected'); });
+      }
+
+      function rosterAction(nodeId) {
+        // Future: context menu with Deploy Product / Snapshot / Details
+        logConsole('rx', 'Node actions for ' + nodeId + ' — coming soon');
+      }
+
+      // ════════════════════════════════════════════════════════════════════════════
+      // Audit Log
+      // ════════════════════════════════════════════════════════════════════════════
+
+      var _auditLog = [];
+      try { _auditLog = JSON.parse(sessionStorage.getItem('ll_audit') || '[]'); } catch {}
+
+      function logAudit(type, msg, ok, fail) {
+        const ts = new Date().toLocaleTimeString('en-GB', {hour12:false,hour:'2-digit',minute:'2-digit'});
+        _auditLog.unshift({ts, type, msg, ok: ok ?? null, fail: fail ?? null});
+        if (_auditLog.length > 100) _auditLog.pop();
+        try { sessionStorage.setItem('ll_audit', JSON.stringify(_auditLog)); } catch {}
+        renderAuditLog();
+      }
+
+      function renderAuditLog() {
+        const el = document.getElementById('audit-log');
+        if (!el) return;
+        el.innerHTML = '';
+        _auditLog.forEach(e => {
+          const row = document.createElement('div');
+          row.className = 'audit-entry';
+          const ts = document.createElement('span');
+          ts.className = 'audit-ts';
+          ts.textContent = e.ts;
+          const tp = document.createElement('span');
+          tp.className = 'audit-type ' + (e.type || '');
+          tp.textContent = e.type ? e.type.toUpperCase() : '—';
+          const msg = document.createElement('span');
+          msg.style.overflow = 'hidden';
+          msg.style.textOverflow = 'ellipsis';
+          msg.style.whiteSpace = 'nowrap';
+          msg.textContent = e.msg + (e.ok != null ? ' ('+e.ok+'ok'+(e.fail?' '+e.fail+'fail':'')+')' : '');
+          row.appendChild(ts); row.appendChild(tp); row.appendChild(msg);
+          el.appendChild(row);
+        });
+        if (!_auditLog.length) {
+          const empty = document.createElement('div');
+          empty.style.cssText = 'padding:12px;text-align:center;color:var(--muted);font-size:0.8em';
+          empty.textContent = 'No events yet';
+          el.appendChild(empty);
+        }
       }
 
       function setText(id, v) {
@@ -1219,6 +1317,7 @@
 
       function renderMesh(nodes) {
         const tb = document.getElementById("mesh-tbody");
+        if (!tb) return; // mesh-tbody removed in FLEET layout — roster replaces it
         if (!nodes.length) {
           tb.innerHTML =
             '<tr><td colspan="5" class="text-muted text-center p-4">No nodes discovered</td></tr>';
@@ -1251,6 +1350,8 @@
 
       function buildGpioPanel() {
         const grid = document.getElementById("gpio-grid");
+        if (!grid) return;
+        // Legacy full-row layout (kept for any embed that still uses it)
         grid.innerHTML = GPIO_CONTROLS.map(
           (g) =>
             `<div class="gpio-row" id="gpio-row-${g.pinNum}">
@@ -1265,6 +1366,20 @@
       </div>
     </div>`,
         ).join("");
+      }
+
+      // Compact chip-style GPIO controls for the FLEET panel
+      function buildGpioChips() {
+        const grid = document.getElementById("gpio-grid");
+        if (!grid) return;
+        grid.innerHTML = GPIO_CONTROLS.map(g =>
+          `<div class="gpio-chip" id="gpio-row-${g.pinNum}" onclick="toggleGpio('${g.pin}',${g.pinNum})" title="${g.label} — GPIO ${g.pinNum}">
+            <span class="gpio-chip-dot" id="gstate-${g.pinNum}" style="display:none">LO</span>
+            <span>${g.label}</span>
+            <span style="font-size:0.65em;opacity:0.5">p${g.pinNum}</span>
+            <span id="gbtn-${g.pinNum}" style="display:none"></span>
+          </div>`
+        ).join('');
       }
 
       function updateGpioPinStates(pins) {
@@ -1284,6 +1399,12 @@
             stateEl.className = `gpio-state ${hi ? "hi" : "lo"}`;
             stateEl.textContent = hi ? "HI" : "LO";
             if (btnEl) btnEl.className = `toggle-btn ${hi ? "active" : ""}`;
+            // Also update chip visual state
+            const chipEl = document.getElementById('gpio-row-' + g.pinNum);
+            if (chipEl && chipEl.classList.contains('gpio-chip')) {
+              chipEl.classList.toggle('hi', hi);
+              chipEl.classList.remove('pending', 'mismatch');
+            }
           }
           // Desired vs. Reported reconciliation
           if (v != null && _pendingGpio[g.pinNum] !== undefined) {
@@ -1298,12 +1419,18 @@
                 btnEl2.classList.add('gpio-confirm');
                 setTimeout(() => btnEl2 && btnEl2.classList.remove('gpio-confirm'), 1200);
               }
+              // Clear chip pending state
+              const chip2 = document.getElementById('gpio-row-' + g.pinNum);
+              if (chip2 && chip2.classList.contains('gpio-chip')) chip2.classList.remove('pending','mismatch');
             } else if (Date.now() - pending.sentAt > GPIO_PENDING_TIMEOUT) {
               if (btnEl2) {
                 btnEl2.classList.remove('gpio-pending');
                 btnEl2.classList.add('gpio-mismatch');
                 btnEl2.textContent = '⚠';
               }
+              // Mark chip as mismatch
+              const chip3 = document.getElementById('gpio-row-' + g.pinNum);
+              if (chip3 && chip3.classList.contains('gpio-chip')) { chip3.classList.remove('pending'); chip3.classList.add('mismatch'); }
             }
           }
         });
@@ -1615,11 +1742,17 @@
           loadNodes();
           buildTopoGraph(lastStatus);
         }
-        if (name === "testbench") {
+        if (name === "deploy") {
           loadSequences();
+          loadProducts();
+          renderAuditLog();
         }
         if (name === "admin") {
           loadFiles();
+          loadProducts(); // refresh product index in Admin
+        }
+        if (name === "fleet") {
+          updateRoster(lastStatus);
         }
       }
 
@@ -1632,23 +1765,50 @@
           const r = await fetch("/api/nodes");
           const nodes = await r.json();
           const el = document.getElementById("node-list");
+          el.innerHTML = '';
           if (!nodes.length) {
-            el.innerHTML =
-              '<div class="text-muted text-center p-4">No nodes configured</div>';
+            const empty = document.createElement('div');
+            empty.className = 'text-muted text-xs';
+            empty.style.cssText = 'padding:8px 10px;color:var(--text-dim)';
+            empty.textContent = 'No nodes configured';
+            el.appendChild(empty);
             return;
           }
-          el.innerHTML = nodes
-            .map(
-              (n) => `
-      <div class="node-item${n.active ? " active-node" : ""}" id="ni-${n.id}">
-        <span class="node-type ${n.type}">${n.type}</span>
-        <span class="flex-1 text-bold">${escHtml(n.name)}</span>
-        <span class="text-xs text-dim font-mono">${escHtml(n.address)}</span>
-        <button class="btn btn-sm${n.active ? "" : " btn-secondary"}" onclick="connectNode('${n.id}')" class="ml-1">${n.active ? "✓ Active" : "Connect"}</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteNode('${n.id}')" class="ml-1">✕</button>
-      </div>`,
-            )
-            .join("");
+          // Roster-row style: grid matches node-list header columns
+          nodes.forEach(n => {
+            const row = document.createElement('div');
+            row.id = 'ni-' + n.id;
+            row.style.cssText = 'display:grid;grid-template-columns:56px 1fr 110px 68px 56px;align-items:center;padding:0 10px;gap:6px;height:28px;border-bottom:1px solid rgba(255,255,255,0.04);font-size:0.78em;cursor:default';
+            if (n.active) row.style.boxShadow = 'inset 2px 0 0 var(--accent)';
+
+            const typeSpan = document.createElement('span');
+            typeSpan.className = 'node-type ' + n.type;
+            typeSpan.style.fontSize = '0.7em';
+            typeSpan.textContent = n.type;
+
+            const nameSpan = document.createElement('span');
+            nameSpan.style.fontWeight = '700';
+            nameSpan.textContent = n.name;
+
+            const addrSpan = document.createElement('span');
+            addrSpan.style.cssText = 'font-family:monospace;font-size:0.85em;color:var(--text-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+            addrSpan.textContent = n.address || '—';
+
+            const connectBtn = document.createElement('button');
+            connectBtn.className = 'btn btn-sm' + (n.active ? '' : ' btn-secondary');
+            connectBtn.style.cssText = 'padding:1px 6px;font-size:0.7em';
+            connectBtn.textContent = n.active ? '✓ Active' : 'Connect';
+            connectBtn.onclick = () => connectNode(n.id);
+
+            const delBtn = document.createElement('button');
+            delBtn.className = 'btn btn-danger btn-sm';
+            delBtn.style.cssText = 'padding:1px 6px;font-size:0.7em';
+            delBtn.textContent = '✕';
+            delBtn.onclick = () => deleteNode(n.id);
+
+            [typeSpan, nameSpan, addrSpan, connectBtn, delBtn].forEach(c => row.appendChild(c));
+            el.appendChild(row);
+          });
         } catch (e) {
           logConsole("err", `loadNodes: ${e.message}`);
         }
@@ -1818,7 +1978,312 @@
       }
 
       // ════════════════════════════════════════════════════════════════════════════
-      // Test Bench page
+      // Deploy page — Product Profiles
+      // ════════════════════════════════════════════════════════════════════════════
+
+      var _selectedProduct = null;   // currently loaded product object
+      var _selectedTransport = 'http';
+      var _selectedFormat = 'J';
+
+      async function loadProducts() {
+        try {
+          const r = await fetch('/api/files');
+          const data = await r.json();
+          const files = data.files || [];
+          const products = files.filter(f => f.name && f.name.startsWith('product_') && f.name.endsWith('.json'));
+          const el = document.getElementById('product-list');
+          if (!el) return;
+          el.innerHTML = '';
+          if (!products.length) {
+            const empty = document.createElement('div');
+            empty.style.cssText = 'padding:6px 10px;font-size:0.75em;color:var(--text-dim)';
+            empty.textContent = 'No products — click +';
+            el.appendChild(empty);
+            return;
+          }
+          products.forEach(f => {
+            const item = document.createElement('div');
+            item.className = 'product-item';
+            item.dataset.file = f.name;
+            item.onclick = () => loadProductFile(f.name);
+
+            const nameSpan = document.createElement('span');
+            nameSpan.className = 'product-name';
+            // extract display name from filename: product_FarmGateway_v1.json → FarmGateway v1
+            nameSpan.textContent = f.name.replace(/^product_/, '').replace(/\.json$/, '').replace(/_/g, ' ');
+
+            const meta = document.createElement('span');
+            meta.className = 'product-meta';
+            meta.textContent = f.size ? (Math.round(f.size / 10.24) / 100 + ' KB') : '';
+
+            item.appendChild(nameSpan);
+            item.appendChild(meta);
+            el.appendChild(item);
+          });
+          // Also populate product index in admin if that panel exists
+          renderProductIndex(products);
+        } catch(e) {
+          logConsole('err', 'loadProducts: ' + e.message);
+        }
+      }
+
+      async function loadProductFile(filename) {
+        try {
+          const r = await fetch('/api/files/' + filename);
+          const p = await r.json();
+          selectProduct(p, filename);
+        } catch(e) {
+          logConsole('err', 'loadProductFile: ' + e.message);
+        }
+      }
+
+      function selectProduct(p, filename) {
+        _selectedProduct = p;
+        _selectedProduct._filename = filename;
+        const ed = document.getElementById('product-editor');
+        if (ed) ed.style.display = '';
+
+        // Populate fields safely via textContent-compatible value assignment
+        const fields = { 'prod-name': p.name||'', 'prod-hw': p.hw||'', 'prod-cfg': p.config_file||'',
+                         'prod-sched': p.schedule_file||'', 'prod-ver': p.version||'', 'prod-notes': p.notes||'' };
+        Object.entries(fields).forEach(([id, val]) => {
+          const el = document.getElementById(id);
+          if (el) el.value = val;
+        });
+
+        // Highlight active product item
+        document.querySelectorAll('.product-item').forEach(el => {
+          el.classList.toggle('active-product', el.dataset.file === filename);
+        });
+
+        // Restore transport/format selections
+        selectProto(p.preferred_transport || 'http', null);
+        selectFmt(p.preferred_format || 'J', null);
+
+        // Reset deploy UI
+        const chk = document.getElementById('deploy-checklist');
+        if (chk) chk.style.display = 'none';
+        const res = document.getElementById('deploy-result');
+        if (res) res.style.display = 'none';
+      }
+
+      function newProduct() {
+        selectProduct({
+          _schema: 'loralink-product-v1', name: '', hw: 'Heltec V3',
+          config_file: '', schedule_file: '', version: '1.0', notes: '',
+          preferred_transport: 'http', preferred_format: 'J'
+        }, null);
+        const ed = document.getElementById('product-editor');
+        if (ed) ed.style.display = '';
+        document.querySelectorAll('.product-item').forEach(el => el.classList.remove('active-product'));
+      }
+
+      async function saveProduct() {
+        const name = (document.getElementById('prod-name')?.value || '').trim();
+        if (!name) { alert('Product name is required'); return; }
+        const p = {
+          _schema: 'loralink-product-v1',
+          name,
+          hw: document.getElementById('prod-hw')?.value.trim() || '',
+          config_file: document.getElementById('prod-cfg')?.value.trim() || '',
+          schedule_file: document.getElementById('prod-sched')?.value.trim() || '',
+          version: document.getElementById('prod-ver')?.value.trim() || '1.0',
+          notes: document.getElementById('prod-notes')?.value.trim() || '',
+          preferred_transport: _selectedTransport,
+          preferred_format: _selectedFormat
+        };
+        const safeName = name.replace(/[^a-zA-Z0-9_\-]/g, '_');
+        const filename = 'product_' + safeName + '.json';
+        try {
+          const r = await fetch('/api/files/' + filename, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ content: JSON.stringify(p, null, 2) })
+          });
+          if (!r.ok) throw new Error(await r.text());
+          _selectedProduct = p;
+          _selectedProduct._filename = filename;
+          logAudit('config', 'Saved product: ' + name);
+          await loadProducts();
+          // Re-highlight after refresh
+          setTimeout(() => {
+            document.querySelectorAll('.product-item').forEach(el => {
+              el.classList.toggle('active-product', el.dataset.file === filename);
+            });
+          }, 100);
+        } catch(e) {
+          logConsole('err', 'saveProduct: ' + e.message);
+        }
+      }
+
+      function selectProto(proto, btn) {
+        _selectedTransport = proto;
+        ['proto-http','proto-ble'].forEach(id => {
+          const el = document.getElementById(id);
+          if (el) el.classList.toggle('active', el.id === 'proto-' + proto);
+        });
+      }
+
+      function selectFmt(fmt, btn) {
+        _selectedFormat = fmt;
+        ['fmt-J'].forEach(id => {
+          const el = document.getElementById(id);
+          if (el) el.classList.toggle('active', el.id === 'fmt-' + fmt);
+        });
+      }
+
+      async function deployProductUI() {
+        if (!_selectedProduct) return;
+        const chk = document.getElementById('deploy-checklist');
+        if (!chk) return;
+        // Toggle checklist visibility
+        if (chk.style.display !== 'none') { chk.style.display = 'none'; return; }
+
+        // Load node list for checklist
+        try {
+          const r = await fetch('/api/nodes');
+          const nodes = await r.json();
+          const container = document.getElementById('deploy-node-items');
+          if (!container) return;
+          container.innerHTML = '';
+          if (!nodes.length) {
+            const msg = document.createElement('div');
+            msg.style.cssText = 'color:var(--text-dim);font-size:0.8em';
+            msg.textContent = 'No nodes configured';
+            container.appendChild(msg);
+            return;
+          }
+          nodes.forEach(n => {
+            const row = document.createElement('label');
+            row.style.cssText = 'display:flex;align-items:center;gap:6px;cursor:pointer';
+            const cb = document.createElement('input');
+            cb.type = 'checkbox';
+            cb.value = n.id;
+            cb.checked = true;
+            cb.style.accentColor = 'var(--accent)';
+            const nameSpan = document.createElement('span');
+            nameSpan.textContent = n.name;
+            const typeSpan = document.createElement('span');
+            typeSpan.style.cssText = 'font-size:0.75em;color:var(--text-dim)';
+            typeSpan.textContent = n.type;
+            row.appendChild(cb); row.appendChild(nameSpan); row.appendChild(typeSpan);
+            container.appendChild(row);
+          });
+          chk.style.display = '';
+        } catch(e) {
+          logConsole('err', 'deployProductUI: ' + e.message);
+        }
+      }
+
+      function confirmDeploy() {
+        if (!_selectedProduct) return;
+        const checkboxes = document.querySelectorAll('#deploy-node-items input[type=checkbox]:checked');
+        const nodeIds = Array.from(checkboxes).map(cb => cb.value);
+        if (!nodeIds.length) { alert('Select at least one target node'); return; }
+
+        // Read live name from input in case user typed without saving first
+        const prodName = (document.getElementById('prod-name')?.value || '').trim() || _selectedProduct.name || '(unnamed)';
+        const modal = document.getElementById('deploy-modal');
+        const msg = document.getElementById('deploy-modal-msg');
+        const okBtn = document.getElementById('deploy-modal-ok');
+        if (!modal || !msg || !okBtn) return;
+
+        // Set modal content using textContent (safe, no XSS)
+        msg.textContent = 'Apply "' + prodName + '" to ' + nodeIds.length + ' node(s).\nConfig + schedule will be overwritten. This action will be logged.';
+        msg.style.whiteSpace = 'pre-line';
+        modal.style.display = 'flex';
+
+        okBtn.onclick = async () => {
+          modal.style.display = 'none';
+          await executeProductDeploy(prodName, nodeIds);
+        };
+      }
+
+      async function executeProductDeploy(productName, nodeIds) {
+        const resEl = document.getElementById('deploy-result');
+        if (resEl) { resEl.style.display = ''; resEl.textContent = 'Deploying…'; resEl.style.color = 'var(--accent)'; }
+
+        // Disable confirm button during deploy
+        const confirmBtn = document.getElementById('confirm-deploy-btn');
+        if (confirmBtn) { confirmBtn.disabled = true; confirmBtn.textContent = 'Deploying…'; }
+
+        try {
+          const safeName = productName.replace(/[^a-zA-Z0-9_\-]/g, '_');
+          const r = await fetch('/api/products/' + encodeURIComponent(safeName) + '/deploy', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ node_ids: nodeIds, transport: _selectedTransport, format: _selectedFormat })
+          });
+          const data = await r.json();
+
+          // Build result display using safe DOM
+          if (resEl) {
+            resEl.innerHTML = '';
+            const summary = document.createElement('span');
+            summary.style.fontWeight = '700';
+            summary.textContent = (data.ok || 0) + ' ok, ' + (data.fail || 0) + ' failed';
+            summary.style.color = (data.fail || 0) > 0 ? 'var(--warn)' : 'var(--ok)';
+            resEl.appendChild(summary);
+
+            (data.results || []).forEach(res => {
+              const row = document.createElement('div');
+              row.style.cssText = 'display:flex;gap:6px;align-items:center;margin-top:2px';
+              const dot = document.createElement('span');
+              dot.textContent = res.ok ? '●' : '✕';
+              dot.style.color = res.ok ? 'var(--ok)' : 'var(--err)';
+              const name = document.createElement('span');
+              name.textContent = res.node_id;
+              const err = document.createElement('span');
+              err.style.cssText = 'color:var(--text-dim);font-size:0.85em';
+              err.textContent = res.error || '';
+              row.appendChild(dot); row.appendChild(name);
+              if (res.error) row.appendChild(err);
+              resEl.appendChild(row);
+            });
+          }
+
+          // Log to audit
+          const nodeNames = nodeIds.join(', ');
+          logAudit('deploy', '"' + productName + '" → ' + nodeNames, data.ok || 0, data.fail || 0);
+        } catch(e) {
+          if (resEl) { resEl.textContent = 'Deploy error: ' + e.message; resEl.style.color = 'var(--err)'; }
+          logAudit('deploy', '"' + productName + '" FAILED: ' + e.message, 0, nodeIds.length);
+        } finally {
+          if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.textContent = '✓ Confirm Deploy'; }
+        }
+      }
+
+      // Product index panel in Admin (read-only list, stub for Phase 5)
+      function renderProductIndex(products) {
+        const el = document.getElementById('product-index-list');
+        if (!el) return;
+        el.innerHTML = '';
+        if (!products.length) {
+          const empty = document.createElement('div');
+          empty.style.cssText = 'padding:4px 10px;font-size:0.75em;color:var(--text-dim)';
+          empty.textContent = 'No product profiles';
+          el.appendChild(empty);
+          return;
+        }
+        products.forEach(f => {
+          const row = document.createElement('div');
+          row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:3px 10px;border-bottom:1px solid rgba(255,255,255,0.04);font-size:0.78em';
+          const name = document.createElement('span');
+          name.style.flex = '1';
+          name.style.fontWeight = '600';
+          name.textContent = f.name.replace(/^product_/,'').replace(/\.json$/,'').replace(/_/g,' ');
+          const editBtn = document.createElement('button');
+          editBtn.className = 'btn btn-sm btn-secondary';
+          editBtn.style.cssText = 'padding:1px 6px;font-size:0.72em';
+          editBtn.textContent = 'Edit';
+          editBtn.onclick = () => { showPage('deploy'); loadProductFile(f.name); };
+          row.appendChild(name); row.appendChild(editBtn);
+          el.appendChild(row);
+        });
+      }
+
+      // ════════════════════════════════════════════════════════════════════════════
+      // Deploy page — Sequences (formerly Test Bench)
       // ════════════════════════════════════════════════════════════════════════════
 
       async function loadSequences() {
@@ -2421,39 +2886,47 @@
       }
 
       function buildApcPanel(pins) {
-         const list = document.getElementById("apc-list");
-         // List of commonly toggled pins for APC
-         const APC_PINS = [
-           { p: 35, n: "LED" },
-           { p: 6, n: "RELAY2" },
-           { p: 7, n: "RELAY3" },
-           { p: 1, n: "GPIO1" },
-           { p: 2, n: "GPIO2" },
-           { p: 3, n: "GPIO3" },
-           { p: 4, n: "GPIO4" },
-           { p: 5, n: "GPIO5" }
-         ];
+        const list = document.getElementById("apc-list");
+        if (!list) return;
+        // List of commonly toggled pins for APC
+        const APC_PINS = [
+          { p: 35, n: "LED" },
+          { p: 6, n: "RL2" },
+          { p: 7, n: "RL3" },
+          { p: 1, n: "GPIO1" },
+          { p: 2, n: "GPIO2" },
+          { p: 3, n: "GPIO3" },
+          { p: 4, n: "GPIO4" },
+          { p: 5, n: "GPIO5" }
+        ];
 
-         const enabledSet = new Set();
-         if (pins) {
-           pins.forEach(p => enabledSet.add(p.p));
-         }
+        const enabledSet = new Set();
+        if (pins) pins.forEach(p => enabledSet.add(p.p));
 
-         list.innerHTML = APC_PINS.map(p => {
-           const isEnabled = enabledSet.has(p.p);
-           return `
-             <div class="flex-between p-2 border-b border-dim">
-                <div class="flex-col">
-                  <span class="text-sm text-accent">${p.n}</span>
-                  <span class="text-xs text-dim">pin ${p.p}</span>
-                </div>
-                <label class="switch">
-                  <input type="checkbox" ${isEnabled ? 'checked' : ''} onchange="updateApc(${p.p}, this.checked)">
-                  <span class="slider round"></span>
-                </label>
-             </div>
-           `;
-         }).join('');
+        list.innerHTML = '';
+        APC_PINS.forEach(p => {
+          const isEnabled = enabledSet.has(p.p);
+          // Render as gpio-chip style — click toggles enabled/disabled in APC
+          const chip = document.createElement('div');
+          chip.className = 'gpio-chip' + (isEnabled ? ' hi' : '');
+          chip.title = (isEnabled ? 'Enabled' : 'Disabled') + ' in status report — GPIO ' + p.p;
+          chip.dataset.pin = p.p;
+          chip.onclick = function() {
+            const nowEnabled = !chip.classList.contains('hi');
+            chip.classList.toggle('hi', nowEnabled);
+            chip.title = (nowEnabled ? 'Enabled' : 'Disabled') + ' in status report — GPIO ' + p.p;
+            updateApc(p.p, nowEnabled);
+          };
+          const dot = document.createElement('span');
+          dot.className = 'gpio-chip-dot';
+          const label = document.createElement('span');
+          label.textContent = p.n;
+          const sub = document.createElement('span');
+          sub.style.cssText = 'font-size:0.65em;opacity:0.5';
+          sub.textContent = 'p' + p.p;
+          chip.appendChild(dot); chip.appendChild(label); chip.appendChild(sub);
+          list.appendChild(chip);
+        });
       }
 
 
@@ -2851,7 +3324,7 @@
       // Init
       // ════════════════════════════════════════════════════════════════════════════
 
-      buildGpioPanel();
+      buildGpioChips(); // compact chip layout for FLEET panel
       wsConnect();
       loadSettings();
       setInterval(loadSchedule, 4000);

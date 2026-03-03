@@ -1200,6 +1200,144 @@ def build_app(
             })
         return JSONResponse({"ok": True, "sequence": name, "nodes": per_node_results})
 
+    # ── Product Profile Deploy ─────────────────────────────────────────────
+
+    @app.post("/api/products/{name}/deploy")
+    async def _product_deploy(name: str, body: dict) -> JSONResponse:
+        """Deploy a product profile (config + schedule) to N nodes in parallel.
+
+        Body: { node_ids: [...], transport: "http"|"ble"|"lora"|"mqtt", format: "J"|"C"|"K"|"B" }
+        Returns: { results: [{node_id, ok, error?}], ok: N, fail: M }
+        """
+        # Sanitise name — strip path traversal attempts
+        safe_name = name.replace("/", "_").replace("..", "_")
+        product_file = CONFIGS_DIR / f"product_{safe_name}.json"
+        if not product_file.exists():
+            # Also try without 'product_' prefix (in case caller already included it)
+            product_file = CONFIGS_DIR / f"{safe_name}.json"
+        if not product_file.exists():
+            return JSONResponse(
+                {"ok": False, "error": f"Product '{name}' not found"}, status_code=404
+            )
+
+        try:
+            product = json.loads(product_file.read_text())
+        except Exception as e:
+            return JSONResponse(
+                {"ok": False, "error": f"Product file invalid: {e}"}, status_code=500
+            )
+
+        node_ids: list = body.get("node_ids", [])
+        transport: str = body.get("transport", "http").lower()
+        fmt: str = body.get("format", "J").upper()
+
+        if not node_ids:
+            return JSONResponse({"ok": False, "error": "node_ids required"}, status_code=400)
+
+        # Stub non-HTTP/BLE transports — planned but require firmware/server additions
+        if transport not in ("http", "ble"):
+            stub_msg = {
+                "mqtt": "MQTT deploy: planned — requires server.py paho-mqtt client (MQTTManager)",
+                "lora": "LoRa relay deploy: planned — requires node-targeted routing in firmware",
+            }.get(transport, f"Transport '{transport}' not recognised")
+            return JSONResponse({
+                "ok": False, "error": stub_msg,
+                "results": [{"node_id": nid, "ok": False, "error": stub_msg} for nid in node_ids],
+                "ok_count": 0, "fail": len(node_ids),
+            })
+
+        # Stub non-JSON formats — firmware tp_mode output switching not yet active
+        if fmt != "J":
+            fmt_msg = f"Format '{fmt}' requires firmware TRANS support — only J (JSON) active today"
+            return JSONResponse({
+                "ok": False, "error": fmt_msg,
+                "results": [{"node_id": nid, "ok": False, "error": fmt_msg} for nid in node_ids],
+                "ok_count": 0, "fail": len(node_ids),
+            })
+
+        async def _deploy_to_node(node_id: str) -> dict:
+            """Push config + schedule from product profile to a single node."""
+            node = node_reg.get(node_id)
+            if not node:
+                return {"node_id": node_id, "ok": False, "error": "node not found"}
+            if not node.address:
+                return {
+                    "node_id": node_id, "node_name": node.name,
+                    "ok": False, "error": f"no HTTP address (type={node.type})",
+                }
+
+            errors: list[str] = []
+
+            # ── Step 1: Apply config file ──────────────────────────────────
+            config_file: str = product.get("config_file", "")
+            if config_file:
+                cfg_path = CONFIGS_DIR / config_file
+                if cfg_path.exists():
+                    try:
+                        cfg_data = json.loads(cfg_path.read_text())
+                        ok = await _proxy_post(node.address, "/api/config/apply", cfg_data)
+                        if not ok:
+                            errors.append(f"config apply failed ({config_file})")
+                    except Exception as e:
+                        errors.append(f"config error: {e}")
+                else:
+                    errors.append(f"config file '{config_file}' not found in configs/")
+
+            # ── Step 2: Apply schedule file ────────────────────────────────
+            schedule_file: str = product.get("schedule_file", "")
+            if schedule_file:
+                sched_path = CONFIGS_DIR / schedule_file
+                if sched_path.exists():
+                    try:
+                        sched_text = sched_path.read_text()
+                        sched_data = json.loads(sched_text)
+                        # Accept either a bare list or {"tasks": [...]}
+                        tasks = sched_data if isinstance(sched_data, list) else sched_data.get("tasks", [])
+                        # Clear existing tasks first
+                        await _send_cmd_to_ip(node.address, "SCHED CLEAR")
+                        await asyncio.sleep(0.05)
+                        for t in tasks:
+                            t_name = t.get("name", "task")
+                            t_type = t.get("type", "TOGGLE")
+                            pin = t.get("pin", 35)
+                            interval = t.get("interval", 10)
+                            duration = t.get("duration", 0)
+                            dur_part = f" {duration}" if duration else ""
+                            cmd = f"SCHED ADD {t_name} {t_type} {pin} {interval}{dur_part}"
+                            ok = await _send_cmd_to_ip(node.address, cmd)
+                            if not ok:
+                                errors.append(f"sched task '{t_name}' failed")
+                            await asyncio.sleep(0.1)
+                        await _send_cmd_to_ip(node.address, "SCHED SAVE")
+                    except Exception as e:
+                        errors.append(f"schedule error: {e}")
+                else:
+                    errors.append(f"schedule file '{schedule_file}' not found in configs/")
+
+            node_ok = len(errors) == 0
+            result: dict = {"node_id": node_id, "node_name": node.name, "ok": node_ok}
+            if errors:
+                result["error"] = "; ".join(errors)
+            return result
+
+        # ── Dispatch ALL nodes simultaneously — no sequential blocking ─────
+        raw_results = await asyncio.gather(
+            *[_deploy_to_node(nid) for nid in node_ids],
+            return_exceptions=True,
+        )
+
+        # Normalise any unexpected exceptions bubbled from gather
+        results: list[dict] = []
+        for r in raw_results:
+            if isinstance(r, Exception):
+                results.append({"ok": False, "error": str(r)})
+            else:
+                results.append(r)
+
+        ok_count = sum(1 for r in results if r.get("ok"))
+        fail_count = len(results) - ok_count
+        return JSONResponse({"results": results, "ok": ok_count, "fail": fail_count})
+
     # ── Config files ──────────────────────────────────────────────────────
 
     @app.get("/api/files")
