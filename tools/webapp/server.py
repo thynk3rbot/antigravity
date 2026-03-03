@@ -1175,8 +1175,30 @@ def build_app(
     @app.post("/api/device/config/apply")
     async def _device_config_apply(body: dict) -> PlainTextResponse:
         # body is the full JSON config
-        ok = await _proxy_post(_effective_ip(), "/api/config/apply", body)
-        return PlainTextResponse("OK" if ok else "ERR", status_code=200 if ok else 502)
+        ip = _effective_ip()
+
+        # Try HTTP first (device proxy)
+        ok = await _proxy_post(ip, "/api/config/apply", body)
+        if ok:
+            return PlainTextResponse("OK", status_code=200)
+
+        # HTTP failed — provide helpful feedback about available transports
+        transports_available = []
+        if _transport:
+            if state.ble_ok or (len(_transport._peers) > 0):
+                transports_available.append("BLE")
+            if state.serial_ok:
+                transports_available.append("Serial")
+            if state.espnow_ok:
+                transports_available.append("ESP-NOW")
+
+        msg = f"Device not reachable via HTTP at {ip}."
+        if transports_available:
+            msg += f" Available transports: {', '.join(transports_available)}. Use command console to apply config."
+        else:
+            msg += " No alternative transports available. Make sure device is powered and in range."
+
+        return PlainTextResponse(msg, status_code=502)
 
     @app.get("/api/device/files")
     async def _device_files_list() -> JSONResponse:
