@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Contact — LoRaLink</title>
+  <link rel="stylesheet" href="/static/css/site.css">
+</head>
+<body>
+
+<nav>
+  <a class="logo" href="/">
+    <img src="/static/media/logo.png" alt="LoRaLink">
+    <span>LoRaLink</span>
+  </a>
+  <a href="/features">Features</a>
+  <a href="/dashboard">Dashboard</a>
+  <a href="/docs">Docs</a>
+  <a href="/contact" class="nav-cta">Get in Touch</a>
+</nav>
+
+<div class="hero" style="padding:4rem 2rem 2rem;">
+  <h1>Get in <span>Touch</span></h1>
+  <p>Interested in LoRaLink? Tell us about your project and we'll be in touch.</p>
+</div>
+
+<section>
+  <div class="container" style="max-width:560px;">
+    <div class="card">
+      <form id="contact-form">
+        <div class="form-group">
+          <label for="name">Name *</label>
+          <input type="text" id="name" name="name" placeholder="Your name" required>
+        </div>
+        <div class="form-group">
+          <label for="email">Email *</label>
+          <input type="email" id="email" name="email" placeholder="you@example.com" required>
+        </div>
+        <div class="form-group">
+          <label for="company">Company</label>
+          <input type="text" id="company" name="company" placeholder="Optional">
+        </div>
+        <div class="form-group">
+          <label for="message">Message</label>
+          <textarea id="message" name="message" placeholder="Tell us about your use case…"></textarea>
+        </div>
+        <button type="submit" class="btn" style="width:100%;cursor:pointer;border:none;">Send Message</button>
+        <p id="msg" style="margin-top:.75rem;font-size:.9rem;min-height:1.2em;"></p>
+      </form>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <p>&copy; 2026 LoRaLink. All rights reserved. &nbsp;|&nbsp; <a href="/docs">Documentation</a> &nbsp;|&nbsp; <a href="/contact">Contact</a></p>
+</footer>
+
+<script>
+  document.getElementById('contact-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const msgEl = document.getElementById('msg');
+    msgEl.style.color = 'var(--text-dim)';
+    msgEl.textContent = 'Sending…';
+
+    const payload = {
+      name: document.getElementById('name').value.trim(),
+      email: document.getElementById('email').value.trim(),
+      company: document.getElementById('company').value.trim() || null,
+      message: document.getElementById('message').value.trim() || null,
+    };
+
+    try {
+      const r = await fetch('/api/contact', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload),
+      });
+      if (r.ok) {
+        msgEl.style.color = 'var(--ok)';
+        msgEl.textContent = 'Submitted! We will be in touch.';
+        document.getElementById('contact-form').reset();
+      } else {
+        msgEl.style.color = 'var(--err)';
+        msgEl.textContent = 'Error — please try again.';
+      }
+    } catch {
+      msgEl.style.color = 'var(--err)';
+      msgEl.textContent = 'Network error — please try again.';
+    }
+  });
+</script>
+
+</body>
+</html>
