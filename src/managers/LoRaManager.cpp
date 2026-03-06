@@ -1,10 +1,10 @@
 #include "LoRaManager.h"
 #include "../utils/DebugMacros.h"
 #include "MQTTManager.h"
+#include "PerformanceManager.h"
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <SPI.h>
-
 
 // ISR Trampoline
 LoRaManager *_loraInstance = NULL;
@@ -128,6 +128,12 @@ void LoRaManager::SendLoRa(const String &text) {
   txPacket.checksum = calculateChecksum(&txPacket);
   encryptPacket(&txPacket, encBuf, currentKey);
   radio->transmit(encBuf, ENCRYPTED_PACKET_SIZE);
+
+  // Track Time on Air (approximate based on byte count, SF, BW etc. or using
+  // radiolib's built in getTimeOnAir)
+  unsigned long toa = radio->getTimeOnAir(ENCRYPTED_PACKET_SIZE) / 1000;
+  PerformanceManager::getInstance().addTimeOnAir(toa);
+
   receivedFlag = false;
   radio->setPacketReceivedAction(setFlag);
   radio->startReceive();
@@ -294,7 +300,7 @@ void LoRaManager::ProcessPacket(uint8_t *rxEncBuf, int size) {
 
     if (!isForMeTarget || isForAll) {
       if (rxPacket.ttl > 0) {
-        int jitter = random(200, 1000);
+        int jitter = random(150, 500);
         LOG_PRINTF("RPTR: Propagation delay %d ms...\n", jitter);
         delay(jitter);
         rxPacket.ttl--;
@@ -337,9 +343,37 @@ void LoRaManager::SendHeartbeat() {
   doc["u"] = millis() / 1000;
   doc["h"] = 0; // hop count: originated here
 
+  PerformanceManager &perf = PerformanceManager::getInstance();
+
   float batVal = analogRead(PIN_BAT_ADC) / 4095.0 * 3.3 * 2.0;
+  String rstReason = String(perf.getResetReason());
+
+  // Dirty-flag suppression: skip TX if state hasn't changed meaningfully
+  bool batChanged = fabs(batVal - _lastHBBat) > 0.05f;
+  bool rstChanged = (rstReason != _lastHBRst);
+  bool forceTX    = (_hbSkipCount >= HB_FORCE_INTERVAL);
+
+  if (!batChanged && !rstChanged && !forceTX) {
+    _hbSkipCount++;
+    LOG_PRINTF("LORA: HB suppressed (skip %d/%d, bat=%.2f)\n",
+               _hbSkipCount, HB_FORCE_INTERVAL, batVal);
+    return;
+  }
+
+  // State changed or forced — update references and transmit
+  _lastHBBat   = batVal;
+  _lastHBRst   = rstReason;
+  _hbSkipCount = 0;
+
   doc["b"] = round(batVal * 100.0) / 100.0;
   doc["r"] = 0;
+  doc["l_avg"] = perf.getLoopAvgMs();
+  doc["l_max"] = perf.getLoopMaxMs();
+  doc["toa"] = perf.getTimeOnAir();
+  doc["rst"] = perf.getResetReason();
+  if (perf.isConfiguratorAttached()) {
+    doc["cfg"] = 1;
+  }
 
   String json;
   serializeJson(doc, json);

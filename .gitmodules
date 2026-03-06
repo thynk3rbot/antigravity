@@ -1,0 +1,3 @@
+[submodule "tools/emqx"]
+	path = tools/emqx
+	url = https://github.com/emqx/emqx.git

@@ -55,6 +55,12 @@ private:
   static const int MAX_PENDING_ACKS = 5;
   PendingAck ackQueue[MAX_PENDING_ACKS];
 
+  // Dirty-flag heartbeat suppression — skip TX when state hasn't changed
+  float _lastHBBat = -1.0f;   // Last transmitted battery voltage
+  String _lastHBRst;           // Last transmitted reset reason
+  uint8_t _hbSkipCount = 0;    // Consecutive skips since last forced TX
+  static const uint8_t HB_FORCE_INTERVAL = 12; // Force TX every N skips (~60 min at 300s)
+
   uint32_t seenMsgHashes[HASH_BUFFER_SIZE];
   int hashIndex;
   uint8_t encBuf[ENCRYPTED_PACKET_SIZE];
