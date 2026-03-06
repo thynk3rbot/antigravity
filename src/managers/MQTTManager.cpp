@@ -4,7 +4,6 @@
 #include "DataManager.h"
 #include <ArduinoJson.h>
 
-
 MQTTManager::MQTTManager() : client(wifiClient) { lastReconnectAttempt = 0; }
 
 void mqttCallback(char *topic, byte *payload, unsigned int length) {
@@ -40,19 +39,31 @@ bool MQTTManager::reconnect() {
     return false;
 
   String clientId = "LoRaLink_" + data.myId;
+  String statusTopic = "loralink/status/" + data.myId;
   bool result;
 
+  // LWT: Set Last Will to report "OFFLINE" if we disconnect unexpectedly
   if (data.mqttUser.length() > 0) {
     result = client.connect(clientId.c_str(), data.mqttUser.c_str(),
-                            data.mqttPass.c_str());
+                            data.mqttPass.c_str(), statusTopic.c_str(), 0, true,
+                            "OFFLINE");
   } else {
-    result = client.connect(clientId.c_str());
+    result = client.connect(clientId.c_str(), statusTopic.c_str(), 0, true,
+                            "OFFLINE");
   }
 
   if (result) {
-    LOG_PRINTLN("MQTT: Connected");
+    LOG_PRINTLN("MQTT: Connected to " + data.mqttServer);
+
+    // Publish "ONLINE" status immediately upon connection
+    client.publish(statusTopic.c_str(), "ONLINE", true);
+
+    // Subscribe to individual and global command topics
     String cmdTopic = "loralink/cmd/" + data.myId;
     client.subscribe(cmdTopic.c_str());
+    client.subscribe("loralink/cmd/all");
+
+    LOG_PRINTLN("MQTT: Subscribed to control topics");
     return true;
   }
   return false;
@@ -112,4 +123,18 @@ void MQTTManager::publishMessage(const String &nodeId, int rssi,
 
   String topic = "loralink/msg/" + nodeId;
   client.publish(topic.c_str(), json.c_str());
+}
+
+void MQTTManager::publishTrace(const String &nodeId, const String &msg) {
+  if (!client.connected())
+    return;
+
+  String topic = "loralink/trace/" + nodeId;
+  client.publish(topic.c_str(), msg.c_str());
+}
+
+void MQTTManager::publish(const String &topic, const String &payload) {
+  if (!client.connected())
+    return;
+  client.publish(topic.c_str(), payload.c_str());
 }

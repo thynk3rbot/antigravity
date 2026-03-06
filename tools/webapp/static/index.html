@@ -252,20 +252,13 @@
 
       /* Fleet Dashboard Layout */
       .fleet-dashboard-mesh {
-        display: grid;
-        grid-template-columns: 1fr 480px;
-        grid-template-rows: 1fr 340px;
-        gap: 8px;
+        position: relative;
         height: calc(100vh - 120px);
         padding: 8px;
         background: #050505;
       }
       .dashboard-cell {
-        background: var(--bg-card);
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        overflow: hidden;
-        position: relative;
+        display: none;  /* Hidden - WinBox windows position over the parent container */
       }
       .cell-wide {
         grid-row: span 1;
@@ -935,7 +928,13 @@
       .dbg-toggle .dot { width: 6px; height: 6px; border-radius: 50%; background: #444; }
       .dbg-toggle.active .dot { background: #00f2ff; box-shadow: 0 0 8px #00f2ff; }
 
+      /* ── Read-only access gate ─────────────────────────────────────────── */
+      body.readonly .write-only { display: none !important; }
+      body.readonly .btn:not(.btn-safe):not(.btn-secondary) { pointer-events: none; opacity: 0.45; }
+      body.readonly input, body.readonly select, body.readonly textarea { pointer-events: none; opacity: 0.6; }
+
 </style>
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
   </head>
   <body>
     <!-- ── Header ────────────────────────────────────────────────────────────── -->
@@ -950,17 +949,6 @@
           <span class="tp unk" id="tp-ble-a" title="Peer A BLE">A ●</span>
           <span class="tp unk" id="tp-ble-b" title="Peer B BLE">B ●</span>
           <span class="tp unk" id="tp-http" title="HTTP transport">HTTP ●</span>
-          <select
-            id="xport-sel"
-            title="Transport strategy"
-            onchange="setTransport(this.value)"
-          >
-            <option value="http_first">HTTP-first</option>
-            <option value="ble_only">BLE only</option>
-            <option value="readwrite_split">R/W split</option>
-            <option value="immediate_fallback">Immediate fallback</option>
-            <option value="roundrobin">Round-robin</option>
-          </select>
           <select
             id="tp-mode-sel"
             title="Transport Mnemonic (J=JSON, C=CSV, K=KV, B=BIN)"
@@ -1013,11 +1001,11 @@
     <!-- ── Top nav ───────────────────────────────────────────────────────────── -->
     <nav class="page-nav">
       <a class="nav-link active" onclick="showPage('fleet')">📡 Fleet</a>
-      <a class="nav-link" onclick="showPage('network')">🌐 Network</a>
+      <a class="nav-link" onclick="showPage('nodes')">🌐 Nodes</a>
+      <a class="nav-link" onclick="showPage('schedules')">📅 Schedules</a>
       <a class="nav-link" onclick="showPage('deploy')">🚀 Deploy</a>
       <a class="nav-link" onclick="showPage('hardware')">🛠️ Hardware</a>
-      <a class="nav-link" onclick="showPage('admin')">🛡️ Admin</a>
-      <a class="nav-link" onclick="showPage('swarm')">🦂 Swarm</a>
+      <a class="nav-link" onclick="showPage('config')">⚙️ Config</a>
       <a class="nav-link" onclick="showPage('analysis')">🧪 Analysis</a>
       <div class="override-btns">
         <button
@@ -1210,7 +1198,7 @@
     </div>
 
     <!-- ── Page: Network (Topology + Node Registry) ────────────────────────── -->
-    <div class="page" id="pg-network">
+    <div class="page" id="pg-nodes">
       <div class="network-layout">
         <!-- Left: Topology graph -->
         <div class="flex-col" style="min-width: 0">
@@ -1439,6 +1427,33 @@
           </div>
         </div>
       </div>
+
+        <!-- ── MQTT Node Monitor ───────────────────────────────────────────── -->
+        <div class="panel" style="margin:8px 0 0 0">
+          <div class="panel-title flex-between">
+            <div style="display:flex;align-items:center;gap:8px">
+              <span class="dbg-id">FA-P-MQTT</span>
+              <span>MQTT Swarm Nodes</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <span id="mqtt-broker-dot" style="width:8px;height:8px;border-radius:50%;background:var(--err);display:inline-block;box-shadow:0 0 6px var(--err)"></span>
+              <span id="mqtt-broker-label" style="font-size:0.75em;color:var(--text-dim)">Broker: disconnected</span>
+              <button class="btn btn-sm btn-secondary write-only" onclick="mqttBroadcastPrompt()" style="font-size:0.72em;padding:2px 8px">📡 Broadcast</button>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;padding:8px;flex-wrap:wrap;min-height:80px" id="mqtt-node-grid">
+            <div data-placeholder style="color:var(--text-dim);font-size:0.8em;padding:20px;width:100%;text-align:center">Waiting for MQTT nodes…</div>
+          </div>
+        </div>
+
+        <!-- ── MQTT Live Log ─────────────────────────────────────────────────── -->
+        <div class="panel" style="margin:8px 0 0 0;max-height:200px">
+          <div class="panel-title flex-between">
+            <span>MQTT Live Log</span>
+            <button class="btn btn-sm btn-secondary" onclick="document.getElementById('mqtt-log').innerHTML=''" style="font-size:0.72em;padding:2px 6px">✕ Clear</button>
+          </div>
+          <div id="mqtt-log" style="flex:1;overflow-y:auto;font-family:monospace;font-size:0.78em;padding:6px 10px;max-height:150px"></div>
+        </div>
     </div>
 
     <!-- ── Page: Deploy (Product Burn-in + Sequences + Audit) ──────────────── -->
@@ -2007,7 +2022,7 @@
     </div>
 
     <!-- ── Page: Admin (Device Config + Files + Pin Map + APC) ──────────────── -->
-    <div class="page" id="pg-admin">
+    <div class="page" id="pg-config">
       <div class="main">
         <!-- Board Variant + LoRa Summary Bar -->
         <div class="panel" style="padding: 0; overflow: hidden">
@@ -2324,12 +2339,160 @@
       </div>
     </div>
 
-    <!-- ── Page: Swarm (MQTT Telemetry Dashboard) ──────────────────────────── -->
-    <div class="page" id="pg-swarm" style="height:100%;display:none;flex-direction:column;">
-      <iframe id="swarm-frame" src="/static/mqtt_dashboard.html"
-        style="flex:1;border:none;width:100%;height:100%;background:#0f0f1a;"
-        title="Swarm MQTT Dashboard">
-      </iframe>
+    <!-- ── Page: Schedules ──────────────────────────────────────────────────── -->
+    <div class="page" id="pg-schedules">
+      <div class="main" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:12px">
+
+        <!-- LANE 1: Timer Tasks -->
+        <div class="panel">
+          <div class="panel-title flex-between">
+            <div style="display:flex;align-items:center;gap:8px">
+              <span class="dbg-id">FA-S-01</span>
+              <span>⏱ Timer Tasks</span>
+            </div>
+            <span style="font-size:0.72em;color:var(--text-dim)" id="sched-slot-count">0 / 5 slots</span>
+          </div>
+
+          <!-- Wizard steps -->
+          <div style="padding:12px;display:flex;flex-direction:column;gap:10px">
+            <div style="font-size:0.72em;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:2px">① Target</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <select id="sched-node" class="input-styled" style="flex:1;min-width:120px">
+                <option value="">— Node —</option>
+              </select>
+              <select id="sched-pin" class="input-styled" style="flex:1;min-width:100px">
+                <option value="">— Pin —</option>
+                <option value="5">Pin 5 (110V)</option>
+                <option value="6">Pin 6 (12V-2)</option>
+                <option value="7">Pin 7 (12V-3)</option>
+              </select>
+            </div>
+
+            <div style="font-size:0.72em;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px">② Type</div>
+            <div style="display:flex;gap:8px">
+              <label style="display:flex;align-items:center;gap:6px;font-size:0.82em;cursor:pointer">
+                <input type="radio" name="sched-type" value="TOGGLE" checked /> TOGGLE (on/off cycle)
+              </label>
+              <label style="display:flex;align-items:center;gap:6px;font-size:0.82em;cursor:pointer">
+                <input type="radio" name="sched-type" value="PULSE" /> PULSE (brief fire)
+              </label>
+            </div>
+
+            <div style="font-size:0.72em;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px">③ Timing</div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <label style="font-size:0.8em;white-space:nowrap">Interval (s)
+                <input type="number" id="sched-interval" class="input-styled" value="30" min="1" max="86400" style="width:80px;margin-left:4px" />
+              </label>
+              <label style="font-size:0.8em;white-space:nowrap" id="sched-dur-label">Duration (ms)
+                <input type="number" id="sched-duration" class="input-styled" value="500" min="50" max="30000" style="width:80px;margin-left:4px" />
+              </label>
+            </div>
+
+            <!-- Best-practice guards (computed inline) -->
+            <div id="sched-guard-box" style="background:rgba(255,170,0,0.07);border:1px solid rgba(255,170,0,0.2);border-radius:6px;padding:8px 10px;font-size:0.76em;display:none">
+              <span id="sched-guard-msg" style="color:var(--warn)"></span>
+            </div>
+
+            <div style="font-size:0.72em;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px">④ Review</div>
+            <div id="sched-preview" style="font-family:monospace;font-size:0.8em;color:var(--accent);background:rgba(0,212,255,0.04);border-radius:6px;padding:8px 10px;border:1px solid var(--border)">
+              Fill in fields above to preview the command
+            </div>
+
+            <button class="btn btn-sm write-only" id="sched-commit-btn" onclick="schedCommit()" style="align-self:flex-start" disabled>
+              Push to Device
+            </button>
+          </div>
+
+          <!-- Active timer slots -->
+          <div style="border-top:1px solid var(--border);padding:8px 12px">
+            <div style="font-size:0.68em;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Active Timer Slots</div>
+            <div id="sched-active-list" style="font-size:0.78em;color:var(--text-dim)">Loading…</div>
+          </div>
+        </div>
+
+        <!-- LANE 2: Interrupt / Rule Tasks -->
+        <div class="panel">
+          <div class="panel-title flex-between">
+            <div style="display:flex;align-items:center;gap:8px">
+              <span class="dbg-id">FA-S-02</span>
+              <span>⚡ Interrupt Rules</span>
+            </div>
+            <span style="font-size:0.72em;color:var(--text-dim)" id="rule-count">0 / 8 rules</span>
+          </div>
+
+          <div style="padding:12px;display:flex;flex-direction:column;gap:10px">
+            <div style="font-size:0.72em;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px">① Trigger</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <select id="rule-source" class="input-styled" style="flex:1" onchange="onRuleSourceChange()">
+                <option value="PIN">GPIO Pin state</option>
+                <option value="BAT">Battery threshold</option>
+                <option value="LORA">LoRa message match</option>
+                <option value="RSSI">RSSI threshold</option>
+                <option value="TIMER">One-shot timer</option>
+              </select>
+              <select id="rule-edge" class="input-styled" style="flex:1">
+                <option value="RISING">Rising edge (LOW→HIGH)</option>
+                <option value="FALLING">Falling edge (HIGH→LOW)</option>
+                <option value="HIGH">Stays HIGH</option>
+                <option value="LOW">Stays LOW</option>
+                <option value="BELOW">Below threshold</option>
+                <option value="ABOVE">Above threshold</option>
+                <option value="MATCH">Pattern match</option>
+              </select>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center">
+              <label style="font-size:0.8em;flex:1">Trigger arg (pin#, voltage, ms, pattern)
+                <input type="text" id="rule-trigger-arg" class="input-styled" placeholder="e.g. 38  or  3.4  or  PING" style="width:100%;margin-top:3px" />
+              </label>
+              <label style="font-size:0.8em">Debounce (ms)
+                <input type="number" id="rule-debounce" class="input-styled" value="50" min="0" max="5000" style="width:75px;margin-top:3px" />
+              </label>
+            </div>
+
+            <div style="font-size:0.72em;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px">② Filter</div>
+            <div style="display:flex;gap:16px;align-items:center">
+              <label style="display:flex;align-items:center;gap:6px;font-size:0.82em;cursor:pointer">
+                <input type="checkbox" id="rule-oneshot" /> One-shot (auto-remove after fire)
+              </label>
+              <label style="font-size:0.8em">Cooldown (s)
+                <input type="number" id="rule-cooldown" class="input-styled" value="0" min="0" max="3600" style="width:60px;margin-left:4px" />
+              </label>
+            </div>
+
+            <div style="font-size:0.72em;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px">③ Action</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <select id="rule-action" class="input-styled" style="flex:1">
+                <option value="SET_PIN">Set pin HIGH/LOW</option>
+                <option value="CMD">Send command</option>
+                <option value="LORA_TX">LoRa TX alert</option>
+                <option value="SLEEP">Enter sleep</option>
+                <option value="LOG">Log only</option>
+              </select>
+              <input type="text" id="rule-action-arg" class="input-styled" placeholder="e.g. PIN_6=HIGH  or  RESTART" style="flex:2" />
+            </div>
+
+            <!-- Best-practice guards -->
+            <div id="rule-guard-box" style="background:rgba(255,170,0,0.07);border:1px solid rgba(255,170,0,0.2);border-radius:6px;padding:8px 10px;font-size:0.76em;display:none">
+              <span id="rule-guard-msg" style="color:var(--warn)"></span>
+            </div>
+
+            <div style="font-size:0.72em;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px">④ Review</div>
+            <div id="rule-preview" style="font-family:monospace;font-size:0.8em;color:var(--accent);background:rgba(0,212,255,0.04);border-radius:6px;padding:8px 10px;border:1px solid var(--border)">
+              Configure trigger + action above
+            </div>
+
+            <button class="btn btn-sm write-only" id="rule-commit-btn" onclick="ruleCommit()" style="align-self:flex-start" disabled>
+              Push Rule to Device
+            </button>
+          </div>
+
+          <!-- Active rules list -->
+          <div style="border-top:1px solid var(--border);padding:8px 12px">
+            <div style="font-size:0.68em;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Active Rules</div>
+            <div id="rule-active-list" style="font-size:0.78em;color:var(--text-dim)">No rules configured</div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- ── Page: Analysis (Multi-Device Trace Verification) ────────────────── -->
@@ -3013,10 +3176,11 @@
         };
 
         ws.onopen = () => {
-          document.getElementById("last-update").textContent = "connected";
+          const updateEl = document.getElementById("last-update");
+          if (updateEl) updateEl.textContent = "connected";
           pollTransport();
-          startFieldMonitor(); // Dashboard always shows Mesh Field — start immediately
-          loadBoardVisual("heltec_v3");
+          if (typeof startFieldMonitor === 'function') startFieldMonitor(); // Dashboard always shows Mesh Field — start immediately
+          if (typeof loadBoardVisual === 'function') loadBoardVisual("heltec_v3");
         };
 
         ws.onclose = () => {
@@ -3046,10 +3210,12 @@
         document.getElementById("fwv").textContent = d.version
           ? `v${d.version}`
           : "";
-        document.getElementById("dev-id").textContent = id;
+        const devIdEl = document.getElementById("dev-id");
+        if (devIdEl) devIdEl.textContent = id;
 
         // Interface badges
-        document.getElementById("ifc").innerHTML =
+        const ifcEl = document.getElementById("ifc");
+        if (ifcEl) ifcEl.innerHTML =
           badge("LoRa", d.lora) +
           badge("BLE", d.ble) +
           badge("WiFi", d.wifi) +
@@ -3076,14 +3242,19 @@
         const lMax = d.l_max || 0;
         setVal("c-loop", lAvg ? `${lAvg}ms` : "—", lAvg > 100 ? "warn" : "");
         setText("c-reset", d.reset || "—");
-        if (d.reset && d.reset.toLowerCase().includes("crash")) {
-          document.getElementById("c-reset").style.color = "var(--err)";
-        } else {
-          document.getElementById("c-reset").style.color = "";
+        const cResetEl = document.getElementById("c-reset");
+        if (cResetEl) {
+          if (d.reset && d.reset.toLowerCase().includes("crash")) {
+            cResetEl.style.color = "var(--err)";
+          } else {
+            cResetEl.style.color = "";
+          }
         }
         const lc = document.getElementById("c-last-cmd");
-        lc.textContent = d.last_cmd || "—";
-        lc.title = d.last_cmd || "";
+        if (lc) {
+          lc.textContent = d.last_cmd || "—";
+          lc.title = d.last_cmd || "";
+        }
 
         // GPIO bitmap (48-bit hex bitmask from status.gp)
         renderBitmap(d.gp || "0");
@@ -3127,8 +3298,8 @@
 
         // Live-update topology if the Network tab is active
         if (
-          document.getElementById("pg-network") &&
-          document.getElementById("pg-network").classList.contains("active")
+          document.getElementById("pg-nodes") &&
+          document.getElementById("pg-nodes").classList.contains("active")
         ) {
           buildTopoGraph(d);
         }
@@ -4075,7 +4246,7 @@
             html: this.content,
             oncreate: function() {
               const wb = this;
-              const wbElem = this.dom;
+              const wbElem = this.g;
 
               const updateId = () => {
                 const titleBar = wbElem.querySelector(".wb-title");
@@ -4115,7 +4286,11 @@
           });
 
           if (this.winbox && container) {
-            this.winbox.maximize();
+            // Don't maximize - let WinBox fill its grid container naturally
+            // this.winbox.maximize();
+            // Position the window to fill its container
+            const rect = container.getBoundingClientRect();
+            this.winbox.resize(rect.width, rect.height).move(0, 0);
           }
         }
 
@@ -4158,9 +4333,12 @@
 
 
       // Initial state
-      if (localStorage.getItem("debugMode") === "1") {
-        toggleDebugMode(true);
-      }
+      // DEBUG: Temporarily disabled to fix overlay issue
+      // if (localStorage.getItem("debugMode") === "1") {
+      //   toggleDebugMode(true);
+      // }
+      // Force debug mode off on load
+      toggleDebugMode(false);
 
       async function sendRaw(cmd) {
         try {
@@ -4417,6 +4595,7 @@
 
       function logConsole(type, msg) {
         const log = document.getElementById("console-log");
+        if (!log) return;
         const ts = new Date().toLocaleTimeString();
         const cls =
           type === "tx" ? "src-tx" : type === "err" ? "src-err" : "src-rx";
@@ -4562,19 +4741,23 @@
             l.classList.add("active");
         });
         // Lazy-load page data
-        if (name === "network") {
+        if (name === "nodes") {
           loadNodes();
           loadBleDevices();
           buildTopoGraph(lastStatus);
+          initMqttSwarm();
+        }
+        if (name === "schedules") {
+          refreshScheduleSlots();
         }
         if (name === "deploy") {
           loadSequences();
           loadProducts();
           renderAuditLog();
         }
-        if (name === "admin") {
+        if (name === "config") {
           loadFiles();
-          loadProducts(); // refresh product index in Admin
+          loadProducts();
         }
         if (name === "analysis") {
           refreshAnalysisDevices();
@@ -4582,11 +4765,6 @@
         }
         if (name === "fleet") {
           initFleetWidgets();
-        }
-        // Swarm uses an iframe — ensure it's visible (page CSS uses display:none default)
-        if (name === "swarm") {
-          const sf = document.getElementById("pg-swarm");
-          if (sf) sf.style.display = "flex";
         }
       }
 
@@ -4716,7 +4894,7 @@
 
             if (pgFleetActive()) {
                 if (rosterWidget && rosterWidget.isReady) updateRoster(d);
-                if (ctrlWidget && ctrlWidget.isReady) refreshGpios(d);
+                if (ctrlWidget && ctrlWidget.isReady && typeof refreshGpios === 'function') refreshGpios(d);
             }
         }
       });
@@ -7360,10 +7538,10 @@
         if (e.key === "Escape" && _paletteOpen) _closePalette();
       });
 
-      buildPinMap();
-      loadDeviceCustomizations();
-      refreshConfigSettings();
-      loadGoldenImage();
+      // buildPinMap();  // TODO: Implement pin configuration UI
+      // loadDeviceCustomizations();  // TODO: Implement device customization
+      // refreshConfigSettings();  // TODO: Implement config settings
+      // loadGoldenImage();  // TODO: Implement golden image support
     </script>
 
     <!-- ── Pin Config Modal ────────────────────────────────────────────────── -->
@@ -7843,17 +8021,227 @@
         }
       };
 
+      // ── Access Level Gate ─────────────────────────────────────────────────
+      // Simple URL flag now; hook: swap for bearer token / session check later.
+      window.ACCESS_LEVEL = new URLSearchParams(location.search).get('mode') === 'ro'
+        ? 'readonly' : 'admin';
+      if (window.ACCESS_LEVEL === 'readonly') {
+        document.body.classList.add('readonly');
+        console.log('[ACCESS] Read-only mode active');
+      }
+
       // Initialize Map
       buildPinMap();
       showPage("fleet");
 
-      // Periodic BLE discovery polling (every 5s if on network page)
+      // Periodic BLE discovery polling (every 5s if on nodes page)
       setInterval(() => {
-        const pg = document.getElementById("pg-network");
+        const pg = document.getElementById("pg-nodes");
         if (pg && pg.classList.contains("active")) {
           loadBleDevices();
         }
       }, 5000);
+
+      // ════════════════════════════════════════════════════════════════════════
+      // MQTT SWARM — Node Monitor (Nodes page)
+      // Connects to EMQX broker via WebSocket. Subscribe-only in readonly mode.
+      // ════════════════════════════════════════════════════════════════════════
+      let _mqttClient = null;
+      const _mqttNodes = new Map();
+
+      function initMqttSwarm() {
+        if (_mqttClient) return; // already connected
+        const host = window.location.hostname || 'localhost';
+        const url = `ws://${host}:8083/mqtt`;
+        try {
+          _mqttClient = mqtt.connect(url, { connectTimeout: 5000 });
+        } catch(e) {
+          mqttLog('System', 'mqtt.js not loaded — check CDN', 'err');
+          return;
+        }
+        _mqttClient.on('connect', () => {
+          const dot = document.getElementById('mqtt-broker-dot');
+          const lbl = document.getElementById('mqtt-broker-label');
+          if (dot) { dot.style.background='var(--ok)'; dot.style.boxShadow='0 0 6px var(--ok)'; }
+          if (lbl) lbl.textContent = `Broker: ${host}:8083`;
+          _mqttClient.subscribe('loralink/telemetry/#');
+          _mqttClient.subscribe('loralink/msg/#');
+          _mqttClient.subscribe('loralink/status/#');
+          mqttLog('System', 'Connected to EMQX broker', 'ok');
+        });
+        _mqttClient.on('error', (e) => {
+          mqttLog('System', 'Broker error: ' + e.message, 'err');
+        });
+        _mqttClient.on('message', (topic, payload) => {
+          const msg = payload.toString();
+          const parts = topic.split('/');
+          const type = parts[1], id = parts[2];
+          if (type === 'telemetry') {
+            try {
+              const d = JSON.parse(msg);
+              mqttUpdateNode(id, { battery: (d.battery||0).toFixed(2)+'V', rssi: (d.rssi||0)+' dBm', hops: d.hops||0, lastSeen: new Date().toLocaleTimeString() });
+              mqttLog(id, `bat=${d.battery?.toFixed(2)}V rssi=${d.rssi}`, 'telem');
+            } catch(e) {}
+          } else if (type === 'status') {
+            mqttUpdateNode(id, { status: msg });
+            mqttLog(id, `status → ${msg}`, 'status');
+          } else if (type === 'msg') {
+            mqttLog(id, msg, 'msg');
+          }
+        });
+      }
+
+      function mqttUpdateNode(id, data) {
+        if (!_mqttNodes.has(id)) {
+          _mqttNodes.set(id, { id, status:'ONLINE', battery:'—', rssi:'—', hops:0, lastSeen:'—' });
+        }
+        Object.assign(_mqttNodes.get(id), data);
+        mqttRenderNode(_mqttNodes.get(id));
+      }
+
+      function mqttRenderNode(node) {
+        const grid = document.getElementById('mqtt-node-grid');
+        if (!grid) return;
+        let card = document.getElementById(`mqtt-node-${node.id}`);
+        if (!card) {
+          // Clear placeholder text on first real node
+          if (grid.querySelector('[data-placeholder]')) grid.innerHTML = '';
+          card = document.createElement('div');
+          card.id = `mqtt-node-${node.id}`;
+          card.className = 'card';
+          card.style.cssText = 'min-width:200px;max-width:260px;flex:1';
+          grid.appendChild(card);
+        }
+        const online = node.status === 'ONLINE';
+        card.style.borderColor = online ? 'rgba(0,255,136,0.35)' : 'rgba(255,68,68,0.35)';
+        card.innerHTML = `
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+            <span style="font-weight:700;font-size:0.9em">${node.id}</span>
+            <span style="font-size:0.65em;padding:2px 6px;border-radius:4px;background:${online?'rgba(0,255,136,0.1)':'rgba(255,68,68,0.1)'};color:${online?'var(--ok)':'var(--err)'};border:1px solid ${online?'rgba(0,255,136,0.3)':'rgba(255,68,68,0.3)'}">${node.status}</span>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:0.75em">
+            <div><span style="color:var(--text-dim)">BAT</span><br><b>${node.battery}</b></div>
+            <div><span style="color:var(--text-dim)">RSSI</span><br><b>${node.rssi}</b></div>
+            <div><span style="color:var(--text-dim)">HOPS</span><br><b>${node.hops}</b></div>
+            <div><span style="color:var(--text-dim)">SEEN</span><br><b style="font-size:0.9em">${node.lastSeen}</b></div>
+          </div>
+          <div style="display:flex;gap:6px;margin-top:8px" class="write-only">
+            <button class="btn btn-sm" style="flex:1;font-size:0.7em;padding:3px" onclick="mqttSendCmd('${node.id}','PING')">Ping</button>
+            <button class="btn btn-sm" style="flex:1;font-size:0.7em;padding:3px;background:rgba(255,68,68,0.15);color:var(--err);border:1px solid rgba(255,68,68,0.3)" onclick="mqttSendCmd('${node.id}','RESTART')">Reset</button>
+          </div>`;
+      }
+
+      function mqttSendCmd(id, cmd) {
+        if (window.ACCESS_LEVEL === 'readonly') return;
+        if (!_mqttClient) { showNotif('Not connected to MQTT broker', 'err'); return; }
+        _mqttClient.publish(`loralink/cmd/${id}`, cmd);
+        mqttLog('System', `Sent ${cmd} → ${id}`, 'cmd');
+      }
+
+      function mqttBroadcastPrompt() {
+        if (window.ACCESS_LEVEL === 'readonly') return;
+        const cmd = prompt('Broadcast command to all MQTT nodes:');
+        if (!cmd) return;
+        if (!_mqttClient) { showNotif('Not connected to MQTT broker', 'err'); return; }
+        _mqttClient.publish('loralink/cmd/all', cmd);
+        mqttLog('System', `BROADCAST: ${cmd}`, 'cmd');
+      }
+
+      function mqttLog(id, msg, type) {
+        const log = document.getElementById('mqtt-log');
+        if (!log) return;
+        const colors = { telem:'var(--accent)', ok:'var(--ok)', err:'var(--err)', cmd:'var(--warn)', status:'var(--text-dim)', msg:'var(--text)' };
+        const entry = document.createElement('div');
+        entry.style.cssText = `padding:2px 0;border-bottom:1px solid rgba(255,255,255,0.04);color:${colors[type]||'var(--text)'}`;
+        entry.textContent = `${new Date().toLocaleTimeString()} · [${id}] ${msg}`;
+        log.prepend(entry);
+        if (log.children.length > 80) log.removeChild(log.lastChild);
+      }
+
+      // ── Schedules page helpers ──────────────────────────────────────────────
+      function refreshScheduleSlots() {
+        // Refresh slot count and active list from device status
+        const slots = lastStatus?.schedules || [];
+        const el = document.getElementById('sched-slot-count');
+        if (el) el.textContent = `${slots.length} / 5 slots`;
+        const list = document.getElementById('sched-active-list');
+        if (list) {
+          if (slots.length === 0) {
+            list.innerHTML = '<span style="color:var(--muted)">No active timer tasks</span>';
+          } else {
+            list.innerHTML = slots.map(s =>
+              `<div style="padding:3px 0;border-bottom:1px solid rgba(255,255,255,0.04)">` +
+              `<b style="color:var(--accent)">${s.pin||'?'}</b> · ${s.type||'?'} · every ${s.interval||'?'}s` +
+              `<button class="btn btn-sm write-only" style="float:right;font-size:0.65em;padding:1px 5px;background:rgba(255,68,68,0.1);color:var(--err)" onclick="schedRemove('${s.id}')">✕</button>` +
+              `</div>`
+            ).join('');
+          }
+        }
+        // Update preview
+        schedUpdatePreview();
+      }
+
+      function schedUpdatePreview() {
+        const node = document.getElementById('sched-node')?.value;
+        const pin = document.getElementById('sched-pin')?.value;
+        const type = document.querySelector('input[name="sched-type"]:checked')?.value;
+        const interval = document.getElementById('sched-interval')?.value;
+        const duration = document.getElementById('sched-duration')?.value;
+        const preview = document.getElementById('sched-preview');
+        const commitBtn = document.getElementById('sched-commit-btn');
+        if (!preview) return;
+        if (!pin || !type || !interval) {
+          preview.textContent = 'Fill in fields above to preview the command';
+          if (commitBtn) commitBtn.disabled = true;
+          return;
+        }
+        const cmd = type === 'TOGGLE'
+          ? `SCHED ADD TOGGLE ${pin} ${interval}`
+          : `SCHED ADD PULSE ${pin} ${interval} ${duration}`;
+        preview.textContent = (node ? `[${node}] ` : '') + cmd;
+        if (commitBtn) commitBtn.disabled = false;
+        // Guard: slot count
+        const slots = lastStatus?.schedules?.length || 0;
+        const guardBox = document.getElementById('sched-guard-box');
+        const guardMsg = document.getElementById('sched-guard-msg');
+        if (guardBox && guardMsg) {
+          if (slots >= 5) {
+            guardBox.style.display = 'block';
+            guardMsg.textContent = '⚠ All 5 task slots are full — remove one before adding.';
+            if (commitBtn) commitBtn.disabled = true;
+          } else if (slots >= 4) {
+            guardBox.style.display = 'block';
+            guardMsg.textContent = `⚠ ${slots}/5 slots used — only 1 remaining.`;
+          } else if (parseInt(duration) < 50 && type === 'PULSE') {
+            guardBox.style.display = 'block';
+            guardMsg.textContent = '⚠ PULSE duration < 50ms may not reliably switch mechanical relays.';
+          } else {
+            guardBox.style.display = 'none';
+          }
+        }
+      }
+
+      function schedCommit() {
+        if (window.ACCESS_LEVEL === 'readonly') return;
+        const preview = document.getElementById('sched-preview')?.textContent;
+        if (!preview || preview.startsWith('Fill')) return;
+        // Strip optional node prefix [GW-XXXX]
+        const match = preview.match(/^\[([^\]]+)\]\s+(.+)/) || [null, null, preview];
+        const cmd = match[2];
+        sendCommand(cmd);
+      }
+
+      function schedRemove(id) {
+        if (window.ACCESS_LEVEL === 'readonly') return;
+        sendCommand(`SCHED REMOVE ${id}`);
+        setTimeout(refreshScheduleSlots, 1500);
+      }
+
+      function ruleCommit() {
+        if (window.ACCESS_LEVEL === 'readonly') return;
+        // TODO: serialize rule fields → RULE ADD command when RuleEngine firmware is ready
+        showNotif('Rule engine firmware not yet available — coming in next release', 'warn');
+      }
     </script>
 
     <!-- Command Palette (Ctrl+K) -->

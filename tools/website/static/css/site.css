@@ -54,9 +54,9 @@ nav{
   position:sticky;top:0;z-index:100;
 }
 nav .logo{display:flex;align-items:center;gap:.6rem;text-decoration:none;margin-right:auto;}
-nav .logo img{height:28px;}
+nav .logo img{height:48px;filter:drop-shadow(0 0 8px rgba(0,212,255,0.65));}
 nav .logo span{font-size:1rem;font-weight:700;color:var(--text-bright);letter-spacing:.04em;}
-nav a{color:var(--text-dim);text-decoration:none;font-size:.9rem;transition:color .15s;}
+nav a{color:var(--text-dim);text-decoration:none;font-size:.9rem;transition:color .15s;white-space:nowrap;}
 nav a:hover{color:var(--accent);}
 nav .nav-cta{
   background:var(--accent);

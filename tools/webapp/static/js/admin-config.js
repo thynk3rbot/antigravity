@@ -14,9 +14,11 @@ var CONFIG_SETTINGS = [
   { key: 'MQTT_PRT',  label: 'MQTT Port',     type: 'number',  fw: 'mqtt_prt', min: 1, max: 65535 },
 ];
 
-var _pendingConfig  = {};
-var _reportedConfig = {};
-var _goldenFile     = null;
+var _pendingConfig        = {};
+var _reportedConfig       = {};
+var _goldenFile           = null;
+var _reconcileTimer       = null;
+var CFG_PENDING_TIMEOUT_MS = 10000; // 10 s before marking a pending item as Unconfirmed
 
 function _cfgVal(v) {
   if (v === null || v === undefined) return '--';
@@ -163,23 +165,48 @@ async function applyConfigChanges() {
     if (typeof sendRaw === 'function') await sendRaw('CONFIG SET ' + s.key + ' ' + val);
     await new Promise(function(r) { setTimeout(r, 200); });
   }
-  _log('rx', 'Commands sent -- refreshing in 3s...');
-  setTimeout(async function() { await refreshConfigSettings(); reconcileConfigStates(); }, 3000);
+  _log('rx', 'Commands sent — polling for confirmation...');
+  // Poll every 2s so we catch the device response quickly
+  if (_reconcileTimer) clearInterval(_reconcileTimer);
+  _reconcileTimer = setInterval(async function() {
+    await refreshConfigSettings();
+    reconcileConfigStates();
+  }, 2000);
+  // Hard stop after timeout + grace period so nothing stays Pending forever
+  setTimeout(function() {
+    if (_reconcileTimer) { clearInterval(_reconcileTimer); _reconcileTimer = null; }
+    reconcileConfigStates(); // final pass — times out any still-pending items
+  }, CFG_PENDING_TIMEOUT_MS + 2000);
+}
+
+function _cfgStateTimeout() {
+  return '<span class="cfg-dot cfg-dot-mismatch"></span><span class="cfg-state-mismatch">? Unconfirmed</span>';
 }
 
 function reconcileConfigStates() {
+  var now = Date.now();
   Object.keys(_pendingConfig).forEach(function(key) {
+    var entry   = _pendingConfig[key];
     var rep     = String(_reportedConfig[key] !== undefined ? _reportedConfig[key] : '');
-    var desired = String(_pendingConfig[key].desired);
+    var desired = String(entry.desired);
     var el      = document.getElementById('cfg-state-' + key);
     if (rep === desired) {
       delete _pendingConfig[key];
       if (el) el.innerHTML = '<span class="cfg-dot cfg-dot-ok"></span><span class="cfg-state-ok">OK</span>';
+    } else if (now - entry.sentAt > CFG_PENDING_TIMEOUT_MS) {
+      // Device never confirmed — stop waiting, surface the failure clearly
+      delete _pendingConfig[key];
+      if (el) el.innerHTML = _cfgStateTimeout();
+      _log('err', 'Timeout: ' + key + ' — no confirmation after ' + (CFG_PENDING_TIMEOUT_MS / 1000) + 's');
     } else {
-      if (el) el.innerHTML = '<span class="cfg-dot cfg-dot-mismatch"></span><span class="cfg-state-mismatch">!</span>';
-      _log('err', 'Mismatch: ' + key + ' desired=' + desired + ' reported=' + rep);
+      if (el) el.innerHTML = _cfgStateHtml(key); // still pending, keep spinner
     }
   });
+  // Stop polling interval once all items have resolved or timed out
+  if (Object.keys(_pendingConfig).length === 0 && _reconcileTimer) {
+    clearInterval(_reconcileTimer);
+    _reconcileTimer = null;
+  }
 }
 
 async function loadGoldenImage() {

@@ -14,6 +14,15 @@ struct LogEntry {
   String message;
 };
 
+struct PeripheralInfo {
+  String id;
+  String hwType;
+  String fwVersion;
+  String caps;
+  String lastReadings; // JSON string
+  uint32_t lastSeen;
+};
+
 class DataManager {
 public:
   static DataManager &getInstance() {
@@ -46,7 +55,26 @@ public:
   uint8_t espNowChannel;
   bool wifiEnabled;
   bool bleEnabled;
-  char transportMode; // 'J'=JSON, 'C'=CSV, 'K'=KV, 'B'=BIN
+  bool traceLogging;
+  char transportMode; // 'J'=JSON, 'C'=CSV, 'K'=KV, 'B'=BIN (message format)
+
+  // ── Transport Link State ────────────────────────────────────────────────────
+  // preferredLink: factory/user setting — persisted in NVS (key: "link_pref")
+  // currentLink:   runtime state — set by negotiate(), updated on up/downgrade
+  LinkPreference preferredLink;
+  LinkPreference currentLink;
+
+  // Negotiation + probe timing (NVS-persisted so downgrade survives reboot)
+  uint32_t transNegotiateMs;  // NVS: "trans_neg_ms" — boot window duration
+  uint32_t probeBackoffMs;    // NVS: "probe_bkoff"  — current backoff interval
+  uint8_t  probeFailCount;    // NVS: "probe_fails"  — consecutive probe failures
+  String   lastProbeResult;   // Runtime only — "OK_MQTT","OK_HTTP","NO_AP",etc.
+  unsigned long lastProbeAtMs; // Runtime only — millis() of last probe
+
+  void SetPreferredLink(LinkPreference pref);
+  void SetProbeState(uint32_t backoffMs, uint8_t failCount);
+  void ResetProbeState();
+  static const char *linkName(LinkPreference lp);
 
   // State
   int bootCount;
@@ -54,6 +82,10 @@ public:
   int numNodes;
   LogEntry msgLog[LOG_SIZE];
   int logIndex;
+
+  // Peripheral Registry
+  PeripheralInfo peripherals[MAX_PERIPHERALS];
+  int numPeripherals;
 
   // ESP-NOW Peers
   ESPNowPeer espNowPeers[ESPNOW_MAX_PEERS];
@@ -96,6 +128,14 @@ public:
   char GetTransportMode();
   void AddToRegistry(const String &id, const String &hwType);
   String GetRegistryJson();
+
+  // Peripheral Methods
+  void RegisterPeripheral(const String &id, const String &hwType,
+                          const String &fw, const String &caps);
+  void UpdateSensorTelemetry(const String &id, const String &jsonReadings);
+  String GetPeripheralsJson();
+
+  void ClearTrace();
   void FactoryReset();
 
   // Node & Log Methods

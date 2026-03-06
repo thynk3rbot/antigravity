@@ -2,6 +2,7 @@
 #include "../config.h"
 #include "../crypto.h"
 #include "../utils/DebugMacros.h"
+#include "MQTTManager.h"
 #include <LittleFS.h>
 #include <Preferences.h>
 #include <esp_system.h>
@@ -20,6 +21,15 @@ DataManager::DataManager() {
   mqttEnabled = false;
   mqttPort = 1883;
   transportMode = 'J';
+  traceLogging = false;
+  numPeripherals = 0;
+  preferredLink    = LinkPreference::LINK_AUTO;
+  currentLink      = LinkPreference::LINK_AUTO;
+  transNegotiateMs = TRANSPORT_NEGOTIATE_MS;
+  probeBackoffMs   = PROBE_BACKOFF_MIN_MS;
+  probeFailCount   = 0;
+  lastProbeResult  = "";
+  lastProbeAtMs    = 0;
 }
 
 String DataManager::getHardwareSuffix() {
@@ -144,6 +154,13 @@ void DataManager::LoadSettings() {
   mqttUser = p.getString("mqtt_usr", "");
   mqttPass = p.getString("mqtt_pwd", "");
   transportMode = p.getString("tp_mode", "J").charAt(0);
+
+  // Transport link preference
+  preferredLink    = (LinkPreference)p.getUChar("link_pref", (uint8_t)LinkPreference::LINK_AUTO);
+  currentLink      = preferredLink;  // negotiate() will adjust at boot
+  transNegotiateMs = p.getULong("trans_neg_ms", TRANSPORT_NEGOTIATE_MS);
+  probeBackoffMs   = p.getULong("probe_bkoff",  PROBE_BACKOFF_MIN_MS);
+  probeFailCount   = p.getUChar("probe_fails",  0);
 
   p.end();
 
@@ -382,6 +399,22 @@ void DataManager::LogMessage(const String &source, int rssi,
   msgLog[logIndex].rssi = rssi;
   msgLog[logIndex].message = msg;
   logIndex = (logIndex + 1) % LOG_SIZE;
+
+  if (traceLogging) {
+    String formattedMsg =
+        String("[") + (millis() / 1000) + "] " + source + ": " + msg;
+
+    File f = LittleFS.open("/trace.log", "a");
+    if (f) {
+      f.printf("%s\n", formattedMsg.c_str());
+      f.close();
+    }
+
+    // MQTT Trace Bridge
+    if (mqttEnabled) {
+      MQTTManager::getInstance().publishTrace(myId, formattedMsg);
+    }
+  }
 }
 
 void DataManager::SetSchedulerInterval(unsigned long ms) {
@@ -420,6 +453,12 @@ String DataManager::GetPinName(const String &pin) {
   String name = p.getString(pin.c_str(), "");
   p.end();
   return name;
+}
+
+void DataManager::ClearTrace() {
+  if (LittleFS.exists("/trace.log")) {
+    LittleFS.remove("/trace.log");
+  }
 }
 
 void DataManager::FactoryReset() {
@@ -608,4 +647,98 @@ String DataManager::GetRegistryJson() {
   String s = f.readString();
   f.close();
   return s;
+}
+
+void DataManager::RegisterPeripheral(const String &id, const String &hwType,
+                                     const String &fw, const String &caps) {
+  // Check if already exists
+  for (int i = 0; i < numPeripherals; i++) {
+    if (peripherals[i].id == id) {
+      peripherals[i].hwType = hwType;
+      peripherals[i].fwVersion = fw;
+      peripherals[i].caps = caps;
+      peripherals[i].lastSeen = millis();
+      return;
+    }
+  }
+
+  // Add new
+  if (numPeripherals < MAX_PERIPHERALS) {
+    peripherals[numPeripherals].id = id;
+    peripherals[numPeripherals].hwType = hwType;
+    peripherals[numPeripherals].fwVersion = fw;
+    peripherals[numPeripherals].caps = caps;
+    peripherals[numPeripherals].lastReadings = "{}";
+    peripherals[numPeripherals].lastSeen = millis();
+    numPeripherals++;
+    LOG_PRINTF("REG: Peripheral registered: %s (%s)\n", id.c_str(),
+               hwType.c_str());
+  }
+}
+
+void DataManager::UpdateSensorTelemetry(const String &id,
+                                        const String &jsonReadings) {
+  for (int i = 0; i < numPeripherals; i++) {
+    if (peripherals[i].id == id) {
+      peripherals[i].lastReadings = jsonReadings;
+      peripherals[i].lastSeen = millis();
+      return;
+    }
+  }
+}
+
+String DataManager::GetPeripheralsJson() {
+  JsonDocument doc;
+  JsonArray array = doc.to<JsonArray>();
+  for (int i = 0; i < numPeripherals; i++) {
+    JsonObject obj = array.add<JsonObject>();
+    obj["id"] = peripherals[i].id;
+    obj["hw"] = peripherals[i].hwType;
+    obj["fw"] = peripherals[i].fwVersion;
+    obj["caps"] = peripherals[i].caps;
+    obj["data"] = serialized(peripherals[i].lastReadings);
+    obj["lastSeen"] = (millis() - peripherals[i].lastSeen) / 1000;
+  }
+  String out;
+  serializeJson(doc, out);
+  return out;
+}
+
+// ── Transport Link Helpers ────────────────────────────────────────────────────
+
+const char *DataManager::linkName(LinkPreference lp) {
+  switch (lp) {
+    case LinkPreference::LINK_AUTO:      return "AUTO";
+    case LinkPreference::LINK_BLE:       return "BLE";
+    case LinkPreference::LINK_WIFI_MQTT: return "WIFI_MQTT";
+    case LinkPreference::LINK_WIFI_HTTP: return "WIFI_HTTP";
+    case LinkPreference::LINK_LORA:      return "LORA";
+    default:                             return "UNKNOWN";
+  }
+}
+
+void DataManager::SetPreferredLink(LinkPreference pref) {
+  preferredLink = pref;
+  currentLink   = pref;
+  Preferences p;
+  p.begin("loralink", false);
+  p.putUChar("link_pref", (uint8_t)pref);
+  p.end();
+  LOG_PRINTF("TRANS: Preferred link set → %s\n", linkName(pref));
+}
+
+void DataManager::SetProbeState(uint32_t backoffMs, uint8_t failCount) {
+  probeBackoffMs = backoffMs;
+  probeFailCount = failCount;
+  Preferences p;
+  p.begin("loralink", false);
+  p.putULong("probe_bkoff", backoffMs);
+  p.putUChar("probe_fails", failCount);
+  p.end();
+}
+
+void DataManager::ResetProbeState() {
+  SetProbeState(PROBE_BACKOFF_MIN_MS, 0);
+  lastProbeResult = "";
+  lastProbeAtMs   = 0;
 }

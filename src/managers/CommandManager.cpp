@@ -1043,6 +1043,27 @@ void CommandManager::initRegistry() {
     }
     lora.lastMsgReceived = "ERR: TRANS J|C|K|B";
   });
+
+  // WIFI_TEST — trigger an immediate WiFi probe regardless of backoff timer.
+  // Usage: WIFI_TEST
+  // Reports probe result back to the originating interface.
+  registerCommand("WIFI_TEST", [](const String &args, CommInterface source) {
+    ProbeResult r = WiFiManager::getInstance().probeWifi(PROBE_TIMEOUT_MS);
+    const char *result =
+      (r == ProbeResult::PROBE_OK_MQTT)   ? "OK_MQTT"   :
+      (r == ProbeResult::PROBE_OK_HTTP)   ? "OK_HTTP"   :
+      (r == ProbeResult::PROBE_NO_AP)     ? "NO_AP"     :
+      (r == ProbeResult::PROBE_NO_BROKER) ? "NO_BROKER" : "TIMEOUT";
+    DataManager &data = DataManager::getInstance();
+    String msg = "WIFI_TEST: " + String(result) +
+                 " link=" + DataManager::linkName(data.currentLink) +
+                 " fails=" + data.probeFailCount;
+    CommandManager::getInstance().sendResponse(msg, source);
+    // Reset backoff on manual test so next auto-probe fires fresh
+    if (r == ProbeResult::PROBE_OK_MQTT || r == ProbeResult::PROBE_OK_HTTP) {
+      data.ResetProbeState();
+    }
+  });
 }
 
 void CommandManager::sendResponse(const String &msg, CommInterface source) {

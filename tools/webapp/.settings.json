@@ -1,3 +1,5 @@
 {
-  "transport_strategy": "http_first"
+  "transport_strategy": "http_first",
+  "ble_prefix_a": "LoRaLink",
+  "ble_prefix_b": ""
 }

@@ -1001,7 +1001,7 @@ def build_app(
 
     @app.on_event("startup")
     async def _startup() -> None:
-        nonlocal _ble_peers, _transport, _poller, _poll_task
+        nonlocal _ble_peers, _transport, _poller, _poll_task, _serial_hub
 
         # Initialize active IP to the startup device_ip
         state.active_ip = device_ip

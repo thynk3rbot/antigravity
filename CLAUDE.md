@@ -23,6 +23,8 @@ Unified ESP32-S3 firmware focused on prioritized any-to-any command routing.
 | `ESPNowManager` | Peer registry, RX queue, send/broadcast, NVS persistence | WiFi STA mode, `ESPNOW_MAX_PEERS=10`, queue=8 |
 | `MQTTManager` | Telemetry & External Commands | WiFi, PubSubClient |
 | `DataManager` | NVS Persistence, Node tracking | LittleFS, Preferences |
+| `MCPManager` | I2C GPIO Expander (MCP23017), ISR-driven | Wire (shared w/ OLED), `PIN_MCP_INT=38`; doc: `MCP23017.md` |
+| `ProductManager` | Product deploy (pins + schedules + alerts atomically) | LittleFS `/products/`, NVS active product |
 
 ## Maintained Tools
 
@@ -48,6 +50,7 @@ When modifying firmware, check this table and update all listed tool files in th
 | `src/managers/ScheduleManager.cpp` | New task type added (beyond TOGGLE / PULSE) | `webapp/static/index.html` → `#s-type` `<select>` options; `ble_instrument.py` → `FIRMWARE_MAX_TASKS` if applicable |
 | `src/managers/ESPNowManager.cpp/h` | New public API, peer struct changed, queue size changed | `webapp/server.py` → proxy routes; `webapp/static/index.html` → peer management panel if added |
 | `src/managers/WiFiManager.cpp` serveHome() | Dashboard HTML changed | `webapp/static/index.html` → keep visual language in sync |
+| `src/managers/MCPManager.cpp/h` | MCP pin range or API changed | `CommandManager.cpp` → `getPinFromName()`; `ScheduleManager.cpp` → `setupDynamicPin()` |
 
 ## Integration Logic
 

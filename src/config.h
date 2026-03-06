@@ -7,7 +7,7 @@
 // ============================================================================
 //   FIRMWARE & FEATURE FLAGS
 // ============================================================================
-#define FIRMWARE_VERSION "v1.4.7"
+#define FIRMWARE_VERSION "v1.5.0"
 #define FIRMWARE_NAME "LoRaLink Any2Any"
 #define HARDWARE_ID "Heltec ESP32 LoRa V3"
 #define CONFIG_SCHEMA "1.0"
@@ -56,6 +56,17 @@
 #define PIN_RELAY_12V_3 7
 #define PIN_SENSOR_DHT 15
 
+// ── MCP23017 I2C GPIO Expander ─────────────────────────────────────────────
+// Up to 8 MCP23017 chips share the OLED I2C bus (SDA=17, SCL=18).
+// Extended pin numbering: pin = MCP_PIN_BASE + chip*MCP_CHIP_PINS + local_pin
+//   "MCP:0:4"  → chip 0 (0x20), pin 4  → extended pin 104
+//   "MCP:1:12" → chip 1 (0x21), pin 12 → extended pin 128
+#define MCP_PIN_BASE       100   // Native pins 0–99; MCP pins 100–227
+#define MCP_CHIP_PINS      16    // 16 GPIO per chip (GPA0–GPB7)
+#define MCP_MAX_CHIPS      8     // 8 addresses: 0x20–0x27
+#define MCP_CHIP_ADDR_BASE 0x20  // I2C base address (A0=A1=A2=GND)
+#define PIN_MCP_INT        38    // INTA → GPIO 38 (safe: not shared on Heltec V3)
+
 // ============================================================================
 //   COMMUNICATION INTERFACE ENUM
 //   Note: Values prefixed with COMM_ to avoid Arduino.h macro conflicts
@@ -69,6 +80,39 @@ enum class CommInterface : uint8_t {
   COMM_ESPNOW = 4,
   COMM_INTERNAL = 5
 };
+
+// ============================================================================
+//   TRANSPORT LINK PREFERENCE
+//   Which protocol the device targets after boot negotiation.
+//   Persisted in NVS (key: "link_pref"). LINK_AUTO = negotiate each boot.
+//   Hook: extend with LINK_LORA_BLE_BRIDGE for gateway/relay role.
+// ============================================================================
+enum class LinkPreference : uint8_t {
+  LINK_AUTO      = 0,  // Negotiate on boot (factory default)
+  LINK_BLE       = 1,  // BLE terminal only — WiFi off after lock-in
+  LINK_WIFI_MQTT = 2,  // WiFi + MQTT bidirectional
+  LINK_WIFI_HTTP = 3,  // WiFi + HTTP (no broker required)
+  LINK_LORA      = 4,  // LoRa mesh only — lowest power hold
+};
+
+// Result of a WiFi probe attempt
+enum class ProbeResult : uint8_t {
+  PROBE_OK_MQTT   = 0,  // WiFi associated + MQTT broker reached
+  PROBE_OK_HTTP   = 1,  // WiFi associated, no MQTT
+  PROBE_NO_AP     = 2,  // SSID not found / association failed
+  PROBE_NO_BROKER = 3,  // WiFi up but MQTT broker unreachable
+  PROBE_TIMEOUT   = 4,  // Association timed out
+};
+
+// Boot negotiation window — try all configured transports before locking in.
+// Override via NVS key "trans_neg_ms". Factory default: 10 000ms (configurable).
+#define TRANSPORT_NEGOTIATE_MS  10000UL
+
+// WiFi probe backoff — applied when downgraded to LINK_LORA.
+// Sequence doubles each failure: 30s → 60s → 2m → ... → 30m cap.
+#define PROBE_BACKOFF_MIN_MS    30000UL   //  30 seconds
+#define PROBE_BACKOFF_MAX_MS  1800000UL   //  30 minutes
+#define PROBE_TIMEOUT_MS         5000UL   //   5 seconds max per probe
 
 // ============================================================================
 //   DATA STRUCTURES
@@ -108,7 +152,8 @@ struct ESPNowPeer {
   bool active;
 };
 
-#define MAX_NODES 20
+#define MAX_NODES 16
+#define MAX_PERIPHERALS 8
 #define LOG_SIZE 20
 #define HASH_BUFFER_SIZE 20
 

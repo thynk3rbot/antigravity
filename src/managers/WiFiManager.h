@@ -35,12 +35,27 @@ public:
     return (bat < 0.1f || bat > 4.1f);
   }
 
+  // ── Transport negotiation & probing ────────────────────────────────────────
+  // negotiate(): called once at boot inside main.cpp setup().
+  // Spends up to windowMs trying to reach the preferred transport,
+  // then locks DataManager::currentLink. Returns the locked preference.
+  LinkPreference negotiate(uint32_t windowMs);
+
+  // probeWifi(): lightweight single-shot reachability test (<5s on battery).
+  // Safe to call from handle() backoff timer. Returns ProbeResult.
+  // Hook: update PROBE_OK_MQTT path when MQTTManager exposes probe().
+  ProbeResult probeWifi(uint32_t timeoutMs = PROBE_TIMEOUT_MS);
+
 private:
   WiFiManager();
   bool serverStarted;
   unsigned long lastWifiTry;
+  unsigned long _wifiLostAt;  // millis() when WiFi last dropped (0 = connected)
   void tryConnect();
   void startServer();
+  void checkProbeBackoff();                                    // Probe timer tick
+  void onLinkDowngrade(LinkPreference from, LinkPreference to);
+  void onLinkUpgrade(LinkPreference from, LinkPreference to);
 
   // Page handlers
   void serveHome();

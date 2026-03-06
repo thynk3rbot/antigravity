@@ -1,4 +1,4 @@
-#include "WiFiManager.h"
+﻿#include "WiFiManager.h"
 #include "CommandManager.h"
 #include "DataManager.h"
 #include "ESPNowManager.h"
@@ -25,6 +25,7 @@ WiFiManager::WiFiManager() {
   lastWifiTry = 0;
   lastApiHit = 0;
   modemSleepEnabled = false;
+  _wifiLostAt = 0;
 }
 
 void WiFiManager::init() {
@@ -85,7 +86,17 @@ void WiFiManager::handle() {
       data.traceLogging = (millis() - lastApiHit < 10000);
 
     } else {
-      isConnected = false;
+      // Track when WiFi first dropped for downgrade timer
+      if (isConnected) {
+        _wifiLostAt = millis();
+        isConnected = false;
+      }
+      // Sustained loss >30s while not already on LORA → downgrade
+      if (_wifiLostAt > 0 && (millis() - _wifiLostAt > 30000UL) &&
+          data.currentLink != LinkPreference::LINK_LORA) {
+        onLinkDowngrade(data.currentLink, LinkPreference::LINK_LORA);
+        _wifiLostAt = 0;
+      }
       if (millis() - lastWifiTry > 10000) {
         lastWifiTry = millis();
         WiFi.disconnect();
@@ -93,6 +104,8 @@ void WiFiManager::handle() {
       }
     }
   }
+  // Probe backoff tick — fires when in LORA hold and backoff interval elapsed
+  checkProbeBackoff();
 }
 
 void WiFiManager::startServer() {
@@ -298,6 +311,7 @@ body.debug-on .dbg-id{display:inline-block!important}
 </div>
 <div class='ifc' id='ifc'></div>
 <div class='grid' id='cards'></div>
+<div id='perf-sect'></div><div id='periph-sect'></div><div id='pins-sect'></div>
 <div class='log' id='log'></div>
 <div class='cmd' style='position:relative'>
   <span class='dbg-id'>DASH-CMD</span>
@@ -313,25 +327,28 @@ document.getElementById('ifc').innerHTML=ifcs.map(function(x){
 return '<span class="badge '+(x[1]?'on':'off')+'">'+x[0]+'</span>';
 }).join('');
 var b=parseFloat(d.bat)||0;
-var c='<div class="card"><span class="dbg-id">DASH-BATT</span><div class="lbl">Batteries</div><div class="val '+(b>3.5?'ok':'warn')+'">'+(b?b.toFixed(2)+'V':'—')+'</div></div>';
+var batStr=b<0.1?'USB':b.toFixed(2)+'V';
+var c='<div class="card"><span class="dbg-id">DASH-BATT</span><div class="lbl">Battery</div><div class="val '+(b<0.1||b>3.5?'ok':'warn')+'">'+batStr+'</div></div>';
 c+='<div class="card"><span class="dbg-id">DASH-RSSI</span><div class="lbl">LoRa RSSI</div><div class="val">'+(d.rssi||'—')+'</div></div>';
 c+='<div class="card"><span class="dbg-id">DASH-NODES</span><div class="lbl">Nodes</div><div class="val ok">'+(d.nodes!=null?d.nodes:'—')+'</div></div>';
 document.getElementById('cards').innerHTML=c;
 
 // Performance Section
+var psect=document.getElementById('perf-sect');
+psect.textContent='';
 if(d.loop_avg_ms !== undefined) {
-  var perfHtml = '<div style="padding:4px 10px;background:#1a1a2e;border-top:1px solid #2a2a4a;font-size:0.65em;color:#00d4ff;text-transform:uppercase;letter-spacing:1px;font-weight:700">Performance (ms) & Diagnostics</div>';
+  var toaS=(d.lora_toa_ms/1000).toFixed(1);
+  var perfHtml = '<div style="padding:4px 10px;background:#1a1a2e;border-top:1px solid #2a2a4a;font-size:0.65em;color:#00d4ff;text-transform:uppercase;letter-spacing:1px;font-weight:700">Performance & Diagnostics</div>';
   perfHtml += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:6px;padding:8px">';
-
-  perfHtml += '<div class="card"><div class="lbl">Loop Avg/Max</div><div class="val" style="font-size:0.8em">' + d.loop_avg_ms + ' / ' + d.loop_max_ms + '</div></div>';
-  perfHtml += '<div class="card"><div class="lbl">LoRa TOA</div><div class="val" style="font-size:0.8em">' + d.lora_toa_ms + '</div></div>';
+  perfHtml += '<div class="card"><div class="lbl">Loop Avg/Max</div><div class="val" style="font-size:0.8em">' + d.loop_avg_ms + ' / ' + d.loop_max_ms + ' ms</div></div>';
+  perfHtml += '<div class="card"><div class="lbl">Total ToA</div><div class="val" style="font-size:0.8em">' + toaS + 's</div></div>';
   perfHtml += '<div class="card" style="grid-column: 1 / -1;"><div class="lbl">Last Reset</div><div class="val" style="font-size:0.75em;color:#ffaa00;white-space:normal;overflow:visible">' + (d.sys_reset || d.reset || 'UNKNOWN') + '</div></div>';
-
   perfHtml += '</div>';
-  document.getElementById('cards').insertAdjacentHTML('afterend', perfHtml);
+  psect.insertAdjacentHTML('afterbegin', perfHtml);
 }
 
 // Peripherals Section
+document.getElementById('periph-sect').textContent='';
 if(d.peripherals && d.peripherals.length > 0) {
   var phtml = '<div style="padding:4px 10px;background:#1a1a2e;border-top:1px solid #2a2a4a;font-size:0.65em;color:#00d4ff;text-transform:uppercase;letter-spacing:1px;font-weight:700">Peripherals</div>';
   phtml += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:6px;padding:8px">';
@@ -352,8 +369,8 @@ if(d.peripherals && d.peripherals.length > 0) {
     phtml += '</div>';
   });
   phtml += '</div>';
-  document.getElementById('cards').insertAdjacentHTML('afterend', phtml);
-}
+  document.getElementById('periph-sect').insertAdjacentHTML('afterbegin', phtml);
+} else { document.getElementById('periph-sect').textContent=''; }
 
 var l='';d.log.forEach(function(m){
 if(m)l+='<div class="m"><span class="ts">['+m.ts+'s]</span> <span class="src">'+m.src+'</span>: '+m.msg+'</div>';
@@ -361,6 +378,7 @@ if(m)l+='<div class="m"><span class="ts">['+m.ts+'s]</span> <span class="src">'+
 document.getElementById('log').innerHTML=l;
 
 // Compact Pin Monitor
+document.getElementById('pins-sect').textContent='';
 if(d.pins && d.pins.length > 0) {
   var phtml = '<div style="padding:10px;display:grid;grid-template-columns:1fr 1fr;gap:5px;">';
   d.pins.forEach(function(p){
@@ -373,8 +391,8 @@ if(d.pins && d.pins.length > 0) {
     phtml += '</div></div>';
   });
   phtml += '</div>';
-  document.getElementById('log').insertAdjacentHTML('beforebegin', phtml);
-}
+  document.getElementById('pins-sect').insertAdjacentHTML('afterbegin', phtml);
+} else { document.getElementById('pins-sect').textContent=''; }
 });}
 setInterval(up,3000);up();
 function tD(f){
@@ -1850,4 +1868,168 @@ setInterval(up, 1000);
 up();
 </script></body></html>)rawhtml";
   server.send(200, "text/html", html);
+}
+
+// ── Transport: negotiate() ────────────────────────────────────────────────────
+// Called once from main.cpp setup() after WiFiManager::init().
+// Spends up to windowMs probing the preferred transport and locks currentLink.
+LinkPreference WiFiManager::negotiate(uint32_t windowMs) {
+  DataManager &data = DataManager::getInstance();
+  LinkPreference pref = data.preferredLink;
+
+  // Fixed preference that doesn't require WiFi — skip probe entirely
+  if (pref == LinkPreference::LINK_BLE || pref == LinkPreference::LINK_LORA) {
+    data.currentLink = pref;
+    Serial.printf("TRANS: Negotiate skip — fixed pref: %s\n", DataManager::linkName(pref));
+    return pref;
+  }
+
+  // No SSID configured — nothing to probe
+  if (data.wifiSsid.length() == 0) {
+    data.currentLink = LinkPreference::LINK_LORA;
+    Serial.println("TRANS: Negotiate → LORA (no SSID configured)");
+    return LinkPreference::LINK_LORA;
+  }
+
+  Serial.printf("BOOT: Transport negotiation window %lums (pref=%s)...\n",
+                windowMs, DataManager::linkName(pref));
+  ProbeResult r = probeWifi(windowMs);
+
+  LinkPreference locked;
+  switch (r) {
+    case ProbeResult::PROBE_OK_MQTT:   locked = LinkPreference::LINK_WIFI_MQTT; break;
+    case ProbeResult::PROBE_OK_HTTP:   locked = LinkPreference::LINK_WIFI_HTTP; break;
+    default:                           locked = LinkPreference::LINK_LORA;      break;
+  }
+
+  // AUTO: use whatever we found
+  // Specific pref but missed it → fall to LORA, probe backoff will recover
+  if (pref != LinkPreference::LINK_AUTO &&
+      locked == LinkPreference::LINK_LORA &&
+      r != ProbeResult::PROBE_OK_MQTT && r != ProbeResult::PROBE_OK_HTTP) {
+    Serial.printf("TRANS: Preferred %s unreachable — holding LORA\n",
+                  DataManager::linkName(pref));
+  }
+
+  data.currentLink = locked;
+  Serial.printf("BOOT: Transport locked → %s\n", DataManager::linkName(locked));
+  return locked;
+}
+
+// ── Transport: probeWifi() ────────────────────────────────────────────────────
+// Lightweight WiFi reachability test. Safe to call on battery (<=5s, ~130mA).
+// Hook: replace OK_HTTP return with PROBE_OK_MQTT when MQTTManager exposes probe().
+ProbeResult WiFiManager::probeWifi(uint32_t timeoutMs) {
+  DataManager &data = DataManager::getInstance();
+  data.lastProbeAtMs = millis();
+
+  if (data.wifiSsid.length() == 0) {
+    data.lastProbeResult = "NO_SSID";
+    return ProbeResult::PROBE_NO_AP;
+  }
+
+  bool alreadyConnected = (WiFi.status() == WL_CONNECTED);
+  if (!alreadyConnected) {
+    WiFi.mode(WIFI_STA);
+    // Apply static IP if configured — mirrors handle()'s WiFi setup so the
+    // probe lands on the correct address rather than a random DHCP lease.
+    if (data.staticIp.length() > 0) {
+      IPAddress ip, gw, sn;
+      if (ip.fromString(data.staticIp)) {
+        if (!gw.fromString(data.gateway)) { gw = ip; gw[3] = 1; }
+        if (!sn.fromString(data.subnet))  { sn = IPAddress(255, 255, 255, 0); }
+        WiFi.config(ip, gw, sn);
+        Serial.printf("TRANS: Probe using static IP %s\n", data.staticIp.c_str());
+      }
+    }
+    WiFi.begin(data.wifiSsid.c_str(), data.wifiPass.c_str());
+    unsigned long t = millis();
+    while (WiFi.status() != WL_CONNECTED && (millis() - t) < timeoutMs) {
+      delay(50);
+    }
+  }
+
+  if (WiFi.status() != WL_CONNECTED) {
+    if (!alreadyConnected) WiFi.disconnect(true);
+    Serial.println("TRANS: Probe → NO_AP");
+    data.lastProbeResult = "NO_AP";
+    return ProbeResult::PROBE_NO_AP;
+  }
+
+  // WiFi OK — check MQTT if enabled
+  // TODO: replace with MQTTManager::getInstance().probe() when available
+  if (data.mqttEnabled && data.mqttServer.length() > 0) {
+    Serial.printf("TRANS: Probe → OK_MQTT candidate (IP: %s)\n",
+               WiFi.localIP().toString().c_str());
+    data.lastProbeResult = "OK_MQTT";
+    return ProbeResult::PROBE_OK_MQTT;
+  }
+
+  Serial.printf("TRANS: Probe → OK_HTTP (IP: %s)\n",
+             WiFi.localIP().toString().c_str());
+  data.lastProbeResult = "OK_HTTP";
+  return ProbeResult::PROBE_OK_HTTP;
+}
+
+// ── Transport: checkProbeBackoff() ───────────────────────────────────────────
+// Called every loop iteration from handle(). Fires a probe when the backoff
+// interval has elapsed and device is holding LORA.
+void WiFiManager::checkProbeBackoff() {
+  DataManager &data = DataManager::getInstance();
+  if (data.currentLink != LinkPreference::LINK_LORA) return;
+  if (data.wifiSsid.length() == 0) return;
+  if (data.lastProbeAtMs == 0) {
+    data.lastProbeAtMs = millis(); // Seed timer on first call
+    return;
+  }
+  if ((millis() - data.lastProbeAtMs) < data.probeBackoffMs) return;
+
+  Serial.printf("TRANS: Probe backoff fired (interval=%lus, fails=%d)\n",
+             data.probeBackoffMs / 1000, data.probeFailCount);
+  ProbeResult r = probeWifi(PROBE_TIMEOUT_MS);
+
+  if (r == ProbeResult::PROBE_OK_MQTT || r == ProbeResult::PROBE_OK_HTTP) {
+    onLinkUpgrade(LinkPreference::LINK_LORA,
+                  (r == ProbeResult::PROBE_OK_MQTT)
+                    ? LinkPreference::LINK_WIFI_MQTT
+                    : LinkPreference::LINK_WIFI_HTTP);
+    data.ResetProbeState();
+  } else {
+    // Exponential backoff — double interval, cap at max
+    uint32_t next = min(data.probeBackoffMs * 2U, (uint32_t)PROBE_BACKOFF_MAX_MS);
+    uint8_t  fails = data.probeFailCount + 1;
+    data.SetProbeState(next, fails);
+    Serial.printf("TRANS: Probe failed — next in %lus (fail #%d)\n",
+               next / 1000, fails);
+  }
+}
+
+// ── Transport: onLinkDowngrade() / onLinkUpgrade() ───────────────────────────
+void WiFiManager::onLinkDowngrade(LinkPreference from, LinkPreference to) {
+  DataManager &data = DataManager::getInstance();
+  data.currentLink   = to;
+  data.probeBackoffMs = PROBE_BACKOFF_MIN_MS;
+  data.probeFailCount = 0;
+  Serial.printf("TRANS: Downgrade %s → %s\n",
+                DataManager::linkName(from), DataManager::linkName(to));
+  data.LogMessage("TRANS", 0,
+    "Link downgrade: " + String(DataManager::linkName(from)) +
+    " → " + String(DataManager::linkName(to)));
+}
+
+void WiFiManager::onLinkUpgrade(LinkPreference from, LinkPreference to) {
+  DataManager &data = DataManager::getInstance();
+  data.currentLink = to;
+  Serial.printf("TRANS: Upgrade %s → %s\n",
+                DataManager::linkName(from), DataManager::linkName(to));
+  data.LogMessage("TRANS", 0,
+    "Link upgrade: " + String(DataManager::linkName(from)) +
+    " → " + String(DataManager::linkName(to)));
+  // Re-start HTTP server if not already running
+  if (!serverStarted && WiFi.status() == WL_CONNECTED) {
+    startServer();
+    ArduinoOTA.begin();
+    serverStarted = true;
+    lastApiHit = millis();
+  }
 }

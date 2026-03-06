@@ -25,7 +25,15 @@ true any-to-any wireless protocol routing. Key facts:
 - Relay control: 4 outputs (1× 110V, 3× 12V)
 - DHT22 sensor support with safety-threshold automation
 - Node tracking: RSSI, battery, uptime, GPS coords, hop count
-- Firmware v1.4.1 — proprietary, © 2026 Steven P Williams (spw1.com)
+- Firmware v1.5.0 — proprietary, © 2026 Steven P Williams (spw1.com)
+
+## Infrastructure & Hosting Roadmap (Separate Project)
+
+The system is currently demoed via temporary Cloudflare Quick Tunnels, but the roadmap includes:
+- **Phase 1**: Migrating `spw1.com` and `viai.club` to Cloudflare DNS for branded access.
+- **Phase 2**: Permanent Cloudflare Zero-Trust Tunnels (`app.spw1.com`, `docs.spw1.com`).
+- **Phase 3**: Implementing SSO/MFA for secure remote fleet administration.
+- **Phase 4**: Dockerized MQTT and WebApp deployment for high availability.
 
 ## The Creator
 

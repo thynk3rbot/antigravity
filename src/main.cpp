@@ -16,7 +16,10 @@
 #include "managers/DisplayManager.h"
 #include "managers/ESPNowManager.h"
 #include "managers/LoRaManager.h"
+#include "managers/MCPManager.h"
 #include "managers/MQTTManager.h"
+#include "managers/PerformanceManager.h"
+#include "managers/ProductManager.h"
 #include "managers/ScheduleManager.h"
 #include "managers/WiFiManager.h"
 
@@ -78,7 +81,20 @@ void setup() {
   Serial.println("BOOT: DataManager...");
   DataManager &data = DataManager::getInstance();
   data.Init();
+
+  // 6.1 Performance Manager
+  PerformanceManager::getInstance().init();
+
   Serial.println("ID: " + data.myId + " [VAL:" + data.getMacSuffix() + "]");
+  Serial.flush();
+
+  // 6.5. MCP23017 I2C GPIO Expander
+  delay(50);
+  MCPManager::getInstance().init();
+  Serial.flush();
+
+  // 6.6. Product Manager - restore active product pin modes
+  ProductManager::getInstance().restoreActiveProduct();
   Serial.flush();
 
   // 7. Command Manager - restore hardware state
@@ -110,6 +126,24 @@ void setup() {
   });
   Serial.flush();
 
+  // 10.5 Transport negotiation window
+  // Spend up to transNegotiateMs probing the preferred transport, then lock
+  // currentLink. Configurable via NVS "trans_neg_ms" (default 10 000ms).
+  {
+    DataManager &d = DataManager::getInstance();
+    Serial.printf("BOOT: Link pref=%s  negotiate=%lums\n",
+                  DataManager::linkName(d.preferredLink), d.transNegotiateMs);
+    if (d.wifiEnabled) {
+      WiFiManager::getInstance().negotiate(d.transNegotiateMs);
+    } else {
+      d.currentLink = LinkPreference::LINK_LORA;
+      Serial.println("BOOT: WiFi disabled — locked to LORA");
+    }
+    Serial.printf("BOOT: Current link → %s\n",
+                  DataManager::linkName(d.currentLink));
+  }
+  Serial.flush();
+
   // 11. ESP-NOW Manager
   Serial.println("BOOT: ESPNowManager...");
   ESPNowManager::getInstance().init();
@@ -139,7 +173,11 @@ void setup() {
 //   MAIN LOOP
 // ============================================================================
 void loop() {
+  PerformanceManager::getInstance().loopTickStart();
+
   ScheduleManager::getInstance().execute();
   MQTTManager::getInstance().loop();
+
+  PerformanceManager::getInstance().loopTickEnd();
 }
 #endif
