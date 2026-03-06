@@ -1,6 +1,10 @@
 #include "WiFiManager.h"
+#include "CommandManager.h"
+#include "DataManager.h"
 #include "ESPNowManager.h"
 #include "LoRaManager.h"
+#include "PerformanceManager.h"
+#include "ProductManager.h"
 #include "ScheduleManager.h"
 #include <Arduino.h>
 #include <ArduinoJson.h>
@@ -78,6 +82,7 @@ void WiFiManager::handle() {
       }
       ArduinoOTA.handle();
       server.handleClient();
+      data.traceLogging = (millis() - lastApiHit < 10000);
 
     } else {
       isConnected = false;
@@ -152,6 +157,10 @@ void WiFiManager::startServer() {
     lastApiHit = millis();
     serveApiConfigApply();
   });
+  server.on("/api/product/save", HTTP_POST, [this]() {
+    lastApiHit = millis();
+    serveApiProductSave();
+  });
   server.on("/api/files/list", HTTP_GET, [this]() {
     lastApiHit = millis();
     serveApiFileList();
@@ -214,6 +223,11 @@ void WiFiManager::startServer() {
     lastApiHit = millis();
     serveApiRegistry();
   });
+  server.on("/api/trace/clear", HTTP_POST, [this]() {
+    lastApiHit = millis();
+    DataManager::getInstance().ClearTrace();
+    server.send(200, "text/plain", "OK");
+  });
 
   server.begin();
 
@@ -247,7 +261,15 @@ body{font-family:'Segoe UI',sans-serif;background:#0f0f1a;color:#e0e0e0;height:1
 .badge.on{background:#00ff8814;color:#00ff88;border:1px solid #00ff8844}
 .badge.off{background:#ff444414;color:#ff4444;border:1px solid #ff444444}
 .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;padding:7px;flex-shrink:0}
-.card{background:#1a1a2e;border-radius:6px;padding:6px 8px;border:1px solid #2a2a4a}
+.card{background:#1a1a2e;border-radius:6px;padding:6px 8px;border:1px solid #2a2a4a;position:relative}
+.dbg-id{display:none;font-size:10px;font-weight:700;color:#00f2ff;background:rgba(0,242,255,0.2);border:1px solid rgba(0,242,255,0.5);padding:1px 4px;border-radius:4px;font-family:monospace;line-height:1;vertical-align:middle;margin:0 4px;pointer-events:none;opacity:1.0;text-shadow:0 0-4px rgba(0,242,255,0.8);z-index:100}
+body.debug-on .dbg-id{display:inline-block!important}
+.dbg-tgl{display:flex;align-items:center;gap:6px;font-size:0.65em;color:#555;cursor:pointer;padding:2px 8px;border-radius:12px;background:#16213e;border:1px solid #2a2a4a;transition:0.2s}
+.dbg-tgl:hover{border-color:#00d4ff22}
+.dbg-tgl.active{color:#00d4ff;background:#00d4ff14;border-color:#00d4ff44}
+.dbg-tgl .dot{width:5px;height:5px;border-radius:50%;background:#444}
+.dbg-tgl.active .dot{background:#00d4ff;box-shadow:0 0 5px #00d4ff}
+
 .card .lbl{font-size:0.58em;color:#666;text-transform:uppercase;letter-spacing:0.8px}
 .card .val{font-size:1.0em;font-weight:700;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ok{color:#00ff88}
@@ -263,18 +285,22 @@ body{font-family:'Segoe UI',sans-serif;background:#0f0f1a;color:#e0e0e0;height:1
 .cmd button:hover{background:#00b8d4}
 </style></head><body>
 <div class='hdr'>
-  <h1>&#x1F4E1; <span id='did'>—</span><span id='fwv'></span></h1>
+  <h1>&#x1F4E1; <span id='did'>—</span><span id='fwv'></span></h1><span class='dbg-id'>DASH-HDR</span>
+  <div id='dbg-btn' class='dbg-tgl' onclick='tD()'><div class='dot'></div>DEBUG</div>
+
   <div class='nav'>
+    <a href='/'>&#x1F4E1; Dash</a>
     <a href='/config'>&#x2699; Config</a>
     <a href='/scheduling'>&#x23F1; Sched</a>
+    <a href='/hardware'>&#x1F527; HW</a>
     <a href='/integration'>&#x1F50C;</a>
-    <a href='/help'>?</a>
   </div>
 </div>
 <div class='ifc' id='ifc'></div>
 <div class='grid' id='cards'></div>
 <div class='log' id='log'></div>
-<div class='cmd'>
+<div class='cmd' style='position:relative'>
+  <span class='dbg-id'>DASH-CMD</span>
   <input id='ci' placeholder='Command...' onkeydown="if(event.key==='Enter')send()">
   <button onclick='send()'>Send</button>
 </div>
@@ -287,10 +313,47 @@ document.getElementById('ifc').innerHTML=ifcs.map(function(x){
 return '<span class="badge '+(x[1]?'on':'off')+'">'+x[0]+'</span>';
 }).join('');
 var b=parseFloat(d.bat)||0;
-var c='<div class="card"><div class="lbl">Batteries</div><div class="val '+(b>3.5?'ok':'warn')+'">'+(b?b.toFixed(2)+'V':'—')+'</div></div>';
-c+='<div class="card"><div class="lbl">LoRa RSSI</div><div class="val">'+(d.rssi||'—')+'</div></div>';
-c+='<div class="card"><div class="lbl">Nodes</div><div class="val ok">'+(d.nodes!=null?d.nodes:'—')+'</div></div>';
+var c='<div class="card"><span class="dbg-id">DASH-BATT</span><div class="lbl">Batteries</div><div class="val '+(b>3.5?'ok':'warn')+'">'+(b?b.toFixed(2)+'V':'—')+'</div></div>';
+c+='<div class="card"><span class="dbg-id">DASH-RSSI</span><div class="lbl">LoRa RSSI</div><div class="val">'+(d.rssi||'—')+'</div></div>';
+c+='<div class="card"><span class="dbg-id">DASH-NODES</span><div class="lbl">Nodes</div><div class="val ok">'+(d.nodes!=null?d.nodes:'—')+'</div></div>';
 document.getElementById('cards').innerHTML=c;
+
+// Performance Section
+if(d.loop_avg_ms !== undefined) {
+  var perfHtml = '<div style="padding:4px 10px;background:#1a1a2e;border-top:1px solid #2a2a4a;font-size:0.65em;color:#00d4ff;text-transform:uppercase;letter-spacing:1px;font-weight:700">Performance (ms) & Diagnostics</div>';
+  perfHtml += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:6px;padding:8px">';
+
+  perfHtml += '<div class="card"><div class="lbl">Loop Avg/Max</div><div class="val" style="font-size:0.8em">' + d.loop_avg_ms + ' / ' + d.loop_max_ms + '</div></div>';
+  perfHtml += '<div class="card"><div class="lbl">LoRa TOA</div><div class="val" style="font-size:0.8em">' + d.lora_toa_ms + '</div></div>';
+  perfHtml += '<div class="card" style="grid-column: 1 / -1;"><div class="lbl">Last Reset</div><div class="val" style="font-size:0.75em;color:#ffaa00;white-space:normal;overflow:visible">' + (d.sys_reset || d.reset || 'UNKNOWN') + '</div></div>';
+
+  perfHtml += '</div>';
+  document.getElementById('cards').insertAdjacentHTML('afterend', perfHtml);
+}
+
+// Peripherals Section
+if(d.peripherals && d.peripherals.length > 0) {
+  var phtml = '<div style="padding:4px 10px;background:#1a1a2e;border-top:1px solid #2a2a4a;font-size:0.65em;color:#00d4ff;text-transform:uppercase;letter-spacing:1px;font-weight:700">Peripherals</div>';
+  phtml += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:6px;padding:8px">';
+  d.peripherals.forEach(function(p){
+    var dataStr = '';
+    if(p.data) {
+      for(var k in p.data) {
+        dataStr += '<div style="display:flex;justify-content:space-between"><span>'+k+'</span><span style="color:#00ff88">'+p.data[k]+'</span></div>';
+      }
+    }
+    phtml += '<div class="card" style="border-left:3px solid #00d4ff">';
+    phtml += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">';
+    phtml += '<div class="lbl" style="font-size:0.65em">'+p.id+' ('+p.hw+')</div>';
+    phtml += '<div style="font-size:0.5em;color:#666">v'+p.fw+'</div>';
+    phtml += '</div>';
+    phtml += '<div style="font-size:0.8em">'+dataStr+'</div>';
+    phtml += '<div style="font-size:0.5em;color:#444;margin-top:4px;text-align:right">seen '+p.lastSeen+'s ago</div>';
+    phtml += '</div>';
+  });
+  phtml += '</div>';
+  document.getElementById('cards').insertAdjacentHTML('afterend', phtml);
+}
 
 var l='';d.log.forEach(function(m){
 if(m)l+='<div class="m"><span class="ts">['+m.ts+'s]</span> <span class="src">'+m.src+'</span>: '+m.msg+'</div>';
@@ -314,7 +377,16 @@ if(d.pins && d.pins.length > 0) {
 }
 });}
 setInterval(up,3000);up();
+function tD(f){
+  var b=document.body,btn=document.getElementById('dbg-btn');
+  var on=f!==undefined?f:!b.classList.contains('debug-on');
+  b.classList.toggle('debug-on',on);
+  if(btn)btn.classList.toggle('active',on);
+  localStorage.setItem('dMode',on?'1':'0');
+}
+if(localStorage.getItem('dMode')==='1')tD(true);
 function send(){var v=document.getElementById('ci').value;if(!v)return;
+
 fetch('/api/cmd',{method:'POST',body:new URLSearchParams({'cmd':v})});
 document.getElementById('ci').value='';}
 function tgl(n,v){
@@ -344,7 +416,15 @@ body{font-family:'Segoe UI',sans-serif;background:#0f0f1a;color:#e0e0e0;min-heig
 .hdr h1{font-size:1.3em;color:#00d4ff;font-weight:600}
 .hdr a{color:#888;text-decoration:none;font-size:0.85em;padding:6px 14px;border:1px solid #2a2a4a;border-radius:6px}
 .hdr a:hover{color:#00d4ff;border-color:#00d4ff}
-.sec{margin:16px;background:#1a1a2e;border-radius:10px;border:1px solid #2a2a4a;padding:20px}
+.sec{margin:16px;background:#1a1a2e;border-radius:10px;border:1px solid #2a2a4a;padding:20px;position:relative}
+.dbg-id{display:none;font-size:10px;font-weight:700;color:#00f2ff;background:rgba(0,242,255,0.2);border:1px solid rgba(0,242,255,0.5);padding:1px 4px;border-radius:4px;font-family:monospace;line-height:1;vertical-align:middle;margin:0 4px;pointer-events:none;opacity:1.0;text-shadow:0 0-4px rgba(0,242,255,0.8);z-index:100}
+body.debug-on .dbg-id{display:inline-block!important}
+.dbg-tgl{display:flex;align-items:center;gap:6px;font-size:0.65em;color:#555;cursor:pointer;padding:2px 8px;border-radius:12px;background:#16213e;border:1px solid #2a2a4a;transition:0.2s}
+.dbg-tgl:hover{border-color:#00d4ff22}
+.dbg-tgl.active{color:#00d4ff;background:#00d4ff14;border-color:#00d4ff44}
+.dbg-tgl .dot{width:5px;height:5px;border-radius:50%;background:#444}
+.dbg-tgl.active .dot{background:#00d4ff;box-shadow:0 0 5px #00d4ff}
+
 .sec h2{color:#00d4ff;font-size:1em;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid #2a2a4a}
 .row{display:flex;gap:12px;margin-bottom:10px;align-items:center;flex-wrap:wrap}
 .row label{width:120px;font-size:0.85em;color:#aaa;flex-shrink:0}
@@ -367,11 +447,12 @@ body{font-family:'Segoe UI',sans-serif;background:#0f0f1a;color:#e0e0e0;min-heig
 .tag.off{background:#ff444422;color:#ff4444}
 .msg{background:#00ff8822;color:#00ff88;border:1px solid #00ff8844;border-radius:8px;padding:10px 16px;margin:16px;text-align:center;display:none}
 </style></head><body>
-<div class='hdr'><h1>&#x2699; Configuration</h1><div><a href='/'>&#x1F4E1; Dashboard</a> <a href='/scheduling'>&#x1F4C5; Schedule</a> <a href='/integration'>&#x1F50C; Integrations</a></div></div>
+<div class='hdr' style='position:relative'><span class='dbg-id' style='top:4px;right:20px'>CFG-HDR</span><h1>&#x2699; Configuration</h1><div id='dbg-btn' class='dbg-tgl' onclick='tD()'><div class='dot'></div>DEBUG</div><div><a href='/'>&#x1F4E1; Dash</a> <a href='/scheduling'>&#x1F4C5; Sched</a> <a href='/hardware'>&#x1F527; HW</a> <a href='/integration'>&#x1F50C; Plugins</a></div></div>
 <div class='msg' id='msg'></div>
 <form method='POST' action='/config'>
 
 <div class='sec'>
+<span class='dbg-id'>CFG-DEV</span>
 <h2>&#x1F4BB; Device</h2>
 <div class='row'><label>Device Name</label><input name='dev_name' value=')rawhtml";
   html += data.myId;
@@ -386,6 +467,7 @@ body{font-family:'Segoe UI',sans-serif;background:#0f0f1a;color:#e0e0e0;min-heig
 </div>
 
 <div class='sec'>
+<span class='dbg-id'>CFG-WIFI</span>
 <h2>&#x1F4F6; WiFi</h2>
 <div class='row'><label>SSID</label><input name='wifi_ssid' value=')rawhtml";
   html += data.wifiSsid;
@@ -405,6 +487,7 @@ body{font-family:'Segoe UI',sans-serif;background:#0f0f1a;color:#e0e0e0;min-heig
 </div>
 
 <div class='sec'>
+<span class='dbg-id'>CFG-LORA</span>
 <h2>&#x1F4E1; LoRa Radio</h2>
 <div class='row'><label>Frequency</label><input value=')rawhtml";
   html += String(LORA_FREQ, 1);
@@ -422,7 +505,8 @@ body{font-family:'Segoe UI',sans-serif;background:#0f0f1a;color:#e0e0e0;min-heig
 </div>
 
 <div class='sec'>
-<h2>&#x26A1; ESP-NOW</h2>
+<span class='dbg-id'>CFG-ESPNOW</span>
+<h2>&#x26A1; ESP-NOW Peers</h2>
 <div class='row'><label>Enabled</label><select name='espnow_en'><option value='0')rawhtml";
   if (!data.espNowEnabled)
     html += " selected";
@@ -443,6 +527,7 @@ body{font-family:'Segoe UI',sans-serif;background:#0f0f1a;color:#e0e0e0;min-heig
 </div>
 
 <div class='sec'>
+<span class='dbg-id'>CFG-RST</span>
 <h2>&#x1F527; Actions</h2>
 <button type='submit' class='btn'>&#x1F4BE; Save & Reboot</button>
 <button type='button' class='btn danger' onclick="if(confirm('Factory Reset?'))fetch('/api/cmd',{method:'POST',body:new URLSearchParams({cmd:'WIPECONFIG'})})">&#x26A0; Factory Reset</button>
@@ -613,6 +698,9 @@ void WiFiManager::serveApiStatus() {
   unsigned long s = millis() / 1000;
   String uptime = String(s / 3600) + "h " + String((s % 3600) / 60) + "m";
 
+  PerformanceManager &perf = PerformanceManager::getInstance();
+  perf.reportConfiguratorActivity();
+
   String json = "{";
   json += "\"id\":\"" + data.myId + "\",";
   json += "\"version\":\"" FIRMWARE_VERSION "\",";
@@ -636,6 +724,10 @@ void WiFiManager::serveApiStatus() {
   json += "\"ble\":true,";
   json += "\"wifi\":true,";
   json += "\"espnow\":" + String(espnow.espNowActive ? "true" : "false") + ",";
+  json += "\"loop_avg_ms\":" + String(perf.getLoopAvgMs()) + ",";
+  json += "\"loop_max_ms\":" + String(perf.getLoopMaxMs()) + ",";
+  json += "\"lora_toa_ms\":" + String(perf.getTimeOnAir()) + ",";
+  json += "\"sys_reset\":\"" + perf.getResetReason() + "\",";
 
   // Standard pins array for labeled diagnostics - FILTERED to "Usable" only
   json += "\"pins\":[";
@@ -706,7 +798,7 @@ void WiFiManager::serveApiStatus() {
     meshFirst = false;
   }
   json += "],";
-
+  json += "\"peripherals\":" + data.GetPeripheralsJson() + ",";
   json += "\"log\":[";
   bool first = true;
   for (int i = 0; i < LOG_SIZE; i++) {
@@ -765,6 +857,29 @@ void WiFiManager::serveApiTransportMode() {
 void WiFiManager::serveApiRegistry() {
   String json = DataManager::getInstance().GetRegistryJson();
   server.send(200, "application/json", json);
+}
+
+void WiFiManager::serveApiProductSave() {
+  if (!server.hasArg("plain")) {
+    server.send(400, "application/json",
+                "{\"ok\":false,\"error\":\"Missing body\"}");
+    return;
+  }
+  String body = server.arg("plain");
+  // Extract name for response before saving
+  JsonDocument doc;
+  String name = "";
+  if (deserializeJson(doc, body) == DeserializationError::Ok)
+    name = doc["name"] | "";
+  bool ok = ProductManager::getInstance().saveProduct(body);
+  if (ok) {
+    server.send(200, "application/json",
+                "{\"ok\":true,\"name\":\"" + name + "\"}");
+  } else {
+    server.send(400, "application/json",
+                "{\"ok\":false,\"error\":\"Save failed — check JSON and 'name' "
+                "field\"}");
+  }
 }
 
 void WiFiManager::serveApiCmd() {
@@ -859,7 +974,7 @@ body{font-family:'Segoe UI',sans-serif;background:#0f0f1a;color:#e0e0e0;min-heig
 .hdr h1{font-size:1.3em;color:#00d4ff;font-weight:600}
 .hdr a{color:#888;text-decoration:none;font-size:0.85em;padding:6px 14px;border:1px solid #2a2a4a;border-radius:6px}
 .hdr a:hover{color:#00d4ff;border-color:#00d4ff}
-.sec{margin:16px;background:#1a1a2e;border-radius:10px;border:1px solid #2a2a4a;padding:20px}
+.sec{margin:16px;background:#1a1a2e;border-radius:10px;border:1px solid #2a2a4a;padding:20px;position:relative}\n.dbg-id{position:absolute;right:8px;top:8px;font-size:9px;color:#555;opacity:0.6;pointer-events:none;font-family:monospace;letter-spacing:0.5px;z-index:10}
 .sec h2{color:#00d4ff;font-size:1em;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid #2a2a4a}
 .row{display:flex;gap:12px;margin-bottom:10px;align-items:center;flex-wrap:wrap}
 .row label{width:160px;font-size:0.85em;color:#aaa;flex-shrink:0}
@@ -880,6 +995,7 @@ body{font-family:'Segoe UI',sans-serif;background:#0f0f1a;color:#e0e0e0;min-heig
   html += R"rawhtml(<form method='POST' action='/integration'>
 
 <div class='sec'>
+<span class='dbg-id'>INT-STREAM</span>
 <h2>&#x1F4CA; Excel Data Streamer</h2>
 <p style='font-size:0.85em;color:#888;margin-bottom:12px'>Outputs live telemetry and messages to the USB Serial port in CSV format.</p>
 <div class='row'><label>Serial CSV Stream</label><select name='stream'><option value='0')rawhtml";
@@ -892,6 +1008,7 @@ body{font-family:'Segoe UI',sans-serif;background:#0f0f1a;color:#e0e0e0;min-heig
 </div>
 
 <div class='sec'>
+<span class='dbg-id'>INT-MQTT</span>
 <h2>&#x1F310; MQTT Broker</h2>
 <p style='font-size:0.85em;color:#888;margin-bottom:12px'>Publishes telemetry to <code>loralink/telemetry/&lt;Node&gt;</code> and messages to <code>loralink/msg/&lt;Node&gt;</code>.</p>
 <div class='row'><label>MQTT Enabled</label><select name='mqtt_en'><option value='0')rawhtml";
@@ -969,6 +1086,7 @@ void WiFiManager::serveScheduling() {
         @media (max-width: 900px) { .dashboard-grid { grid-template-columns: 1fr; } }
 
         .card { padding: 1.5rem; margin-bottom: 1.5rem; box-shadow: 0 8px 32px rgba(0,0,0,0.3); position: relative; overflow: hidden; }
+        .dbg-id { position: absolute; right: 8px; top: 8px; font-size: 10px; color: #555; opacity: 0.6; pointer-events: none; font-family: monospace; letter-spacing: 0.5px; z-index: 10; }
         .card-header { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1.5rem; color: var(--accent); }
         .card-header i { font-size: 1.2rem; }
         .card-header h2 { font-size: 1rem; text-transform: uppercase; letter-spacing: 1px; }
@@ -1070,7 +1188,7 @@ void WiFiManager::serveScheduling() {
         <div class="dashboard-grid">
             <div class="left-col">
                 <div class="card glass">
-                    <div class="card-header"><i class="fas fa-calendar-plus"></i><h2>Configure Task</h2></div>
+                    <div class="card-header"><i class="fas fa-calendar-plus"></i><span class="dbg-id">SCH-NEW</span><h2>New Task</h2></div>
                     <div class="input-group">
                         <label>Identifier</label>
                         <input type="text" id="name" placeholder="e.g. HydroPump_01">
@@ -1126,7 +1244,7 @@ void WiFiManager::serveScheduling() {
 
             <div class="right-col">
                 <div class="card glass" style="min-height: 450px;">
-                    <div class="card-header"><i class="fas fa-wave-square"></i><h2>Active Infrastructure Grid</h2></div>
+                    <div class="card-header"><i class="fas fa-wave-square"></i><span class="dbg-id">SCH-LIST</span><h2>Active Tasks</h2></div>
                     <div id="taskList" class="sched-list">
                         <!-- Loaded via JS -->
                         <div style="text-align:center; color:var(--text-dim); margin-top:5rem;">
@@ -1472,27 +1590,34 @@ void WiFiManager::serveApiScheduleAdd() {
   }
 
   String name = server.arg("name");
-  bool enabled = true;
-  if (server.hasArg("enabled"))
-    enabled = server.arg("enabled") == "true";
-
-  // If update_only is set, we just want to toggle enabled state or similar
-  if (server.hasArg("update_only")) {
-    // Logic to find task and update state
-    // For now we'll just re-add with same params if provided, or we need a more
-    // surgical update But addDynamicTask already handles updates if name
-    // exists.
-  }
-
   String type = server.hasArg("type") ? server.arg("type") : "TOGGLE";
   String pin = server.hasArg("pin") ? server.arg("pin") : "RELAY1";
   unsigned long interval =
-      server.hasArg("interval") ? server.arg("interval").toInt() : 600000;
+      server.hasArg("interval") ? server.arg("interval").toInt() : 60;
   unsigned long duration =
       server.hasArg("duration") ? server.arg("duration").toInt() : 0;
+  int value = server.hasArg("value") ? server.arg("value").toInt() : 0;
+  bool enabled = server.hasArg("enabled") ? (server.arg("enabled") == "true" ||
+                                             server.arg("enabled") == "1")
+                                          : true;
+
+  int triggerPin = server.hasArg("triggerPin")
+                       ? CommandManager::getInstance().getPinFromName(
+                             server.arg("triggerPin"))
+                       : -1;
+  int triggerMode =
+      server.hasArg("triggerMode") ? server.arg("triggerMode").toInt() : 0;
+  int threshold =
+      server.hasArg("threshold") ? server.arg("threshold").toInt() : 0;
+  bool thresholdGreater = server.hasArg("thresholdGreater")
+                              ? (server.arg("thresholdGreater") == "true" ||
+                                 server.arg("thresholdGreater") == "1")
+                              : true;
 
   bool ok = ScheduleManager::getInstance().addDynamicTask(
-      name, type, pin, interval, duration, "WEB", enabled);
+      name, type, pin, interval, duration, "WEB", enabled, value, triggerPin,
+      triggerMode, threshold, thresholdGreater);
+
   server.send(ok ? 200 : 500, "text/plain", ok ? "OK" : "Error");
 }
 
@@ -1602,4 +1727,127 @@ void WiFiManager::serveApiFileRead() {
   } else {
     server.send(400, "text/plain", "Missing path");
   }
+}
+void WiFiManager::serveHardware() {
+  String html = R"rawhtml(<!DOCTYPE html><html><head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width,initial-scale=1'>
+<title>Hardware Visualizer</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',sans-serif;background:#050510;color:#e0e0e0;overflow-x:hidden}
+.nav{background:#111122;padding:12px;border-bottom:1px solid #2a2a4a;display:flex;justify-content:center;gap:15px;position:sticky;top:0;z-index:100}
+.nav a{color:#888;text-decoration:none;font-size:0.85em;padding:4px 8px;border-radius:4px}
+.nav a:hover, .nav a.active{color:#00d4ff;background:#1a1a3a}
+.container{padding:20px;display:flex;flex-direction:column;align-items:center;max-width:800px;margin:0 auto}
+.board-container{position:relative;background:#1a1a2e;border:1px solid #2a2a4a;border-radius:15px;padding:40px;margin-top:20px;box-shadow:0 10px 30px rgba(0,0,0,0.5)}
+.pin-label{position:absolute;font-size:10px;color:#aaa;pointer-events:none;white-space:nowrap}
+.pin-circle{cursor:help;transition:all 0.2s}
+.pin-circle:hover{filter:brightness(1.5);r:6}
+.info-panel{margin-top:20px;width:100%;background:#111122;border:1px solid #2a2a4a;border-radius:10px;padding:15px;position:relative}
+.dbg-id{position:absolute;right:8px;top:8px;font-size:9px;color:#555;opacity:0.6;pointer-events:none;font-family:monospace;letter-spacing:0.5px;z-index:10}
+.info-panel h2{font-size:1.1em;color:#00d4ff;margin-bottom:10px}
+.selector{margin-bottom:20px}
+.selector select{background:#111122;color:#fff;border:1px solid #2a2a4a;padding:8px 12px;border-radius:6px;outline:none}
+</style></head><body>
+<div class='nav'>
+  <a href='/'>&#x1F4E1; Dash</a>
+  <a href='/config'>&#x2699; Config</a>
+  <a href='/hardware' class='active'>&#x1F527; Hardware</a>
+</div>
+<div class='container'>
+  <div class='selector' style='position:relative'>
+    <span class='dbg-id' style='right:-20px'>HW-SEL</span>
+    <select id='boardSelect' onchange='loadBoard(this.value)'>
+      <option value='heltec_v3'>Heltec WiFi LoRa 32 V3 (Local)</option>
+      <option value='xiao_samd21'>Seeeduino Xiao (Satellite)</option>
+    </select>
+  </div>
+  <div id='boardArea' class='board-container'><span class='dbg-id'>HW-VIEW</span></div>
+  <div class='info-panel' id='infoPanel' style='position:relative'>
+    <span class='dbg-id'>HW-INFO</span>
+    <h2>Board Info</h2>
+    <div id='pinInfo'>Select a pin to see details</div>
+  </div>
+</div>
+<script>
+var currentBoard = null;
+var liveData = {};
+
+function up(){
+  fetch('/api/status').then(r=>r.json()).then(d=>{
+    liveData = d;
+    updatePins();
+  });
+}
+
+function loadBoard(id){
+  fetch('/api/files/read?path=/boards/'+id+'.json').then(r=>r.json()).then(data=>{
+    currentBoard = data;
+    renderBoard();
+  });
+}
+
+function renderBoard(){
+  if(!currentBoard) return;
+  var b = currentBoard;
+  var html = '<svg width="'+b.width+'" height="'+b.height+'" viewBox="0 0 '+b.width+' '+b.height+'">';
+  // Board outline
+  html += '<rect x="30" y="20" width="'+(b.width-60)+'" height="'+(b.height-40)+'" rx="10" fill="#222" stroke="#444" stroke-width="2"/>';
+  // Component markers (OLED, Buttons, etc)
+  if(b.id=='heltec_v3'){
+    html += '<rect x="45" y="50" width="90" height="40" fill="#000" rx="2"/>'; // OLED
+    html += '<rect x="45" y="100" width="10" height="10" fill="#333"/>'; // Boot btn
+  }
+
+  // Pins
+  b.pins.forEach(function(p){
+    var color = '#444';
+    if(p.t=='GND') color='#555';
+    if(p.t=='PWR') color='#ff4444';
+    if(p.t=='ADC') color='#ffcc00';
+    if(p.t=='SDA'||p.t=='SCL') color='#00d4ff';
+
+    html += '<circle class="pin-circle" id="p'+p.p+'" cx="'+p.x+'" cy="'+p.y+'" r="4" fill="'+color+'" onmouseover="showPin(\''+p.n+'\','+p.p+',\''+p.t+'\')"/>';
+    // Label
+    var lx = p.x < b.width/2 ? p.x + 10 : p.x - 10;
+    var ta = p.x < b.width/2 ? 'start' : 'end';
+    html += '<text x="'+lx+'" y="'+(p.y+3)+'" font-size="8" fill="#888" text-anchor="'+ta+'">'+p.n+'</text>';
+  });
+
+  html += '</svg>';
+  document.getElementById('boardArea').innerHTML = html;
+  updatePins();
+}
+
+function showPin(name, num, type){
+  var h = '<strong>Pin:</strong> '+name+'<br>';
+  h += '<strong>GPIO:</strong> '+(num>=0?num:'N/A')+'<br>';
+  h += '<strong>Type:</strong> '+type+'<br>';
+  if(num >= 0 && liveData.pins && liveData.pins[num]){
+    var ps = liveData.pins[num];
+    h += '<strong>State:</strong> <span style="color:'+(ps.val?'#00ff88':'#ff4444')+'">'+(ps.val?'HIGH':'LOW')+'</span><br>';
+    if(ps.name) h += '<strong>User Name:</strong> '+ps.name+'<br>';
+  }
+  document.getElementById('pinInfo').innerHTML = h;
+}
+
+function updatePins(){
+  if(!currentBoard || !liveData.pins) return;
+  currentBoard.pins.forEach(function(p){
+    if(p.p < 0) return;
+    var el = document.getElementById('p'+p.p);
+    if(el && liveData.pins[p.p]){
+      var val = liveData.pins[p.p].val;
+      el.setAttribute('fill', val ? '#00ff88' : '#ff4444');
+      el.setAttribute('stroke', val ? '#00ff8844' : '#ff444444');
+      el.setAttribute('stroke-width', '4');
+    }
+  });
+}
+
+loadBoard('heltec_v3');
+setInterval(up, 1000);
+up();
+</script></body></html>)rawhtml";
+  server.send(200, "text/html", html);
 }
