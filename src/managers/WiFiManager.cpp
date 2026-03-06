@@ -714,7 +714,7 @@ void WiFiManager::serveApiStatus() {
   json += "\"espnow_peers\":" + String(data.numEspNowPeers) + ",";
   json += "\"hw\":\"" + data.getMacSuffix() + "\",";
   json += "\"reset\":\"" + data.getResetReason() + "\",";
-  json += "\"last_cmd\":\"" + lora.lastMsgReceived + "\",";
+  { String lc = lora.lastMsgReceived; lc.replace("\"", "\\\""); lc.replace("\n", " "); lc.replace("\r", ""); json += "\"last_cmd\":\"" + lc + "\","; }
   json += "\"bat\":" + String(bat, 2) + ",";
   json += "\"rssi\":" + String(lora.lastRssi) + ",";
   json += "\"nodes\":" + String(data.numNodes) + ",";
