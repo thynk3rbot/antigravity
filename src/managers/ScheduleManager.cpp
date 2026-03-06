@@ -560,23 +560,9 @@ void ScheduleManager::loadSchedulesFromCsv(const String &csv) {
 void ScheduleManager::batteryMonitorCallback() {
   float bat = analogRead(PIN_BAT_ADC) / 4095.0 * 3.3 * 2.0;
   LOG_PRINTF("SCHED: Battery Monitor -> %.2fV\n", bat);
-  if (bat > 0.5 && bat < 3.20) {
-    LOG_PRINTLN("SCHED: Low Battery! Entering Deep Sleep.");
-    DataManager::getInstance().LogMessage("SYS", 0, "Low Battery Sleep");
-    if (LoRaManager::getInstance().loraActive) {
-      LoRaManager::getInstance().SendLoRa(DataManager::getInstance().myId +
-                                          " SYS: Low Battery Sleep");
-    }
-    delay(1000);
-    if (Heltec.display) {
-      Heltec.display->clear();
-      Heltec.display->drawString(0, 0, "LOW BATTERY SLEEP");
-      Heltec.display->display();
-      delay(2000);
-      Heltec.display->displayOff();
-    }
-    esp_sleep_enable_timer_wakeup(6ULL * 60 * 60 * 1000000ULL); // 6 Hours
-    esp_deep_sleep_start();
+  if (bat > 0.5f && bat < 3.20f) {
+    LOG_PRINTLN("SCHED: Low Battery! Routing through executeSleep.");
+    CommandManager::executeSleep(6.0f, "LOW-BAT:" + String(bat, 2) + "V");
   }
 }
 

@@ -23,6 +23,18 @@ public:
   unsigned long lastApiHit;
   bool modemSleepEnabled;
 
+  // Returns true if a PC webapp has hit the API within the given window (default 5 min)
+  bool isPCAttached(unsigned long windowMs = 300000UL) const {
+    return isConnected && lastApiHit > 0 &&
+           (millis() - lastApiHit) < windowMs;
+  }
+
+  // Returns true if running on USB/mains (battery reads near 0V or > 4.1V charging)
+  static bool isPowered() {
+    float bat = analogRead(PIN_BAT_ADC) / 4095.0f * 3.3f * 2.0f;
+    return (bat < 0.1f || bat > 4.1f);
+  }
+
 private:
   WiFiManager();
   bool serverStarted;
@@ -38,6 +50,7 @@ private:
   void serveIntegrationSave();
   void serveHelp();
   void serveScheduling();
+  void serveHardware();
   void serveApiStatus();
   void serveApiConfig();
   void serveApiConfigApply();
@@ -56,6 +69,7 @@ private:
   void serveApiPinEnable();
   void serveApiTransportMode();
   void serveApiRegistry();
+  void serveApiProductSave();
 };
 
 #endif // WIFI_MANAGER_H

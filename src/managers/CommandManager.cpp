@@ -5,9 +5,14 @@
 #include "DisplayManager.h"
 #include "ESPNowManager.h"
 #include "LoRaManager.h"
+#include "MCPManager.h"
+#include "MQTTManager.h"
+#include "ProductManager.h"
 #include "ScheduleManager.h"
+#include "WiFiManager.h"
 #include <Arduino.h>
 #include <WiFi.h>
+#include <esp32-hal-ledc.h>
 
 // Pin Lookup Table
 struct PinMap {
@@ -57,6 +62,18 @@ int CommandManager::getPinFromName(const String &name) {
       return PIN_LOOKUP[i].pin;
     }
   }
+  // "MCP:chip:pin" → extended pin number (e.g. "MCP:0:4" → 104)
+  if (upperName.startsWith("MCP:")) {
+    int c2 = upperName.indexOf(':', 4);
+    if (c2 > 4) {
+      int chip = upperName.substring(4, c2).toInt();
+      int pin  = upperName.substring(c2 + 1).toInt();
+      if (chip >= 0 && chip < MCP_MAX_CHIPS && pin >= 0 && pin < MCP_CHIP_PINS)
+        return MCP_PIN_BASE + chip * MCP_CHIP_PINS + pin;
+    }
+    return -1;
+  }
+
   if (isdigit(upperName.charAt(0))) {
     return upperName.toInt();
   }
@@ -191,6 +208,65 @@ void CommandManager::registerCommand(const String &cmd,
   _commandRegistry[upperCmd] = handler;
 }
 
+// ── Guarded sleep entry point ────────────────────────────────────────────────
+// Called by the SLEEP command handler and batteryMonitorCallback.
+// Guards: mains power blocks sleep entirely; PC attachment logs a no-ACK alert.
+// Broadcasts a 3-2-1 LoRa countdown so mesh peers know the node is going quiet.
+void CommandManager::executeSleep(float hours, const String &trigger) {
+  DataManager &data   = DataManager::getInstance();
+  LoRaManager &lora   = LoRaManager::getInstance();
+  WiFiManager &wifi   = WiFiManager::getInstance();
+
+  unsigned int mins = (unsigned int)(hours * 60.0f);
+
+  // ── Guard: mains / USB power ─────────────────────────────────────────────
+  if (WiFiManager::isPowered()) {
+    String msg = "SYS: Sleep blocked — mains/USB power detected [" + trigger + "]";
+    data.LogMessage("SYS", 0, msg);
+    lora.lastMsgReceived = "SLEEP BLOCKED (powered)";
+    LOG_PRINTLN(msg);
+    return;
+  }
+
+  // ── Guard: PC webapp attached ─────────────────────────────────────────────
+  if (wifi.isPCAttached()) {
+    String alert = "SYS: Sleep in 10s — PC attached, no cancel received [" + trigger + "]";
+    data.LogMessage("SYS", 0, alert);
+    lora.lastMsgReceived = "SLEEP WARN: PC attached";
+    LOG_PRINTLN(alert);
+    if (lora.loraActive)
+      lora.SendLoRa(data.myId + " " + alert);
+    // Brief pause so the LoRa frame clears and the webapp sees the log entry
+    delay(3000);
+  }
+
+  // ── Countdown broadcast ───────────────────────────────────────────────────
+  for (int i = 3; i >= 1; i--) {
+    String cd = data.myId + " SLEEP " + String(mins) + "min in " + String(i) + "s";
+    data.LogMessage("SYS", 0, "Sleep " + String(mins) + "min in " + String(i) + "s");
+    if (lora.loraActive) lora.SendLoRa(cd);
+    LOG_PRINTLN(cd);
+    delay(1200);
+  }
+
+  // ── Execute deep sleep ────────────────────────────────────────────────────
+  data.LogMessage("SYS", 0, "Sleeping " + String(mins) + "min [" + trigger + "]");
+  lora.lastMsgReceived = "SYS: Sleeping " + String(mins) + "min";
+
+  digitalWrite(PIN_LED_BUILTIN, LOW);
+  if (Heltec.display) {
+    Heltec.display->clear();
+    Heltec.display->drawString(0, 0, "SLEEP " + String(mins) + "min");
+    Heltec.display->display();
+    delay(500);
+    Heltec.display->displayOff();
+  }
+
+  uint64_t sleepUs = (uint64_t)(hours * 3600.0f * 1000000.0f);
+  esp_sleep_enable_timer_wakeup(sleepUs);
+  esp_deep_sleep_start();
+}
+
 void CommandManager::initRegistry() {
   registerCommand("LED", [](const String &args, CommInterface source) {
     DataManager &data = DataManager::getInstance();
@@ -250,7 +326,9 @@ void CommandManager::initRegistry() {
   registerCommand("HELP", [](const String &args, CommInterface source) {
     LoRaManager &lora = LoRaManager::getInstance();
     String help = "LED ON/OFF, BLINK, STATUS, READMAC, RADIO, SETNAME, "
-                  "SETWIFI, ESPNOW ON/OFF, STREAM ON/OFF";
+                  "SETWIFI, ESPNOW ON/OFF, STREAM ON/OFF, "
+                  "GPIO pin 0|1, PWM pin duty(0-255), SERVO pin angle(0-180), "
+                  "READ pin, APC pin 0|1";
     if (source == CommInterface::COMM_LORA)
       lora.SendLoRa(help);
     else
@@ -291,21 +369,11 @@ void CommandManager::initRegistry() {
   });
 
   registerCommand("SLEEP", [](const String &args, CommInterface source) {
-    DataManager &data = DataManager::getInstance();
-    LoRaManager &lora = LoRaManager::getInstance();
     float hours = args.toFloat();
-    if (hours > 0.0 && hours <= 24.0) {
-      uint64_t sleepUs = (uint64_t)(hours * 3600.0 * 1000000.0);
-      unsigned int mins = (unsigned int)(hours * 60.0);
-      lora.lastMsgReceived = "SYS: Sleep " + String(mins) + "min";
-      lora.SendLoRa(data.myId + " sleeping for " + String(mins) + "min");
-      delay(500);
-      digitalWrite(PIN_LED_BUILTIN, LOW);
-      Heltec.display->displayOff();
-      esp_sleep_enable_timer_wakeup(sleepUs);
-      esp_deep_sleep_start();
+    if (hours > 0.0f && hours <= 24.0f) {
+      CommandManager::executeSleep(hours, "CMD:" + String(interfaceName(source)));
     } else {
-      lora.lastMsgReceived = "ERR: SLEEP 0.01-24";
+      LoRaManager::getInstance().lastMsgReceived = "ERR: SLEEP 0.01-24";
     }
   });
 
@@ -379,27 +447,52 @@ void CommandManager::initRegistry() {
         data.SetWifi(data.wifiSsid, value);
         lora.lastMsgReceived = "CONFIG: wifi_pass -> ****";
       } else if (key == "WIFI_EN") {
-        bool enable = value.equalsIgnoreCase("1") || value.equalsIgnoreCase("true") || value.equalsIgnoreCase("on");
+        bool enable = value.equalsIgnoreCase("1") ||
+                      value.equalsIgnoreCase("true") ||
+                      value.equalsIgnoreCase("on");
         data.SetWifiEnabled(enable);
-        lora.lastMsgReceived = "CONFIG: wifi_en -> " + String(enable ? "1" : "0");
+        lora.lastMsgReceived =
+            "CONFIG: wifi_en -> " + String(enable ? "1" : "0");
       } else if (key == "STATIC_IP") {
         data.SetStaticIp(value, "", "");
         lora.lastMsgReceived = "CONFIG: static_ip -> " + value;
       } else if (key == "REPEATER") {
-        bool enable = value.equalsIgnoreCase("1") || value.equalsIgnoreCase("true") || value.equalsIgnoreCase("on");
+        bool enable = value.equalsIgnoreCase("1") ||
+                      value.equalsIgnoreCase("true") ||
+                      value.equalsIgnoreCase("on");
         data.SetRepeater(enable);
-        lora.lastMsgReceived = "CONFIG: repeater -> " + String(enable ? "1" : "0");
+        lora.lastMsgReceived =
+            "CONFIG: repeater -> " + String(enable ? "1" : "0");
       } else if (key == "ESPNOW") {
-        bool enable = value.equalsIgnoreCase("1") || value.equalsIgnoreCase("true") || value.equalsIgnoreCase("on");
+        bool enable = value.equalsIgnoreCase("1") ||
+                      value.equalsIgnoreCase("true") ||
+                      value.equalsIgnoreCase("on");
         data.SetESPNowEnabled(enable);
-        lora.lastMsgReceived = "CONFIG: espnow_en -> " + String(enable ? "1" : "0");
+        lora.lastMsgReceived =
+            "CONFIG: espnow_en -> " + String(enable ? "1" : "0");
+      } else if (key == "MQTT_EN") {
+        bool enable = value.equalsIgnoreCase("1") ||
+                      value.equalsIgnoreCase("true") ||
+                      value.equalsIgnoreCase("on");
+        data.SetMqtt(enable, data.mqttServer, data.mqttPort, data.mqttUser,
+                     data.mqttPass);
+        lora.lastMsgReceived = "CONFIG: mqtt_en -> " + String(enable ? "1" : "0");
+      } else if (key == "MQTT_SRV") {
+        data.SetMqtt(data.mqttEnabled, value, data.mqttPort, data.mqttUser,
+                     data.mqttPass);
+        lora.lastMsgReceived = "CONFIG: mqtt_srv -> " + value;
+      } else if (key == "MQTT_PRT") {
+        data.SetMqtt(data.mqttEnabled, data.mqttServer, value.toInt(),
+                     data.mqttUser, data.mqttPass);
+        lora.lastMsgReceived = "CONFIG: mqtt_prt -> " + value;
       } else {
         lora.lastMsgReceived = "ERR: Unknown config key: " + key;
         return;
       }
 
       // Trigger restart for WiFi/IP changes
-      if (key == "WIFI_SSID" || key == "WIFI_PASS" || key == "WIFI_EN" || key == "STATIC_IP") {
+      if (key == "WIFI_SSID" || key == "WIFI_PASS" || key == "WIFI_EN" ||
+          key == "STATIC_IP") {
 #ifndef UNIT_TEST
         ScheduleManager::getInstance().triggerRestart(1000);
 #endif
@@ -414,13 +507,23 @@ void CommandManager::initRegistry() {
       } else if (key == "WIFI_SSID") {
         lora.lastMsgReceived = "CONFIG: wifi_ssid = " + data.wifiSsid;
       } else if (key == "WIFI_EN") {
-        lora.lastMsgReceived = "CONFIG: wifi_en = " + String(data.wifiEnabled ? "1" : "0");
+        lora.lastMsgReceived =
+            "CONFIG: wifi_en = " + String(data.wifiEnabled ? "1" : "0");
       } else if (key == "STATIC_IP") {
         lora.lastMsgReceived = "CONFIG: static_ip = " + data.staticIp;
       } else if (key == "REPEATER") {
-        lora.lastMsgReceived = "CONFIG: repeater = " + String(data.repeaterEnabled ? "1" : "0");
+        lora.lastMsgReceived =
+            "CONFIG: repeater = " + String(data.repeaterEnabled ? "1" : "0");
       } else if (key == "ESPNOW") {
-        lora.lastMsgReceived = "CONFIG: espnow_en = " + String(data.espNowEnabled ? "1" : "0");
+        lora.lastMsgReceived =
+            "CONFIG: espnow_en = " + String(data.espNowEnabled ? "1" : "0");
+      } else if (key == "MQTT_EN") {
+        lora.lastMsgReceived =
+            "CONFIG: mqtt_en = " + String(data.mqttEnabled ? "1" : "0");
+      } else if (key == "MQTT_SRV") {
+        lora.lastMsgReceived = "CONFIG: mqtt_srv = " + data.mqttServer;
+      } else if (key == "MQTT_PRT") {
+        lora.lastMsgReceived = "CONFIG: mqtt_prt = " + String(data.mqttPort);
       } else {
         lora.lastMsgReceived = "ERR: Unknown config key: " + key;
       }
@@ -556,18 +659,23 @@ void CommandManager::initRegistry() {
       int pin = getPinFromName(pinName);
       int val = args.substring(space + 1).toInt();
       if (pin >= 0) {
-        pinMode(pin, OUTPUT);
-        digitalWrite(pin, val);
-        data.SetGpioState(pinName, val == 1);
-        String friendly = data.GetPinName(String(pin));
-        String msg = "SYS: GPIO " + pinName + "=" + String(val);
-        if (friendly.length() > 0)
-          msg += " (" + friendly + ")";
-        lora.lastMsgReceived = msg;
-        if (source == CommInterface::COMM_LORA)
-          lora.SendLoRa(data.myId + " " + msg);
-        else
-          LOG_PRINTLN(msg);
+        MCPManager::setupPin(pin, OUTPUT);
+        if (!MCPManager::writePin(pin, val)) {
+          String err = "ERR: MCP chip " + String(MCPManager::chipIndex(pin)) + " not present";
+          lora.lastMsgReceived = err;
+          LOG_PRINTLN(err);
+        } else {
+          data.SetGpioState(pinName, val == 1);
+          String friendly = data.GetPinName(String(pin));
+          String msg = "SYS: GPIO " + pinName + "=" + String(val);
+          if (friendly.length() > 0)
+            msg += " (" + friendly + ")";
+          lora.lastMsgReceived = msg;
+          if (source == CommInterface::COMM_LORA)
+            lora.SendLoRa(data.myId + " " + msg);
+          else
+            LOG_PRINTLN(msg);
+        }
       }
     }
   });
@@ -579,17 +687,87 @@ void CommandManager::initRegistry() {
     pinName.trim();
     int pin = getPinFromName(pinName);
     if (pin >= 0) {
-      pinMode(pin, INPUT);
-      int val = digitalRead(pin);
-      String friendly = data.GetPinName(String(pin));
-      String msg = "SYS: READ " + pinName + "=" + String(val);
-      if (friendly.length() > 0)
-        msg += " (" + friendly + ")";
-      lora.lastMsgReceived = msg;
-      if (source == CommInterface::COMM_LORA)
-        lora.SendLoRa(data.myId + " " + msg);
-      else
-        LOG_PRINTLN(msg);
+      if (MCPManager::isMcpPin(pin) && !MCPManager::getInstance().isReady()) {
+        String err = "ERR: MCP chip " + String(MCPManager::chipIndex(pin)) + " not present";
+        lora.lastMsgReceived = err;
+        LOG_PRINTLN(err);
+      } else {
+        if (!MCPManager::isMcpPin(pin)) MCPManager::setupPin(pin, INPUT);
+        int val = MCPManager::readPin(pin) ? 1 : 0;
+        String friendly = data.GetPinName(String(pin));
+        String msg = "SYS: READ " + pinName + "=" + String(val);
+        if (friendly.length() > 0)
+          msg += " (" + friendly + ")";
+        lora.lastMsgReceived = msg;
+        if (source == CommInterface::COMM_LORA)
+          lora.SendLoRa(data.myId + " " + msg);
+        else
+          LOG_PRINTLN(msg);
+      }
+    }
+  });
+
+  // PWM: set a pin to a specific duty cycle (0-255, 8-bit, 5kHz)
+  registerCommand("PWM", [this](const String &args, CommInterface source) {
+    DataManager &data = DataManager::getInstance();
+    LoRaManager &lora = LoRaManager::getInstance();
+    int space = args.indexOf(' ');
+    if (space > 0) {
+      String pinName = args.substring(0, space);
+      int duty = args.substring(space + 1).toInt();
+      int pin = getPinFromName(pinName);
+      if (pin >= 0 && duty >= 0 && duty <= 255) {
+        // ESP32 Arduino Core v2 LEDC: channel = pin % 8
+        uint8_t ch = pin % 8;
+        ledcSetup(ch, 5000, 8);
+        ledcAttachPin(pin, ch);
+        ledcWrite(ch, (uint32_t)duty);
+        data.SetGpioState(pinName, duty > 0);
+        String friendly = data.GetPinName(String(pin));
+        String msg = "SYS: PWM " + pinName + "=" + String(duty);
+        if (friendly.length() > 0)
+          msg += " (" + friendly + ")";
+        lora.lastMsgReceived = msg;
+        if (source == CommInterface::COMM_LORA)
+          lora.SendLoRa(data.myId + " " + msg);
+        else
+          LOG_PRINTLN(msg);
+      } else {
+        lora.lastMsgReceived = "ERR: PWM pin duty(0-255)";
+      }
+    }
+  });
+
+  // SERVO: set a servo angle (0-180 deg) on any GPIO via 50Hz PWM
+  // Pulse width: 544us (0 deg) to 2400us (180 deg) on a 20ms period
+  registerCommand("SERVO", [this](const String &args, CommInterface source) {
+    DataManager &data = DataManager::getInstance();
+    LoRaManager &lora = LoRaManager::getInstance();
+    int space = args.indexOf(' ');
+    if (space > 0) {
+      String pinName = args.substring(0, space);
+      int angle = args.substring(space + 1).toInt();
+      int pin = getPinFromName(pinName);
+      if (pin >= 0 && angle >= 0 && angle <= 180) {
+        // ESP32 Arduino Core v2 LEDC. Use channels 8-15 for servos.
+        uint8_t ch = 8 + (pin % 8);
+        uint32_t duty_us = 544 + (uint32_t)(angle * (2400 - 544) / 180);
+        ledcSetup(ch, 50, 16);
+        ledcAttachPin(pin, ch);
+        uint32_t duty16 = (uint32_t)(duty_us * 65535UL / 20000UL);
+        ledcWrite(ch, duty16);
+        String friendly = data.GetPinName(String(pin));
+        String msg = "SYS: SERVO " + pinName + "=" + String(angle) + "deg";
+        if (friendly.length() > 0)
+          msg += " (" + friendly + ")";
+        lora.lastMsgReceived = msg;
+        if (source == CommInterface::COMM_LORA)
+          lora.SendLoRa(data.myId + " " + msg);
+        else
+          LOG_PRINTLN(msg);
+      } else {
+        lora.lastMsgReceived = "ERR: SERVO pin angle(0-180)";
+      }
     }
   });
 
@@ -721,6 +899,132 @@ void CommandManager::initRegistry() {
     }
   });
 
+  registerCommand("HELLO", [](const String &args, CommInterface source) {
+    // Parse: device=XIAO hw=SAMD21 fw=v1.0 caps=adc,dht
+    String dev = "", hw = "", fw = "", caps = "";
+    int start = 0;
+    while (start < (int)args.length()) {
+      int eq = args.indexOf('=', start);
+      if (eq == -1)
+        break;
+      String key = args.substring(start, eq);
+      key.trim();
+      int end = args.indexOf(' ', eq);
+      if (end == -1)
+        end = args.length();
+      String val = args.substring(eq + 1, end);
+      val.trim();
+
+      if (key == "device")
+        dev = val;
+      else if (key == "hw")
+        hw = val;
+      else if (key == "fw")
+        fw = val;
+      else if (key == "caps")
+        caps = val;
+
+      start = end + 1;
+    }
+
+    if (dev.length() > 0) {
+      DataManager::getInstance().RegisterPeripheral(dev, hw, fw, caps);
+    }
+  });
+
+  registerCommand("SENSOR", [](const String &args, CommInterface source) {
+    // Parse: key1=val1 key2=val2 ...
+    // Note: If no device= id is provided, we assume it's the first registered
+    // peripheral for this interface.
+    String devId = "";
+    JsonDocument doc;
+    JsonObject data = doc.to<JsonObject>();
+
+    int start = 0;
+    while (start < (int)args.length()) {
+      int eq = args.indexOf('=', start);
+      if (eq == -1)
+        break;
+      String key = args.substring(start, eq);
+      key.trim();
+      int end = args.indexOf(' ', eq);
+      if (end == -1)
+        end = args.length();
+      String val = args.substring(eq + 1, end);
+      val.trim();
+
+      if (key == "id" || key == "device") {
+        devId = val;
+      } else {
+        data[key] = val;
+      }
+      start = end + 1;
+    }
+
+    DataManager &dm = DataManager::getInstance();
+    if (devId.length() == 0 && dm.numPeripherals > 0) {
+      devId = dm.peripherals[0].id; // Default to first
+    }
+
+    if (devId.length() > 0) {
+      String json;
+      serializeJson(data, json);
+      dm.UpdateSensorTelemetry(devId, json);
+
+      // MQTT Bridge: loralink/<node>/sensor/<key>
+      if (dm.mqttEnabled) {
+        for (JsonPair p : data) {
+          String topic =
+              "loralink/" + dm.myId + "/sensor/" + String(p.key().c_str());
+          MQTTManager::getInstance().publish(topic, p.value().as<String>());
+        }
+      }
+    }
+  });
+
+  registerCommand("PRODUCT", [](const String &args, CommInterface source) {
+    ProductManager &pm = ProductManager::getInstance();
+    LoRaManager &lora = LoRaManager::getInstance();
+
+    int space = args.indexOf(' ');
+    String sub = (space > 0) ? args.substring(0, space) : args;
+    String subArgs = (space > 0) ? args.substring(space + 1) : "";
+    sub.trim();
+    sub.toUpperCase();
+
+    if (sub == "LIST") {
+      String list = pm.listProducts();
+      lora.lastMsgReceived = "PRODUCT LIST: " + list;
+      LOG_PRINTLN(lora.lastMsgReceived);
+    } else if (sub == "STATUS") {
+      String active = pm.getActiveProduct();
+      String msg = active.isEmpty()
+                       ? "PRODUCT: none active"
+                       : ("PRODUCT ACTIVE: " + active);
+      lora.lastMsgReceived = msg;
+      LOG_PRINTLN(msg);
+    } else if (sub == "LOAD") {
+      subArgs.trim();
+      if (subArgs.isEmpty()) {
+        lora.lastMsgReceived = "ERR: PRODUCT LOAD <name>";
+      } else {
+        pm.loadProduct(subArgs, source);
+      }
+    } else if (sub == "SAVE") {
+      subArgs.trim();
+      if (subArgs.isEmpty()) {
+        lora.lastMsgReceived = "ERR: PRODUCT SAVE <json>";
+      } else {
+        bool ok = pm.saveProduct(subArgs);
+        String msg = ok ? "PRODUCT: saved" : "ERR: PRODUCT save failed";
+        lora.lastMsgReceived = msg;
+        LOG_PRINTLN(msg);
+      }
+    } else {
+      lora.lastMsgReceived = "ERR: PRODUCT LIST|STATUS|LOAD <n>|SAVE <json>";
+    }
+  });
+
   registerCommand("TRANS", [](const String &args, CommInterface source) {
     DataManager &data = DataManager::getInstance();
     LoRaManager &lora = LoRaManager::getInstance();
@@ -739,6 +1043,15 @@ void CommandManager::initRegistry() {
     }
     lora.lastMsgReceived = "ERR: TRANS J|C|K|B";
   });
+}
+
+void CommandManager::sendResponse(const String &msg, CommInterface source) {
+  LoRaManager &lora = LoRaManager::getInstance();
+  lora.lastMsgReceived = msg;
+  if (source == CommInterface::COMM_LORA)
+    lora.SendLoRa(DataManager::getInstance().myId + " " + msg);
+  else
+    LOG_PRINTLN(msg);
 }
 
 void CommandManager::executeLocalCommand(const String &cmd,

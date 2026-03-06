@@ -27,6 +27,14 @@ public:
   // Helper to get interface name string
   static const char *interfaceName(CommInterface ifc);
 
+  // Guarded deep-sleep entry: checks mains power, PC attachment, broadcasts
+  // countdown, logs PC alert if no cancel received. Both the SLEEP command and
+  // the battery monitor callback route through here.
+  static void executeSleep(float hours, const String &trigger);
+
+  // Route a response string back to the originating interface
+  void sendResponse(const String &msg, CommInterface source);
+
 private:
   CommandManager();
   void initRegistry();
