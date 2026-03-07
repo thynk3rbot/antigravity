@@ -3,13 +3,27 @@
     "name": "MASTER",
     "type": "LORA_TX",
     "pin": "7",
-    "interval": 30000,
-    "duration": 5000,
+    "interval": 4230196,
+    "duration": 705032,
     "value": 0,
     "enabled": true,
     "state": 0,
-    "nextRun": 28611,
+    "nextRun": 0,
     "updatedBy": "WiFi",
     "lastUpdated": "0h 8m"
+  },
+  {
+    "name": "TestBlink",
+    "type": "TOGGLE",
+    "pin": "35",
+    "pinName": "LED_Write",
+    "interval": 1000000,
+    "duration": 1705032,
+    "value": 0,
+    "enabled": true,
+    "state": 1,
+    "nextRun": 993846,
+    "updatedBy": "WEB",
+    "lastUpdated": "0h 26m"
   }
 ]

@@ -136,6 +136,9 @@ void ScheduleManager::init() {
   // Battery protection monitor
   tBatteryMonitor.enableDelayed(10000);
 
+  Serial.setTimeout(5);
+  Serial1.setTimeout(5);
+
   loadDynamicSchedules();
 }
 
@@ -191,33 +194,48 @@ void ScheduleManager::loraTask() {
     initial = false;
   }
   LoRaManager::getInstance().HandleRx();
+  LoRaManager::getInstance().periodicTick();
 }
 
 void ScheduleManager::wifiTask() { WiFiManager::getInstance().handle(); }
 
 void ScheduleManager::serialTask() {
   ScheduleManager &inst = getInstance();
-  if (Serial.available()) {
-    String input = Serial.readStringUntil('\n');
-    input.trim();
-    if (input.length() > 0) {
-      if (inst.isStreaming) {
-        inst.processStreamLine(input, CommInterface::COMM_SERIAL);
-      } else {
-        CommandManager::getInstance().handleCommand(input,
-                                                    CommInterface::COMM_SERIAL);
+  static String serialBuffer = "";
+  while (Serial.available()) {
+    char c = Serial.read();
+    if (c == '\n' || (c == '\r' && Serial.peek() != '\n')) {
+      String line = serialBuffer;
+      line.trim();
+      serialBuffer = "";
+      if (line.length() > 0) {
+        if (inst.isStreaming) {
+          inst.processStreamLine(line, CommInterface::COMM_SERIAL);
+        } else {
+          CommandManager::getInstance().handleCommand(
+              line, CommInterface::COMM_SERIAL);
+        }
       }
+    } else if (c != '\r') {
+      serialBuffer += c;
     }
   }
 }
 
 void ScheduleManager::peripheralSerialTask() {
-  if (Serial1.available()) {
-    String input = Serial1.readStringUntil('\n');
-    input.trim();
-    if (input.length() > 0) {
-      CommandManager::getInstance().handleCommand(input,
-                                                  CommInterface::COMM_SERIAL);
+  static String pSerialBuffer = "";
+  while (Serial1.available()) {
+    char c = Serial1.read();
+    if (c == '\n' || (c == '\r' && Serial1.peek() != '\n')) {
+      String line = pSerialBuffer;
+      line.trim();
+      pSerialBuffer = "";
+      if (line.length() > 0) {
+        CommandManager::getInstance().handleCommand(line,
+                                                    CommInterface::COMM_SERIAL);
+      }
+    } else if (c != '\r') {
+      pSerialBuffer += c;
     }
   }
 }
@@ -472,14 +490,15 @@ void ScheduleManager::dynamicTaskCallback() {
     LoRaManager::getInstance().SendLoRa(payload);
     LOG_PRINTF("SCHED: %s LORA_TX -> %s\n", cfg.name.c_str(), payload.c_str());
   } else if (cfg.type == "ALERT") {
-    int raw = MCPManager::isMcpPin(cfg.pin)
-                  ? (int)MCPManager::readPin(cfg.pin)
-                  : analogRead(cfg.pin);
-    bool triggered = cfg.thresholdGreater ? (raw > cfg.threshold) : (raw < cfg.threshold);
+    int raw = MCPManager::isMcpPin(cfg.pin) ? (int)MCPManager::readPin(cfg.pin)
+                                            : analogRead(cfg.pin);
+    bool triggered =
+        cfg.thresholdGreater ? (raw > cfg.threshold) : (raw < cfg.threshold);
     if (triggered && cfg.notifyCmd.length() > 0) {
-      CommandManager::getInstance().handleCommand(cfg.notifyCmd, CommInterface::COMM_INTERNAL);
-      LOG_PRINTF("SCHED: %s ALERT triggered (raw=%d) -> %s\n",
-                 cfg.name.c_str(), raw, cfg.notifyCmd.c_str());
+      CommandManager::getInstance().handleCommand(cfg.notifyCmd,
+                                                  CommInterface::COMM_INTERNAL);
+      LOG_PRINTF("SCHED: %s ALERT triggered (raw=%d) -> %s\n", cfg.name.c_str(),
+                 raw, cfg.notifyCmd.c_str());
     }
   }
 }
@@ -777,11 +796,16 @@ void ScheduleManager::saveDynamicTasks() {
     obj["value"] = cfg.value;
     obj["updatedBy"] = cfg.updatedBy;
     obj["lastUpdated"] = cfg.lastUpdated;
-    if (cfg.triggerPin >= 0) obj["triggerPin"] = String(cfg.triggerPin);
-    if (cfg.triggerMode != 0) obj["triggerMode"] = cfg.triggerMode;
-    if (cfg.threshold != 0) obj["threshold"] = cfg.threshold;
-    if (!cfg.thresholdGreater) obj["thresholdGreater"] = false;
-    if (cfg.notifyCmd.length() > 0) obj["notifyCmd"] = cfg.notifyCmd;
+    if (cfg.triggerPin >= 0)
+      obj["triggerPin"] = String(cfg.triggerPin);
+    if (cfg.triggerMode != 0)
+      obj["triggerMode"] = cfg.triggerMode;
+    if (cfg.threshold != 0)
+      obj["threshold"] = cfg.threshold;
+    if (!cfg.thresholdGreater)
+      obj["thresholdGreater"] = false;
+    if (cfg.notifyCmd.length() > 0)
+      obj["notifyCmd"] = cfg.notifyCmd;
   }
 
   String json;

@@ -5,7 +5,26 @@
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>LoRaLink Suite — Fleet Control</title>
     <link rel="stylesheet" href="/static/css/shared.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/winbox@0.2.82/dist/css/winbox.min.css" />
     <style>
+      /* WinBox Theme Overrides */
+      .wb-modern {
+        background: #111;
+        border-radius: 6px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+      }
+      .wb-modern .wb-title {
+        background: #1a1a1a;
+        color: var(--accent);
+        font-weight: 800;
+        font-size: 0.72em;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        padding-left: 10px;
+      }
+      .wb-modern .wb-body {
+        border-top: 1px solid var(--border);
+      }
       /* Page-specific overrides or critical inline styles can go here if needed */
       .board-container {
         display: flex;
@@ -145,6 +164,7 @@
         width: 100%;
         height: 100%;
         background: rgba(0, 0, 0, 0.8);
+        -webkit-backdrop-filter: blur(4px);
         backdrop-filter: blur(4px);
       }
       .modal-content {
@@ -253,15 +273,38 @@
       /* Fleet Dashboard Layout */
       .fleet-dashboard-mesh {
         position: relative;
-        height: calc(100vh - 120px);
-        padding: 8px;
-        background: #050505;
+        height: calc(100vh - 110px);
+        padding: 12px;
+        background: transparent;
+        display: grid;
+        grid-template-columns: 320px 1fr 340px;
+        grid-template-rows: 1fr 1fr 1.2fr;
+        gap: 12px;
       }
       .dashboard-cell {
-        display: none;  /* Hidden - WinBox windows position over the parent container */
+        position: relative;
+        min-height: 80px;
+        overflow: hidden;
+        background: var(--glass);
+        -webkit-backdrop-filter: blur(12px);
+        backdrop-filter: blur(12px);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        box-shadow: var(--shadow);
+        display: flex;
+        flex-direction: column;
+        transition: transform 0.2s;
       }
-      .cell-wide {
-        grid-row: span 1;
+      .dashboard-cell:hover { border-color: var(--accent-dim); }
+      .cell-tall { grid-row: span 3; }
+      .cell-wide { grid-column: span 2; }
+      .dashboard-cell::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background: linear-gradient(135deg, var(--glass-bright) 0%, transparent 40%);
+        border-radius: inherit;
       }
 
       .status-pills { display: flex; gap: 4px; align-items: center; padding: 4px 8px; background: rgba(0,0,0,0.2); border-bottom: 1px solid var(--border); overflow-x: auto; }
@@ -285,6 +328,7 @@
         inset: 0;
         z-index: 2000;
         background: rgba(0, 0, 0, 0.7);
+        -webkit-backdrop-filter: blur(4px);
         backdrop-filter: blur(4px);
         align-items: flex-start;
         justify-content: center;
@@ -896,16 +940,18 @@
       }
       .dbg-id {
         display: none !important;
-        font-size: 11px !important; font-weight: 900 !important;
-        color: #000 !important; background: #ffeb3b !important;
-        border: 2px solid #000 !important;
-        padding: 1px 6px !important; border-radius: 3px !important;
-        font-family: 'JetBrains Mono', 'Fira Code', monospace !important;
-        line-height: 1 !important; vertical-align: middle !important;
-        pointer-events: none !important; opacity: 1.0 !important;
-        box-shadow: 3px 3px 0px rgba(0,0,0,0.8) !important; z-index: 100000 !important;
-        position: relative !important;
-        margin: 0 8px !important;
+        font-size: 9px !important;
+        font-weight: 800 !important;
+        color: #000 !important;
+        background: var(--accent) !important;
+        padding: 1px 5px !important;
+        border-radius: 2px !important;
+        font-family: 'JetBrains Mono', monospace !important;
+        line-height: 1 !important;
+        vertical-align: middle !important;
+        pointer-events: none !important;
+        opacity: 0.8 !important;
+        text-transform: uppercase !important;
       }
       body.debug-on .dbg-id { display: inline-block !important; }
 
@@ -933,14 +979,191 @@
       body.readonly .btn:not(.btn-safe):not(.btn-secondary) { pointer-events: none; opacity: 0.45; }
       body.readonly input, body.readonly select, body.readonly textarea { pointer-events: none; opacity: 0.6; }
 
-</style>
+      .hdr h1 {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .hdr .logo-img {
+        height: 36px;
+        width: 36px;
+        object-fit: contain;
+        border-radius: 4px;
+      }
+      /* Transport bar compact controls */
+      .tp-ble-input {
+        padding: 2px 5px;
+        font-size: 0.78em;
+      }
+      .tp-ble-input-a { width: 90px; }
+      .tp-ble-input-b { width: 78px; }
+      .tp-ble-btn-save {
+        padding: 2px 7px;
+        font-size: 0.78em;
+      }
+      /* Utility Classes for removing inline styles */
+      .flex-centered { display: flex; align-items: center; justify-content: center; }
+      .flex-gap-2 { display: flex; gap: 2px; }
+      .flex-gap-4 { display: flex; gap: 4px; }
+      .flex-gap-6 { display: flex; gap: 6px; }
+      .flex-gap-8 { display: flex; gap: 8px; }
+      .flex-gap-10 { display: flex; gap: 10px; }
+      .flex-gap-12 { display: flex; gap: 12px; }
+      .flex-col { display: flex; flex-direction: column; }
+      .flex-col-gap-2 { display: flex; flex-direction: column; gap: 2px; }
+      .flex-col-gap-10 { display: flex; flex-direction: column; gap: 10px; }
+      .flex-between { display: flex; justify-content: space-between; align-items: center; }
+      .flex-wrap { flex-wrap: wrap; }
+      .grid-2 { display: grid; grid-template-columns: 1fr 1fr; }
+      .grid-gap-12 { gap: 12px; }
+      .p-12 { padding: 12px; }
+      .p-8-12 { padding: 8px 12px; }
+      .p-8-10 { padding: 8px 10px; }
+      .m-0 { margin: 0; }
+      .mt-0 { margin-top: 0; }
+      .mt-1 { margin-top: 1rem; }
+      .mt-2 { margin-top: 2px; }
+      .mt-3 { margin-top: 3px; }
+      .mt-4 { margin-top: 4px; }
+      .mb-2 { margin-bottom: 2px; }
+      .mb-6 { margin-bottom: 6px; }
+      .ml-1 { margin-left: 1rem; }
+      .ml-4 { margin-left: 4px; }
+      .as-fs { align-self: flex-start; }
+      .flex-1 { flex: 1; }
+      .min-w-100 { min-width: 100px; }
+      .min-w-120 { min-width: 120px; }
+      .w-60 { width: 60px; }
+      .w-75 { width: 75px; }
+      .w-80 { width: 80px; }
+      .w-full { width: 100%; }
+      .text-xs { font-size: 0.72em; }
+      .text-sm { font-size: 0.8em; }
+      .text-md { font-size: 0.82em; }
+      .text-dim { color: var(--text-dim); }
+      .text-warn { color: var(--warn); }
+      .text-accent { color: var(--accent); }
+      .upper { text-transform: uppercase; }
+      .tracking-1 { letter-spacing: 1px; }
+      .op-05 { opacity: 0.5; }
+      .border-box { border: 1px solid var(--border); border-radius: 6px; }
+      .bg-preview { background: rgba(0,212,255,0.04); }
+      .bg-guard { background: rgba(255,170,0,0.07); border-color: rgba(255,170,0,0.2); }
+      .grid-roster-header { display: grid; grid-template-columns: 56px 1fr 110px 68px 56px; padding: 3px 10px; gap: 6px; font-size: 0.6em; color: var(--text-dim); text-transform: uppercase; background: var(--bg-hdr); border-bottom: 1px solid var(--border); }
+      .grid-add-form { display: grid; grid-template-columns: 80px 1fr; align-items: center; gap: 6px; }
+      .grid-deploy-form { display: grid; grid-template-columns: 64px 1fr; align-items: center; gap: 5px; }
+      .grid-auto-300 { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1rem; }
+      .p-1rem { padding: 1rem; }
+      .p-3-7 { padding: 3px 7px; }
+      .p-4-10 { padding: 4px 10px; }
+      .p-5-10 { padding: 5px 10px; }
+      .p-6-10 { padding: 6px 10px; }
+      .mt-8 { margin-top: 8px; }
+      .mb-1rem { margin-bottom: 1rem; }
+      .ml-8 { margin-left: 8px; }
+      .w-180 { width: 180px; }
+      .h-220 { height: 220px; }
+      .max-height-120 { max-height: 120px; }
+      .max-height-160 { max-height: 160px; }
+      .ov-hidden { overflow: hidden; }
+      .ov-y-auto { overflow-y: auto; }
+      .cursor-pointer { cursor: pointer; }
+      .uppercase { text-transform: uppercase; }
+      .border-left-4 { border-left-width: 4px; }
+      .border-danger { color: var(--danger); }
+      .bg-hdr { background: var(--bg-hdr); }
+      .line-height-1 { line-height: 1; }
+      .p-2 { padding: 0.5rem; }
+      .p-1-5 { padding: 1px 5px; }
+      .p-2-5 { padding: 2px 5px; }
+      .p-2-6 { padding: 2px 6px; }
+      .p-2-8 { padding: 2px 8px; }
+      .p-3 { padding: 0.75rem; }
+      .p-20-24 { padding: 20px 24px; }
+      .mt-3px { margin-top: 3px; }
+      .mt-15 { margin-top: 15px; }
+      .mr-2 { margin-right: 2px; }
+      .mr-3 { margin-right: 3px; }
+      .mb-3 { margin-bottom: 3px; }
+      .mb-8 { margin-bottom: 8px; }
+      .mb-16 { margin-bottom: 16px; }
+      .lh-1-5 { line-height: 1.5; }
+      .text-xs-dim { font-size: 0.75em; color: var(--text-dim); }
+      .text-md-dim { font-size: 0.82em; color: var(--text-dim); }
+      .text-right { text-align: right; }
+      .text-center { text-align: center; }
+      .font-700 { font-weight: 700; }
+      .dot-8 { width: 8px; height: 8px; border-radius: 50%; }
+      .flex-2 { flex: 2; }
+      .flex-shrink-0 { flex-shrink: 0; }
+      .min-h-0 { min-height: 0; }
+      .min-h-50 { min-height: 50px; }
+      .min-h-80 { min-height: 80px; }
+      .min-w-320 { min-width: 320px; }
+      .max-w-480 { max-width: 480px; }
+      .max-height-150 { max-height: 150px; }
+      .max-height-200 { max-height: 200px; }
+      .fixed { position: fixed; }
+      .inset-0 { inset: 0; }
+      .z-1000 { z-index: 1000; }
+      .z-1001 { z-index: 1001; }
+      .bg-modal { background: rgba(0, 0, 0, 0.7); }
+      .bg-card { background: var(--bg-card); }
+      .text-danger { color: var(--danger); }
+      .b-radius-8 { border-radius: 8px; }
+      .justify-fe { justify-content: flex-end; }
+      .tracking-08 { letter-spacing: 0.8px; }
+      .p-20 { padding: 20px; }
+      .min-h-300 { min-height: 300px; }
+      .ov-x-auto { overflow-x: auto; }
+      .p-1-8 { padding: 1px 8px; }
+      .p-2-10-4 { padding: 2px 10px 4px; }
+      .p-4-10-2 { padding: 4px 10px 2px; }
+      .p-4-10-8 { padding: 4px 10px 8px; }
+      .w-90 { width: 90px; }
+      .min-w-70 { min-width: 70px; }
+      .min-w-80 { min-width: 80px; }
+      .min-w-90 { min-width: 90px; }
+      .min-w-130 { min-width: 130px; }
+      .w-140 { width: 140px; }
+      .h-4 { height: 4px; }
+      .p-4-6 { padding: 4px 6px; }
+      .p-6-8-8 { padding: 6px 8px 8px; }
+      .p-10-12-6 { padding: 10px 12px 6px; }
+      .fs-068 { font-size: 0.68em; }
+      .fs-09 { font-size: 0.9em; }
+      .fs-1-3 { font-size: 1.3em; }
+      .lh-0 { line-height: 0; }
+      .tracking-05 { letter-spacing: .05em; }
+      .b-radius-2 { border-radius: 2px; }
+      .bg-ok { background: var(--ok); }
+      .bg-warn { background: var(--warn); }
+      .bg-err { background: var(--err); }
+      .bg-accent { background: var(--accent); }
+      .bg-stale { background: #555; }
+      .text-ok { color: var(--ok); }
+      .text-err { color: var(--err); }
+      .text-stale { color: #555; }
+      .shadow-err { box-shadow: 0 0 6px var(--err); }
+      .max-w-500 { max-width: 500px; }
+      .mt-8 { margin-top: 8px; }
+      .mt-0-0-0 { margin: 8px 0 0 0; }
+      .bg-dark-1 { background: #1a1a1a; }
+      .bg-dark-2 { background: rgba(0,0,0,0.2); }
+      .border-dark-1 { border-top: 1px solid #1e1e1e; }
+      .m-0-12 { margin: 0 12px 12px 12px; }
+      .border-bottom { border-bottom: 1px solid var(--border); }
+      .as-fe { align-self: flex-end; }
+      .mono { font-family: monospace; }
+      .d-none { display: none; }
+    </style>
     <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
   </head>
   <body>
     <!-- ── Header ────────────────────────────────────────────────────────────── -->
     <div class="hdr">
-      <h1 style="display:flex;align-items:center;gap:10px;">
-        <img src="/static/media/logo.png" alt="LoRaLink Suite" style="height:36px;width:36px;object-fit:contain;border-radius:4px;" />
+      <h1>
+        <img src="/static/media/logo.png" alt="LoRaLink Suite" class="logo-img" />
         LoRaLink Suite
         <span id="fwv" class="text-dim text-xs"></span>
       </h1>
@@ -965,29 +1188,26 @@
             title="Re-scan for BLE devices"
             onclick="rescan()"
             class="btn-icon"
-          >
+          ><span class="dbg-id">BLE-RESCAN</span>
             ⟳
           </button>
           <!-- BLE prefix inputs (shown as compact inline fields) -->
           <input
             id="ble-prefix-a"
-            class="input-styled"
+            class="input-styled tp-ble-input tp-ble-input-a"
             title="BLE name prefix for Peer A (takes effect on rescan)"
             placeholder="Peer A prefix"
-            style="width:90px;padding:2px 5px;font-size:0.78em"
           />
           <input
             id="ble-prefix-b"
-            class="input-styled"
+            class="input-styled tp-ble-input tp-ble-input-b"
             title="BLE name prefix for Peer B (optional, takes effect on rescan)"
             placeholder="Peer B (opt)"
-            style="width:78px;padding:2px 5px;font-size:0.78em"
           />
           <button
-            class="btn btn-sm btn-secondary"
+            class="btn btn-sm btn-secondary tp-ble-btn-save"
             title="Save BLE prefixes and rescan"
             onclick="saveBlePrefix().then(()=>rescan())"
-            style="padding:2px 7px;font-size:0.78em"
           >💾⟳</button>
         </div>
         <div id="dbg-mode-btn" class="dbg-toggle" onclick="toggleDebugMode()" title="Toggle Debug IDs (Ctrl+Alt+D)">
@@ -1000,13 +1220,13 @@
 
     <!-- ── Top nav ───────────────────────────────────────────────────────────── -->
     <nav class="page-nav">
-      <a class="nav-link active" onclick="showPage('fleet')">📡 Fleet</a>
-      <a class="nav-link" onclick="showPage('nodes')">🌐 Nodes</a>
-      <a class="nav-link" onclick="showPage('schedules')">📅 Schedules</a>
-      <a class="nav-link" onclick="showPage('deploy')">🚀 Deploy</a>
-      <a class="nav-link" onclick="showPage('hardware')">🛠️ Hardware</a>
-      <a class="nav-link" onclick="showPage('config')">⚙️ Config</a>
-      <a class="nav-link" onclick="showPage('analysis')">🧪 Analysis</a>
+      <a class="nav-link active" onclick="showPage('fleet')"><span class="dbg-id">NAV-FLEET</span>📡 Fleet</a>
+      <a class="nav-link" onclick="showPage('nodes')"><span class="dbg-id">NAV-NODES</span>🌐 Nodes</a>
+      <a class="nav-link" onclick="showPage('schedules')"><span class="dbg-id">NAV-SCHED</span>📅 Schedules</a>
+      <a class="nav-link" onclick="showPage('deploy')"><span class="dbg-id">NAV-DEPLOY</span>🚀 Deploy</a>
+      <a class="nav-link" onclick="showPage('hardware')"><span class="dbg-id">NAV-HARDWARE</span>🛠️ Hardware</a>
+      <a class="nav-link" onclick="showPage('config')"><span class="dbg-id">NAV-CONFIG</span>⚙️ Config</a>
+      <a class="nav-link" onclick="showPage('analysis')"><span class="dbg-id">NAV-ANALYSIS</span>🧪 Analysis</a>
       <div class="override-btns">
         <button
           class="btn-override danger"
@@ -1029,85 +1249,13 @@
     <!-- ── Page: FLEET (Unified Command Center) ────────────────────────── -->
     <div class="page active" id="pg-fleet">
       <div class="fleet-dashboard-mesh">
-        <!-- 4-Widget Grid: Dynamic, Spaced, Compact -->
-        <div id="roster-container" class="dashboard-cell cell-wide"></div>
-        <div id="device-ctrl-container" class="dashboard-cell cell-wide"></div>
-        <div id="schedule-container" class="dashboard-cell"></div>
-        <div id="console-container" class="dashboard-cell"></div>
+        <div id="roster-container" class="dashboard-cell cell-tall"><span class="dbg-id">FLT-ROSTER</span></div>
+        <div id="device-ctrl-container" class="dashboard-cell"><span class="dbg-id">FLT-CTRL</span></div>
+        <div id="console-container" class="dashboard-cell cell-tall"><span class="dbg-id">FLT-CONSOLE</span></div>
+        <div id="schedule-container" class="dashboard-cell"><span class="dbg-id">FLT-SCHED</span></div>
+        <div id="reference-container" class="dashboard-cell"><span class="dbg-id">FLT-REF</span></div>
       </div>
 
-      <!-- ── Console Help Strip ──────────────────────────────────────────────
-           Contextual reference for the System Console widget above.
-           Covers: command flight bar, hop timing model, network sync, and signal colors.
-      ──────────────────────────────────────────────────────────────────────── -->
-      <div style="display:flex;flex-wrap:wrap;gap:8px;padding:8px 8px 4px;align-items:stretch">
-
-        <!-- Card 1: Command Flight Bar -->
-        <div class="adc-card" style="min-width:200px;flex:2;gap:6px">
-          <div style="display:flex;align-items:center;gap:6px">
-            <span style="font-size:0.68em;font-weight:800;color:var(--accent);text-transform:uppercase;letter-spacing:.06em">⟶ Command Flight Bar</span>
-            <span class="dbg-id" style="font-size:9px">FA-H-01</span>
-          </div>
-          <div style="font-size:0.72em;color:var(--text-dim);line-height:1.55">
-            Appears below the console input when a remote command is sent.
-            Fills left-to-right over the expected round-trip window.
-            Vertical tick lines mark each <b style="color:var(--text)">relay hop boundary</b>.
-          </div>
-          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:2px">
-            <span style="font-size:0.7em;padding:2px 7px;border-radius:4px;background:rgba(0,212,255,0.12);color:#00d4ff">&#9646; In flight</span>
-            <span style="font-size:0.7em;padding:2px 7px;border-radius:4px;background:rgba(255,170,0,0.12);color:#ffaa00">&#9646; Near timeout</span>
-            <span style="font-size:0.7em;padding:2px 7px;border-radius:4px;background:rgba(0,255,136,0.12);color:#00ff88">&#10003; Response</span>
-            <span style="font-size:0.7em;padding:2px 7px;border-radius:4px;background:rgba(255,68,68,0.12);color:#ff4444">&#10007; Timeout</span>
-          </div>
-        </div>
-
-        <!-- Card 2: Hop Timing Reference -->
-        <div class="adc-card" style="min-width:190px;flex:2;gap:6px">
-          <div style="font-size:0.68em;font-weight:800;color:var(--accent);text-transform:uppercase;letter-spacing:.06em">Hop Timing Model</div>
-          <div style="font-size:0.7em;color:var(--text-dim);line-height:1.4;margin-bottom:2px">
-            SF10 / BW250 / 915 MHz &mdash; ToA ~400&ndash;450 ms/packet.
-            Each relay adds: ToA&nbsp;&#215;&nbsp;2&nbsp;+&nbsp;600ms avg jitter.
-          </div>
-          <table style="font-size:0.7em;width:100%;border-collapse:collapse">
-            <tr style="color:var(--text-dim)"><th style="text-align:left;font-weight:600;padding:1px 0">Route</th><th style="text-align:right;font-weight:600">Window</th></tr>
-            <tr><td style="color:var(--text);padding:1px 0">Local (WiFi/BLE)</td><td style="text-align:right;color:#00ff88">&lt; 400 ms</td></tr>
-            <tr><td style="color:var(--text);padding:1px 0">Direct peer (1 hop)</td><td style="text-align:right;color:#00d4ff">~1.6&ndash;2.2 s</td></tr>
-            <tr><td style="color:var(--text);padding:1px 0">1 repeater (2 hops)</td><td style="text-align:right;color:#ffaa00">~3.2&ndash;3.6 s</td></tr>
-            <tr><td style="color:var(--text);padding:1px 0">2 repeaters (3 hops)</td><td style="text-align:right;color:#ff8844">~4.8&ndash;5.0 s</td></tr>
-          </table>
-        </div>
-
-        <!-- Card 3: Network Sync -->
-        <div class="adc-card" style="min-width:175px;flex:1.5;gap:6px">
-          <div style="font-size:0.68em;font-weight:800;color:var(--accent);text-transform:uppercase;letter-spacing:.06em">&#x1F5F8; Network Sync</div>
-          <div style="font-size:0.72em;color:var(--text-dim);line-height:1.55">
-            <b style="color:var(--text)">ALL STATUS</b> mesh broadcast runs
-            <b style="color:var(--text)">once per hour</b> to limit radio traffic.
-            Live device metrics (heap, RSSI, GPIO) still update at <b style="color:var(--text)">4 Hz</b>
-            via WebSocket &mdash; no radio involved.
-          </div>
-          <div style="font-size:0.7em;color:var(--text-dim);margin-top:2px">
-            Use <b style="color:var(--text)">&#x2713; Sync</b> in the console bar to
-            trigger an immediate mesh-wide read.
-          </div>
-        </div>
-
-        <!-- Card 4: Response Detection -->
-        <div class="adc-card" style="min-width:175px;flex:1.5;gap:6px">
-          <div style="font-size:0.68em;font-weight:800;color:var(--accent);text-transform:uppercase;letter-spacing:.06em">Response Detection</div>
-          <div style="font-size:0.72em;color:var(--text-dim);line-height:1.55">
-            Response is detected when the device&rsquo;s <code style="color:var(--text);font-size:0.9em">last_cmd</code>
-            field changes in the status stream. This is a
-            <b style="color:var(--text)">change-based signal</b> &mdash; not a per-command ACK.
-          </div>
-          <div style="font-size:0.7em;color:var(--text-dim);margin-top:2px">
-            Rapid back-to-back commands may share a confirmation.
-            True per-command ACKs require the BLE notify firmware fix.
-          </div>
-        </div>
-
-      </div>
-      <!-- ── end Console Help Strip ───────────────────────────────────────── -->
     </div>
     <!-- end pg-fleet -->
 
@@ -1115,22 +1263,22 @@
     <div class="page" id="pg-hardware">
       <div class="panel">
         <div class="panel-title flex-between">
-          <div style="display: flex; align-items: center; gap: 8px;"><span class="dbg-id">FA-P-01</span><span>Local Serial Peripherals</span></div>
+          <div class="flex-centered flex-gap-8"><span class="dbg-id">HW-SERIAL-LIST</span><span>Local Serial Peripherals</span></div>
           <div class="flex-row-sm">
             <span id="serial-hub-status" class="text-xs text-dim">Scanning Hub…</span>
             <button class="btn btn-sm btn-secondary" onclick="refreshSerialPorts()">↺</button>
           </div>
         </div>
-        <div id="serial-peripherals-list" style="padding: 1rem; display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1rem;">
+        <div id="serial-peripherals-list" class="p-1rem grid-auto-300">
           <div class="list-empty">No USB satellites detected. Connect a device to begin.</div>
         </div>
       </div>
 
       <div class="panel">
         <div class="panel-title flex-between">
-          <div style="display: flex; align-items: center; gap: 8px;"><span class="dbg-id">FA-P-02</span><span>Visual Layouts</span></div>
+          <div class="flex-centered flex-gap-8"><span class="dbg-id">HW-BOARD-VIS</span><span>Visual Layouts</span></div>
           <div class="flex-row-sm">
-            <select id="board-select" class="input-styled" title="Select hardware board to visualize" style="width: 180px; padding: 2px 5px; font-size: 0.85em" onchange="loadBoardVisual(this.value)">
+            <select id="board-select" class="input-styled w-180 tp-ble-input tp-ble-btn-save" title="Select hardware board to visualize" onchange="loadBoardVisual(this.value)">
               <option value="heltec_v3">Heltec WiFi LoRa 32 V3</option>
               <option value="lilygo_tbeam">LilyGo T-Beam v1.1</option>
               <option value="wio_e5">Seeed Wio-E5</option>
@@ -1148,7 +1296,7 @@
 
       <!-- Provisioning Component (Template) -->
       <template id="serial-card-template">
-        <div class="schedule-card" style="border-left-width: 4px;">
+        <div class="schedule-card border-left-4">
           <div class="card-header">
             <div class="card-icon">🔌</div>
             <div class="card-title-group">
@@ -1166,7 +1314,7 @@
               <span>Firmware</span>
               <span class="peripheral-fw">v1.0</span>
             </div>
-            <div class="peripheral-telemetry" style="margin-top: 8px; font-family: monospace; font-size: 0.9em; color: var(--accent);">
+            <div class="peripheral-telemetry mt-8 mono text-sm text-accent">
               <!-- Telemetry key-values go here -->
             </div>
           </div>
@@ -1180,11 +1328,11 @@
       <!-- Provisioning Modal -->
       <div id="modal-provision" class="modal">
         <div class="modal-content">
-          <div class="flex-row-sb" style="margin-bottom: 1rem">
+          <div class="flex-row-sb mb-1rem">
             <h3 id="provision-title">Provision Satellite</h3>
-            <span class="close" onclick="closeModal('modal-provision')" style="cursor:pointer">×</span>
+            <span class="close cursor-pointer" onclick="closeModal('modal-provision')">×</span>
           </div>
-          <div class="editor-field" style="margin-bottom: 1rem">
+          <div class="editor-field mb-1rem">
             <label>Configuration Command</label>
             <input id="provision-cmd" class="input-styled" placeholder="e.g. SET_GAIN 25" value="STATUS" />
             <p class="text-xs text-dim mt-1">Send a setup string directly to the serial device.</p>
@@ -1201,11 +1349,11 @@
     <div class="page" id="pg-nodes">
       <div class="network-layout">
         <!-- Left: Topology graph -->
-        <div class="flex-col" style="min-width: 0">
-          <div class="panel" style="padding: 0; overflow: hidden">
+        <div class="flex-col min-w-0">
+          <div class="panel p-0 ov-hidden">
             <div class="panel-title flex-between">
-              <div style="display: flex; align-items: center; gap: 8px;"><span class="dbg-id">FA-P-03</span><span>Mesh Topology</span></div>
-              <div style="display: flex; align-items: center; gap: 8px">
+              <div class="flex-centered flex-gap-8"><span class="dbg-id">NET-MESH-TOPO</span><span>Mesh Topology</span></div>
+              <div class="flex-centered flex-gap-8">
                 <span id="topo-status" class="text-xs text-dim"
                   >Waiting for data…</span
                 >
@@ -1218,48 +1366,45 @@
               </div>
             </div>
             <div class="topo-wrap">
-              <svg id="topo-svg" class="topo-svg" style="height: 220px"></svg>
+              <svg id="topo-svg" class="topo-svg h-220"></svg>
               <div class="topo-legend">
                 <span
                   ><span
-                    class="topo-legend-dot"
-                    style="background: #00ff88"
+                    class="topo-legend-dot bg-ok"
                   ></span
                   >GW</span
                 >
                 <span
                   ><span
-                    class="topo-legend-dot"
-                    style="background: #00aaff"
+                    class="topo-legend-dot bg-accent"
                   ></span
                   >Online</span
                 >
                 <span
-                  ><span class="topo-legend-dot" style="background: #555"></span
+                  ><span class="topo-legend-dot bg-stale"></span
                   >Stale</span
                 >
-                <span style="color: #555"
-                  >━<span style="color: #00ff88">━</span>&gt;-75
-                  <span style="color: #ffaa00">━</span>&gt;-90
-                  <span style="color: #ff4455">━</span>weak</span
+                <span class="text-stale"
+                  >━<span class="text-ok">━</span>&gt;-75
+                  <span class="text-warn">━</span>&gt;-90
+                  <span class="text-err">━</span>weak</span
                 >
               </div>
             </div>
           </div>
           <div
             id="topo-detail"
-            class="topo-detail-panel"
-            style="display: none"
+            class="topo-detail-panel d-none"
           ></div>
         </div>
 
         <!-- Right: Node registry -->
-        <div class="flex-col" style="min-width: 0; gap: 8px">
+        <div class="flex-col min-w-0 flex-gap-8">
           <!-- Configured nodes — roster-row style -->
-          <div class="panel" style="padding: 0; overflow: hidden">
+          <div class="panel p-0 ov-hidden">
             <div class="panel-title flex-between">
-              <div style="display: flex; align-items: center; gap: 8px;"><span class="dbg-id">FA-P-04</span><span>Configured Nodes</span></div>
-              <div style="display: flex; gap: 6px">
+              <div class="flex-centered flex-gap-8"><span class="dbg-id">NET-CONF-ROSTER</span><span>Configured Nodes</span></div>
+              <div class="flex-gap-6">
                 <button
                   class="btn btn-sm btn-secondary"
                   onclick="startDiscovery()"
@@ -1267,10 +1412,9 @@
                   ⊕ Scan
                 </button>
                 <button
-                  class="btn btn-sm btn-secondary"
+                  class="btn btn-sm btn-secondary p-2-8 text-md line-height-1"
                   onclick="loadNodes()"
                   title="Reload configured nodes from server"
-                  style="padding: 2px 8px; font-size: 1em; line-height: 1"
                 >
                   ⟳
                 </button>
@@ -1284,46 +1428,24 @@
               </div>
             </div>
             <!-- Node roster header -->
-            <div
-              style="
-                display: grid;
-                grid-template-columns: 56px 1fr 110px 68px 56px;
-                padding: 3px 10px;
-                gap: 6px;
-                font-size: 0.6em;
-                color: var(--text-dim);
-                text-transform: uppercase;
-                background: var(--bg-hdr);
-                border-bottom: 1px solid var(--border);
-              "
-            >
-              <span>Type</span><span>Name</span><span>Address</span><span>Link</span
-              ><span
-                style="cursor: pointer; color: var(--danger)"
+            <div class="grid-roster-header">
+              <span>Type</span><span>Name</span><span>Address</span><span>Link</span><span
+                class="cursor-pointer text-danger"
                 onclick="clearNodes()"
                 title="Clear all configured nodes"
                 >Clear</span
               >
             </div>
-            <div id="node-list" style="overflow-y: auto; max-height: 160px">
+            <div id="node-list" class="ov-y-auto max-height-160">
               <!-- Populated by JS -->
             </div>
             <div
               id="discovery-results"
-              class="py-2"
-              style="
-                max-height: 120px;
-                overflow-y: auto;
-                display: none;
-                border-top: 1px solid var(--border);
-                padding: 4px 10px;
-                font-size: 0.78em;
-              "
+              class="py-2 ov-y-auto max-height-120 border-top p-4-10 text-xs text-dim d-none"
             ></div>
             <div
               id="discovery-status"
-              class="text-xs text-dim"
-              style="display: none; padding: 4px 10px"
+              class="text-xs text-dim d-none p-4-10"
             >
               Scanning…
             </div>
@@ -1331,44 +1453,21 @@
 
           <!-- Add Node — inline label/input form -->
           <div class="panel">
-            <div class="panel-title"><div style="display: flex; align-items: center; gap: 8px;"><span class="dbg-id">FA-P-05</span><span>Add Node</span></div></div>
-            <div
-              style="
-                display: flex;
-                flex-direction: column;
-                gap: 5px;
-                padding: 6px 10px;
-              "
-            >
-              <div
-                style="
-                  display: grid;
-                  grid-template-columns: 80px 1fr;
-                  align-items: center;
-                  gap: 6px;
-                "
-              >
+            <div class="panel-title"><div class="flex-centered flex-gap-8"><span class="dbg-id">NET-ADD-FORM</span><span>Add Node</span></div></div>
+            <div class="flex-col flex-gap-4 p-6-10">
+              <div class="grid-add-form">
                 <label class="text-xs text-dim uppercase">Name</label>
                 <input
                   id="node-name"
                   placeholder="e.g. Master"
-                  class="input-styled"
-                  style="padding: 3px 7px"
+                  class="input-styled p-3-7"
                 />
               </div>
-              <div
-                style="
-                  display: grid;
-                  grid-template-columns: 80px 1fr;
-                  align-items: center;
-                  gap: 6px;
-                "
-              >
+              <div class="grid-add-form">
                 <label class="text-xs text-dim uppercase">Interface</label>
                 <select
                   id="node-type"
-                  class="input-styled"
-                  style="padding: 3px 7px"
+                  class="input-styled p-3-7"
                   onchange="onNodeTypeChange()"
                   title="Select the communication interface for this node"
                 >
@@ -1378,27 +1477,18 @@
                   <option value="lora">LoRa Gateway</option>
                 </select>
               </div>
-              <div
-                style="
-                  display: grid;
-                  grid-template-columns: 80px 1fr;
-                  align-items: center;
-                  gap: 6px;
-                "
-              >
+              <div class="grid-add-form">
                 <label id="node-addr-label" class="text-xs text-dim uppercase"
                   >IP Address</label
                 >
                 <input
                   id="node-address"
                   placeholder="e.g. 172.16.0.26"
-                  class="input-styled"
-                  style="padding: 3px 7px"
+                  class="input-styled p-3-7"
                 />
               </div>
               <button
-                class="btn btn-sm"
-                style="align-self: flex-end; margin-top: 2px"
+                class="btn btn-sm as-fe mt-2"
                 onclick="addNode()"
               >
                 + Add
@@ -1407,9 +1497,9 @@
           </div>
 
           <!-- Nearby Bluetooth Devices Section -->
-          <div class="panel" style="padding: 0; overflow: hidden">
+          <div class="panel p-0 ov-hidden">
             <div class="panel-title flex-between">
-              <div style="display: flex; align-items: center; gap: 8px;"><span class="dbg-id">FA-P-06</span><span>Nearby Bluetooth Devices</span></div>
+            <div class="flex-centered-y flex-gap-8"><span class="dbg-id">NET-BLE-DISCO</span><span>Nearby Bluetooth Devices</span></div>
               <button
                 class="btn btn-sm btn-secondary"
                 onclick="rescan()"
@@ -1420,7 +1510,7 @@
             </div>
             <div
               id="ble-discovery-list"
-              style="max-height: 200px; overflow-y: auto; font-size: 0.8em"
+              class="max-height-200 ov-y-auto text-sm"
             >
               <div class="list-empty">No devices found. Click Scan to start.</div>
             </div>
@@ -1429,30 +1519,30 @@
       </div>
 
         <!-- ── MQTT Node Monitor ───────────────────────────────────────────── -->
-        <div class="panel" style="margin:8px 0 0 0">
+        <div class="panel mt-8">
           <div class="panel-title flex-between">
-            <div style="display:flex;align-items:center;gap:8px">
-              <span class="dbg-id">FA-P-MQTT</span>
+            <div class="flex-centered-y flex-gap-8">
+              <span class="dbg-id">NET-MQTT-SWARM</span>
               <span>MQTT Swarm Nodes</span>
             </div>
-            <div style="display:flex;align-items:center;gap:8px">
-              <span id="mqtt-broker-dot" style="width:8px;height:8px;border-radius:50%;background:var(--err);display:inline-block;box-shadow:0 0 6px var(--err)"></span>
-              <span id="mqtt-broker-label" style="font-size:0.75em;color:var(--text-dim)">Broker: disconnected</span>
-              <button class="btn btn-sm btn-secondary write-only" onclick="mqttBroadcastPrompt()" style="font-size:0.72em;padding:2px 8px">📡 Broadcast</button>
+            <div class="flex-centered flex-gap-8">
+              <span id="mqtt-broker-dot" class="dot-8 d-none bg-err shadow-err"></span>
+              <span id="mqtt-broker-label" class="text-xs-dim">Broker: disconnected</span>
+              <button class="btn btn-sm btn-secondary write-only p-2-8 text-xs" onclick="mqttBroadcastPrompt()">📡 Broadcast</button>
             </div>
           </div>
-          <div style="display:flex;gap:8px;padding:8px;flex-wrap:wrap;min-height:80px" id="mqtt-node-grid">
-            <div data-placeholder style="color:var(--text-dim);font-size:0.8em;padding:20px;width:100%;text-align:center">Waiting for MQTT nodes…</div>
+          <div class="flex-gap-8 p-8 flex-wrap min-h-80" id="mqtt-node-grid">
+            <div data-placeholder class="text-dim text-sm p-20 w-full text-center">Waiting for MQTT nodes…</div>
           </div>
         </div>
 
         <!-- ── MQTT Live Log ─────────────────────────────────────────────────── -->
-        <div class="panel" style="margin:8px 0 0 0;max-height:200px">
+        <div class="panel mt-0 max-height-200">
           <div class="panel-title flex-between">
             <span>MQTT Live Log</span>
-            <button class="btn btn-sm btn-secondary" onclick="document.getElementById('mqtt-log').innerHTML=''" style="font-size:0.72em;padding:2px 6px">✕ Clear</button>
+            <button class="btn btn-sm btn-secondary p-2-6 text-xs" onclick="document.getElementById('mqtt-log').innerHTML=''">✕ Clear</button>
           </div>
-          <div id="mqtt-log" style="flex:1;overflow-y:auto;font-family:monospace;font-size:0.78em;padding:6px 10px;max-height:150px"></div>
+          <div id="mqtt-log" class="flex-1 ov-y-auto mono text-sm p-6-10 max-height-150"></div>
         </div>
     </div>
 
@@ -1460,60 +1550,39 @@
     <div class="page" id="pg-deploy">
       <div class="deploy-layout">
         <!-- LEFT 200px: Products + Sequences lists -->
-        <div class="flex-col" style="min-width: 0; overflow: hidden">
+        <div class="flex-col min-w-0 ov-hidden">
           <div
-            class="panel"
-            style="
-              padding: 0;
-              display: flex;
-              flex-direction: column;
-              overflow: hidden;
-              flex: 1;
-            "
+            class="panel p-0 flex-col ov-hidden flex-1"
           >
             <div class="panel-title flex-between">
-              <div style="display: flex; align-items: center; gap: 8px;"><span class="dbg-id">FA-P-07</span><span>Products</span></div>
+              <div class="flex-centered flex-gap-8"><span class="dbg-id">DEP-PROD-LIST</span><span>Products</span></div>
               <button
                 class="btn btn-sm"
                 onclick="newProduct()"
                 title="New product profile"
               >
-                +
+                <span class="dbg-id">DEP-BTN-NEW</span>+
               </button>
             </div>
             <div
               id="product-list"
-              style="overflow-y: auto; flex: 1; min-height: 50px"
+              class="ov-y-auto flex-1 min-h-50"
             ></div>
             <div
-              style="
-                border-top: 1px solid var(--border);
-                padding: 3px 10px;
-                font-size: 0.6em;
-                color: var(--text-dim);
-                text-transform: uppercase;
-                letter-spacing: 0.8px;
-                background: var(--bg-hdr);
-                flex-shrink: 0;
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-              "
+              class="border-top p-3-7 text-xs text-dim uppercase tracking-08 bg-hdr flex-shrink-0 flex-between"
             >
-              <span>Sequences</span>
+              <div class="flex-centered flex-gap-8"><span class="dbg-id">DEP-SEQ-LIST</span><span>Sequences</span></div>
               <button
-                class="btn btn-sm btn-secondary"
+                class="btn btn-sm btn-secondary p-1-5 text-md-dim"
                 onclick="clearDeviceTasks()"
-                style="padding: 1px 5px; font-size: 0.85em"
                 title="Clear all tasks on device"
               >
-                ⊗
+                <span class="dbg-id">DEP-BTN-CLEAR-TASKS</span>⊗
               </button>
             </div>
             <div
-              class="flex-1 overflow-y-auto p-2"
+              class="flex-1 ov-y-auto p-2 min-h-50"
               id="seq-list"
-              style="min-height: 50px"
             >
               <div class="list-empty">No sequences saved</div>
             </div>
@@ -1521,160 +1590,83 @@
         </div>
 
         <!-- CENTER 1fr: Product editor + Sequence editor -->
-        <div class="flex-col" style="min-width: 0; overflow: hidden; gap: 8px">
+        <div class="flex-col min-w-0 ov-hidden flex-gap-8">
           <!-- Product editor panel (hidden until product selected/created) -->
           <div
             id="product-editor"
-            class="panel"
-            style="display: none; padding: 0; overflow: visible; flex-shrink: 0"
+            class="panel d-none p-0 ov-visible flex-shrink-0"
           >
             <div class="panel-title flex-between">
-              <div style="display: flex; align-items: center; gap: 8px;"><span class="dbg-id">FA-P-08</span><span id="prod-editor-title">Product Profile</span></div>
-              <div style="display: flex; gap: 5px">
+              <div class="flex-centered flex-gap-8"><span class="dbg-id">DEP-PROD-EDIT</span><span id="prod-editor-title">Product Profile</span></div>
+              <div class="flex-gap-4">
                 <button
                   class="btn btn-sm btn-secondary"
                   onclick="saveProduct()"
                 >
-                  Save
+                  <span class="dbg-id">DEP-BTN-SAVE-PROD</span>Save
                 </button>
                 <button
                   class="btn btn-sm"
                   onclick="deployProductUI()"
                   id="deploy-btn"
                 >
-                  Deploy ▾
+                  <span class="dbg-id">DEP-BTN-DEPLOY</span>Deploy ▾
                 </button>
               </div>
             </div>
             <!-- Inline product form -->
-            <div
-              style="
-                display: flex;
-                flex-direction: column;
-                gap: 3px;
-                padding: 5px 10px;
-                flex-shrink: 0;
-              "
-            >
-              <div
-                style="
-                  display: grid;
-                  grid-template-columns: 64px 1fr;
-                  align-items: center;
-                  gap: 5px;
-                "
-              >
-                <label class="stat-label" style="text-align: right">Name</label>
+            <div class="flex-col flex-gap-2 p-5-10 flex-shrink-0">
+              <div class="grid-deploy-form">
+                <label class="stat-label text-right">Name</label>
                 <input
                   id="prod-name"
-                  class="input-styled"
-                  style="padding: 2px 6px; font-size: 0.82em"
+                  class="input-styled p-2-6 text-md-dim"
                   placeholder="FarmGateway v1"
                 />
               </div>
-              <div
-                style="
-                  display: grid;
-                  grid-template-columns: 64px 1fr;
-                  align-items: center;
-                  gap: 5px;
-                "
-              >
-                <label class="stat-label" style="text-align: right">HW</label>
+              <div class="grid-deploy-form">
+                <label class="stat-label text-right">HW</label>
                 <input
                   id="prod-hw"
-                  class="input-styled"
-                  style="padding: 2px 6px; font-size: 0.82em"
+                  class="input-styled p-2-6 text-md-dim"
                   placeholder="Heltec V3"
                 />
               </div>
-              <div
-                style="
-                  display: grid;
-                  grid-template-columns: 64px 1fr;
-                  align-items: center;
-                  gap: 5px;
-                "
-              >
-                <label class="stat-label" style="text-align: right"
-                  >Config</label
-                >
+              <div class="grid-deploy-form">
+                <label class="stat-label text-right">Config</label>
                 <input
                   id="prod-cfg"
-                  class="input-styled"
-                  style="padding: 2px 6px; font-size: 0.82em"
+                  class="input-styled p-2-6 text-md-dim"
                   placeholder="heltec_v3_farm.json"
                 />
               </div>
-              <div
-                style="
-                  display: grid;
-                  grid-template-columns: 64px 1fr;
-                  align-items: center;
-                  gap: 5px;
-                "
-              >
-                <label class="stat-label" style="text-align: right"
-                  >Schedule</label
-                >
+              <div class="grid-deploy-form">
+                <label class="stat-label text-right">Schedule</label>
                 <input
                   id="prod-sched"
-                  class="input-styled"
-                  style="padding: 2px 6px; font-size: 0.82em"
+                  class="input-styled p-2-6 text-md-dim"
                   placeholder="tasks_farm.json"
                 />
               </div>
-              <div
-                style="
-                  display: grid;
-                  grid-template-columns: 64px 1fr;
-                  align-items: center;
-                  gap: 5px;
-                "
-              >
-                <label class="stat-label" style="text-align: right"
-                  >Version</label
-                >
+              <div class="grid-deploy-form">
+                <label class="stat-label text-right">Version</label>
                 <input
                   id="prod-ver"
-                  class="input-styled"
-                  style="padding: 2px 6px; font-size: 0.82em"
+                  class="input-styled p-2-6 text-md-dim"
                   placeholder="1.0"
                 />
               </div>
-              <div
-                style="
-                  display: grid;
-                  grid-template-columns: 64px 1fr;
-                  align-items: center;
-                  gap: 5px;
-                "
-              >
-                <label class="stat-label" style="text-align: right"
-                  >Notes</label
-                >
+              <div class="grid-deploy-form">
+                <label class="stat-label text-right">Notes</label>
                 <input
                   id="prod-notes"
-                  class="input-styled"
-                  style="padding: 2px 6px; font-size: 0.82em"
+                  class="input-styled p-2-6 text-md-dim"
                   placeholder="Field gateways"
                 />
               </div>
               <!-- Transport selector -->
-              <div
-                style="
-                  display: flex;
-                  align-items: center;
-                  gap: 4px;
-                  margin-top: 3px;
-                  flex-wrap: wrap;
-                "
-              >
-                  <span
-                  class="stat-label"
-                  style="flex-shrink: 0; margin-right: 2px"
-                  >Transport</span
-                >
+              <div class="flex-centered flex-gap-4 mt-3px flex-wrap">
+                <span class="stat-label flex-shrink-0 mr-2">Transport</span>
                 <button
                   class="proto-btn"
                   id="proto-http"
@@ -1705,19 +1697,8 @@
                 </button>
               </div>
               <!-- Format selector -->
-              <div
-                style="
-                  display: flex;
-                  align-items: center;
-                  gap: 4px;
-                  flex-wrap: wrap;
-                "
-              >
-                  <span
-                  class="stat-label"
-                  style="flex-shrink: 0; margin-right: 2px"
-                  >Format</span
-                >
+              <div class="flex-centered flex-gap-4 flex-wrap">
+                <span class="stat-label flex-shrink-0 mr-2">Format</span>
                 <button
                   class="proto-btn"
                   id="fmt-J"
@@ -1747,51 +1728,23 @@
               </div>
             </div>
             <!-- Deploy node checklist -->
-            <div
-              id="deploy-checklist"
-              style="
-                display: none;
-                border-top: 1px solid var(--border);
-                padding: 5px 10px;
-              "
-            >
-              <div class="stat-label" style="margin-bottom: 3px">
-                Target Nodes
-              </div>
-              <div
-                id="deploy-node-items"
-                style="
-                  display: flex;
-                  flex-direction: column;
-                  gap: 3px;
-                  font-size: 0.78em;
-                  margin-bottom: 5px;
-                "
-              ></div>
-              <button
-                class="btn btn-sm"
-                id="confirm-deploy-btn"
-                onclick="confirmDeploy()"
-                style="width: 100%"
-              >
-                ✓ Confirm Deploy
+            <div id="deploy-checklist" class="d-none border-top p-5-10">
+              <div class="stat-label mb-3">Target Nodes</div>
+              <div id="deploy-node-items" class="flex-col flex-gap-4 text-xs-dim mb-6"></div>
+              <button class="btn btn-sm w-full" id="confirm-deploy-btn" onclick="confirmDeploy()">
+                <span class="dbg-id">DEP-BTN-CONFIRM</span>✓ Confirm Deploy
               </button>
             </div>
             <!-- Deploy result -->
             <div
               id="deploy-result"
-              style="
-                display: none;
-                padding: 4px 10px;
-                font-size: 0.78em;
-                border-top: 1px solid var(--border);
-              "
+              class="d-none p-4-10 text-xs border-top"
             ></div>
           </div>
 
           <!-- Sequence editor (existing, always visible) -->
-          <div class="panel bench-editor overflow-hidden" style="flex: 1">
-            <div class="panel-title"><div style="display: flex; align-items: center; gap: 8px;"><span class="dbg-id">FA-P-09</span><span>Sequence Editor</span></div></div>
+          <div class="panel bench-editor ov-hidden flex-1">
+            <div class="panel-title"><div class="flex-centered flex-gap-8"><span class="dbg-id">DEP-SEQ-EDIT</span><span>Sequence Editor</span></div></div>
             <div class="editor-toolbar">
               <label class="label-caps">Sequence Name</label>
               <input
@@ -1799,7 +1752,7 @@
                 placeholder="e.g. smoke_test"
                 class="input-styled flex-1"
               />
-              <button class="btn btn-sm" onclick="saveSequence()">Save</button>
+              <button class="btn btn-sm" onclick="saveSequence()"><span class="dbg-id">DEP-BTN-SAVE-SEQ</span>Save</button>
             </div>
             <div class="bench-meta">
               <label
@@ -1826,7 +1779,7 @@
                 ><input
                   type="checkbox"
                   id="seq-dryrun"
-                  style="accent-color: var(--warn); margin-right: 3px"
+                  class="mr-3 accent-warn"
                 />🧪 Dry Run</label
               >
             </div>
@@ -1834,18 +1787,18 @@
               <div id="schedule-grid" class="schedule-grid">
                 <!-- Populated by JS -->
               </div>
-              <div style="margin-top: 15px; display: flex; gap: 10px;">
+              <div class="mt-15 flex-gap-10">
                 <button
                   class="btn btn-secondary btn-sm"
                   onclick="openTaskEditor(-1)"
                 >
-                  + Add New Task
+                  <span class="dbg-id">DEP-BTN-ADD-TASK</span>+ Add New Task
                 </button>
                 <button
                   class="btn btn-secondary btn-sm"
                   onclick="clearSequence()"
                 >
-                  🗑 Clear All
+                  <span class="dbg-id">DEP-BTN-CLEAR-SEQ</span>🗑 Clear All
                 </button>
               </div>
               <div class="duty-panel" id="duty-panel">
@@ -1853,7 +1806,7 @@
                   <span>Aggregated LoRa Duty Cycle</span
                   ><span
                     id="duty-pct"
-                    style="font-weight: 700; color: var(--ok)"
+                    class="font-700 text-ok"
                     >—</span
                   >
                 </div>
@@ -1861,10 +1814,10 @@
                   <div
                     class="duty-bar-fill duty-ok"
                     id="duty-fill"
-                    style="width: 0%"
+                    class="w-0"
                   ></div>
                 </div>
-                <div class="duty-row" id="duty-detail" style="color: #555">
+                <div class="duty-row text-dim" id="duty-detail">
                   Add tasks to calculate airtime usage
                 </div>
               </div>
@@ -1873,21 +1826,14 @@
         </div>
 
         <!-- RIGHT 200px: Audit log -->
-        <div class="flex-col" style="min-width: 0; overflow: hidden">
+        <div class="flex-col min-w-0 ov-hidden">
           <div
-            class="panel"
-            style="
-              padding: 0;
-              flex: 1;
-              display: flex;
-              flex-direction: column;
-              overflow: hidden;
-            "
+            class="panel p-0 flex-1 flex-col ov-hidden"
           >
             <div class="panel-title flex-between">
-              <div style="display: flex; align-items: center; gap: 8px;"><span class="dbg-id">FA-P-10</span><span>Audit Log</span></div>
+              <div class="flex-centered flex-gap-8"><span class="dbg-id">DEP-AUDIT-LOG</span><span>Audit Log</span></div>
               <button
-                class="btn btn-sm btn-secondary"
+                class="btn btn-sm btn-secondary p-1-5 text-xs"
                 onclick="
                   _auditLog = [];
                   try {
@@ -1895,10 +1841,9 @@
                   } catch (e) {}
                   renderAuditLog();
                 "
-                style="padding: 1px 5px; font-size: 0.75em"
                 title="Clear audit log"
               >
-                ✕
+                <span class="dbg-id">DEP-BTN-CLEAR-AUDIT</span>✕
               </button>
             </div>
             <div id="audit-log" class="audit-log"></div>
@@ -1910,47 +1855,17 @@
     <!-- Deploy confirmation modal -->
     <div
       id="deploy-modal"
-      style="
-        display: none;
-        position: fixed;
-        inset: 0;
-        background: rgba(0, 0, 0, 0.7);
-        z-index: 1000;
-        display: none;
-        align-items: center;
-        justify-content: center;
-      "
+      class="d-none fixed inset-0 bg-modal z-1000 flex-centered"
     >
-      <div
-        style="
-          background: var(--bg-card);
-          border: 1px solid var(--border);
-          border-radius: 8px;
-          padding: 20px 24px;
-          min-width: 320px;
-          max-width: 480px;
-        "
-      >
-        <div
-          style="
-            font-size: 0.95em;
-            font-weight: 700;
-            margin-bottom: 8px;
-            color: var(--accent);
-          "
-        >
+      <div class="bg-card border-box b-radius-8 p-20-24 max-w-480 min-w-320">
+        <div class="text-md font-700 mb-8 text-accent">
           Confirm Deploy
         </div>
         <div
           id="deploy-modal-msg"
-          style="
-            font-size: 0.82em;
-            color: var(--text-dim);
-            margin-bottom: 16px;
-            line-height: 1.5;
-          "
+          class="text-md-dim mb-16 lh-1-5"
         ></div>
-        <div style="display: flex; gap: 8px; justify-content: flex-end">
+        <div class="flex-centered flex-gap-8 justify-fe">
           <button
             class="btn btn-secondary btn-sm"
             onclick="
@@ -1960,9 +1875,8 @@
             Cancel
           </button>
           <button
-            class="btn btn-sm"
+            class="btn btn-sm min-w-100"
             id="deploy-modal-ok"
-            style="min-width: 100px"
           >
             Deploy
           </button>
@@ -1973,48 +1887,24 @@
     <!-- Suite Editor Modal -->
     <div
       id="suite-modal"
-      style="
-        display: none;
-        position: fixed;
-        inset: 0;
-        background: rgba(0, 0, 0, 0.7);
-        z-index: 1001;
-        align-items: center;
-        justify-content: center;
-      "
+      class="d-none fixed inset-0 bg-modal z-1001 flex-centered"
     >
-      <div
-        style="
-          background: var(--bg-card);
-          border: 1px solid var(--border);
-          border-radius: 8px;
-          padding: 20px 24px;
-          width: 90%;
-          max-width: 500px;
-        "
-      >
-        <div
-          style="
-            font-size: 0.95em;
-            font-weight: 700;
-            margin-bottom: 12px;
-            color: var(--accent);
-          "
-        >
+      <div class="bg-card border-box b-radius-8 p-20-24 w-full max-w-500">
+        <div class="text-md font-700 mb-8 text-accent">
           Define Protocol Expectations
         </div>
-        <div style="margin-bottom: 12px">
+        <div class="mb-12">
           <label class="text-xs text-dim">Suite Name</label>
-          <input id="suite-name" class="input-styled" placeholder="e.g., Ping-Pong Test" style="width: 100%; margin-top: 4px" />
+          <input id="suite-name" class="input-styled w-full mt-4" placeholder="e.g., Ping-Pong Test" />
         </div>
         <div>
           <label class="text-xs text-dim">Expectations (JSON Array)</label>
-          <textarea id="suite-expectations" class="input-styled" style="width: 100%; height: 200px; font-family: monospace; font-size: 0.8em; margin-top: 4px" spellcheck="false"></textarea>
-          <div class="text-xs text-dim" style="margin-top: 4px">
+          <textarea id="suite-expectations" class="input-styled w-full mono text-sm mt-4 h-200" spellcheck="false"></textarea>
+          <div class="text-xs text-dim mt-4">
             [{"device": "A", "type": "TX", "data": "pattern"}, ...]
           </div>
         </div>
-        <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px">
+        <div class="flex-centered flex-gap-8 justify-fe mt-16">
           <button class="btn btn-secondary btn-sm" onclick="document.getElementById('suite-modal').style.display='none'">Cancel</button>
           <button class="btn btn-sm" onclick="saveTestSuite()">Save Suite</button>
         </div>
@@ -2025,9 +1915,9 @@
     <div class="page" id="pg-config">
       <div class="main">
         <!-- Board Variant + LoRa Summary Bar -->
-        <div class="panel" style="padding: 0; overflow: hidden">
+        <div class="panel p-0 ov-hidden">
           <div class="board-variant-bar">
-            <label style="color: #888; font-size: 0.8em">Board</label>
+            <label class="text-md-dim">Board</label>
             <select id="board-variant" onchange="onBoardVariantChange()" title="Select your hardware board variant">
               <option value="heltec_v3" selected>
                 Heltec WiFi LoRa 32 V3 (ESP32-S3)
@@ -2036,14 +1926,9 @@
                 Heltec V4 — coming soon
               </option>
             </select>
-            <span style="color: #555; font-size: 0.75em">LoRa:</span>
+            <span class="text-stale text-xs">LoRa:</span>
             <span
-              id="admin-toa-chip"
-              class="toa-chip duty-ok"
-              style="
-                background: rgba(0, 255, 136, 0.1);
-                border: 1px solid rgba(0, 255, 136, 0.3);
-              "
+              class="toa-chip duty-ok bg-ok-dim border-ok-dim"
               >SF10 · 250kHz · ~330ms ToA</span
             >
             <span
@@ -2051,18 +1936,17 @@
               title="Pin 14 is shared between LoRa DIO1 and RELAY_12V_1 — never enable both"
               >⚠ Pin 14 hazard</span
             >
-            <span style="color: #555; font-size: 0.75em; margin-left: auto"
+            <span class="text-stale text-xs ml-auto"
               >Restricted: 8,9,10,11,12,13,14 (LoRa/SPI)</span
             >
           </div>
         </div>
 
         <!-- Golden Image — PRIORITY RECOVERY at top -->
-        <div class="panel" style="padding: 0; overflow: hidden">
+        <div class="panel p-0 ov-hidden">
           <div
-            class="golden-panel"
+            class="golden-panel m-0 b-radius-0 border-none"
             id="golden-panel"
-            style="margin: 0; border-radius: 0; border: none"
           >
             <span class="golden-badge">🛡 GOLDEN IMAGE</span>
             <span class="golden-name" id="golden-name">No backup on file</span>
@@ -2072,16 +1956,7 @@
             >
               Create Backup
             </button>
-            <button
-              class="btn btn-sm"
-              id="golden-restore-btn"
-              onclick="restoreGoldenImage()"
-              disabled
-              style="
-                background: rgba(255, 170, 0, 0.12);
-                border-color: rgba(255, 170, 0, 0.4);
-                color: var(--warn);
-              "
+              class="btn btn-sm bg-warn-dim border-warn-dim text-warn"
               title="Apply the most recent backup to the device"
             >
               ↩ Restore Golden
@@ -2092,22 +1967,15 @@
         <!-- Device Config Settings Panel (3-state: Desired / Pending / Confirmed) -->
         <div class="panel">
           <div class="panel-title flex-row-sb">
-            <div style="display: flex; align-items: center; gap: 8px;"><span class="dbg-id">FA-P-11</span><span>Device Configuration</span></div>
-            <div style="display: flex; gap: 6px">
+            <div class="flex-centered-y flex-gap-8"><span class="dbg-id">CFG-DEV-SETTINGS</span><span>Device Configuration</span></div>
+            <div class="flex-row flex-gap-6">
               <button
                 class="btn btn-sm btn-secondary"
                 onclick="refreshConfigSettings()"
               >
                 ↺ Refresh
               </button>
-              <button
-                class="btn btn-sm"
-                onclick="applyConfigChanges()"
-                style="
-                  background: #00884422;
-                  border-color: #00884444;
-                  color: #00ff88;
-                "
+              class="btn btn-sm bg-ok-dim border-ok-dim text-ok"
               >
                 Apply Changes
               </button>
@@ -2115,24 +1983,23 @@
           </div>
           <div
             id="cfg-validation-err"
-            class="cfg-validation-err"
-            style="margin: 0 12px 0 12px"
+            class="cfg-validation-err m-0-12"
           ></div>
-          <div style="overflow-x: auto; padding: 4px 0">
-            <table class="cfg-settings-table" style="font-size: 0.82em">
+          <div class="ov-x-auto p-4-0">
+            <table class="cfg-settings-table text-md">
               <thead>
                 <tr>
-                  <th style="width: 160px">Setting</th>
-                  <th style="width: 140px">Reported</th>
+                  <th class="w-160">Setting</th>
+                  <th class="w-140">Reported</th>
                   <th>Desired</th>
-                  <th style="width: 90px; text-align: center">State</th>
+                  <th class="w-90 text-center">State</th>
                 </tr>
               </thead>
               <tbody id="cfg-settings-body">
                 <tr>
                   <td
                     colspan="4"
-                    style="text-align: center; color: #555; padding: 12px"
+                    class="text-center text-dim p-12"
                   >
                     Loading…
                   </td>
@@ -2143,15 +2010,14 @@
         </div>
 
         <!-- Smart Pin Map — collapsible -->
-        <details class="panel" style="padding: 0" open>
+        <details class="panel p-0" open>
           <summary
-            class="panel-title flex-row-sb"
-            style="cursor: pointer; list-style: none; display: flex"
+            class="panel-title flex-between cursor-pointer ls-none"
           >
             <span>Smart Pin Map (Heltec V3)</span>
-            <span style="font-size: 0.75em; color: var(--text-dim)">▼</span>
+            <span class="text-xs text-dim">▼</span>
           </summary>
-          <p class="text-xs text-dim" style="padding: 4px 10px 2px">
+          <p class="text-xs text-dim p-4-10-2">
             Interactive diagram. Click a GPIO pin to label it or toggle
             status-report visibility. Red border = LoRa/SPI reserved.
           </p>
@@ -2166,68 +2032,41 @@
         </details>
 
         <!-- APC Section — compact gpio-chip-row style -->
-        <div class="panel" style="padding: 0; overflow: hidden">
-          <div class="panel-title"><div style="display: flex; align-items: center; gap: 8px;"><span class="dbg-id">FA-P-12</span><span>APC — Interest List Pins</span></div></div>
-          <p class="text-xs text-dim" style="padding: 2px 10px 4px">
+        <div class="panel p-0 ov-hidden">
+          <div class="panel-title"><div class="flex-centered flex-gap-8"><span class="dbg-id">CFG-APC-LIST</span><span>APC — Interest List Pins</span></div></div>
+          <p class="text-xs text-dim p-2-10-4">
             Toggle pin visibility in the device status report.
           </p>
           <div
             id="apc-list"
-            class="gpio-chip-row"
-            style="padding: 4px 10px 8px"
+            class="gpio-chip-row p-4-10-8"
           ></div>
         </div>
 
         <!-- Hardware Registry Section — compact -->
-        <div class="panel" style="padding: 0; overflow: hidden">
-          <div class="panel-title flex-row-sb">
-            <div style="display: flex; align-items: center; gap: 8px;"><span class="dbg-id">FA-P-13</span><span>Hardware Registry</span></div>
+        <div class="panel p-0 ov-hidden">
+          <div class="panel-title flex-between">
+            <div class="flex-centered flex-gap-8"><span class="dbg-id">CFG-HW-REGISTRY</span><span>Hardware Registry</span></div>
             <button
-              class="btn btn-sm btn-secondary"
+              class="btn btn-sm btn-secondary p-1-8"
               onclick="refreshRegistry()"
-              style="padding: 1px 8px"
             >
               ↺
             </button>
           </div>
-          <div style="overflow-x: auto">
-            <table class="w-full" style="font-size: 0.78em">
+          <div class="ov-x-auto">
+            <table class="w-full text-xs">
               <thead>
-                <tr
-                  style="
-                    background: var(--bg-hdr);
-                    border-bottom: 1px solid var(--border);
-                  "
-                >
-                  <th
-                    style="
-                      padding: 3px 10px;
-                      text-align: left;
-                      color: var(--text-dim);
-                      font-size: 0.85em;
-                      text-transform: uppercase;
-                    "
-                  >
-                    Device ID
-                  </th>
-                  <th
-                    style="
-                      padding: 3px 10px;
-                      text-align: left;
-                      color: var(--text-dim);
-                      font-size: 0.85em;
-                      text-transform: uppercase;
-                    "
-                  >
-                    Hardware Type
-                  </th>
+                <tr class="bg-hdr border-bottom">
+                  <th class="p-3-7 text-left text-dim text-sm uppercase"> Device ID </th>
+                  <th class="p-3-7 text-left text-dim text-sm uppercase"> Hardware Type </th>
                 </tr>
               </thead>
               <tbody id="registry-tbody">
                 <tr>
                   <td
                     colspan="2"
-                    style="text-align: center; color: #555; padding: 6px 10px"
+                    class="text-center text-dim p-4-10"
                   >
                     No hardware registered
                   </td>
@@ -2238,92 +2077,80 @@
         </div>
 
         <!-- Product Profiles index — read-only list with Edit links -->
-        <div class="panel" style="padding: 0; overflow: hidden">
+        <div class="panel p-0 ov-hidden">
           <div class="panel-title flex-between">
-            <div style="display: flex; align-items: center; gap: 8px;"><span class="dbg-id">FA-P-14</span><span>Product Profiles</span></div>
+            <div class="flex-centered flex-gap-8"><span class="dbg-id">CFG-PROD-INDEX</span><span>Product Profiles</span></div>
             <button
-              class="btn btn-sm"
+              class="btn btn-sm p-1-8"
               onclick="
                 showPage('deploy');
                 newProduct();
               "
-              style="padding: 1px 8px"
             >
               + New
             </button>
           </div>
-          <div id="product-index-list" style="min-height: 28px"></div>
+          <div id="product-index-list" class="min-h-0 min-h-28"></div>
         </div>
       </div>
 
       <!-- ── Config Files (merged from Config tab) ──────────────────────────── -->
       <div
-        class="config-layout"
-        style="padding: 12px; flex: 1; min-height: 300px"
+        class="config-layout p-12 flex-1 min-h-300"
       >
         <div class="panel flex-col overflow-hidden">
-          <div class="panel-title panel-title-flex">
-            <div style="display: flex; align-items: center; gap: 8px;"><span class="dbg-id">FA-P-15</span><span>Config Files</span></div>
+          <div class="panel-title flex-between">
+            <div class="flex-centered flex-gap-8"><span class="dbg-id">CFG-FILE-LIST</span><span>Config Files</span></div>
             <button class="btn btn-sm" onclick="newFile()">+ New</button>
           </div>
-          <div class="flex-1 overflow-y-auto p-2" id="file-list">
+          <div class="flex-1 ov-y-auto p-2" id="file-list">
             <div class="list-empty">No files</div>
           </div>
         </div>
         <div class="panel config-editor">
-          <div class="panel-title panel-title-flex flex-shrink-0">
-           <div style="display: flex; align-items: center; gap: 8px;"><span class="dbg-id">FA-P-16</span><span> </span></div><div style="display: flex; align-items: center; gap: 8px">
+          <div class="panel-title flex-between flex-shrink-0">
+           <div class="flex-centered flex-gap-8"><span class="dbg-id">CFG-FILE-EDIT</span><span> </span></div><div class="flex-centered flex-gap-8">
               <span id="cfg-filename" class="text-dim"
                 >— no file selected —</span
               >
               <span
                 id="json-status"
-                style="
-                  font-size: 0.7em;
-                  padding: 2px 6px;
-                  border-radius: 4px;
-                  display: none;
-                "
+                class="text-xs p-2-6 b-radius-8 d-none"
               ></span>
             </div>
             <div class="flex-row-sm">
               <button
-                class="btn btn-secondary btn-sm"
+                class="btn btn-secondary btn-sm d-none"
                 onclick="loadFromDevice()"
                 id="cfg-load-btn"
-                style="display: none"
               >
                 📥 Load from Device
               </button>
               <button
-                class="btn btn-secondary btn-sm"
+                class="btn btn-secondary btn-sm d-none"
                 onclick="prettifyJson()"
                 id="cfg-pretty-btn"
-                style="display: none"
               >
                 { } Prettify
               </button>
               <button
-                class="btn btn-secondary btn-sm"
+                class="btn btn-secondary btn-sm d-none"
                 onclick="deleteFile()"
                 id="cfg-del-btn"
-                style="display: none"
               >
                 Delete
               </button>
               <button
-                class="btn btn-sm"
+                class="btn btn-sm d-none"
                 onclick="saveFile()"
                 id="cfg-save-btn"
-                style="display: none"
               >
                 Save to Disk
               </button>
               <button
-                class="btn btn-sm"
+                class="btn btn-sm d-none"
                 onclick="applyFileTasks()"
                 id="cfg-apply-btn"
-                style="display: none"
               >
                 Apply to Device
               </button>
@@ -2341,26 +2168,26 @@
 
     <!-- ── Page: Schedules ──────────────────────────────────────────────────── -->
     <div class="page" id="pg-schedules">
-      <div class="main" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:12px">
+      <div class="main grid-2 grid-gap-12 p-12">
 
         <!-- LANE 1: Timer Tasks -->
         <div class="panel">
           <div class="panel-title flex-between">
-            <div style="display:flex;align-items:center;gap:8px">
-              <span class="dbg-id">FA-S-01</span>
+            <div class="flex-centered flex-gap-8">
+              <span class="dbg-id">SCH-TIMER-WIZ</span>
               <span>⏱ Timer Tasks</span>
             </div>
-            <span style="font-size:0.72em;color:var(--text-dim)" id="sched-slot-count">0 / 5 slots</span>
+            <span class="text-xs text-dim" id="sched-slot-count">0 / 5 slots</span>
           </div>
 
           <!-- Wizard steps -->
-          <div style="padding:12px;display:flex;flex-direction:column;gap:10px">
-            <div style="font-size:0.72em;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:2px">① Target</div>
-            <div style="display:flex;gap:8px;flex-wrap:wrap">
-              <select id="sched-node" class="input-styled" style="flex:1;min-width:120px">
+          <div class="p-12 flex-col flex-gap-10">
+            <div class="text-xs text-dim upper tracking-1 mb-2">① Target</div>
+            <div class="flex-gap-8 flex-wrap">
+              <select id="sched-node" class="input-styled flex-1 min-w-120" title="Select node for scheduling">
                 <option value="">— Node —</option>
               </select>
-              <select id="sched-pin" class="input-styled" style="flex:1;min-width:100px">
+              <select id="sched-pin" class="input-styled flex-1 min-w-100" title="Select pin for scheduling">
                 <option value="">— Pin —</option>
                 <option value="5">Pin 5 (110V)</option>
                 <option value="6">Pin 6 (12V-2)</option>
@@ -2368,69 +2195,70 @@
               </select>
             </div>
 
-            <div style="font-size:0.72em;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px">② Type</div>
-            <div style="display:flex;gap:8px">
-              <label style="display:flex;align-items:center;gap:6px;font-size:0.82em;cursor:pointer">
+            <div class="text-xs text-dim upper tracking-1">② Type</div>
+            <div class="flex-gap-8">
+              <label class="flex-centered flex-gap-8 text-md cursor-pointer">
                 <input type="radio" name="sched-type" value="TOGGLE" checked /> TOGGLE (on/off cycle)
               </label>
-              <label style="display:flex;align-items:center;gap:6px;font-size:0.82em;cursor:pointer">
+              <label class="flex-centered flex-gap-8 text-md cursor-pointer">
                 <input type="radio" name="sched-type" value="PULSE" /> PULSE (brief fire)
               </label>
             </div>
 
-            <div style="font-size:0.72em;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px">③ Timing</div>
-            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-              <label style="font-size:0.8em;white-space:nowrap">Interval (s)
-                <input type="number" id="sched-interval" class="input-styled" value="30" min="1" max="86400" style="width:80px;margin-left:4px" />
+            <div class="text-xs text-dim upper tracking-1">③ Timing</div>
+            <div class="flex-gap-8 flex-centered flex-wrap">
+              <label class="text-sm border-nowrap">Interval (s)
+                <input type="number" id="sched-interval" class="input-styled w-80 ml-4" value="30" min="1" max="86400" />
               </label>
-              <label style="font-size:0.8em;white-space:nowrap" id="sched-dur-label">Duration (ms)
-                <input type="number" id="sched-duration" class="input-styled" value="500" min="50" max="30000" style="width:80px;margin-left:4px" />
+              <label class="text-sm border-nowrap" id="sched-dur-label">Duration (ms)
+                <input type="number" id="sched-duration" class="input-styled w-80 ml-4" value="500" min="50" max="30000" />
               </label>
             </div>
 
             <!-- Best-practice guards (computed inline) -->
-            <div id="sched-guard-box" style="background:rgba(255,170,0,0.07);border:1px solid rgba(255,170,0,0.2);border-radius:6px;padding:8px 10px;font-size:0.76em;display:none">
-              <span id="sched-guard-msg" style="color:var(--warn)"></span>
+            <div id="sched-guard-box" class="bg-guard border-box p-8-10 text-xs d-none">
+              <span id="sched-guard-msg" class="text-warn"></span>
             </div>
 
-            <div style="font-size:0.72em;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px">④ Review</div>
-            <div id="sched-preview" style="font-family:monospace;font-size:0.8em;color:var(--accent);background:rgba(0,212,255,0.04);border-radius:6px;padding:8px 10px;border:1px solid var(--border)">
+            <div class="text-xs-dim upper tracking-1">④ Review</div>
+            <div class="text-xs text-dim upper tracking-1">④ Review</div>
+            <div id="sched-preview" class="mono text-sm text-accent bg-preview p-8-10 border-box">
               Fill in fields above to preview the command
             </div>
 
-            <button class="btn btn-sm write-only" id="sched-commit-btn" onclick="schedCommit()" style="align-self:flex-start" disabled>
+            <button class="btn btn-sm write-only as-fs" id="sched-commit-btn" onclick="schedCommit()" disabled>
               Push to Device
             </button>
           </div>
 
           <!-- Active timer slots -->
-          <div style="border-top:1px solid var(--border);padding:8px 12px">
-            <div style="font-size:0.68em;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Active Timer Slots</div>
-            <div id="sched-active-list" style="font-size:0.78em;color:var(--text-dim)">Loading…</div>
+          <div class="border-top p-8-12">
+            <div class="text-xs text-dim upper tracking-1 mb-6">Active Timer Slots</div>
+            <div id="sched-active-list" class="text-xs text-dim">Loading…</div>
           </div>
         </div>
 
         <!-- LANE 2: Interrupt / Rule Tasks -->
         <div class="panel">
           <div class="panel-title flex-between">
-            <div style="display:flex;align-items:center;gap:8px">
-              <span class="dbg-id">FA-S-02</span>
+            <div class="flex-centered flex-gap-8">
+              <span class="dbg-id">SCH-RULE-WIZ</span>
               <span>⚡ Interrupt Rules</span>
             </div>
-            <span style="font-size:0.72em;color:var(--text-dim)" id="rule-count">0 / 8 rules</span>
+            <span class="text-xs text-dim" id="rule-count">0 / 8 rules</span>
           </div>
 
-          <div style="padding:12px;display:flex;flex-direction:column;gap:10px">
-            <div style="font-size:0.72em;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px">① Trigger</div>
-            <div style="display:flex;gap:8px;flex-wrap:wrap">
-              <select id="rule-source" class="input-styled" style="flex:1" onchange="onRuleSourceChange()">
+          <div class="p-12 flex-col flex-gap-10">
+            <div class="text-xs-dim upper tracking-1">① Trigger</div>
+            <div class="flex-row flex-gap-8 flex-wrap">
+              <select id="rule-source" class="input-styled flex-1" onchange="onRuleSourceChange()" title="Select trigger source">
                 <option value="PIN">GPIO Pin state</option>
                 <option value="BAT">Battery threshold</option>
                 <option value="LORA">LoRa message match</option>
                 <option value="RSSI">RSSI threshold</option>
                 <option value="TIMER">One-shot timer</option>
               </select>
-              <select id="rule-edge" class="input-styled" style="flex:1">
+              <select id="rule-edge" class="input-styled flex-1" title="Select trigger edge or condition">
                 <option value="RISING">Rising edge (LOW→HIGH)</option>
                 <option value="FALLING">Falling edge (HIGH→LOW)</option>
                 <option value="HIGH">Stays HIGH</option>
@@ -2440,56 +2268,56 @@
                 <option value="MATCH">Pattern match</option>
               </select>
             </div>
-            <div style="display:flex;gap:8px;align-items:center">
-              <label style="font-size:0.8em;flex:1">Trigger arg (pin#, voltage, ms, pattern)
-                <input type="text" id="rule-trigger-arg" class="input-styled" placeholder="e.g. 38  or  3.4  or  PING" style="width:100%;margin-top:3px" />
+            <div class="flex-gap-8 flex-centered">
+              <label class="text-sm flex-1">Trigger arg (pin#, voltage, ms, pattern)
+                <input type="text" id="rule-trigger-arg" class="input-styled w-full mt-3" placeholder="e.g. 38  or  3.4  or  PING" />
               </label>
-              <label style="font-size:0.8em">Debounce (ms)
-                <input type="number" id="rule-debounce" class="input-styled" value="50" min="0" max="5000" style="width:75px;margin-top:3px" />
+              <label class="text-sm">Debounce (ms)
+                <input type="number" id="rule-debounce" class="input-styled w-75 mt-3" value="50" min="0" max="5000" />
               </label>
             </div>
 
-            <div style="font-size:0.72em;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px">② Filter</div>
-            <div style="display:flex;gap:16px;align-items:center">
-              <label style="display:flex;align-items:center;gap:6px;font-size:0.82em;cursor:pointer">
+            <div class="text-xs text-dim upper tracking-1">② Filter</div>
+            <div class="flex-gap-12 flex-centered">
+              <label class="flex-centered flex-gap-6 text-md cursor-pointer">
                 <input type="checkbox" id="rule-oneshot" /> One-shot (auto-remove after fire)
               </label>
-              <label style="font-size:0.8em">Cooldown (s)
-                <input type="number" id="rule-cooldown" class="input-styled" value="0" min="0" max="3600" style="width:60px;margin-left:4px" />
+              <label class="text-sm">Cooldown (s)
+                <input type="number" id="rule-cooldown" class="input-styled w-60 ml-4" value="0" min="0" max="3600" />
               </label>
             </div>
 
-            <div style="font-size:0.72em;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px">③ Action</div>
-            <div style="display:flex;gap:8px;flex-wrap:wrap">
-              <select id="rule-action" class="input-styled" style="flex:1">
+            <div class="text-xs text-dim upper tracking-1">③ Action</div>
+            <div class="flex-gap-8 flex-wrap">
+              <select id="rule-action" class="input-styled flex-1" title="Select action to take on trigger">
                 <option value="SET_PIN">Set pin HIGH/LOW</option>
                 <option value="CMD">Send command</option>
                 <option value="LORA_TX">LoRa TX alert</option>
                 <option value="SLEEP">Enter sleep</option>
                 <option value="LOG">Log only</option>
               </select>
-              <input type="text" id="rule-action-arg" class="input-styled" placeholder="e.g. PIN_6=HIGH  or  RESTART" style="flex:2" />
+              <input type="text" id="rule-action-arg" class="input-styled flex-2" placeholder="e.g. PIN_6=HIGH  or  RESTART" />
             </div>
 
             <!-- Best-practice guards -->
-            <div id="rule-guard-box" style="background:rgba(255,170,0,0.07);border:1px solid rgba(255,170,0,0.2);border-radius:6px;padding:8px 10px;font-size:0.76em;display:none">
-              <span id="rule-guard-msg" style="color:var(--warn)"></span>
+            <div id="rule-guard-box" class="bg-guard border-box p-8-10 text-xs d-none">
+              <span id="rule-guard-msg" class="text-warn"></span>
             </div>
 
-            <div style="font-size:0.72em;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px">④ Review</div>
-            <div id="rule-preview" style="font-family:monospace;font-size:0.8em;color:var(--accent);background:rgba(0,212,255,0.04);border-radius:6px;padding:8px 10px;border:1px solid var(--border)">
+            <div class="text-xs text-dim upper tracking-1">④ Review</div>
+            <div id="rule-preview" class="mono text-sm text-accent bg-preview p-8-10 border-box">
               Configure trigger + action above
             </div>
 
-            <button class="btn btn-sm write-only" id="rule-commit-btn" onclick="ruleCommit()" style="align-self:flex-start" disabled>
+            <button class="btn btn-sm write-only as-fs" id="rule-commit-btn" onclick="ruleCommit()" disabled>
               Push Rule to Device
             </button>
           </div>
 
           <!-- Active rules list -->
-          <div style="border-top:1px solid var(--border);padding:8px 12px">
-            <div style="font-size:0.68em;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Active Rules</div>
-            <div id="rule-active-list" style="font-size:0.78em;color:var(--text-dim)">No rules configured</div>
+          <div class="border-top p-8-12">
+            <div class="text-xs text-dim upper tracking-1 mb-6">Active Rules</div>
+            <div id="rule-active-list" class="text-xs text-dim">No rules configured</div>
           </div>
         </div>
       </div>
@@ -2499,69 +2327,69 @@
     <div class="page" id="pg-analysis">
 
       <!-- ── Performance Monitor ──────────────────────────────────────────────── -->
-      <div class="panel" id="perf-panel" style="margin-bottom:12px">
+      <div class="panel mb-12" id="perf-panel">
         <div class="panel-title flex-between">
-          <div style="display:flex;align-items:center;gap:8px">
-            <span class="dbg-id">FA-P-30</span>
+          <div class="flex-centered flex-gap-8">
+            <span class="dbg-id">PERF-MONITOR</span>
             <span>Device Performance</span>
           </div>
-          <span id="perf-device-label" style="font-size:0.8em;color:#555;font-family:monospace">No data yet</span>
+          <span id="perf-device-label" class="text-sm text-dim mono">No data yet</span>
         </div>
 
         <!-- ── 5 Metric cards ─────────────────────────────────────────────── -->
-        <div style="display:flex;flex-wrap:wrap;gap:12px;padding:10px 12px 6px">
+        <div class="flex flex-wrap flex-gap-12 p-10-12-6">
 
-          <div class="adc-card" style="min-width:130px;flex:1">
+          <div class="adc-card min-w-130 flex-1">
             <div class="adc-label">Free Heap</div>
-            <div id="perf-heap-val" class="adc-value" style="font-size:1.3em;transition:color 0.4s">--</div>
-            <div style="display:flex;align-items:center;gap:6px;margin-top:5px">
-              <div id="perf-heap-spark" style="line-height:0;flex-shrink:0"></div>
-              <div style="flex:1;height:4px;background:#1a1a1a;border-radius:2px;overflow:hidden">
-                <div id="perf-heap-bar" style="height:100%;width:0%;transition:width 0.5s,background 0.5s"></div>
+            <div id="perf-heap-val" class="adc-value fs-1-3 trans-color-04">--</div>
+            <div class="flex-centered flex-gap-6 mt-5px">
+              <div id="perf-heap-spark" class="lh-0 flex-shrink-0"></div>
+              <div class="flex-1 h-4 bg-dark-1 b-radius-2 ov-hidden">
+                <div id="perf-heap-bar" class="h-full w-0 trans-all-05"></div>
               </div>
             </div>
           </div>
 
-          <div class="adc-card" style="min-width:130px;flex:1">
+          <div class="adc-card min-w-130 flex-1">
             <div class="adc-label">Loop Avg</div>
-            <div id="perf-lavg-val" class="adc-value" style="font-size:1.3em;transition:color 0.4s">--</div>
-            <div style="display:flex;align-items:center;gap:6px;margin-top:5px">
-              <div id="perf-lavg-spark" style="line-height:0;flex-shrink:0"></div>
-              <div style="flex:1;height:4px;background:#1a1a1a;border-radius:2px;overflow:hidden">
-                <div id="perf-lavg-bar" style="height:100%;width:0%;transition:width 0.5s,background 0.5s"></div>
+            <div id="perf-lavg-val" class="adc-value fs-1-3 trans-color-04">--</div>
+            <div class="flex-centered flex-gap-6 mt-5px">
+              <div id="perf-lavg-spark" class="lh-0 flex-shrink-0"></div>
+              <div class="flex-1 h-4 bg-dark-1 b-radius-2 ov-hidden">
+                <div id="perf-lavg-bar" class="h-full w-0 trans-all-05"></div>
               </div>
             </div>
           </div>
 
-          <div class="adc-card" style="min-width:130px;flex:1">
+          <div class="adc-card min-w-130 flex-1">
             <div class="adc-label">Loop Peak</div>
-            <div id="perf-lmax-val" class="adc-value" style="font-size:1.3em;transition:color 0.4s">--</div>
-            <div style="display:flex;align-items:center;gap:6px;margin-top:5px">
-              <div id="perf-lmax-spark" style="line-height:0;flex-shrink:0"></div>
-              <div style="flex:1;height:4px;background:#1a1a1a;border-radius:2px;overflow:hidden">
-                <div id="perf-lmax-bar" style="height:100%;width:0%;transition:width 0.5s,background 0.5s"></div>
+            <div id="perf-lmax-val" class="adc-value fs-1-3 trans-color-04">--</div>
+            <div class="flex-centered flex-gap-6 mt-5px">
+              <div id="perf-lmax-spark" class="lh-0 flex-shrink-0"></div>
+              <div class="flex-1 h-4 bg-dark-1 b-radius-2 ov-hidden">
+                <div id="perf-lmax-bar" class="h-full w-0 trans-all-05"></div>
               </div>
             </div>
           </div>
 
-          <div class="adc-card" style="min-width:130px;flex:1">
+          <div class="adc-card min-w-130 flex-1">
             <div class="adc-label">Battery</div>
-            <div id="perf-bat-val" class="adc-value" style="font-size:1.3em;transition:color 0.4s">--</div>
-            <div style="display:flex;align-items:center;gap:6px;margin-top:5px">
-              <div id="perf-bat-spark" style="line-height:0;flex-shrink:0"></div>
-              <div style="flex:1;height:4px;background:#1a1a1a;border-radius:2px;overflow:hidden">
-                <div id="perf-bat-bar" style="height:100%;width:0%;transition:width 0.5s,background 0.5s"></div>
+            <div id="perf-bat-val" class="adc-value fs-1-3 trans-color-04">--</div>
+            <div class="flex-centered flex-gap-6 mt-5px">
+              <div id="perf-bat-spark" class="lh-0 flex-shrink-0"></div>
+              <div class="flex-1 h-4 bg-dark-1 b-radius-2 ov-hidden">
+                <div id="perf-bat-bar" class="h-full w-0 trans-all-05"></div>
               </div>
             </div>
           </div>
 
-          <div class="adc-card" style="min-width:130px;flex:1">
+          <div class="adc-card min-w-130 flex-1">
             <div class="adc-label">WiFi RSSI</div>
-            <div id="perf-rssi-val" class="adc-value" style="font-size:1.3em;transition:color 0.4s">--</div>
-            <div style="display:flex;align-items:center;gap:6px;margin-top:5px">
-              <div id="perf-rssi-spark" style="line-height:0;flex-shrink:0"></div>
-              <div style="flex:1;height:4px;background:#1a1a1a;border-radius:2px;overflow:hidden">
-                <div id="perf-rssi-bar" style="height:100%;width:0%;transition:width 0.5s,background 0.5s"></div>
+            <div id="perf-rssi-val" class="adc-value fs-1-3 trans-color-04">--</div>
+            <div class="flex-centered flex-gap-6 mt-5px">
+              <div id="perf-rssi-spark" class="lh-0 flex-shrink-0"></div>
+              <div class="flex-1 h-4 bg-dark-1 b-radius-2 ov-hidden">
+                <div id="perf-rssi-bar" class="h-full w-0 trans-all-05"></div>
               </div>
             </div>
           </div>
@@ -2569,36 +2397,36 @@
         </div>
 
         <!-- ── Counters row ───────────────────────────────────────────────── -->
-        <div style="display:flex;flex-wrap:wrap;border-top:1px solid #1e1e1e;margin-top:4px;padding:6px 8px 8px">
+        <div class="flex-wrap border-dark-1 mt-4 p-6-8-8">
 
-          <div style="flex:1;min-width:90px;text-align:center;padding:4px 6px">
-            <div style="font-size:0.68em;color:#444;text-transform:uppercase;letter-spacing:.05em">Uptime</div>
-            <div id="perf-uptime" style="font-size:0.9em;color:#888;font-family:monospace">--</div>
+          <div class="flex-1 min-w-90 text-center p-4-6">
+            <div class="fs-068 text-dim uppercase tracking-05">Uptime</div>
+            <div id="perf-uptime" class="fs-09 text-dim mono">--</div>
           </div>
 
-          <div style="flex:1;min-width:80px;text-align:center;padding:4px 6px">
-            <div style="font-size:0.68em;color:#444;text-transform:uppercase;letter-spacing:.05em">ESP-NOW TX</div>
-            <div id="perf-enow-tx" style="font-size:0.9em;color:#888;font-family:monospace">--</div>
+          <div class="flex-1 min-w-80 text-center p-4-6">
+            <div class="fs-068 text-dim uppercase tracking-05">ESP-NOW TX</div>
+            <div id="perf-enow-tx" class="fs-09 text-dim mono">--</div>
           </div>
 
-          <div style="flex:1;min-width:80px;text-align:center;padding:4px 6px">
-            <div style="font-size:0.68em;color:#444;text-transform:uppercase;letter-spacing:.05em">ESP-NOW RX</div>
-            <div id="perf-enow-rx" style="font-size:0.9em;color:#888;font-family:monospace">--</div>
+          <div class="flex-1 min-w-80 text-center p-4-6">
+            <div class="fs-068 text-dim uppercase tracking-05">ESP-NOW RX</div>
+            <div id="perf-enow-rx" class="fs-09 text-dim mono">--</div>
           </div>
 
-          <div style="flex:1;min-width:70px;text-align:center;padding:4px 6px">
-            <div style="font-size:0.68em;color:#444;text-transform:uppercase;letter-spacing:.05em">Peers</div>
-            <div id="perf-peers" style="font-size:0.9em;color:#888;font-family:monospace">--</div>
+          <div class="flex-1 min-w-70 text-center p-4-6">
+            <div class="fs-068 text-dim uppercase tracking-05">Peers</div>
+            <div id="perf-peers" class="fs-09 text-dim mono">--</div>
           </div>
 
-          <div style="flex:1;min-width:70px;text-align:center;padding:4px 6px">
-            <div style="font-size:0.68em;color:#444;text-transform:uppercase;letter-spacing:.05em">Resets</div>
-            <div id="perf-rst" style="font-size:0.9em;color:#888;font-family:monospace">--</div>
+          <div class="flex-1 min-w-70 text-center p-4-6">
+            <div class="fs-068 text-dim uppercase tracking-05">Resets</div>
+            <div id="perf-rst" class="fs-09 text-dim mono">--</div>
           </div>
 
-          <div style="flex:1;min-width:90px;text-align:center;padding:4px 6px">
-            <div style="font-size:0.68em;color:#444;text-transform:uppercase;letter-spacing:.05em">LoRa ToA</div>
-            <div id="perf-loratoa" style="font-size:0.9em;color:#888;font-family:monospace">--</div>
+          <div class="flex-1 min-w-90 text-center p-4-6">
+            <div class="fs-068 text-dim uppercase tracking-05">LoRa ToA</div>
+            <div id="perf-loratoa" class="fs-09 text-dim mono">--</div>
           </div>
 
         </div>
@@ -2607,52 +2435,52 @@
 
       <div class="analysis-layout">
         <!-- Device A Column -->
-        <div class="panel flex-col" style="flex: 1; min-width: 0; padding: 0; overflow: hidden">
+        <div class="panel flex-col p-0 ov-hidden flex-1 min-w-0">
           <div class="panel-title flex-between">
-            <div style="display: flex; align-items: center; gap: 8px;"><span class="dbg-id">FA-P-17</span><span>Device A Trace</span></div>
-            <select id="analysis-dev-a" onchange="loadAnalysisTrace('a')" class="input-styled" style="width: 140px; padding: 2px 5px; font-size: 0.85em" title="Select Device A for comparison">
+            <div class="flex-centered flex-gap-8"><span class="dbg-id">ANA-TRACE-A</span><span>Device A Trace</span></div>
+            <select id="analysis-dev-a" onchange="loadAnalysisTrace('a')" class="input-styled w-140 p-2-5 text-sm" title="Select Device A for comparison">
               <option value="">Select Device...</option>
             </select>
           </div>
           <div id="trace-a" class="trace-log"></div>
-          <div class="panel-footer flex-between" style="padding: 4px 10px; font-size: 0.75em; background: rgba(0,0,0,0.2)">
+          <div class="panel-footer flex-between p-4-10 text-xs bg-dark-2">
             <span id="trace-a-status" class="text-dim">No log loaded</span>
-            <button class="btn btn-secondary" style="padding: 1px 6px; font-size: 0.9em" onclick="clearAnalysisLog('a')">Clear Local</button>
+            <button class="btn btn-secondary fs-09 p-1-5" onclick="clearAnalysisLog('a')">Clear Local</button>
           </div>
         </div>
 
         <!-- Device B Column -->
-        <div class="panel flex-col" style="flex: 1; min-width: 0; padding: 0; overflow: hidden">
+        <div class="panel flex-col p-0 ov-hidden flex-1 min-w-0">
           <div class="panel-title flex-between">
-            <div style="display: flex; align-items: center; gap: 8px;"><span class="dbg-id">FA-P-18</span><span>Device B Trace</span></div>
-            <select id="analysis-dev-b" onchange="loadAnalysisTrace('b')" class="input-styled" style="width: 140px; padding: 2px 5px; font-size: 0.85em" title="Select Device B for comparison">
+            <div class="flex-centered flex-gap-8"><span class="dbg-id">ANA-TRACE-B</span><span>Device B Trace</span></div>
+            <select id="analysis-dev-b" onchange="loadAnalysisTrace('b')" class="input-styled w-140 p-2-5 text-sm" title="Select Device B for comparison">
               <option value="">Select Device...</option>
             </select>
           </div>
           <div id="trace-b" class="trace-log"></div>
-          <div class="panel-footer flex-between" style="padding: 4px 10px; font-size: 0.75em; background: rgba(0,0,0,0.2)">
+          <div class="panel-footer flex-between p-4-10 text-xs bg-dark-2">
             <span id="trace-b-status" class="text-dim">No log loaded</span>
-            <button class="btn btn-secondary" style="padding: 1px 6px; font-size: 0.9em" onclick="clearAnalysisLog('b')">Clear Local</button>
+            <button class="btn btn-secondary fs-09 p-1-5" onclick="clearAnalysisLog('b')">Clear Local</button>
           </div>
         </div>
       </div>
 
       <!-- Analysis Toolbar -->
-      <div class="panel" style="margin: 0 12px 12px 12px; flex-shrink: 0">
+      <div class="panel m-0-12 flex-shrink-0">
         <div class="panel-title flex-between">
-          <div style="display: flex; align-items: center; gap: 8px;"><span class="dbg-id">FA-P-19</span><span>Verification Results</span></div>
-          <div style="display: flex; gap: 8px; align-items: center">
+          <div class="flex-centered flex-gap-8"><span class="dbg-id">ANA-VERIFY-RESULTS</span><span>Verification Results</span></div>
+          <div class="flex-centered flex-gap-8">
             <label class="text-xs text-dim">Expected Suite:</label>
-            <select id="analysis-suite" class="input-styled" style="width: 140px; padding: 2px 5px; font-size: 0.85em" title="Select a preconceived protocol model">
+            <select id="analysis-suite" class="input-styled w-140 p-2-5 text-sm" title="Select a preconceived protocol model">
               <option value="">None (Manual)</option>
             </select>
-            <button class="btn btn-sm btn-secondary" onclick="openSuiteEditor()" style="padding: 2px 4px; font-size: 0.75em">+ Edit</button>
-            <div style="width: 1px; height: 20px; background: var(--border); margin: 0 4px"></div>
+            <button class="btn btn-sm btn-secondary p-2-5 text-xs" onclick="openSuiteEditor()">+ Edit</button>
+            <div class="divider-v m-0-4"></div>
             <button class="btn btn-sm" onclick="verifyProtocol()">✓ Verify Swarm</button>
             <button class="btn btn-sm btn-secondary" onclick="refreshAnalysisDevices()">⟳ Refresh Nodes</button>
           </div>
         </div>
-        <div id="analysis-results" style="padding: 10px; max-height: 150px; overflow-y: auto; font-size: 0.82em">
+        <div id="analysis-results" class="p-10 max-height-150 ov-y-auto text-md">
           <div class="text-dim">Select two devices above and click Verify Protocol to compare their trace logs.</div>
         </div>
       </div>
@@ -3026,6 +2854,7 @@
             statusEl.textContent = "Syncing…";
             statusEl.className = "badge on syncing";
           }
+          fieldSyncTimer = FIELD_SYNC_INTERVAL_S; // Reset immediately to prevent loop storm if fetch stalls
 
           // Broadcast status request to entire mesh
           fetch("/api/cmd", {
@@ -3036,7 +2865,6 @@
             .then(() => {
               setTimeout(() => {
                 if (statusEl) { statusEl.textContent = "Idle"; statusEl.className = "badge"; }
-                fieldSyncTimer = FIELD_SYNC_INTERVAL_S;
                 _lastSyncedAt  = Date.now();
                 logConsole("rx", "[FieldSync] Mesh ALL STATUS complete — next scan in 1h");
               }, 5000);
@@ -3044,6 +2872,8 @@
             .catch((err) => {
               if (statusEl) { statusEl.textContent = "Err"; statusEl.className = "badge off"; }
               logConsole("err", `[FieldSync] Mesh scan failed: ${err.message}`);
+              // If it fails, still back off for a minute to avoid spamming
+              fieldSyncTimer = 60;
             });
         }
 
@@ -3552,7 +3382,17 @@
              body.appendChild(row);
 
              const dot = document.createElement("span");
+             const idWrap = document.createElement("div"); // Wrapper for ID + DBG
+             idWrap.style.cssText = "display:flex; flex-direction:column; min-width:0;";
              const idSpan = document.createElement("span");
+             const dbg = document.createElement("span");
+             dbg.className = "dbg-id";
+             dbg.style.fontSize = "9px";
+             dbg.style.marginTop = "-2px";
+             dbg.textContent = "FA-R-" + n.id;
+             idWrap.appendChild(idSpan);
+             idWrap.appendChild(dbg);
+
              const bat = document.createElement("span");
              const rssi = document.createElement("span");
              const hops = document.createElement("span");
@@ -3568,17 +3408,15 @@
                rosterAction(n.id);
              });
 
-             const dbg = document.createElement("span");
-             dbg.className = "dbg-id";
-             dbg.textContent = "FA-R-" + n.id;
-             [dbg, dot, idSpan, bat, rssi, hops, ago, btn].forEach((el) => row.appendChild(el));
+             [dot, idWrap, bat, rssi, hops, ago, btn].forEach((el) => row.appendChild(el));
           }
 
           // Update state and layout
           row.className = "roster-row" + (stale ? " stale" : "") + (n.isLocal ? " local" : "");
           if (row.dataset.selected === "true") row.classList.add("selected");
 
-          const [dbg, dot, idSpan, bat, rssi, hops, ago] = row.children; // Corrected to match the children order
+          const [dot, idWrap, bat, rssi, hops, ago] = row.children;
+          const [idSpan, dbg] = idWrap.children;
 
           dot.className = "status-dot " + (n.isLocal ? "online" : n.ago < 120 ? "online" : "offline");
           dot.style.cssText =
@@ -3642,9 +3480,18 @@
         }
       }
 
-      function rosterAction(nodeId) {
-        // Future: context menu with Deploy Product / Snapshot / Details
-        logConsole("rx", "Node actions for " + nodeId + " — coming soon");
+      async function rosterAction(nodeId) {
+        if (!nodeId) return;
+        const act = confirm(`Node: ${nodeId}\n\n[OK] Force Restart (reboots device)\n[Cancel] Request All Stats (manual sync)`);
+        if (act) {
+          logConsole("tx", `RESTART target=${nodeId}`);
+          await sendRaw(`RESTART ${nodeId}`);
+          logAudit("sys", `Restart command sent to ${nodeId}`);
+        } else {
+          logConsole("tx", `STATUS target=${nodeId}`);
+          await sendRaw(`STATUS ${nodeId}`);
+          logAudit("sys", `Status request sent to ${nodeId}`);
+        }
       }
 
       // ════════════════════════════════════════════════════════════════════════════
@@ -4239,8 +4086,10 @@
 
           this.winbox = new WinBox({
             title: this.title,
-            width: this.width,
-            height: this.height,
+            width: "100%",
+            height: "100%",
+            top: 0,
+            left: 0,
             root: container || document.body,
             class: ["wb-modern", "winbox"],
             html: this.content,
@@ -4271,26 +4120,49 @@
               wb.onclose = () => observer.disconnect();
 
               if (wb.body) {
-                wb.body.style.overflow = "hidden";
+                wb.body.style.overflow = "auto";
                 wb.body.style.background = "transparent";
               }
 
               // EVENT DRIVEN: Notify when fully mounted and IDs injected
               setTimeout(() => {
                 self.isReady = true;
-                console.log(`[WIDGET] "${self.title}" fully mounted.`);
+                const refit = () => {
+                  const rect = container.getBoundingClientRect();
+                  if (rect.width > 30 && rect.height > 30 && self.winbox) {
+                    self.winbox.resize(rect.width-4, rect.height-4).move(2, 2);
+                  }
+                };
+                refit();
+                setTimeout(refit, 300);
+                setTimeout(refit, 1000);
                 if (self.onReady) self.onReady(self);
-                document.dispatchEvent(new CustomEvent('widget:ready', { detail: { id: self.dbgId, title: self.title } }));
               }, 250);
             }
           });
 
           if (this.winbox && container) {
-            // Don't maximize - let WinBox fill its grid container naturally
-            // this.winbox.maximize();
-            // Position the window to fill its container
-            const rect = container.getBoundingClientRect();
-            this.winbox.resize(rect.width, rect.height).move(0, 0);
+            const self = this;
+            const refit = () => {
+              const rect = container.getBoundingClientRect();
+              if (rect.width > 30 && rect.height > 30 && self.winbox) {
+                // Ensure the winbox fills the cell with a small margin to reveal scrollbars
+                self.winbox.resize(rect.width-4, rect.height-4).move(2, 2);
+                // Also update the internal body
+                if (self.winbox.body) {
+                   self.winbox.body.style.width = "100%";
+                   self.winbox.body.style.height = "100%";
+                }
+              }
+            };
+
+            // Give the browser a moment to settle the grid
+            setTimeout(refit, 50);
+            setTimeout(refit, 300);
+            setTimeout(refit, 1500);
+
+            // Handle window resize
+            window.addEventListener('resize', refit);
           }
         }
 
@@ -4587,8 +4459,15 @@
       // Update toggle to also handle WinBox titles
       function updateWidgetDebugVisibility() {
         const on = document.body.classList.contains("debug-on");
+        // Update WinBox titles (often need JS force)
         document.querySelectorAll(".winbox .dbg-id").forEach(el => {
           el.style.display = on ? "inline-block" : "none";
+        });
+        // General refresh for static elements (redundant but safe)
+        document.querySelectorAll(".dbg-id").forEach(el => {
+          if (!el.closest(".winbox")) {
+            el.style.display = on ? "inline-block" : "none";
+          }
         });
       }
 
@@ -4779,7 +4658,7 @@
 
         const sequence = [
           {
-            title: "Roster + Topology", dbgId: "FA-W-01", container: "#roster-container",
+            title: "Roster + Topology", dbgId: "WGT-ROSTER", container: "#roster-container",
             content: `
               <div class="flex-col" style="height:100%;">
                 <div class="status-pills">
@@ -4793,7 +4672,7 @@
                   <button class="dev-tab-btn active" id="rtab-list" onclick="showRosterTab('list')">Nodes</button>
                   <button class="dev-tab-btn" id="rtab-mesh" onclick="showRosterTab('mesh')">Topology</button>
                 </div>
-                <div id="roster-list-section" class="dev-section" style="flex:1; overflow-y:auto;">
+                <div id="roster-list-section" class="dev-section" style="flex:1; overflow-y:scroll;">
                   <div class="roster-cols" style="flex-shrink:0"><span></span><span>ID</span><span>BAT</span><span>RSSI</span><span>HP</span><span>AGO</span><span></span></div>
                   <div id="roster-body"><div class="list-empty">Initializing Roster...</div></div>
                 </div>
@@ -4805,7 +4684,7 @@
               </div>`
           },
           {
-            title: "Control + Hardware", dbgId: "FA-W-02", container: "#device-ctrl-container",
+            title: "Control + Hardware", dbgId: "WGT-CTRL-HW", container: "#device-ctrl-container",
             content: `
               <div id="device-ctrl-body" class="flex-col" style="height:100%;gap:0;">
                 <div class="dev-tabs" style="padding:6px; border-bottom:1px solid var(--border); display:flex; gap:4px; background:var(--bg-hdr);">
@@ -4814,7 +4693,7 @@
                   <button class="dev-tab-btn" id="dtab-gpio" onclick="showDevTab('gpio')">GPIO</button>
                   <button class="dev-tab-btn" id="dtab-board" onclick="showDevTab('board')">Visualizer</button>
                 </div>
-                <div class="dev-content p-3" style="flex:1; overflow-y:auto;">
+                <div class="dev-content p-3" style="flex:1; overflow-y:scroll;">
                   <div id="dev-relay-section" class="dev-section"><div class="gpio-chip-row" id="gpio-grid"></div></div>
                   <div id="dev-pwm-section" class="dev-section" style="display:none"><div id="pwm-grid" class="pwm-grid"></div></div>
                   <div id="dev-gpio-section" class="dev-section" style="display:none"><div class="gpio-chip-row" id="rawgpio-grid"></div></div>
@@ -4825,12 +4704,57 @@
               </div>`
           },
           {
-            title: "Task Schedule", dbgId: "FA-W-03", container: "#schedule-container",
-            content: `<div class="flex-col" style="height:100%;"><div class="p-2 border-bottom flex-between glass" style="flex-shrink:0"><span class="text-xs uppercase text-dim">Task Pipeline</span><div class="flex-row-sm"><button class="btn sm secondary" onclick="saveSched()">Save</button><button class="btn sm danger" onclick="clearSched()">Clear</button></div></div><div class="sched-body p-2" style="overflow-y:auto;flex:1;"><div id="fleet-schedule-grid" class="schedule-grid"><div class="text-muted text-center p-3">Loading tasks...</div></div></div><div class="p-2 border-top" style="flex-shrink:0"><button class="btn sm w-full" onclick="openTaskEditor(-1, 'fleet')">+ Add Live Task</button></div></div>`
+            title: "Task Schedule", dbgId: "WGT-TASK-SCHED", container: "#schedule-container",
+            content: `<div class="flex-col" style="height:100%;"><div class="p-2 border-bottom flex-between glass" style="flex-shrink:0"><span class="text-xs uppercase text-dim">Task Pipeline</span><div class="flex-row-sm"><button class="btn sm secondary" onclick="saveSched()">Save</button><button class="btn sm danger" onclick="clearSched()">Clear</button></div></div><div class="sched-body p-2" style="overflow-y:scroll;flex:1;"><div id="fleet-schedule-grid" class="schedule-grid"><div class="text-muted text-center p-3">Loading tasks...</div></div></div><div class="p-2 border-top" style="flex-shrink:0"><button class="btn sm w-full" onclick="openTaskEditor(-1, 'fleet')">+ Add Live Task</button></div></div>`
           },
           {
-            title: "System Console", dbgId: "FA-W-04", container: "#console-container",
-            content: `<div class="flex-col" style="height:100%;gap:0;"><div class="console-log" id="console-log" style="flex:1;overflow-y:auto;background:rgba(0,0,0,0.3);padding:8px;"></div><div class="cmd-bar" style="padding:6px 8px;border-top:1px solid var(--border);display:flex;gap:6px;align-items:center;"><input id="cmd-input" class="input-styled flex-1" placeholder="Enter command..." onkeydown="handleKey(event)" /><button class="btn sm" onclick="sendCmd()">Send</button><button class="btn sm secondary" onclick="fieldSync()" title="Broadcast ALL STATUS to mesh now (normally runs every hour)" style="padding:2px 7px;opacity:0.7" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.7">&#x1F5F8; Sync</button></div></div>`
+            title: "System Console", dbgId: "WGT-CONSOLE", container: "#console-container",
+            content: `<div class="flex-col" style="height:100%;gap:0;"><div class="console-log" id="console-log" style="flex:1;overflow-y:scroll;background:rgba(0,0,0,0.3);padding:8px;"></div><div class="cmd-bar" style="padding:6px 8px;border-top:1px solid var(--border);display:flex;gap:6px;align-items:center;"><input id="cmd-input" class="input-styled flex-1" placeholder="Enter command..." onkeydown="handleKey(event)" /><button class="btn sm" onclick="sendCmd()">Send</button><button class="btn sm secondary" onclick="fieldSync()" title="Broadcast ALL STATUS to mesh now (normally runs every hour)" style="padding:2px 7px;opacity:0.7" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.7">&#x1F5F8; Sync</button></div></div>`
+          },
+          {
+            title: "System Reference", dbgId: "WGT-REFERENCE", container: "#reference-container",
+            content: `
+              <div class="flex-col" style="padding:10px; gap:10px;">
+                <div class="adc-card">
+                  <div style="display:flex;align-items:center;gap:6px">
+                    <span style="font-size:0.75em; font-weight:800; color:var(--accent); text-transform:uppercase; letter-spacing:0.04em">⟶ Command Flight Bar</span>
+                    <span class="dbg-id" style="font-size:9px">REF-FLIGHT-BAR</span>
+                  </div>
+                  <p class="text-xs text-dim" style="margin-top:2px;">Fills over the round-trip window. Tick lines mark relay hop boundaries.</p>
+                  <div style="display:flex; flex-wrap:wrap; gap:4px; margin-top:4px;">
+                    <span class="badge on" style="font-size:0.6em; padding:1px 5px">In flight</span>
+                    <span class="badge on" style="font-size:0.6em; padding:1px 5px; border-color:var(--ok); color:var(--ok)">Success</span>
+                    <span class="badge off" style="font-size:0.6em; padding:1px 5px; border-color:var(--warn); color:var(--warn)">Late</span>
+                    <span class="badge off" style="font-size:0.6em; padding:1px 5px">Timed Out</span>
+                  </div>
+                </div>
+                <div class="adc-card adc-card-gold">
+                  <div style="display:flex;align-items:center;gap:6px">
+                    <span style="font-size:0.75em; font-weight:800; color:var(--gold); text-transform:uppercase; letter-spacing:0.04em">Hop Timing Model</span>
+                    <span class="dbg-id" style="font-size:9px">REF-HOP-TIMING</span>
+                  </div>
+                  <p class="text-xs text-dim" style="margin-top:2px;">SF10/BW250/915MHz. Jitter affects Mesh RTT.</p>
+                  <table class="w-full text-xs" style="margin-top:4px; color:var(--text-dim)">
+                    <tr><td style="color:var(--text)">Local GW</td><td align="right">320ms</td></tr>
+                    <tr><td style="color:var(--text)">1 Relay</td><td align="right">~1.8s</td></tr>
+                    <tr><td style="color:var(--text)">2 Relays</td><td align="right">~3.5s</td></tr>
+                  </table>
+                </div>
+                <div class="adc-card">
+                  <div style="display:flex;align-items:center;gap:6px">
+                    <span style="font-size:0.75em; font-weight:800; color:var(--accent); text-transform:uppercase; letter-spacing:0.04em">Network Sync</span>
+                    <span class="dbg-id" style="font-size:9px">REF-NET-SYNC</span>
+                  </div>
+                  <p class="text-xs text-dim" style="margin-top:2px;">Full mesh sync runs hourly. UI metrics update at 4Hz via active transport.</p>
+                </div>
+                <div class="adc-card adc-card-gold">
+                  <div style="display:flex;align-items:center;gap:6px">
+                    <span style="font-size:0.75em; font-weight:800; color:var(--gold); text-transform:uppercase; letter-spacing:0.04em">Response Detect</span>
+                    <span class="dbg-id" style="font-size:9px">REF-RESP-DETECT</span>
+                  </div>
+                  <p class="text-xs text-dim" style="margin-top:2px;">ACK is inferred by the 'last_cmd' field update. Change-based detection.</p>
+                </div>
+              </div>`
           }
         ];
 
@@ -4849,6 +4773,7 @@
           if (idx === 1) ctrlWidget = w;
           if (idx === 2) schedWidget = w;
           if (idx === 3) consoleWidget = w;
+          if (idx === 4) refWidget = w;
 
           idx++;
           // Space out the next widget creation heavily (500ms) to ensure thread-safety and layout calm
@@ -8262,7 +8187,7 @@
     <div id="modal-provision" class="modal">
       <div class="modal-content editor-modal-content">
         <div class="flex-row-sb mb-3">
-          <h3 style="margin: 0">Provision Device</h3>
+          <h3 class="m-0">Provision Device</h3>
           <button class="btn btn-sm btn-secondary" onclick="closeProvisionModal()">
             ✕
           </button>
@@ -8291,7 +8216,7 @@
         </div>
         <div class="mt-4 flex-row-sb">
           <button class="btn btn-danger" onclick="deleteProvisionedDevice()">Delete Device</button>
-          <div style="display: flex; gap: 10px;">
+          <div class="flex-row flex-gap-10">
             <button class="btn btn-secondary" onclick="closeProvisionModal()">Cancel</button>
             <button class="btn" onclick="saveProvisionedDevice()">✓ Apply Device</button>
           </div>
@@ -8302,7 +8227,7 @@
     <div id="task-editor-modal" class="modal">
       <div class="modal-content editor-modal-content">
         <div class="flex-row-sb mb-3">
-          <h3 id="editor-title" style="margin: 0">Edit Task</h3>
+          <h3 id="editor-title" class="m-0">Edit Task</h3>
           <button class="btn btn-sm btn-secondary" onclick="closeTaskEditor()">
             ✕
           </button>
@@ -8371,9 +8296,9 @@
             <input id="edit-task-thresh" type="number" class="input-styled" min="0" max="4095" value="0" />
           </div>
 
-          <div class="editor-field" style="flex-direction: row; align-items: center; gap: 10px; margin-top: 20px;">
-            <input type="checkbox" id="edit-task-crit" style="accent-color: var(--err);" />
-            <label style="margin: 0; color: var(--text);">Critical (Stop on Fail)</label>
+          <div class="editor-field flex-row flex-centered-y flex-gap-10 mt-20">
+            <input type="checkbox" id="edit-task-crit" class="accent-err" />
+            <label class="m-0 text-full">Critical (Stop on Fail)</label>
           </div>
 
           <div class="editor-stats-panel">
@@ -8394,7 +8319,7 @@
 
         <div class="mt-4 flex-row-sb">
           <button class="btn btn-danger" onclick="deleteCurrentTask()">Delete Task</button>
-          <div style="display: flex; gap: 10px;">
+          <div class="flex-row flex-gap-10">
             <button class="btn btn-secondary" onclick="closeTaskEditor()">Cancel</button>
             <button class="btn" onclick="saveTaskFromEditor()">✓ Apply Task</button>
           </div>
@@ -8407,11 +8332,11 @@
 
     <footer class="global-footer">
       <div>LoRaLink Configurator <span class="footer-ver">v1.5.0-2026.03.03.23</span></div>
-      <div>&copy; 2026 Steven P Williams · <a href="https://spw1.com" target="_blank">spw1.com</a></div>
-      <div style="margin-top: 4px; opacity: 0.5;">All Rights Reserved</div>
+      <div>&copy; 2026 Steven P Williams · <a href="https://spw1.com" target="_blank" rel="noopener">spw1.com</a></div>
+      <div class="mt-4 opacity-50">All Rights Reserved</div>
     </footer>
 
     <script src="/static/js/admin-config.js"></script>
-    <div id="debug-banner" style="display:none">DEBUG MODE ACTIVE</div>
+    <div id="debug-banner" class="d-none">DEBUG MODE ACTIVE</div>
   </body>
 </html>

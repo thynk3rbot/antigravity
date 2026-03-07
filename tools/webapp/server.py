@@ -45,7 +45,6 @@ except ImportError:
 # ── FastAPI / WebSocket ──────────────────────────────────────────────────────
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, HTTPException
 from fastapi.responses import (
-    FileResponse,
     JSONResponse,
     PlainTextResponse,
     HTMLResponse,
@@ -432,7 +431,11 @@ class SerialHub:
             self._links[port] = ser
             self._tasks[port] = asyncio.create_task(self._monitor_port(port, ser))
         except Exception as e:
-            print(f"[SerialHub] Error opening {port}: {e}")
+            # Suppress common Windows permission errors on busy ports
+            if "PermissionError" in str(e) or "(13," in str(e):
+                pass
+            else:
+                print(f"[SerialHub] Error opening {port}: {e}")
 
     async def _monitor_port(self, port: str, ser: serial.Serial) -> None:
         """Rigorous read loop with line-buffering and error recovery."""
@@ -609,7 +612,7 @@ class TransportManager:
             async with session.post(
                 f"http://{ip}/api/cmd",
                 data={"cmd": cmd},
-                timeout=aiohttp.ClientTimeout(total=3.0),
+                timeout=aiohttp.ClientTimeout(total=12.0),
             ) as r:
                 return r.status == 200
         except Exception:
@@ -815,7 +818,7 @@ class StatusPoller:
             session = await self._get_session()
             async with session.get(
                 f"http://{ip}/api/status",
-                timeout=aiohttp.ClientTimeout(total=2.5),
+                timeout=aiohttp.ClientTimeout(total=12.0),
             ) as r:
                 if r.status == 200:
                     data = await r.json(content_type=None)
@@ -872,7 +875,7 @@ async def _proxy_get(device_ip: Optional[str], path: str) -> Optional[dict]:
         async with aiohttp.ClientSession() as s:
             async with s.get(
                 f"http://{device_ip}{path}",
-                timeout=aiohttp.ClientTimeout(total=3.0),
+                timeout=aiohttp.ClientTimeout(total=12.0),
             ) as r:
                 return await r.json(content_type=None)
     except Exception:
@@ -887,7 +890,7 @@ async def _proxy_post(device_ip: Optional[str], path: str, data: dict) -> bool:
             async with s.post(
                 f"http://{device_ip}{path}",
                 data=data,
-                timeout=aiohttp.ClientTimeout(total=3.0),
+                timeout=aiohttp.ClientTimeout(total=12.0),
             ) as r:
                 return r.status == 200
     except Exception:
@@ -903,7 +906,7 @@ async def _send_cmd_to_ip(ip: str, cmd: str) -> bool:
             async with s.post(
                 f"http://{ip}/api/cmd",
                 data={"cmd": cmd},
-                timeout=aiohttp.ClientTimeout(total=4.0),
+                timeout=aiohttp.ClientTimeout(total=12.0),
             ) as r:
                 return r.status == 200
     except Exception:
@@ -1301,10 +1304,11 @@ def build_app(
             try:
                 async with session.get(
                     f"http://{ip}/api/status",
-                    timeout=aiohttp.ClientTimeout(total=1.0),
+                    timeout=aiohttp.ClientTimeout(total=4.0),
                 ) as r:
                     if r.status == 200:
                         data = await r.json()
+                        print(f"[scan] Found Antigravity device at {ip}")
                         if "myId" in data or "id" in data:  # LoRaLink device
                             return {
                                 "ip": ip,
@@ -1530,13 +1534,15 @@ def build_app(
         saved = False
         if all_ok:
             saved = await _transport.send_command("SCHED SAVE")
-        return JSONResponse({
-            "ok": all_ok,
-            "partial": not all_ok,
-            "failed": failed,
-            "saved": saved,
-            "results": results,
-        })
+        return JSONResponse(
+            {
+                "ok": all_ok,
+                "partial": not all_ok,
+                "failed": failed,
+                "saved": saved,
+                "results": results,
+            }
+        )
 
     @app.post("/api/sequences/{name}/apply-multi")
     async def _seq_apply_multi(name: str, body: dict) -> JSONResponse:

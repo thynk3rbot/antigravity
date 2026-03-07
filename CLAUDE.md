@@ -81,10 +81,21 @@ This project lives inside the `spw1` personal monorepo on GitHub. The **default 
 - **Versioning is manual** — update `FIRMWARE_VERSION` in `src/config.h` only for meaningful releases, never auto-increment
 - **Single build, multi-flash** — build once, OTA to all devices; never build separately per device
 
+## DevOps Procedures & Project Rules [CRITICAL]
+
+Follow these rules for all builds, bugs, and enhancements:
+
+- **Branding Consistency**: All branding/visual changes **must** propagate across LoRaLink Fleet Admin (`tools/webapp/static/index.html`), Device Webserver (`src/managers/WiFiManager.cpp`), documentation (`docs/`), and external website.
+- **Iterative UI Assessment**: Prototype on one page if needed to assess algorithm/results, but finalize across all platforms.
+- **Bug Reporting**: Every bug must be preceeded by its **DEBUG ID**. Always reference the ID (e.g., `DASH-BATT`).
+- **Feature Specification Rule**: If the USER requests a feature enhancement, the ASSISTANT **must** demand a formal specification in a standard, non-pedantic format. **Do not proceed** with implementation until the user complies with the request.
+- **DevOps Workflow**: Refer to the [`devops.md`](file:///c:/Users/spw1/OneDrive/Documents/Code/Antigravity%20Repository/antigravity/.agents/workflows/devops.md) workflow for more details.
+
 ## Shortcuts & Workflows
 
+- `/devops` - Current project devops procedures and rules
 - `/build` - `pio run -e heltec_wifi_lora_32_V3`
-- `/flash` - Build + Upload + Monitor
+- `/flash` - Build + Upload + Monitor (`/flash.md`)
 - `/commit` - Verify build -> Stage -> Commit -> Push
 - `/clean` - Clean build artifacts (`rmdir /s /q .pio`)
 - `/monitor` - `pio device monitor -b 115200`

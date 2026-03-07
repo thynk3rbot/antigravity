@@ -67,7 +67,7 @@ int CommandManager::getPinFromName(const String &name) {
     int c2 = upperName.indexOf(':', 4);
     if (c2 > 4) {
       int chip = upperName.substring(4, c2).toInt();
-      int pin  = upperName.substring(c2 + 1).toInt();
+      int pin = upperName.substring(c2 + 1).toInt();
       if (chip >= 0 && chip < MCP_MAX_CHIPS && pin >= 0 && pin < MCP_CHIP_PINS)
         return MCP_PIN_BASE + chip * MCP_CHIP_PINS + pin;
     }
@@ -213,15 +213,16 @@ void CommandManager::registerCommand(const String &cmd,
 // Guards: mains power blocks sleep entirely; PC attachment logs a no-ACK alert.
 // Broadcasts a 3-2-1 LoRa countdown so mesh peers know the node is going quiet.
 void CommandManager::executeSleep(float hours, const String &trigger) {
-  DataManager &data   = DataManager::getInstance();
-  LoRaManager &lora   = LoRaManager::getInstance();
-  WiFiManager &wifi   = WiFiManager::getInstance();
+  DataManager &data = DataManager::getInstance();
+  LoRaManager &lora = LoRaManager::getInstance();
+  WiFiManager &wifi = WiFiManager::getInstance();
 
   unsigned int mins = (unsigned int)(hours * 60.0f);
 
   // ── Guard: mains / USB power ─────────────────────────────────────────────
   if (WiFiManager::isPowered()) {
-    String msg = "SYS: Sleep blocked — mains/USB power detected [" + trigger + "]";
+    String msg =
+        "SYS: Sleep blocked — mains/USB power detected [" + trigger + "]";
     data.LogMessage("SYS", 0, msg);
     lora.lastMsgReceived = "SLEEP BLOCKED (powered)";
     LOG_PRINTLN(msg);
@@ -230,7 +231,8 @@ void CommandManager::executeSleep(float hours, const String &trigger) {
 
   // ── Guard: PC webapp attached ─────────────────────────────────────────────
   if (wifi.isPCAttached()) {
-    String alert = "SYS: Sleep in 10s — PC attached, no cancel received [" + trigger + "]";
+    String alert =
+        "SYS: Sleep in 10s — PC attached, no cancel received [" + trigger + "]";
     data.LogMessage("SYS", 0, alert);
     lora.lastMsgReceived = "SLEEP WARN: PC attached";
     LOG_PRINTLN(alert);
@@ -242,15 +244,19 @@ void CommandManager::executeSleep(float hours, const String &trigger) {
 
   // ── Countdown broadcast ───────────────────────────────────────────────────
   for (int i = 3; i >= 1; i--) {
-    String cd = data.myId + " SLEEP " + String(mins) + "min in " + String(i) + "s";
-    data.LogMessage("SYS", 0, "Sleep " + String(mins) + "min in " + String(i) + "s");
-    if (lora.loraActive) lora.SendLoRa(cd);
+    String cd =
+        data.myId + " SLEEP " + String(mins) + "min in " + String(i) + "s";
+    data.LogMessage("SYS", 0,
+                    "Sleep " + String(mins) + "min in " + String(i) + "s");
+    if (lora.loraActive)
+      lora.SendLoRa(cd);
     LOG_PRINTLN(cd);
     delay(1200);
   }
 
   // ── Execute deep sleep ────────────────────────────────────────────────────
-  data.LogMessage("SYS", 0, "Sleeping " + String(mins) + "min [" + trigger + "]");
+  data.LogMessage("SYS", 0,
+                  "Sleeping " + String(mins) + "min [" + trigger + "]");
   lora.lastMsgReceived = "SYS: Sleeping " + String(mins) + "min";
 
   digitalWrite(PIN_LED_BUILTIN, LOW);
@@ -371,7 +377,8 @@ void CommandManager::initRegistry() {
   registerCommand("SLEEP", [](const String &args, CommInterface source) {
     float hours = args.toFloat();
     if (hours > 0.0f && hours <= 24.0f) {
-      CommandManager::executeSleep(hours, "CMD:" + String(interfaceName(source)));
+      CommandManager::executeSleep(hours,
+                                   "CMD:" + String(interfaceName(source)));
     } else {
       LoRaManager::getInstance().lastMsgReceived = "ERR: SLEEP 0.01-24";
     }
@@ -476,7 +483,8 @@ void CommandManager::initRegistry() {
                       value.equalsIgnoreCase("on");
         data.SetMqtt(enable, data.mqttServer, data.mqttPort, data.mqttUser,
                      data.mqttPass);
-        lora.lastMsgReceived = "CONFIG: mqtt_en -> " + String(enable ? "1" : "0");
+        lora.lastMsgReceived =
+            "CONFIG: mqtt_en -> " + String(enable ? "1" : "0");
       } else if (key == "MQTT_SRV") {
         data.SetMqtt(data.mqttEnabled, value, data.mqttPort, data.mqttUser,
                      data.mqttPass);
@@ -485,6 +493,14 @@ void CommandManager::initRegistry() {
         data.SetMqtt(data.mqttEnabled, data.mqttServer, value.toInt(),
                      data.mqttUser, data.mqttPass);
         lora.lastMsgReceived = "CONFIG: mqtt_prt -> " + value;
+      } else if (key == "MQTT_USR") {
+        data.SetMqtt(data.mqttEnabled, data.mqttServer, data.mqttPort, value,
+                     data.mqttPass);
+        lora.lastMsgReceived = "CONFIG: mqtt_usr -> " + value;
+      } else if (key == "MQTT_PWD") {
+        data.SetMqtt(data.mqttEnabled, data.mqttServer, data.mqttPort,
+                     data.mqttUser, value);
+        lora.lastMsgReceived = "CONFIG: mqtt_pwd -> ********";
       } else {
         lora.lastMsgReceived = "ERR: Unknown config key: " + key;
         return;
@@ -661,7 +677,8 @@ void CommandManager::initRegistry() {
       if (pin >= 0) {
         MCPManager::setupPin(pin, OUTPUT);
         if (!MCPManager::writePin(pin, val)) {
-          String err = "ERR: MCP chip " + String(MCPManager::chipIndex(pin)) + " not present";
+          String err = "ERR: MCP chip " + String(MCPManager::chipIndex(pin)) +
+                       " not present";
           lora.lastMsgReceived = err;
           LOG_PRINTLN(err);
         } else {
@@ -688,11 +705,13 @@ void CommandManager::initRegistry() {
     int pin = getPinFromName(pinName);
     if (pin >= 0) {
       if (MCPManager::isMcpPin(pin) && !MCPManager::getInstance().isReady()) {
-        String err = "ERR: MCP chip " + String(MCPManager::chipIndex(pin)) + " not present";
+        String err = "ERR: MCP chip " + String(MCPManager::chipIndex(pin)) +
+                     " not present";
         lora.lastMsgReceived = err;
         LOG_PRINTLN(err);
       } else {
-        if (!MCPManager::isMcpPin(pin)) MCPManager::setupPin(pin, INPUT);
+        if (!MCPManager::isMcpPin(pin))
+          MCPManager::setupPin(pin, INPUT);
         int val = MCPManager::readPin(pin) ? 1 : 0;
         String friendly = data.GetPinName(String(pin));
         String msg = "SYS: READ " + pinName + "=" + String(val);
@@ -998,9 +1017,8 @@ void CommandManager::initRegistry() {
       LOG_PRINTLN(lora.lastMsgReceived);
     } else if (sub == "STATUS") {
       String active = pm.getActiveProduct();
-      String msg = active.isEmpty()
-                       ? "PRODUCT: none active"
-                       : ("PRODUCT ACTIVE: " + active);
+      String msg = active.isEmpty() ? "PRODUCT: none active"
+                                    : ("PRODUCT ACTIVE: " + active);
       lora.lastMsgReceived = msg;
       LOG_PRINTLN(msg);
     } else if (sub == "LOAD") {
@@ -1049,11 +1067,11 @@ void CommandManager::initRegistry() {
   // Reports probe result back to the originating interface.
   registerCommand("WIFI_TEST", [](const String &args, CommInterface source) {
     ProbeResult r = WiFiManager::getInstance().probeWifi(PROBE_TIMEOUT_MS);
-    const char *result =
-      (r == ProbeResult::PROBE_OK_MQTT)   ? "OK_MQTT"   :
-      (r == ProbeResult::PROBE_OK_HTTP)   ? "OK_HTTP"   :
-      (r == ProbeResult::PROBE_NO_AP)     ? "NO_AP"     :
-      (r == ProbeResult::PROBE_NO_BROKER) ? "NO_BROKER" : "TIMEOUT";
+    const char *result = (r == ProbeResult::PROBE_OK_MQTT)     ? "OK_MQTT"
+                         : (r == ProbeResult::PROBE_OK_HTTP)   ? "OK_HTTP"
+                         : (r == ProbeResult::PROBE_NO_AP)     ? "NO_AP"
+                         : (r == ProbeResult::PROBE_NO_BROKER) ? "NO_BROKER"
+                                                               : "TIMEOUT";
     DataManager &data = DataManager::getInstance();
     String msg = "WIFI_TEST: " + String(result) +
                  " link=" + DataManager::linkName(data.currentLink) +

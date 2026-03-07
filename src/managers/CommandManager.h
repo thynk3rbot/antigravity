@@ -17,6 +17,8 @@ public:
 
   // Main entry point for ANY text command from ANY interface
   void handleCommand(const String &fullCmd, CommInterface source);
+  void handleBinaryCommand(const uint8_t *data, size_t len,
+                           CommInterface source);
   void executeLocalCommand(const String &subCmd, CommInterface source);
   void restoreHardwareState();
 
