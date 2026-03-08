@@ -1,0 +1,9 @@
+{
+  "host": "localhost",
+  "port": 1883,
+  "topic_prefix": "nutribuddy",
+  "client_id": "nutribuddy-server",
+  "username": "admin",
+  "password": "EMQMyxlpyx99!",
+  "pump_map": {}
+}
