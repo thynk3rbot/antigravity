@@ -40,3 +40,7 @@ build_log*.txt
 .agent/
 .agents/
 .claude/
+
+# Multi-agent coordination (lock files, audit trails)
+.locks/
+agent-audit.log

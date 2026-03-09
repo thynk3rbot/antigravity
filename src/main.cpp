@@ -16,7 +16,7 @@
 #include "managers/DisplayManager.h"
 #include "managers/ESPNowManager.h"
 #include "managers/LoRaManager.h"
-#include "managers/MCPManager.h"
+// #include "managers/MCPManager.h"  // DISABLED — not on this board
 #include "managers/MQTTManager.h"
 #include "managers/PerformanceManager.h"
 #include "managers/ProductManager.h"
@@ -94,10 +94,10 @@ void setup() {
   Serial.println("ID: " + data.myId + " [VAL:" + data.getMacSuffix() + "]");
   Serial.flush();
 
-  // 6.5. MCP23017 I2C GPIO Expander
-  delay(50);
-  MCPManager::getInstance().init();
-  Serial.flush();
+  // 6.5. MCP23017 I2C GPIO Expander (DISABLED — not on this board, causes I2C hang)
+  // delay(50);
+  // MCPManager::getInstance().init();
+  // Serial.flush();
 
   // 6.6. Product Manager - restore active product pin modes
   ProductManager::getInstance().restoreActiveProduct();
