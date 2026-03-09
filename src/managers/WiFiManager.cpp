@@ -1,9 +1,11 @@
 ﻿#include "WiFiManager.h"
+#include "BLEManager.h"
 #include "CommandManager.h"
 #include "DataManager.h"
 #include "ESPNowManager.h"
 #include "LoRaManager.h"
 #include "PerformanceManager.h"
+#include "PowerManager.h"
 #include "ProductManager.h"
 #include "ScheduleManager.h"
 #include <Arduino.h>
@@ -43,6 +45,19 @@ void WiFiManager::handle() {
 
   if (millis() < 5000)
     return;
+
+  // Power-Miser Enforcement: Immediately kill radios if disallowed by policy
+  if (!PowerManager::getInstance().isWifiAllowed()) {
+    if (isConnected || serverStarted) {
+      WiFi.disconnect(true);
+      WiFi.mode(WIFI_OFF);
+      isConnected = false;
+      serverStarted = false;
+      Serial.println(
+          "POWER: Miser enforcing WiFi OFF (Critical Safe-Shutdown)");
+    }
+    return;
+  }
 
   if (data.wifiSsid.length() > 0) {
     if (WiFi.status() != WL_CONNECTED && millis() - lastWifiTry > 10000) {
@@ -329,6 +344,11 @@ return '<span class="badge '+(x[1]?'on':'off')+'">'+x[0]+'</span>';
 var b=parseFloat(d.bat)||0;
 var batStr=b<0.1?'USB':b.toFixed(2)+'V';
 var c='<div class="card"><span class="dbg-id">DASH-BATT</span><div class="lbl">Battery</div><div class="val '+(b<0.1||b>3.5?'ok':'warn')+'">'+batStr+'</div></div>';
+var pmStr = d.power_mode || 'NORMAL';
+var pmColor = (pmStr === 'NORMAL') ? '#00ff88' : (pmStr === 'CONSERVE' ? '#ffaa00' : '#ff4444');
+if (b >= 0.1 && b <= 4.1) {
+  c += '<div class="card"><span class="dbg-id">DASH-POWER</span><div class="lbl">Power-Miser</div><div class="val" style="color:'+pmColor+'">'+pmStr+'</div></div>';
+}
 c+='<div class="card"><span class="dbg-id">DASH-RSSI</span><div class="lbl">LoRa RSSI</div><div class="val">'+(d.rssi||'—')+'</div></div>';
 c+='<div class="card"><span class="dbg-id">DASH-NODES</span><div class="lbl">Nodes</div><div class="val ok">'+(d.nodes!=null?d.nodes:'—')+'</div></div>';
 document.getElementById('cards').innerHTML=c;
@@ -342,6 +362,7 @@ if(d.loop_avg_ms !== undefined) {
   perfHtml += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:6px;padding:8px">';
   perfHtml += '<div class="card"><div class="lbl">Loop Avg/Max</div><div class="val" style="font-size:0.8em">' + d.loop_avg_ms + ' / ' + d.loop_max_ms + ' ms</div></div>';
   perfHtml += '<div class="card"><div class="lbl">Total ToA</div><div class="val" style="font-size:0.8em">' + toaS + 's</div></div>';
+  perfHtml += '<div class="card"><div class="lbl">Range Boost</div><div class="val ok" style="font-size:0.8em">+' + (d.bytes_saved || 0) + ' Bytes</div></div>';
   perfHtml += '<div class="card" style="grid-column: 1 / -1;"><div class="lbl">Last Reset</div><div class="val" style="font-size:0.75em;color:#ffaa00;white-space:normal;overflow:visible">' + (d.sys_reset || d.reset || 'UNKNOWN') + '</div></div>';
   perfHtml += '</div>';
   psect.insertAdjacentHTML('afterbegin', perfHtml);
@@ -372,7 +393,7 @@ if(d.peripherals && d.peripherals.length > 0) {
   document.getElementById('periph-sect').insertAdjacentHTML('afterbegin', phtml);
 } else { document.getElementById('periph-sect').textContent=''; }
 
-var l='';d.log.forEach(function(m){
+var l='';d.log.slice().reverse().forEach(function(m){
 if(m)l+='<div class="m"><span class="ts">['+m.ts+'s]</span> <span class="src">'+m.src+'</span>: '+m.msg+'</div>';
 });
 document.getElementById('log').innerHTML=l;
@@ -732,7 +753,7 @@ void WiFiManager::serveApiStatus() {
   LoRaManager &lora = LoRaManager::getInstance();
   ESPNowManager &espnow = ESPNowManager::getInstance();
 
-  float bat = analogRead(PIN_BAT_ADC) / 4095.0 * 3.3 * 2.0;
+  float bat = (analogRead(PIN_BAT_ADC) / 4095.0f) * 3.3f * BAT_VOLT_MULTI;
   unsigned long s = millis() / 1000;
   String uptime = String(s / 3600) + "h " + String((s % 3600) / 60) + "m";
 
@@ -744,11 +765,10 @@ void WiFiManager::serveApiStatus() {
   json += "\"version\":\"" FIRMWARE_VERSION "\",";
   json += "\"uptime\":\"" + uptime + "\",";
   json += "\"espnow_ch\":" + String(data.espNowChannel) + ",";
-  json += "\"espnow_rx\":" + String(ESPNowManager::getInstance().rxCount) + ",";
-  json += "\"espnow_tx\":" + String(ESPNowManager::getInstance().txCount) + ",";
-  json +=
-      "\"espnow_ok\":" + String(ESPNowManager::getInstance().lastSendSuccess) +
-      ",";
+  json += "\"espnow_rx\":" + String(espnow.rxCount) + ",";
+  json += "\"espnow_tx\":" + String(espnow.txCount) + ",";
+  json += "\"espnow_drop\":" + String(espnow.txDropCount) + ",";
+  json += "\"espnow_ok\":" + String(espnow.lastSendSuccess) + ",";
   json += "\"espnow_peers\":" + String(data.numEspNowPeers) + ",";
   json += "\"hw\":\"" + data.getMacSuffix() + "\",";
   json += "\"reset\":\"" + data.getResetReason() + "\",";
@@ -765,12 +785,27 @@ void WiFiManager::serveApiStatus() {
   json += "\"heap\":" + String(ESP.getFreeHeap()) + ",";
   json += "\"tp_mode\":\"" + String(data.transportMode) + "\",";
   json += "\"lora\":" + String(lora.loraActive ? "true" : "false") + ",";
+  json += "\"lora_tx\":" + String(lora.getTxCount()) + ",";
+  json += "\"lora_rx\":" + String(lora.getRxCount()) + ",";
+  json += "\"lora_drop\":" + String(lora.getTxDropCount()) + ",";
+  {
+    const char *rs = "idle";
+    switch (lora.getRadioState()) {
+      case RadioState::RADIO_TX: rs = "tx"; break;
+      case RadioState::RADIO_RX: rs = "rx"; break;
+      default: break;
+    }
+    json += "\"radio_state\":\"" + String(rs) + "\",";
+  }
   json += "\"ble\":true,";
   json += "\"wifi\":true,";
   json += "\"espnow\":" + String(espnow.espNowActive ? "true" : "false") + ",";
   json += "\"loop_avg_ms\":" + String(perf.getLoopAvgMs()) + ",";
   json += "\"loop_max_ms\":" + String(perf.getLoopMaxMs()) + ",";
   json += "\"lora_toa_ms\":" + String(perf.getTimeOnAir()) + ",";
+  json += "\"bytes_saved\":" + String(perf.getBytesSaved()) + ",";
+  json +=
+      "\"power_mode\":\"" + PowerManager::getInstance().getModeString() + "\",";
   json += "\"sys_reset\":\"" + perf.getResetReason() + "\",";
 
   // Standard pins array for labeled diagnostics - FILTERED to "Usable" only
@@ -783,18 +818,19 @@ void WiFiManager::serveApiStatus() {
   PinDef pins[] = {
       {"LED", PIN_LED_BUILTIN, false},    {"PRG", PIN_BUTTON_PRG, false},
       {"VEXT", PIN_VEXT_CTRL, false},     {"BAT", PIN_BAT_ADC, true},
-      {"RL110", PIN_RELAY_110V, false},   {"RL12_1", PIN_RELAY_12V_1, false},
-      {"RL12_2", PIN_RELAY_12V_2, false}, {"RL12_3", PIN_RELAY_12V_3, false}};
+      {"BAT_CTRL", PIN_BAT_CTRL, false},  {"RL110", PIN_RELAY_110V, false},
+      {"RL12_1", PIN_RELAY_12V_1, false}, {"RL12_2", PIN_RELAY_12V_2, false},
+      {"RL12_3", PIN_RELAY_12V_3, false}};
 
   bool pinFirst = true;
-  for (int i = 0; i < 8; i++) {
+  for (int i = 0; i < 9; i++) {
     // Failsafe: only show pins that are enabled via APC OR are critical system
     // pins
     String friendlyName = data.GetPinName(String(pins[i].p));
     bool isEnabled = data.GetPinEnabled(pins[i].p);
     bool isUsable =
         isEnabled ||
-        (i < 4); // Always show LED, PRG, VEXT, BAT regardless of APC
+        (i < 5); // Always show LED, PRG, VEXT, BAT, BAT_CTRL regardless of APC
 
     if (!isUsable)
       continue;
@@ -847,8 +883,8 @@ void WiFiManager::serveApiStatus() {
   bool first = true;
   for (int i = 0; i < LOG_SIZE; i++) {
     int idx = (data.logIndex - 1 - i + LOG_SIZE) % LOG_SIZE;
-    if (data.msgLog[idx].message.length() > 0) {
-      String sanitized = data.msgLog[idx].message;
+    if (strlen(data.msgLog[idx].message) > 0) {
+      String sanitized = String(data.msgLog[idx].message);
       sanitized.replace("\"", "'");
       String cleanStr = "";
       for (unsigned int j = 0; j < sanitized.length(); j++) {
@@ -862,7 +898,7 @@ void WiFiManager::serveApiStatus() {
 
       json += "{";
       json += "\"ts\":" + String(data.msgLog[idx].timestamp) + ",";
-      json += "\"src\":\"" + data.msgLog[idx].source + "\",";
+      json += "\"src\":\"" + String(data.msgLog[idx].source) + "\",";
       json += "\"rssi\":" + String(data.msgLog[idx].rssi) + ",";
       json += "\"msg\":\"" + cleanStr + "\"";
       json += "}";
@@ -1791,9 +1827,16 @@ body{font-family:'Segoe UI',sans-serif;background:#050510;color:#e0e0e0;overflow
 .info-panel{margin-top:20px;width:100%;background:#111122;border:1px solid #2a2a4a;border-radius:10px;padding:15px;position:relative}
 .dbg-id{position:absolute;right:8px;top:8px;font-size:9px;color:#555;opacity:0.6;pointer-events:none;font-family:monospace;letter-spacing:0.5px;z-index:10}
 .info-panel h2{font-size:1.1em;color:#00d4ff;margin-bottom:10px}
+.test-panel{margin-top:20px;width:100%;background:#111122;border:1px solid #2a2a4a;border-radius:10px;padding:15px;display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.test-panel h2{grid-column:1/-1;font-size:1.1em;color:#00ff88;margin-bottom:5px}
+.test-btn{padding:10px;background:#1a1a3a;border:1px solid #336;border-radius:8px;color:#fff;cursor:pointer;font-size:0.85em;display:flex;align-items:center;justify-content:center;gap:8px;transition:0.2s}
+.test-btn:hover{background:#00d4ff22;border-color:#00d4ff}
+.test-btn i{font-size:1.1em;color:#00d4ff}
 .selector{margin-bottom:20px}
 .selector select{background:#111122;color:#fff;border:1px solid #2a2a4a;padding:8px 12px;border-radius:6px;outline:none}
-</style></head><body>
+</style>
+<link rel='stylesheet' href='https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css'>
+</head><body>
 <div class='nav' style='position:relative'>
   <span class='dbg-id' style='top:4px;right:20px'>HW-NAV</span>
   <a href='/'>&#x1F4E1; Dash</a>
@@ -1814,10 +1857,25 @@ body{font-family:'Segoe UI',sans-serif;background:#050510;color:#e0e0e0;overflow
     <h2>Board Info</h2>
     <div id='pinInfo'>Select a pin to see details</div>
   </div>
+
+  <div class='test-panel' style='position:relative'>
+    <span class='dbg-id'>HW-TEST-SUITE</span>
+    <h2>RF Diagnostics & Field Testing</h2>
+    <button class='test-btn' onclick='runCmd("RTEST")'><i class='fas fa-wave-square'></i> Range Comparison</button>
+    <button class='test-btn' onclick='runCmd("ALL BINCMD 6 1")'><i class='fas fa-satellite-dish'></i> Reliable Ping (ALL)</button>
+    <button class='test-btn' onclick='runCmd("ALL PMISER AUTO")'><i class='fas fa-bolt'></i> Power Cycle (ALL)</button>
+    <button class='test-btn' onclick='location.href="/"'><i class='fas fa-chart-line'></i> View Metrics</button>
+  </div>
 </div>
 <script>
 var currentBoard = null;
 var liveData = {};
+
+function runCmd(c){
+  if(confirm('Run command: '+c+'?')){
+    fetch('/api/cmd',{method:'POST',body:new URLSearchParams({'cmd':c})});
+  }
+}
 
 function up(){
   fetch('/api/status').then(r=>r.json()).then(d=>{
@@ -2053,11 +2111,47 @@ void WiFiManager::checkProbeBackoff() {
 }
 
 // ── Transport: onLinkDowngrade() / onLinkUpgrade() ───────────────────────────
+void WiFiManager::onPowerStateChange(PowerMode mode) {
+  if (mode == PowerMode::CRITICAL) {
+    // Force immediate downgrade to LORA mesh mode to save power
+    /*
+    onLinkDowngrade(DataManager::getInstance().currentLink,
+                    LinkPreference::LINK_LORA);
+    */
+
+    /*
+    // WiFi is handled proactively in handle() next tick, but we can nudge it
+    WiFi.disconnect(true);
+    WiFi.mode(WIFI_OFF);
+    isConnected = false;
+    serverStarted = false;
+    */
+  } else if (mode == PowerMode::CONSERVE) {
+    /*
+    // Enable WiFi Modem Sleep to reduce current draw by ~50%
+    WiFi.setSleep(true);
+    modemSleepEnabled = true;
+    Serial.println("POWER: Miser enabling WiFi Modem-Sleep (CONSERVE)");
+    */
+  } else {
+    /*
+    // NORMAL: Full performance
+    WiFi.setSleep(false);
+    modemSleepEnabled = false;
+    */
+  }
+}
+
 void WiFiManager::onLinkDowngrade(LinkPreference from, LinkPreference to) {
   DataManager &data = DataManager::getInstance();
   data.currentLink = to;
   data.probeBackoffMs = PROBE_BACKOFF_MIN_MS;
   data.probeFailCount = 0;
+
+  // Proactive Fallback: boost BLE advertising to make the device easier to find
+  // when WiFi is lost.
+  BLEManager::getInstance().boostAdvertising(true);
+
   Serial.printf("TRANS: Downgrade %s → %s\n", DataManager::linkName(from),
                 DataManager::linkName(to));
   data.LogMessage("TRANS", 0,

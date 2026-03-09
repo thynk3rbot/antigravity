@@ -7,6 +7,7 @@
 #include "ESPNowManager.h"
 #include "LoRaManager.h"
 #include "MCPManager.h"
+#include "PowerManager.h"
 #include "WiFiManager.h"
 #include <Arduino.h>
 #include <ArduinoJson.h>
@@ -34,9 +35,10 @@ ScheduleManager::ScheduleManager()
       t110V(5000, TASK_FOREVER, &ScheduleManager::toggle110VCallback),
       t12V(3600000, TASK_FOREVER, &ScheduleManager::pulse12VCallback),
       t12VEnd(5000, TASK_ONCE, &ScheduleManager::endPulse12VCallback),
-      tLoRa(10, TASK_FOREVER, &ScheduleManager::loraTask), // ISR: 500→10ms
-      tWiFi(1000, TASK_FOREVER, &ScheduleManager::wifiTask),
-      tSerial(20, TASK_FOREVER, &ScheduleManager::serialTask), // ISR: 100→20ms
+      tLoRa(50, TASK_FOREVER, &ScheduleManager::loraTask), // Relaxed: 10->50ms
+      tWiFi(2000, TASK_FOREVER, &ScheduleManager::wifiTask), // Relaxed: 1s->2s
+      tSerial(50, TASK_FOREVER,
+              &ScheduleManager::serialTask), // Relaxed: 20->50ms
       tHeartbeat(300000, TASK_FOREVER, &ScheduleManager::heartbeatTask),
       // tButton removed — replaced by attachInterrupt(buttonISR) in init()
       tDisplay(2000, TASK_FOREVER, &ScheduleManager::displayTask),
@@ -48,7 +50,13 @@ ScheduleManager::ScheduleManager()
                         &ScheduleManager::peripheralSerialTask),
       tBatteryMonitor(300000, TASK_FOREVER,
                       &ScheduleManager::batteryMonitorCallback),
-      blinkCount(0) {
+      blinkCount(0),
+      tRepeaterDefer(REPEATER_JITTER_MAX_MS, TASK_ONCE,
+                     &ScheduleManager::repeaterDeferCallback),
+      tBeaconLegacy(BEACON_LEGACY_DELAY_MS, TASK_ONCE,
+                    &ScheduleManager::beaconLegacyCallback),
+      tSleepSequence(SLEEP_PC_GUARD_MS, TASK_ONCE,
+                     &ScheduleManager::sleepSequenceCallback) {
   instance_ptr = this;
 }
 
@@ -61,6 +69,7 @@ ScheduleManager::~ScheduleManager() {
 
 void ScheduleManager::init() {
   LOG_PRINTLN("SCHED: Initializing Tasks");
+  PowerManager::getInstance().Init();
 
   pinMode(PIN_RELAY_110V, OUTPUT);
   pinMode(PIN_RELAY_12V_1, OUTPUT);
@@ -91,6 +100,9 @@ void ScheduleManager::init() {
   runner.addTask(tESPNow);
   runner.addTask(tPeripheralSerial);
   runner.addTask(tBatteryMonitor);
+  runner.addTask(tRepeaterDefer);
+  runner.addTask(tBeaconLegacy);
+  runner.addTask(tSleepSequence);
 
   // Load Saved Interval
   unsigned long savedInterval =
@@ -217,7 +229,9 @@ void ScheduleManager::serialTask() {
         }
       }
     } else if (c != '\r') {
-      serialBuffer += c;
+      if (serialBuffer.length() < 128) {
+        serialBuffer += c;
+      }
     }
   }
 }
@@ -235,7 +249,9 @@ void ScheduleManager::peripheralSerialTask() {
                                                     CommInterface::COMM_SERIAL);
       }
     } else if (c != '\r') {
-      pSerialBuffer += c;
+      if (pSerialBuffer.length() < 128) {
+        pSerialBuffer += c;
+      }
     }
   }
 }
@@ -246,8 +262,25 @@ void ScheduleManager::heartbeatTask() {
     showStartupText("Heartbeat... OK");
     initial = false;
   }
+
   LoRaManager::getInstance().SendHeartbeat();
   DataManager::getInstance().PruneStaleNodes();
+
+  // Power-Miser Duty-Cycle Throttling
+  uint32_t targetIntervalSec = PowerManager::getInstance().getTargetInterval();
+
+  // Fast-Boot Status: Broadcast every 20s for the first 3 minutes
+  if (millis() < 180000) {
+    targetIntervalSec = 20;
+  }
+
+  uint32_t targetIntervalMs = targetIntervalSec * 1000;
+
+  if (instance_ptr->tHeartbeat.getInterval() != targetIntervalMs) {
+    instance_ptr->tHeartbeat.setInterval(targetIntervalMs);
+    LOG_PRINTF("SCHED: Heartbeat throttled to %lu s (Power-Miser)\n",
+               targetIntervalSec);
+  }
 }
 
 void ScheduleManager::bleTask() {
@@ -266,11 +299,16 @@ void ScheduleManager::bleTask() {
 }
 
 void ScheduleManager::espNowTask() {
+  ESPNowManager &espnow = ESPNowManager::getInstance();
+  // Deferred peer registration (NVS write deferred out of callback context)
+  espnow.processPendingPeer();
+  // Drain TX queue — one send per poll cycle (50ms) to avoid blocking
+  espnow.processTxQueue();
+  // Process received messages
   String msg;
-  while (ESPNowManager::getInstance().poll(msg)) {
+  while (espnow.poll(msg)) {
     DataManager::getInstance().LogMessage("ESPNOW", 0, msg);
-    CommandManager::getInstance().handleCommand(msg,
-                                                CommInterface::COMM_ESPNOW);
+    CommandManager::getInstance().handleCommand(msg, CommInterface::COMM_ESPNOW);
   }
 }
 
@@ -279,7 +317,17 @@ void ScheduleManager::espNowTask() {
 // displayTask checks and resets this flag every 2s
 
 void ScheduleManager::displayTask() {
+  PowerManager &power = PowerManager::getInstance();
   DisplayManager &disp = DisplayManager::getInstance();
+
+  if (!power.isOledAllowed()) {
+    if (disp.IsDisplayActive()) {
+      disp.SetDisplayActive(false);
+      LOG_PRINTLN("POWER: Miser forcing OLED OFF (Critical)");
+    }
+    return;
+  }
+
   // Absorb button press from ISR (flag set in buttonISR, cleared here)
   if (instance_ptr && instance_ptr->_btnPressed) {
     instance_ptr->_btnPressed = false;
@@ -357,12 +405,123 @@ void ScheduleManager::triggerRestart(unsigned long delayMs) {
   LOG_PRINTLN("SCHED: Restart Scheduled");
 }
 
-void ScheduleManager::loadDynamicSchedules() {
+// ── Non-blocking Deferred Operations ────────────────────────────────────────
+
+void ScheduleManager::deferRepeaterSend(const uint8_t *encBuf, size_t encLen,
+                                        unsigned long jitterMs) {
+  if (!instance_ptr || encLen == 0 || encLen > 92)
+    return;
+  memcpy(instance_ptr->_repeaterEncBuf, encBuf, encLen);
+  instance_ptr->_repeaterEncLen = encLen;
+  instance_ptr->tRepeaterDefer.setInterval(jitterMs);
+  instance_ptr->tRepeaterDefer.restartDelayed(jitterMs);
+}
+
+void ScheduleManager::repeaterDeferCallback() {
+  if (!instance_ptr || instance_ptr->_repeaterEncLen == 0)
+    return;
+  LOG_PRINTF("RPTR: Deferred TX firing (%u bytes)\n",
+             (unsigned int)instance_ptr->_repeaterEncLen);
+  LoRaManager::getInstance().SendRawLoRa(instance_ptr->_repeaterEncBuf,
+                                         instance_ptr->_repeaterEncLen);
+  instance_ptr->_repeaterEncLen = 0;
+}
+
+void ScheduleManager::deferLegacyBeacon(const String &payload) {
+  if (!instance_ptr)
+    return;
+  instance_ptr->_legacyBeaconPayload = payload;
+  instance_ptr->tBeaconLegacy.restartDelayed(BEACON_LEGACY_DELAY_MS);
+}
+
+void ScheduleManager::beaconLegacyCallback() {
+  if (!instance_ptr || instance_ptr->_legacyBeaconPayload.isEmpty())
+    return;
+  LOG_PRINTLN("LORA: Deferred legacy beacon TX");
+  LoRaManager::getInstance().SendLegacyLoRa(instance_ptr->_legacyBeaconPayload);
+  instance_ptr->_legacyBeaconPayload = "";
+}
+
+void ScheduleManager::startSleepSequence(float hours, const String &trigger,
+                                         unsigned long initialDelayMs) {
+  if (!instance_ptr)
+    return;
+  instance_ptr->_sleepHours = hours;
+  instance_ptr->_sleepTrigger = trigger;
+  instance_ptr->_sleepStep = 0;
+  instance_ptr->sleepSequenceActive = true;
+  unsigned long delay = initialDelayMs > 0 ? initialDelayMs : 10;
+  instance_ptr->tSleepSequence.setInterval(delay);
+  instance_ptr->tSleepSequence.restartDelayed(delay);
+  LOG_PRINTF("SCHED: Sleep sequence armed (initial delay: %lu ms)\n", delay);
+}
+
+void ScheduleManager::sleepSequenceCallback() {
+  if (!instance_ptr)
+    return;
+  LoRaManager &lora = LoRaManager::getInstance();
   DataManager &data = DataManager::getInstance();
-  String json = data.ReadSchedule();
+  unsigned int mins =
+      (unsigned int)(instance_ptr->_sleepHours * 60.0f);
+
+  switch (instance_ptr->_sleepStep) {
+  case 0: // PC guard elapsed — start countdown from 3
+  case 1:
+  case 2:
+  case 3: {
+    int count = 3 - instance_ptr->_sleepStep;
+    if (count > 0) {
+      String cd = data.myId + " SLEEP " + String(mins) + "min in " +
+                  String(count) + "s";
+      data.LogMessage("SYS", 0,
+                      "Sleep " + String(mins) + "min in " + String(count) + "s");
+      if (lora.loraActive)
+        lora.SendLoRa(cd);
+      LOG_PRINTLN(cd);
+      instance_ptr->_sleepStep++;
+      instance_ptr->tSleepSequence.setInterval(SLEEP_COUNTDOWN_STEP_MS);
+      instance_ptr->tSleepSequence.restartDelayed(SLEEP_COUNTDOWN_STEP_MS);
+    } else {
+      // Countdown done — display off and sleep
+      data.LogMessage("SYS", 0,
+                      "Sleeping " + String(mins) + "min [" +
+                          instance_ptr->_sleepTrigger + "]");
+      lora.lastMsgReceived =
+          "SYS: Sleeping " + String(mins) + "min";
+      digitalWrite(PIN_LED_BUILTIN, LOW);
+      if (Heltec.display) {
+        Heltec.display->clear();
+        Heltec.display->drawString(0, 0, "SLEEP " + String(mins) + "min");
+        Heltec.display->display();
+        Heltec.display->displayOff();
+      }
+      uint64_t sleepUs =
+          (uint64_t)(instance_ptr->_sleepHours * 3600.0f * 1000000.0f);
+      esp_sleep_enable_timer_wakeup(sleepUs);
+      instance_ptr->sleepSequenceActive = false;
+      esp_deep_sleep_start();
+    }
+    break;
+  }
+  }
+}
+
+void ScheduleManager::loadDynamicSchedules() {
+  if (!LittleFS.exists("/schedule.json")) {
+    LOG_PRINTLN("SCHED: No schedule file found");
+    return;
+  }
+
+  File file = LittleFS.open("/schedule.json", "r");
+  if (!file) {
+    LOG_PRINTLN("SCHED: Failed to open schedule file");
+    return;
+  }
 
   JsonDocument doc;
-  DeserializationError error = deserializeJson(doc, json);
+  DeserializationError error = deserializeJson(doc, file);
+  file.close();
+
   if (error) {
     LOG_PRINTLN("SCHED: JSON Parse Fail");
     return;
@@ -500,6 +659,10 @@ void ScheduleManager::dynamicTaskCallback() {
       LOG_PRINTF("SCHED: %s ALERT triggered (raw=%d) -> %s\n", cfg.name.c_str(),
                  raw, cfg.notifyCmd.c_str());
     }
+  } else if (cfg.type == "FAILOVER_PING") {
+    String target = cfg.name; // Use name as target node
+    LoRaManager::getInstance().QueueFailoverPing(target);
+    LOG_PRINTF("SCHED: %s Protocol Failover Ping started\n", target.c_str());
   }
 }
 
@@ -577,11 +740,17 @@ void ScheduleManager::loadSchedulesFromCsv(const String &csv) {
 }
 
 void ScheduleManager::batteryMonitorCallback() {
-  float bat = analogRead(PIN_BAT_ADC) / 4095.0 * 3.3 * 2.0;
-  LOG_PRINTF("SCHED: Battery Monitor -> %.2fV\n", bat);
-  if (bat > 0.5f && bat < 3.20f) {
-    LOG_PRINTLN("SCHED: Low Battery! Routing through executeSleep.");
-    CommandManager::executeSleep(6.0f, "LOW-BAT:" + String(bat, 2) + "V");
+  PowerManager::getInstance().Update();
+  float bat = PowerManager::getInstance().getBatteryVoltage();
+
+  // Boot Grace Period: Ignore critical low battery for first 2 minutes
+  // (Prevents immediate sleep if sensors/ADC are stabilizing)
+  if (millis() < 120000)
+    return;
+
+  if (bat > 0.5f && bat < POWER_MISER_VOLT_CRITICAL) {
+    LOG_PRINTLN("SCHED: Power-Miser CRITICAL! Routing through executeSleep.");
+    CommandManager::executeSleep(6.0f, "PM-CRIT:" + String(bat, 2) + "V");
   }
 }
 

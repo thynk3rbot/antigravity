@@ -1,16 +1,25 @@
 #include "LoRaManager.h"
 #include "../utils/DebugMacros.h"
+#include "BinaryManager.h"
 #include "MQTTManager.h"
 #include "PerformanceManager.h"
+#include "ScheduleManager.h"
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <SPI.h>
 
-// ISR Trampoline
+// ISR Trampoline — RX complete (DIO1 in receive mode)
 LoRaManager *_loraInstance = NULL;
 void IRAM_ATTR setFlag(void) {
   if (_loraInstance) {
     _loraInstance->receivedFlag = true;
+  }
+}
+
+// ISR Trampoline — TX complete (DIO1 in transmit mode)
+void IRAM_ATTR LoRaManager::_setTxFlag() {
+  if (_loraInstance) {
+    _loraInstance->_transmittedFlag = true;
   }
 }
 
@@ -19,6 +28,8 @@ void (*_msgCallback)(const String &, CommInterface) = NULL;
 
 LoRaManager::LoRaManager() {
   loraActive = false;
+  beaconActive = false;
+  lastBeaconMs = 0;
   receivedFlag = false;
   lastRssi = 0;
   lastSnr = 0;
@@ -57,14 +68,51 @@ void LoRaManager::Init() {
                            LORA_PWR, 8);
   if (state == RADIOLIB_ERR_NONE) {
     loraActive = true;
-    radio->setPacketReceivedAction(setFlag);
-    radio->startReceive();
+    _enterRx();
     LOG_PRINTLN("LoRa: Initialized OK");
   } else {
     LOG_PRINT("LoRa: Init Failed, code ");
     LOG_PRINTLN(state);
   }
   Serial.flush();
+}
+
+// ── Async TX State Machine ──────────────────────────────────────────────────
+
+bool LoRaManager::_startAsyncTx(const uint8_t *data, size_t len) {
+  // Self-healing: if ISR fired while HandleRx() wasn't polling, finalize now
+  if (_radioState == RadioState::RADIO_TX && _transmittedFlag) {
+    _onTxComplete();
+  }
+  if (_radioState == RadioState::RADIO_TX) {
+    _txDropCount++;
+    LOG_PRINTLN("LORA: TX dropped (radio busy)");
+    return false;
+  }
+  _transmittedFlag = false;
+  _radioState = RadioState::RADIO_TX;
+  _txStartMs = millis();
+  radio->setPacketSentAction(_setTxFlag);
+  int state = radio->startTransmit(const_cast<uint8_t *>(data), len);
+  if (state != RADIOLIB_ERR_NONE) {
+    LOG_PRINTF("LORA: startTransmit failed (%d)\n", state);
+    _enterRx();
+    return false;
+  }
+  return true;
+}
+
+void LoRaManager::_onTxComplete() {
+  _txCount++;
+  _transmittedFlag = false;
+  _enterRx();
+}
+
+void LoRaManager::_enterRx() {
+  receivedFlag = false;
+  radio->setPacketReceivedAction(setFlag);
+  radio->startReceive();
+  _radioState = RadioState::RADIO_RX;
 }
 
 void LoRaManager::SetKey(const uint8_t *newKey) {
@@ -114,96 +162,196 @@ void LoRaManager::SendLoRa(const String &text) {
   DataManager &data = DataManager::getInstance();
   DisplayManager &display = DisplayManager::getInstance();
 
-  memset(&txPacket, 0, sizeof(MessagePacket)); // Explicitly wipe entire packet
+  if (text.length() > 0 && (uint8_t)text[0] == BINARY_TOKEN) {
+    // Send as compact binary frame
+    uint8_t binBuf[64];
+    size_t binLen = text.length();
+    if (binLen > 64)
+      binLen = 64;
+    memcpy(binBuf, text.c_str(), binLen);
+
+    uint8_t encBin[128]; // IV(12) + Tag(16) + Payload
+    encryptData(binBuf, binLen, encBin, currentKey);
+    size_t txLen = binLen + 28;
+    _startAsyncTx(encBin, txLen);
+
+    unsigned long toa = radio->getTimeOnAir(txLen) / 1000;
+    PerformanceManager &perf = PerformanceManager::getInstance();
+    perf.addTimeOnAir(toa);
+    perf.addBytesSaved(92 - txLen);
+    LOG_PRINTF("LORA: Binary TX (%u bytes, %lums ToA)\n", (unsigned int)binLen,
+               toa);
+  } else {
+    // Standard text packet
+    memset(&txPacket, 0, sizeof(MessagePacket));
+    strncpy(txPacket.sender, data.myId.c_str(), sizeof(txPacket.sender) - 1);
+    strncpy(txPacket.text, text.c_str(), sizeof(txPacket.text) - 1);
+    txPacket.ttl = MAX_TTL;
+
+    lastMsgSent = text;
+
+    data.LogMessage(data.myId, 0, text);
+    display.SetDisplayActive(true);
+    display.DrawUi();
+
+    txPacket.checksum = calculateChecksum(&txPacket);
+
+    // Variable Sized Payload: only send up to the end of the null-terminated
+    // text
+    size_t textLen = strlen(txPacket.text);
+    if (textLen > 44)
+      textLen = 44;
+    size_t payloadSize =
+        16 + textLen + 1 + 2; // sender(16) + text(textLen) + ttl(1) + cksum(2)
+
+    uint8_t varEncBuf[128];
+    size_t txLen = payloadSize + 28;
+    encryptData((const uint8_t *)&txPacket, payloadSize, varEncBuf, currentKey);
+    _startAsyncTx(varEncBuf, txLen);
+
+    unsigned long toa = radio->getTimeOnAir(txLen) / 1000;
+    PerformanceManager &perf = PerformanceManager::getInstance();
+    perf.addTimeOnAir(toa);
+    perf.addBytesSaved(ENCRYPTED_PACKET_SIZE - txLen);
+    LOG_PRINTF("LORA: Var-TX (%u bytes, %lums ToA)\n",
+               (unsigned int)payloadSize, toa);
+  }
+}
+
+void LoRaManager::SendLegacyLoRa(const String &text) {
+  if (!loraActive)
+    return;
+
+  DataManager &data = DataManager::getInstance();
+  DisplayManager &display = DisplayManager::getInstance();
+
+  memset(&txPacket, 0, sizeof(MessagePacket));
   strncpy(txPacket.sender, data.myId.c_str(), sizeof(txPacket.sender) - 1);
   strncpy(txPacket.text, text.c_str(), sizeof(txPacket.text) - 1);
   txPacket.ttl = MAX_TTL;
 
   lastMsgSent = text;
-
   data.LogMessage(data.myId, 0, text);
   display.SetDisplayActive(true);
   display.DrawUi();
 
   txPacket.checksum = calculateChecksum(&txPacket);
-  encryptPacket(&txPacket, encBuf, currentKey);
-  radio->transmit(encBuf, ENCRYPTED_PACKET_SIZE);
 
-  // Track Time on Air (approximate based on byte count, SF, BW etc. or using
-  // radiolib's built in getTimeOnAir)
+  uint8_t legacyEncBuf[ENCRYPTED_PACKET_SIZE];
+  encryptPacket(&txPacket, legacyEncBuf, currentKey);
+  _startAsyncTx(legacyEncBuf, ENCRYPTED_PACKET_SIZE);
+
   unsigned long toa = radio->getTimeOnAir(ENCRYPTED_PACKET_SIZE) / 1000;
   PerformanceManager::getInstance().addTimeOnAir(toa);
+  LOG_PRINTF("LORA: Legacy-TX (92 bytes, %lums ToA)\n", toa);
+}
 
-  receivedFlag = false;
-  radio->setPacketReceivedAction(setFlag);
-  radio->startReceive();
+void LoRaManager::SendLoRaBinary(uint8_t targetSid, uint8_t cmd, uint8_t val) {
+  if (!loraActive)
+    return;
+
+  uint8_t binBuf[32];
+  size_t frameLen = BinaryManager::getInstance().createBinaryFrame(
+      targetSid, (BinaryCmd)cmd, &val, 1, binBuf);
+
+  uint8_t encBin[128];
+  size_t txLen = frameLen + 28;
+  encryptData(binBuf, frameLen, encBin, currentKey);
+  _startAsyncTx(encBin, txLen);
+
+  unsigned long toa = radio->getTimeOnAir(txLen) / 1000;
+  PerformanceManager::getInstance().addTimeOnAir(toa);
+  LOG_PRINTF("LORA: Binary-TX (0x%02X -> 0x%02X) to 0x%02X, %lums\n", cmd, val,
+             targetSid, toa);
 }
 
 void LoRaManager::HandleRx() {
   static int rxPollCount = 0;
   rxPollCount++;
 
-  // Periodic diagnostic: every 120 polls (~60s at 500ms)
-  if (rxPollCount % 120 == 0) {
-    LOG_PRINTF("LORA-DIAG: poll=%d, flag=%d, active=%d, DIO1=%d\n", rxPollCount,
-               receivedFlag ? 1 : 0, loraActive ? 1 : 0,
-               digitalRead(PIN_LORA_DIO1));
+  // ── Poll TX completion (ISR sets _transmittedFlag) ──────────────────────
+  if (_radioState == RadioState::RADIO_TX) {
+    if (_transmittedFlag) {
+      _onTxComplete();
+      LOG_PRINTLN("LORA: Async TX complete");
+    } else if (millis() - _txStartMs > LORA_TX_TIMEOUT_MS) {
+      // Safety timeout — force back to RX
+      _txDropCount++;
+      LOG_PRINTLN("LORA: TX timeout — forcing RX");
+      _enterRx();
+    }
+    return; // Skip RX processing while in TX state
+  }
+
+  // Periodic diagnostic: every 120 polls (~60s at 50ms interval)
+  if (rxPollCount % 1200 == 0) {
+    LOG_PRINTF("LORA-DIAG: poll=%d, flag=%d, active=%d, DIO1=%d, tx=%lu rx=%lu drop=%lu\n",
+               rxPollCount, receivedFlag ? 1 : 0, loraActive ? 1 : 0,
+               digitalRead(PIN_LORA_DIO1), _txCount, _rxCount, _txDropCount);
     // Force re-arm the receiver
-    radio->setPacketReceivedAction(setFlag);
-    radio->startReceive();
+    _enterRx();
   }
 
   if (!loraActive || !receivedFlag)
     return;
   receivedFlag = false;
+  _rxCount++;
   LOG_PRINTLN("LORA: *** RX EVENT ***");
 
-  uint8_t rxEncBuf[ENCRYPTED_PACKET_SIZE];
-  int state = radio->readData(rxEncBuf, ENCRYPTED_PACKET_SIZE);
+  uint8_t rxEncBuf[128];
+  int state = radio->readData(rxEncBuf, 128);
+  int receivedLen = radio->getPacketLength();
 
   if (state != RADIOLIB_ERR_NONE) {
-    radio->startReceive();
+    _enterRx();
     return;
   }
 
   lastRssi = radio->getRSSI();
   lastSnr = radio->getSNR();
 
-  ProcessPacket(rxEncBuf, ENCRYPTED_PACKET_SIZE);
+  ProcessPacket(rxEncBuf, receivedLen);
 }
 
 void LoRaManager::ProcessPacket(uint8_t *rxEncBuf, int size) {
-  if (!decryptPacket(rxEncBuf, &rxPacket, currentKey)) {
+  int payloadLen = size - 28; // IV(12) + Tag(16)
+  if (payloadLen <= 0) {
+    _enterRx();
+    return;
+  }
+
+  uint8_t rxPlainBuf[128];
+  if (!decryptData(rxEncBuf, payloadLen, rxPlainBuf, currentKey)) {
     LOG_PRINTLN("CRYPTO: GCM auth failed (Wrong Key or Tampered)");
-    radio->startReceive();
+    _enterRx();
     return;
   }
 
-  rxPacket.sender[15] = '\0';
-  rxPacket.text[44] =
-      '\0'; // Strictly enforce null-termination within the 45-byte block
-
-  if (rxPacket.checksum != calculateChecksum(&rxPacket)) {
-    LOG_PRINTLN("LORA: Integrity Fail (Noise/Garbage)");
-    radio->startReceive();
-    return;
-  }
-
-  // Validate ASCII
-  for (int i = 0; i < 15 && rxPacket.sender[i] != '\0'; i++) {
-    if (rxPacket.sender[i] < 0x20 || rxPacket.sender[i] > 0x7E) {
-      LOG_PRINTLN("CRYPTO: Bad packet (Wrong Key?)");
-      radio->startReceive();
+  // Check if it's a binary packet
+  if (rxPlainBuf[0] == BINARY_TOKEN) {
+    LOG_PRINTF("BIN: Compact RX (%d bytes)\n", payloadLen);
+    if (BinaryManager::getInstance().handleBinary(rxPlainBuf, payloadLen,
+                                                  CommInterface::COMM_LORA)) {
+      _enterRx();
       return;
     }
   }
 
+  // Otherwise treat as MessagePacket if size is within bounds (min 19 bytes)
+  if (payloadLen < 19 || payloadLen > (int)sizeof(MessagePacket)) {
+    LOG_PRINTF("LORA: Unknown packet size %d (not BIN or MSG)\n", payloadLen);
+    _enterRx();
+    return;
+  }
+
+  memset(&rxPacket, 0, sizeof(MessagePacket));
+  memcpy(&rxPacket, rxPlainBuf, payloadLen);
   String sender = String(rxPacket.sender);
   String text = String(rxPacket.text);
 
   uint32_t msgHash = getMsgHash(&rxPacket);
   if (hasSeenMessage(msgHash)) {
-    radio->startReceive();
+    _enterRx();
     return;
   }
   markMessageSeen(msgHash);
@@ -214,7 +362,7 @@ void LoRaManager::ProcessPacket(uint8_t *rxEncBuf, int size) {
   if (MAX_TTL >= rxPacket.ttl) {
     hops = MAX_TTL - rxPacket.ttl;
   }
-  data.SawNode(rxPacket.sender, lastRssi, hops);
+  data.SawNode(sender.c_str(), lastRssi, hops);
 
   if (text.startsWith("{") && text.indexOf("\"t\":\"T\"") > 0) {
     JsonDocument doc;
@@ -224,9 +372,10 @@ void LoRaManager::ProcessPacket(uint8_t *rxEncBuf, int size) {
       float bat = doc["b"] | 0.0f;
       uint8_t rst = doc["r"] | 0;
       uint8_t hops = doc["h"] | 0;
+      uint8_t sid = doc["sid"] | 0xFF;
       data.UpdateNode(rxPacket.sender, uptime, bat, rst, 0.0f, 0.0f, lastRssi,
-                      hops);
-      LOG_PRINTF("TEL: %s (hops=%d)\n", sender.c_str(), hops);
+                      hops, sid);
+      LOG_PRINTF("TEL: %s (hops=%d, sid=0x%02X)\n", sender.c_str(), hops, sid);
 
       if (data.streamToSerial) {
         Serial.printf("DATA,%s,%.2f,%d,%d\n", sender.c_str(), bat, lastRssi,
@@ -235,9 +384,23 @@ void LoRaManager::ProcessPacket(uint8_t *rxEncBuf, int size) {
       MQTTManager::getInstance().publishTelemetry(sender, bat, lastRssi, hops);
 
       lastMsgReceived = "TEL [" + sender + "]";
-      radio->startReceive();
+      _enterRx();
       return;
     }
+  }
+
+  // Intercept Binary ACK
+  // New Packet structure: [TOKEN] [TARGET] [SENDER] [CMD] [VAL] [CHECKSUM]
+  if (rxPlainBuf[0] == BINARY_TOKEN &&
+      (BinaryCmd)rxPlainBuf[3] == BinaryCmd::BC_ACK) {
+    uint8_t senderSid = rxPlainBuf[2];
+    uint8_t ackToken = rxPlainBuf[4];
+    String ackSender = DataManager::getInstance().getNameByShortId(senderSid);
+    LOG_PRINTF("BIN: ACK token 0x%02X from %s (SID:0x%02X)\n", ackToken,
+               ackSender.c_str(), senderSid);
+    clearPendingAck(ackSender, true, ackToken);
+    _enterRx();
+    return;
   }
 
   // Telemetry or Binary Check
@@ -283,10 +446,10 @@ void LoRaManager::ProcessPacket(uint8_t *rxEncBuf, int size) {
 
   // Clear Pending ACK if this is an ACK response
   if (text.startsWith("ACK: ")) {
-    clearPendingAck(sender);
+    clearPendingAck(sender, false);
   }
 
-  // Repeater Logic
+  // Repeater Logic — deferred TASK_ONCE (Phase 2: no blocking delay)
   if (data.repeaterEnabled && !text.startsWith("ACK:")) {
     String target = "";
     int space = text.indexOf(' ');
@@ -300,15 +463,17 @@ void LoRaManager::ProcessPacket(uint8_t *rxEncBuf, int size) {
 
     if (!isForMeTarget || isForAll) {
       if (rxPacket.ttl > 0) {
-        int jitter = random(150, 500);
-        LOG_PRINTF("RPTR: Propagation delay %d ms...\n", jitter);
-        delay(jitter);
+        int jitter = random(REPEATER_JITTER_MIN_MS, REPEATER_JITTER_MAX_MS);
         rxPacket.ttl--;
         rxPacket.checksum = calculateChecksum(&rxPacket);
         uint8_t fwdEncBuf[ENCRYPTED_PACKET_SIZE];
         encryptPacket(&rxPacket, fwdEncBuf, currentKey);
-        radio->transmit(fwdEncBuf, ENCRYPTED_PACKET_SIZE);
-        data.LogMessage("RPTR", radio->getRSSI(), "Propagation: " + text);
+        // Defer the actual TX by jitter ms — zero blocking in this path
+        ScheduleManager::getInstance().deferRepeaterSend(fwdEncBuf,
+                                                         ENCRYPTED_PACKET_SIZE,
+                                                         jitter);
+        data.LogMessage("RPTR", radio->getRSSI(), "Queued propagation: " + text);
+        LOG_PRINTF("RPTR: Queued deferred TX (jitter=%d ms)\n", jitter);
       } else {
         LOG_PRINTLN("RPTR: Packet dropped (TTL=0)");
       }
@@ -316,7 +481,16 @@ void LoRaManager::ProcessPacket(uint8_t *rxEncBuf, int size) {
   }
 
   DisplayManager::getInstance().DrawUi();
-  radio->startReceive();
+  _enterRx();
+}
+
+void LoRaManager::SendRawLoRa(const uint8_t *buf, size_t len) {
+  if (!loraActive)
+    return;
+  _startAsyncTx(buf, len);
+  unsigned long toa = radio->getTimeOnAir(len) / 1000;
+  PerformanceManager::getInstance().addTimeOnAir(toa);
+  LOG_PRINTF("LORA: Raw-TX (%u bytes, %lums ToA)\n", (unsigned int)len, toa);
 }
 
 void LoRaManager::DumpDiagnostics() {
@@ -345,24 +519,24 @@ void LoRaManager::SendHeartbeat() {
 
   PerformanceManager &perf = PerformanceManager::getInstance();
 
-  float batVal = analogRead(PIN_BAT_ADC) / 4095.0 * 3.3 * 2.0;
+  float batVal = (analogRead(PIN_BAT_ADC) / 4095.0f) * 3.3f * BAT_VOLT_MULTI;
   String rstReason = String(perf.getResetReason());
 
   // Dirty-flag suppression: skip TX if state hasn't changed meaningfully
   bool batChanged = fabs(batVal - _lastHBBat) > 0.05f;
   bool rstChanged = (rstReason != _lastHBRst);
-  bool forceTX    = (_hbSkipCount >= HB_FORCE_INTERVAL);
+  bool forceTX = (_hbSkipCount >= HB_FORCE_INTERVAL);
 
   if (!batChanged && !rstChanged && !forceTX) {
     _hbSkipCount++;
-    LOG_PRINTF("LORA: HB suppressed (skip %d/%d, bat=%.2f)\n",
-               _hbSkipCount, HB_FORCE_INTERVAL, batVal);
+    LOG_PRINTF("LORA: HB suppressed (skip %d/%d, bat=%.2f)\n", _hbSkipCount,
+               HB_FORCE_INTERVAL, batVal);
     return;
   }
 
   // State changed or forced — update references and transmit
-  _lastHBBat   = batVal;
-  _lastHBRst   = rstReason;
+  _lastHBBat = batVal;
+  _lastHBRst = rstReason;
   _hbSkipCount = 0;
 
   doc["b"] = round(batVal * 100.0) / 100.0;
@@ -383,14 +557,8 @@ void LoRaManager::SendHeartbeat() {
   txPacket.checksum = calculateChecksum(&txPacket);
   encryptPacket(&txPacket, encBuf, currentKey);
 
-  int txState = radio->transmit(encBuf, ENCRYPTED_PACKET_SIZE);
-  LOG_PRINTF("LORA: TX result=%d, size=%d\n", txState, ENCRYPTED_PACKET_SIZE);
-  receivedFlag = false;
-  radio->setPacketReceivedAction(setFlag);
-  int rxState = radio->startReceive();
-  LOG_PRINTF("LORA: RX re-armed, state=%d\n", rxState);
-
-  LOG_PRINTLN("LORA: Heartbeat Sent -> " + json);
+  _startAsyncTx(encBuf, ENCRYPTED_PACKET_SIZE);
+  LOG_PRINTLN("LORA: Heartbeat TX queued -> " + json);
 }
 void LoRaManager::QueueReliableCommand(const String &targetId,
                                        const String &commandText) {
@@ -398,6 +566,8 @@ void LoRaManager::QueueReliableCommand(const String &targetId,
     if (!ackQueue[i].active) {
       ackQueue[i].targetId = targetId;
       ackQueue[i].commandText = commandText;
+      ackQueue[i].isBinary = false;
+      ackQueue[i].useFailover = false;
       ackQueue[i].retryCount = 0;
       ackQueue[i].lastAttemptMs = millis();
       ackQueue[i].active = true;
@@ -409,12 +579,64 @@ void LoRaManager::QueueReliableCommand(const String &targetId,
   LOG_PRINTLN("ERR: ACK Queue is full!");
 }
 
-void LoRaManager::clearPendingAck(const String &targetId) {
+void LoRaManager::QueueReliableBinaryCommand(const String &targetId,
+                                             uint8_t cmd, uint8_t val) {
+  uint8_t targetSid = DataManager::getInstance().getShortIdByName(targetId);
+
+  for (int i = 0; i < MAX_PENDING_ACKS; i++) {
+    if (!ackQueue[i].active) {
+      ackQueue[i].targetId = targetId;
+      ackQueue[i].targetSid = targetSid;
+      ackQueue[i].cmd = cmd;
+      ackQueue[i].val = val;
+      ackQueue[i].isBinary = true;
+      ackQueue[i].useFailover = false;
+      ackQueue[i].retryCount = 0;
+      ackQueue[i].lastAttemptMs = millis();
+      ackQueue[i].active = true;
+      LOG_PRINTF("LORA: Queued reliable BINARY -> %s (0x%02X) [SID:0x%02X]\n",
+                 targetId.c_str(), cmd, targetSid);
+      SendLoRaBinary(targetSid, cmd, val);
+      return;
+    }
+  }
+}
+
+void LoRaManager::QueueFailoverPing(const String &targetId) {
+  uint8_t targetSid = DataManager::getInstance().getShortIdByName(targetId);
+
+  for (int i = 0; i < MAX_PENDING_ACKS; i++) {
+    if (!ackQueue[i].active) {
+      ackQueue[i].targetId = targetId;
+      ackQueue[i].targetSid = targetSid;
+      ackQueue[i].cmd = (uint8_t)BinaryCmd::BC_PING;
+      ackQueue[i].val = 0;
+      ackQueue[i].isBinary = true;
+      ackQueue[i].useFailover = true;
+      ackQueue[i].retryCount = 0;
+      ackQueue[i].lastAttemptMs = millis();
+      ackQueue[i].active = true;
+      LOG_PRINTF("LORA: Queued FAILOVER PING -> %s [SID:0x%02X]\n",
+                 targetId.c_str(), targetSid);
+      SendLoRaBinary(targetSid, (uint8_t)BinaryCmd::BC_PING, 0);
+      return;
+    }
+  }
+  LOG_PRINTLN("ERR: ACK Queue full (FPING)");
+}
+
+void LoRaManager::clearPendingAck(const String &targetId, bool isBinary,
+                                  uint8_t cmd) {
   for (int i = 0; i < MAX_PENDING_ACKS; i++) {
     if (ackQueue[i].active && ackQueue[i].targetId.equalsIgnoreCase(targetId)) {
-      ackQueue[i].active = false;
-      LOG_PRINTLN("LORA: RX ACK Verified from " + targetId);
-      return;
+      if (isBinary == ackQueue[i].isBinary) {
+        if (!isBinary || (isBinary && cmd == ackQueue[i].cmd)) {
+          ackQueue[i].active = false;
+          LOG_PRINTF("LORA: %s ACK Verified from %s\n",
+                     isBinary ? "BINARY" : "TEXT", targetId.c_str());
+          return;
+        }
+      }
     }
   }
 }
@@ -424,21 +646,47 @@ void LoRaManager::periodicTick() {
     return;
 
   unsigned long now = millis();
+
+  // Beacon Mode: Fire an RTEST pulse every 60 seconds
+  if (beaconActive && (now - lastBeaconMs > 60000 || lastBeaconMs == 0)) {
+    lastBeaconMs = now;
+    LOG_PRINTLN("LORA: Firing Beacon Pulse (Boosted + Legacy)...");
+    SendLoRa("BEACON_TEST");
+    // Deferred legacy send — avoids delay() between the two transmits (Phase 3)
+    ScheduleManager::getInstance().deferLegacyBeacon("BEACON_TEST");
+  }
+
   for (int i = 0; i < MAX_PENDING_ACKS; i++) {
     if (ackQueue[i].active) {
       if (now - ackQueue[i].lastAttemptMs > 3000) {
         ackQueue[i].retryCount++;
         if (ackQueue[i].retryCount > 3) {
-          ackQueue[i].active = false;
-          LOG_PRINTLN("LORA: Delivery Failed (Max retries) -> " +
-                      ackQueue[i].targetId);
-          DataManager::getInstance().LogMessage(
-              "SYS", 0, "Delivery failed -> " + ackQueue[i].targetId);
+          if (ackQueue[i].useFailover && ackQueue[i].isBinary) {
+            // Protocol Failover Algorithm: Binary failed -> Try Legacy Text
+            ackQueue[i].isBinary = false;
+            ackQueue[i].commandText = "PING";
+            ackQueue[i].retryCount = 0;
+            ackQueue[i].lastAttemptMs = now;
+            LOG_PRINTLN("LORA: Protocol Failover -> Trying Legacy PING for " +
+                        ackQueue[i].targetId);
+            SendLoRa(ackQueue[i].targetId + " PING");
+          } else {
+            ackQueue[i].active = false;
+            LOG_PRINTLN("LORA: Delivery Failed (Max retries) -> " +
+                        ackQueue[i].targetId);
+            DataManager::getInstance().LogMessage(
+                "SYS", 0, "Delivery failed -> " + ackQueue[i].targetId);
+          }
         } else {
           ackQueue[i].lastAttemptMs = now;
           LOG_PRINTF("LORA: Resending reliable command (Try %d/3)...\n",
                      ackQueue[i].retryCount);
-          SendLoRa(ackQueue[i].targetId + " " + ackQueue[i].commandText);
+          if (ackQueue[i].isBinary) {
+            SendLoRaBinary(ackQueue[i].targetSid, ackQueue[i].cmd,
+                           ackQueue[i].val);
+          } else {
+            SendLoRa(ackQueue[i].targetId + " " + ackQueue[i].commandText);
+          }
         }
       }
     }

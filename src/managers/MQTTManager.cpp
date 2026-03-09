@@ -9,8 +9,12 @@ MQTTManager::MQTTManager() : client(wifiClient) { lastReconnectAttempt = 0; }
 void mqttCallback(char *topic, byte *payload, unsigned int length) {
   String topicStr = String(topic);
   String msg;
-  for (unsigned int i = 0; i < length; i++) {
+  unsigned int limit = (length > 256) ? 256 : length;
+  for (unsigned int i = 0; i < limit; i++) {
     msg += (char)payload[i];
+  }
+  if (length > 256) {
+    LOG_PRINTF("MQTT_RX: Truncated message (len=%u)\n", length);
   }
   LOG_PRINTLN("MQTT_RX: [" + topicStr + "] " + msg);
 

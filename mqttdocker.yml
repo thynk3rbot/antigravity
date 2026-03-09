@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  emqx:
+    image: emqx:latest
+    container_name: loralink_emqx
+    ports:
+      - "1883:1883"     # MQTT TCP port
+      - "8083:8083"     # MQTT WebSockets support (used by webapp/Swarm UI)
+      - "18083:18083"   # EMQX Dashboard
+    environment:
+      - "EMQX_ALLOW_ANONYMOUS=true"
+      - "EMQX_LOG__LEVEL=warning"
+    volumes:
+      - vol-emqx-data:/opt/emqx/data
+      - vol-emqx-etc:/opt/emqx/etc
+      - vol-emqx-log:/opt/emqx/log
+    restart: always
+
+  ngrok:
+    image: ngrok/ngrok:latest
+    container_name: loralink_ngrok
+    restart: always
+    depends_on:
+      - emqx
+    environment:
+      - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN:-you_must_set_a_token_in_env_file}
+    command:
+      - "tcp"
+      - "emqx:1883"
+
+volumes:
+  vol-emqx-data:
+    name: loralink-emqx-data
+  vol-emqx-etc:
+    name: loralink-emqx-etc
+  vol-emqx-log:
+    name: loralink-emqx-log

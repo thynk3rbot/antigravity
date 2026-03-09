@@ -60,6 +60,7 @@ Navigate to the device IP in any browser:
 | `GPIO <pin> <0/1>` | Set GPIO pin |
 | `READ <pin>` | Read GPIO pin |
 | `RADIO` | Dump LoRa diagnostics |
+| `FPING <target>` | Protocol Failover Ping (Binary -> Text) |
 | `SETSCHED <ms>` | Set 110V toggle interval |
 | `GETSCHED` | Get dynamic schedule JSON |
 | `WIPECONFIG` | Factory reset all settings |

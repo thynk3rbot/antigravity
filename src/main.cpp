@@ -65,17 +65,23 @@ void setup() {
     ESP.restart();
   }
 
-  // 3. Power rail initialization (critical for Heltec V3 OLED)
+  // 3. Power rail initialization (critical for Heltec V3 peripherals)
   pinMode(PIN_VEXT_CTRL, OUTPUT);
-  digitalWrite(PIN_VEXT_CTRL, LOW); // Power ON display rail
+  digitalWrite(PIN_VEXT_CTRL, LOW); // Power ON display/LoRa rail
+  pinMode(PIN_BAT_CTRL, OUTPUT);
+  digitalWrite(PIN_BAT_CTRL, LOW); // Power ON battery divider
   delay(100);
 
-  // 4. CPU clock optimization (prevent brownouts)
-  setCpuFrequencyMhz(80);
+  // 4. CPU clock optimization - Temporarily DISABLED to rule out clock
+  // instability setCpuFrequencyMhz(80);
   Serial.printf("SYS: CPU Clock = %dMHz\n", getCpuFrequencyMhz());
 
   // 5. Heltec init (display only, LoRa handled by LoRaManager)
   Heltec.begin(true, false, true, false, 0);
+  if (Heltec.display) {
+    Heltec.display->setContrast(255);
+    Heltec.display->setBrightness(255);
+  }
 
   // 6. Data Manager
   Serial.println("BOOT: DataManager...");

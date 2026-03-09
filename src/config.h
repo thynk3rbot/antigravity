@@ -7,7 +7,7 @@
 // ============================================================================
 //   FIRMWARE & FEATURE FLAGS
 // ============================================================================
-#define FIRMWARE_VERSION "v1.5.0"
+#define FIRMWARE_VERSION "v1.6.0"
 #define FIRMWARE_NAME "LoRaLink Any2Any"
 #define HARDWARE_ID "Heltec ESP32 LoRa V3"
 #define CONFIG_SCHEMA "1.0"
@@ -44,6 +44,8 @@
 #define PIN_OLED_SDA 17
 #define PIN_OLED_SCL 18
 #define PIN_OLED_RST 21
+#define PIN_BAT_CTRL 37       // Battery Divider Control (LOW = ON)
+#define BAT_VOLT_MULTI 3.564f // Heltec V3: (1M + 390k) / 390k = 3.5641
 
 // GPS Placeholder Pins
 #define PIN_GPS_RX 47
@@ -142,8 +144,20 @@ enum class BinaryCmd : uint8_t {
   BC_REBOOT = 0x05,
   BC_PING = 0x06,
   BC_STATUS = 0x07,
-  BC_CONFIG_SEG = 0x08 // [SegIndex] [TotalSegs] [Data...]
+  BC_ACK = 0x08,       // ACK for binary command [AckToken]
+  BC_CONFIG_SEG = 0x09 // [SegIndex] [TotalSegs] [Data...]
 };
+
+// ============================================================================
+//   NON-BLOCKING TIMING CONSTANTS
+// ============================================================================
+#define LORA_TX_TIMEOUT_MS 5000          // TX watchdog — force RX if stuck
+#define REPEATER_JITTER_MIN_MS 150       // Repeater propagation jitter floor
+#define REPEATER_JITTER_MAX_MS 500       // Repeater propagation jitter ceiling
+#define BEACON_LEGACY_DELAY_MS 500       // Gap between encrypted & legacy beacon
+#define SLEEP_PC_GUARD_MS 3000           // Sleep PC-attached guard window
+#define SLEEP_COUNTDOWN_STEP_MS 1200     // Sleep countdown step interval
+#define ESPNOW_TX_QUEUE_SIZE 12          // ESP-NOW async send queue depth
 
 #define MAX_TTL 3
 
@@ -161,6 +175,7 @@ struct RemoteNode {
   uint8_t hops; // 0 = direct neighbor, 1+ = relayed
   float lat;
   float lon;
+  uint8_t shortId; // Last byte of MAC for binary routing
 };
 
 // ESP-NOW Peer Info
@@ -174,5 +189,16 @@ struct ESPNowPeer {
 #define MAX_PERIPHERALS 8
 #define LOG_SIZE 20
 #define HASH_BUFFER_SIZE 20
+
+// ============================================================================
+//   POWER-MISER (SMART AG) CONFIGURATION
+// ============================================================================
+#define POWER_MISER_VOLT_NORMAL 3.80f
+#define POWER_MISER_VOLT_CONSERVE 3.65f
+#define POWER_MISER_VOLT_CRITICAL 3.45f
+
+#define POWER_MISER_HB_NORMAL 300UL    // 5 min
+#define POWER_MISER_HB_CONSERVE 900UL  // 15 min
+#define POWER_MISER_HB_CRITICAL 3600UL // 60 min
 
 #endif // CONFIG_H

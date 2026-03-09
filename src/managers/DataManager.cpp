@@ -23,13 +23,13 @@ DataManager::DataManager() {
   transportMode = 'J';
   traceLogging = false;
   numPeripherals = 0;
-  preferredLink    = LinkPreference::LINK_AUTO;
-  currentLink      = LinkPreference::LINK_AUTO;
+  preferredLink = LinkPreference::LINK_AUTO;
+  currentLink = LinkPreference::LINK_AUTO;
   transNegotiateMs = TRANSPORT_NEGOTIATE_MS;
-  probeBackoffMs   = PROBE_BACKOFF_MIN_MS;
-  probeFailCount   = 0;
-  lastProbeResult  = "";
-  lastProbeAtMs    = 0;
+  probeBackoffMs = PROBE_BACKOFF_MIN_MS;
+  probeFailCount = 0;
+  lastProbeResult = "";
+  lastProbeAtMs = 0;
 }
 
 String DataManager::getHardwareSuffix() {
@@ -44,6 +44,11 @@ String DataManager::getMacSuffix() {
   char buf[12];
   sprintf(buf, "%06X", (uint32_t)((mac >> 24) & 0xFFFFFF));
   return String(buf);
+}
+
+uint8_t DataManager::getMyShortId() {
+  uint64_t mac = ESP.getEfuseMac();
+  return (uint8_t)(mac & 0xFF);
 }
 
 void DataManager::Init() {
@@ -126,21 +131,33 @@ void DataManager::LoadSettings() {
 
   LOG_PRINTLN("INIT: Loading WiFi...");
   wifiSsid = p.getString("wifi_ssid", "");
+  if (wifiSsid.length() > 64)
+    wifiSsid = wifiSsid.substring(0, 64);
   wifiPass = p.getString("wifi_pass", "");
+  if (wifiPass.length() > 64)
+    wifiPass = wifiPass.substring(0, 64);
 
   LOG_PRINTLN("INIT: Loading IP...");
   staticIp = p.getString("static_ip", "");
+  if (staticIp.length() > 64)
+    staticIp = staticIp.substring(0, 64);
   gateway = p.getString("gateway", "");
+  if (gateway.length() > 64)
+    gateway = gateway.substring(0, 64);
   subnet = p.getString("subnet", "");
+  if (subnet.length() > 64)
+    subnet = subnet.substring(0, 64);
 
   LOG_PRINTLN("INIT: Loading Crypto Key...");
   cryptoKey = p.getString("crypto_key", "");
+  if (cryptoKey.length() > 64)
+    cryptoKey = cryptoKey.substring(0, 64);
 
   LOG_PRINTLN("INIT: Loading Sched...");
   schedulerInterval110V = p.getULong("sched_int_110", 5000);
 
-  LOG_PRINTLN("INIT: Loading ESP-NOW...");
-  espNowEnabled = p.getBool("espnow_en", false);
+  LOG_PRINTF("INIT: Loading ESP-NOW (Default: %s)...\n", "ENABLED");
+  espNowEnabled = p.getBool("espnow_en", true);
   espNowChannel = p.getUChar("espnow_ch", ESPNOW_CHANNEL);
 
   LOG_PRINTLN("INIT: Loading Radio Profiles...");
@@ -150,17 +167,24 @@ void DataManager::LoadSettings() {
   LOG_PRINTLN("INIT: Loading Integrations...");
   mqttEnabled = p.getBool("mqtt_en", false);
   mqttServer = p.getString("mqtt_srv", "");
+  if (mqttServer.length() > 128)
+    mqttServer = mqttServer.substring(0, 128);
   mqttPort = p.getInt("mqtt_prt", 1883);
   mqttUser = p.getString("mqtt_usr", "");
+  if (mqttUser.length() > 64)
+    mqttUser = mqttUser.substring(0, 64);
   mqttPass = p.getString("mqtt_pwd", "");
+  if (mqttPass.length() > 64)
+    mqttPass = mqttPass.substring(0, 64);
   transportMode = p.getString("tp_mode", "J").charAt(0);
 
   // Transport link preference
-  preferredLink    = (LinkPreference)p.getUChar("link_pref", (uint8_t)LinkPreference::LINK_AUTO);
-  currentLink      = preferredLink;  // negotiate() will adjust at boot
+  preferredLink = (LinkPreference)p.getUChar(
+      "link_pref", (uint8_t)LinkPreference::LINK_AUTO);
+  currentLink = preferredLink; // negotiate() will adjust at boot
   transNegotiateMs = p.getULong("trans_neg_ms", TRANSPORT_NEGOTIATE_MS);
-  probeBackoffMs   = p.getULong("probe_bkoff",  PROBE_BACKOFF_MIN_MS);
-  probeFailCount   = p.getUChar("probe_fails",  0);
+  probeBackoffMs = p.getULong("probe_bkoff", PROBE_BACKOFF_MIN_MS);
+  probeFailCount = p.getUChar("probe_fails", 0);
 
   p.end();
 
@@ -296,6 +320,17 @@ void DataManager::RemoveESPNowPeer(int index) {
   espNowPeers[index].active = false;
   memset(espNowPeers[index].mac, 0, 6);
   espNowPeers[index].name[0] = '\0';
+
+  Preferences p;
+  p.begin("espnow", false);
+  String key_mac = "peer_mac_" + String(index);
+  String key_name = "peer_name_" + String(index);
+  uint8_t zeroMac[6] = {0};
+  p.putBytes(key_mac.c_str(), zeroMac, 6);
+  p.putString(key_name.c_str(), "");
+  // Note: We don't decrement peer_count to avoid index-shifting complexities,
+  // but active=false handles it.
+  p.end();
 }
 
 void DataManager::LoadESPNowPeers() {
@@ -320,7 +355,7 @@ void DataManager::LoadESPNowPeers() {
 
 void DataManager::UpdateNode(const char *id, uint32_t uptime, float battery,
                              uint8_t resetCode, float lat, float lon, int rssi,
-                             uint8_t hops) {
+                             uint8_t hops, uint8_t shortId) {
   if (strcmp(id, myId.c_str()) == 0)
     return;
   for (int i = 0; i < numNodes; i++) {
@@ -333,6 +368,8 @@ void DataManager::UpdateNode(const char *id, uint32_t uptime, float battery,
       remoteNodes[i].hops = hops;
       remoteNodes[i].lat = lat;
       remoteNodes[i].lon = lon;
+      if (shortId != 0xFF)
+        remoteNodes[i].shortId = shortId;
       return;
     }
   }
@@ -347,11 +384,13 @@ void DataManager::UpdateNode(const char *id, uint32_t uptime, float battery,
     remoteNodes[numNodes].hops = hops;
     remoteNodes[numNodes].lat = lat;
     remoteNodes[numNodes].lon = lon;
+    remoteNodes[numNodes].shortId = shortId;
     numNodes++;
   }
 }
 
-void DataManager::SawNode(const char *id, int rssi, uint8_t hops) {
+void DataManager::SawNode(const char *id, int rssi, uint8_t hops,
+                          uint8_t shortId) {
   if (strcmp(id, myId.c_str()) == 0)
     return;
   for (int i = 0; i < numNodes; i++) {
@@ -359,6 +398,8 @@ void DataManager::SawNode(const char *id, int rssi, uint8_t hops) {
       remoteNodes[i].lastSeen = millis();
       remoteNodes[i].rssi = rssi;
       remoteNodes[i].hops = hops;
+      if (shortId != 0xFF)
+        remoteNodes[i].shortId = shortId;
       return;
     }
   }
@@ -373,8 +414,33 @@ void DataManager::SawNode(const char *id, int rssi, uint8_t hops) {
     remoteNodes[numNodes].hops = hops;
     remoteNodes[numNodes].lat = 0.0f;
     remoteNodes[numNodes].lon = 0.0f;
+    remoteNodes[numNodes].shortId = shortId;
     numNodes++;
   }
+}
+
+uint8_t DataManager::getShortIdByName(const String &name) {
+  if (name.equalsIgnoreCase("ALL"))
+    return 0xFF;
+  if (name.equalsIgnoreCase(myId))
+    return getMyShortId();
+  for (int i = 0; i < numNodes; i++) {
+    if (name.equalsIgnoreCase(remoteNodes[i].id))
+      return remoteNodes[i].shortId;
+  }
+  return 0xFF;
+}
+
+String DataManager::getNameByShortId(uint8_t shortId) {
+  if (shortId == 0xFF)
+    return "ALL";
+  if (shortId == getMyShortId())
+    return myId;
+  for (int i = 0; i < numNodes; i++) {
+    if (remoteNodes[i].shortId == shortId)
+      return String(remoteNodes[i].id);
+  }
+  return "UNKNOWN_0x" + String(shortId, HEX);
 }
 
 void DataManager::PruneStaleNodes() {
@@ -395,9 +461,13 @@ void DataManager::PruneStaleNodes() {
 void DataManager::LogMessage(const String &source, int rssi,
                              const String &msg) {
   msgLog[logIndex].timestamp = millis() / 1000;
-  msgLog[logIndex].source = source;
-  msgLog[logIndex].rssi = rssi;
-  msgLog[logIndex].message = msg;
+  strncpy(msgLog[logIndex].source, source.c_str(), 15);
+  msgLog[logIndex].source[15] = '\0';
+  msgLog[logIndex].rssi = (int16_t)rssi;
+
+  strncpy(msgLog[logIndex].message, msg.c_str(), 63);
+  msgLog[logIndex].message[63] = '\0';
+
   logIndex = (logIndex + 1) % LOG_SIZE;
 
   if (traceLogging) {
@@ -653,10 +723,13 @@ void DataManager::RegisterPeripheral(const String &id, const String &hwType,
                                      const String &fw, const String &caps) {
   // Check if already exists
   for (int i = 0; i < numPeripherals; i++) {
-    if (peripherals[i].id == id) {
-      peripherals[i].hwType = hwType;
-      peripherals[i].fwVersion = fw;
-      peripherals[i].caps = caps;
+    if (strcmp(peripherals[i].id, id.c_str()) == 0) {
+      strncpy(peripherals[i].hwType, hwType.c_str(), 15);
+      peripherals[i].hwType[15] = '\0';
+      strncpy(peripherals[i].fwVersion, fw.c_str(), 11);
+      peripherals[i].fwVersion[11] = '\0';
+      strncpy(peripherals[i].caps, caps.c_str(), 31);
+      peripherals[i].caps[31] = '\0';
       peripherals[i].lastSeen = millis();
       return;
     }
@@ -664,11 +737,15 @@ void DataManager::RegisterPeripheral(const String &id, const String &hwType,
 
   // Add new
   if (numPeripherals < MAX_PERIPHERALS) {
-    peripherals[numPeripherals].id = id;
-    peripherals[numPeripherals].hwType = hwType;
-    peripherals[numPeripherals].fwVersion = fw;
-    peripherals[numPeripherals].caps = caps;
-    peripherals[numPeripherals].lastReadings = "{}";
+    strncpy(peripherals[numPeripherals].id, id.c_str(), 15);
+    peripherals[numPeripherals].id[15] = '\0';
+    strncpy(peripherals[numPeripherals].hwType, hwType.c_str(), 15);
+    peripherals[numPeripherals].hwType[15] = '\0';
+    strncpy(peripherals[numPeripherals].fwVersion, fw.c_str(), 11);
+    peripherals[numPeripherals].fwVersion[11] = '\0';
+    strncpy(peripherals[numPeripherals].caps, caps.c_str(), 31);
+    peripherals[numPeripherals].caps[31] = '\0';
+    strcpy(peripherals[numPeripherals].lastReadings, "{}");
     peripherals[numPeripherals].lastSeen = millis();
     numPeripherals++;
     LOG_PRINTF("REG: Peripheral registered: %s (%s)\n", id.c_str(),
@@ -679,8 +756,9 @@ void DataManager::RegisterPeripheral(const String &id, const String &hwType,
 void DataManager::UpdateSensorTelemetry(const String &id,
                                         const String &jsonReadings) {
   for (int i = 0; i < numPeripherals; i++) {
-    if (peripherals[i].id == id) {
-      peripherals[i].lastReadings = jsonReadings;
+    if (strcmp(peripherals[i].id, id.c_str()) == 0) {
+      strncpy(peripherals[i].lastReadings, jsonReadings.c_str(), 63);
+      peripherals[i].lastReadings[63] = '\0';
       peripherals[i].lastSeen = millis();
       return;
     }
@@ -692,11 +770,11 @@ String DataManager::GetPeripheralsJson() {
   JsonArray array = doc.to<JsonArray>();
   for (int i = 0; i < numPeripherals; i++) {
     JsonObject obj = array.add<JsonObject>();
-    obj["id"] = peripherals[i].id;
-    obj["hw"] = peripherals[i].hwType;
-    obj["fw"] = peripherals[i].fwVersion;
-    obj["caps"] = peripherals[i].caps;
-    obj["data"] = serialized(peripherals[i].lastReadings);
+    obj["id"] = String(peripherals[i].id);
+    obj["hw"] = String(peripherals[i].hwType);
+    obj["fw"] = String(peripherals[i].fwVersion);
+    obj["caps"] = String(peripherals[i].caps);
+    obj["data"] = serialized(String(peripherals[i].lastReadings));
     obj["lastSeen"] = (millis() - peripherals[i].lastSeen) / 1000;
   }
   String out;
@@ -704,22 +782,29 @@ String DataManager::GetPeripheralsJson() {
   return out;
 }
 
-// ── Transport Link Helpers ────────────────────────────────────────────────────
+// ── Transport Link Helpers
+// ────────────────────────────────────────────────────
 
 const char *DataManager::linkName(LinkPreference lp) {
   switch (lp) {
-    case LinkPreference::LINK_AUTO:      return "AUTO";
-    case LinkPreference::LINK_BLE:       return "BLE";
-    case LinkPreference::LINK_WIFI_MQTT: return "WIFI_MQTT";
-    case LinkPreference::LINK_WIFI_HTTP: return "WIFI_HTTP";
-    case LinkPreference::LINK_LORA:      return "LORA";
-    default:                             return "UNKNOWN";
+  case LinkPreference::LINK_AUTO:
+    return "AUTO";
+  case LinkPreference::LINK_BLE:
+    return "BLE";
+  case LinkPreference::LINK_WIFI_MQTT:
+    return "WIFI_MQTT";
+  case LinkPreference::LINK_WIFI_HTTP:
+    return "WIFI_HTTP";
+  case LinkPreference::LINK_LORA:
+    return "LORA";
+  default:
+    return "UNKNOWN";
   }
 }
 
 void DataManager::SetPreferredLink(LinkPreference pref) {
   preferredLink = pref;
-  currentLink   = pref;
+  currentLink = pref;
   Preferences p;
   p.begin("loralink", false);
   p.putUChar("link_pref", (uint8_t)pref);
@@ -740,5 +825,5 @@ void DataManager::SetProbeState(uint32_t backoffMs, uint8_t failCount) {
 void DataManager::ResetProbeState() {
   SetProbeState(PROBE_BACKOFF_MIN_MS, 0);
   lastProbeResult = "";
-  lastProbeAtMs   = 0;
+  lastProbeAtMs = 0;
 }

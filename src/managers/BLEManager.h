@@ -16,6 +16,7 @@ public:
   }
 
   void init();
+  void boostAdvertising(bool active);
   void notify(const String &text);
   bool poll(String &cmdOut);
   void enqueue(const String &cmd);

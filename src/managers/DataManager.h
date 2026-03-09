@@ -9,17 +9,17 @@
 
 struct LogEntry {
   uint32_t timestamp;
-  String source;
-  int rssi;
-  String message;
+  char source[16];
+  int16_t rssi;
+  char message[64];
 };
 
 struct PeripheralInfo {
-  String id;
-  String hwType;
-  String fwVersion;
-  String caps;
-  String lastReadings; // JSON string
+  char id[16];
+  char hwType[16];
+  char fwVersion[12];
+  char caps[32];
+  char lastReadings[64]; // JSON string snippet
   uint32_t lastSeen;
 };
 
@@ -58,17 +58,18 @@ public:
   bool traceLogging;
   char transportMode; // 'J'=JSON, 'C'=CSV, 'K'=KV, 'B'=BIN (message format)
 
-  // ── Transport Link State ────────────────────────────────────────────────────
-  // preferredLink: factory/user setting — persisted in NVS (key: "link_pref")
-  // currentLink:   runtime state — set by negotiate(), updated on up/downgrade
+  // ── Transport Link State
+  // ──────────────────────────────────────────────────── preferredLink:
+  // factory/user setting — persisted in NVS (key: "link_pref") currentLink:
+  // runtime state — set by negotiate(), updated on up/downgrade
   LinkPreference preferredLink;
   LinkPreference currentLink;
 
   // Negotiation + probe timing (NVS-persisted so downgrade survives reboot)
-  uint32_t transNegotiateMs;  // NVS: "trans_neg_ms" — boot window duration
-  uint32_t probeBackoffMs;    // NVS: "probe_bkoff"  — current backoff interval
-  uint8_t  probeFailCount;    // NVS: "probe_fails"  — consecutive probe failures
-  String   lastProbeResult;   // Runtime only — "OK_MQTT","OK_HTTP","NO_AP",etc.
+  uint32_t transNegotiateMs; // NVS: "trans_neg_ms" — boot window duration
+  uint32_t probeBackoffMs;   // NVS: "probe_bkoff"  — current backoff interval
+  uint8_t probeFailCount;    // NVS: "probe_fails"  — consecutive probe failures
+  String lastProbeResult;    // Runtime only — "OK_MQTT","OK_HTTP","NO_AP",etc.
   unsigned long lastProbeAtMs; // Runtime only — millis() of last probe
 
   void SetPreferredLink(LinkPreference pref);
@@ -141,9 +142,11 @@ public:
   // Node & Log Methods
   void UpdateNode(const char *id, uint32_t uptime, float battery,
                   uint8_t resetCode, float lat, float lon, int rssi,
-                  uint8_t hops = 0);
-  void SawNode(const char *id, int rssi, uint8_t hops);
+                  uint8_t hops = 0, uint8_t shortId = 0xFF);
+  void SawNode(const char *id, int rssi, uint8_t hops, uint8_t shortId = 0xFF);
   void PruneStaleNodes();
+  uint8_t getShortIdByName(const String &name);
+  String getNameByShortId(uint8_t shortId);
   void LogMessage(const String &source, int rssi, const String &msg);
   bool ImportConfig(const String &json);
   String ExportConfig();
@@ -157,6 +160,7 @@ public:
   String getHardwareSuffix();
   String getMacSuffix();
   String getResetReason();
+  uint8_t getMyShortId();
 
 private:
   DataManager();

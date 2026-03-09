@@ -24,6 +24,13 @@ public:
   void triggerBlink();
   void triggerRestart(unsigned long delayMs);
 
+  // Non-blocking deferred operations
+  void deferRepeaterSend(const uint8_t *encBuf, size_t encLen,
+                         unsigned long jitterMs);
+  void deferLegacyBeacon(const String &payload);
+  void startSleepSequence(float hours, const String &trigger,
+                          unsigned long initialDelayMs = 0);
+
   // JSON/CSV Dynamic Scheduling
   void loadDynamicSchedules();
   void loadSchedulesFromCsv(const String &csv);
@@ -74,6 +81,9 @@ public:
   // Returns how many dynamic tasks are currently registered
   int getDynamicTaskCount() const { return (int)dynamicConfigs.size(); }
 
+  // Sleep sequence state (checked by batteryMonitorCallback)
+  bool sleepSequenceActive = false;
+
 private:
   bool isStreaming = false;
   volatile bool _btnPressed = false; // Set by buttonISR, cleared in displayTask
@@ -106,6 +116,11 @@ private:
   static void peripheralSerialTask();
   static void batteryMonitorCallback();
 
+  // System Callbacks (deferred operations)
+  static void repeaterDeferCallback();
+  static void beaconLegacyCallback();
+  static void sleepSequenceCallback();
+
   // Tasks
   Task tEnvironmental;
   Task t110V;
@@ -125,6 +140,19 @@ private:
   Task tPeripheralSerial;
   Task tBatteryMonitor;
   int blinkCount;
+
+  // Deferred operation tasks (TASK_ONCE)
+  Task tRepeaterDefer;
+  Task tBeaconLegacy;
+  Task tSleepSequence;
+
+  // Deferred operation state
+  uint8_t _repeaterEncBuf[92]; // ENCRYPTED_PACKET_SIZE — avoid circular include
+  size_t _repeaterEncLen = 0;
+  String _legacyBeaconPayload;
+  float _sleepHours = 0.0f;
+  String _sleepTrigger;
+  uint8_t _sleepStep = 0;
 
   // Dynamic Task Pool — heap-allocated; unbounded (limited only by free heap).
   // Task objects are new'd on addDynamicTask, deleted on remove/clear.

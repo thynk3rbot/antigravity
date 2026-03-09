@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  # The MQTT Broker (EMQX) - Already containerized
+  emqx:
+    image: emqx:latest
+    container_name: loralink_emqx
+    ports:
+      - "1883:1883"     # MQTT TCP
+      - "8083:8083"     # MQTT WebSockets (Swarm UI)
+      - "18083:18083"   # EMQX Dashboard
+    environment:
+      - "EMQX_ALLOW_ANONYMOUS=true"
+    volumes:
+      - loralink-emqx-data:/opt/emqx/data
+    restart: always
+
+  # The Fleet Admin (FastAPI) - Containerized Alternative
+  # WARNING: Direct BLE/Serial host access requires host-mode or extra drivers in Docker
+  webapp:
+    build:
+      context: .
+      dockerfile: ./tools/webapp/Dockerfile
+    container_name: loralink_webapp
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./tools/webapp/configs:/app/configs
+      - ./tools/webapp/logs:/app/logs
+    restart: always
+
+  # The Corporate Website (FastAPI)
+  website:
+    build:
+      context: .
+      dockerfile: ./tools/website/Dockerfile
+    container_name: loralink_website
+    ports:
+      - "8010:8010"
+    restart: always
+
+  # The Documentation Server (HTTP Server)
+  docs:
+    image: python:3.11-slim
+    container_name: loralink_docs
+    working_dir: /docs
+    volumes:
+      - ./docs:/docs
+    command: python -m http.server 8001
+    ports:
+      - "8001:8001"
+    restart: always
+
+volumes:
+  loralink-emqx-data:

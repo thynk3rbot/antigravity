@@ -1227,6 +1227,7 @@
       <a class="nav-link" onclick="showPage('hardware')"><span class="dbg-id">NAV-HARDWARE</span>🛠️ Hardware</a>
       <a class="nav-link" onclick="showPage('config')"><span class="dbg-id">NAV-CONFIG</span>⚙️ Config</a>
       <a class="nav-link" onclick="showPage('analysis')"><span class="dbg-id">NAV-ANALYSIS</span>🧪 Analysis</a>
+      <a class="nav-link" href="/devqa"><span class="dbg-id">NAV-DEVQA</span>🐛 Dev / QA</a>
       <div class="override-btns">
         <button
           class="btn-override danger"
@@ -1319,30 +1320,14 @@
             </div>
           </div>
           <div class="card-footer">
-            <button class="btn btn-sm btn-secondary provision-btn" onclick="">Provision</button>
+            <button class="btn btn-sm btn-secondary provision-btn">Provision</button>
             <span class="text-xs text-dim peripheral-last-seen">Last seen: --</span>
           </div>
         </div>
       </template>
 
       <!-- Provisioning Modal -->
-      <div id="modal-provision" class="modal">
-        <div class="modal-content">
-          <div class="flex-row-sb mb-1rem">
-            <h3 id="provision-title">Provision Satellite</h3>
-            <span class="close cursor-pointer" onclick="closeModal('modal-provision')">×</span>
-          </div>
-          <div class="editor-field mb-1rem">
-            <label>Configuration Command</label>
-            <input id="provision-cmd" class="input-styled" placeholder="e.g. SET_GAIN 25" value="STATUS" />
-            <p class="text-xs text-dim mt-1">Send a setup string directly to the serial device.</p>
-          </div>
-          <div class="flex-row-sb">
-            <button class="btn secondary" onclick="closeModal('modal-provision')">Cancel</button>
-            <button class="btn" id="provision-exec-btn">Execute</button>
-          </div>
-        </div>
-      </div>
+
     </div>
 
     <!-- ── Page: Network (Topology + Node Registry) ────────────────────────── -->
@@ -1451,7 +1436,24 @@
             </div>
           </div>
 
+          <!-- ESP-NOW Mesh Management -->
+          <div class="panel p-0 ov-hidden">
+            <div class="panel-title flex-between">
+              <div class="flex-centered flex-gap-8"><span class="dbg-id">NET-ESP-NOW</span><span>ESP-NOW Peer Mesh</span></div>
+              <div class="flex-gap-6">
+                <button class="btn btn-sm btn-secondary" onclick="loadEspNowPeers()" title="Scan for active ESP-NOW peers">⟳ Refresh</button>
+              </div>
+            </div>
+            <div class="grid-roster-header" style="grid-template-columns: 1fr 140px 60px;">
+              <span>Peer Name</span><span>MAC Address</span><span class="text-center">Action</span>
+            </div>
+            <div id="espnow-peer-list" class="ov-y-auto max-height-200">
+              <div class="list-empty">No peers discovered. Click Refresh to scan.</div>
+            </div>
+          </div>
+
           <!-- Add Node — inline label/input form -->
+
           <div class="panel">
             <div class="panel-title"><div class="flex-centered flex-gap-8"><span class="dbg-id">NET-ADD-FORM</span><span>Add Node</span></div></div>
             <div class="flex-col flex-gap-4 p-6-10">
@@ -2415,6 +2417,11 @@
           </div>
 
           <div class="flex-1 min-w-70 text-center p-4-6">
+            <div class="fs-068 text-dim uppercase tracking-05">ESP-NOW Drop</div>
+            <div id="perf-enow-drop" class="fs-09 text-dim mono">--</div>
+          </div>
+
+          <div class="flex-1 min-w-70 text-center p-4-6">
             <div class="fs-068 text-dim uppercase tracking-05">Peers</div>
             <div id="perf-peers" class="fs-09 text-dim mono">--</div>
           </div>
@@ -2427,6 +2434,26 @@
           <div class="flex-1 min-w-90 text-center p-4-6">
             <div class="fs-068 text-dim uppercase tracking-05">LoRa ToA</div>
             <div id="perf-loratoa" class="fs-09 text-dim mono">--</div>
+          </div>
+
+          <div class="flex-1 min-w-70 text-center p-4-6">
+            <div class="fs-068 text-dim uppercase tracking-05">LoRa TX</div>
+            <div id="perf-lora-tx" class="fs-09 text-dim mono">--</div>
+          </div>
+
+          <div class="flex-1 min-w-70 text-center p-4-6">
+            <div class="fs-068 text-dim uppercase tracking-05">LoRa RX</div>
+            <div id="perf-lora-rx" class="fs-09 text-dim mono">--</div>
+          </div>
+
+          <div class="flex-1 min-w-70 text-center p-4-6">
+            <div class="fs-068 text-dim uppercase tracking-05">LoRa Drop</div>
+            <div id="perf-lora-drop" class="fs-09 text-dim mono">--</div>
+          </div>
+
+          <div class="flex-1 min-w-80 text-center p-4-6">
+            <div class="fs-068 text-dim uppercase tracking-05">Radio</div>
+            <div id="perf-radio-state" class="fs-09 text-dim mono">--</div>
           </div>
 
         </div>
@@ -4482,10 +4509,9 @@
         const div = document.createElement("div");
         div.className = "log-entry";
         div.innerHTML = `<span class="ts">${ts}</span><span class="${cls}">${pfx}</span> ${escHtml(msg)}`;
-        log.appendChild(div);
-        log.scrollTop = log.scrollHeight;
+        log.prepend(div);
         // Keep at most 200 entries
-        while (log.children.length > 200) log.removeChild(log.firstChild);
+        while (log.children.length > 200) log.removeChild(log.lastChild);
       }
 
       // ════════════════════════════════════════════════════════════════════════════
@@ -4625,6 +4651,8 @@
           loadBleDevices();
           buildTopoGraph(lastStatus);
           initMqttSwarm();
+          loadEspNowPeers();
+          refreshSerialPorts();
         }
         if (name === "schedules") {
           refreshScheduleSlots();
@@ -4953,6 +4981,141 @@
           });
         } catch (e) {}
       }
+
+      // ── ESP-NOW Peer Management ──
+      async function loadEspNowPeers() {
+        const el = document.getElementById("espnow-peer-list");
+        if (!el) return;
+        el.innerHTML = '<div class="list-empty">Scanning for peers...</div>';
+        try {
+          const r = await fetch("/api/espnow/peers");
+          const d = await r.json();
+          const peers = d.peers || [];
+
+          if (peers.length === 0) {
+            el.innerHTML = '<div class="list-empty">No active peers found.</div>';
+            return;
+          }
+
+          el.innerHTML = peers.map(p => `
+            <div style="display:grid;grid-template-columns: 1fr 140px 60px;align-items:center;padding:4px 10px;gap:6px;border-bottom:1px solid rgba(255,255,255,0.04);font-size:0.85em;">
+              <div style="font-weight:600;white-space:nowrap;text-overflow:ellipsis;overflow:hidden">${escHtml(p.name)}</div>
+              <div style="font-family:monospace;color:var(--text-dim)">${escHtml(p.mac)}</div>
+              <div class="text-center">
+                <button class="btn btn-sm btn-danger" onclick="removeEspNowPeer('${p.mac}')" style="padding:1px 6px;">✕</button>
+              </div>
+            </div>
+          `).join("");
+        } catch (e) {
+          el.innerHTML = `<div class="list-empty text-err">Error: ${e.message}</div>`;
+        }
+      }
+
+      async function removeEspNowPeer(mac) {
+        if (!confirm(`Remove peer ${mac}?`)) return;
+        try {
+          const r = await fetch("/api/espnow/peers/remove", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ mac })
+          });
+          const d = await r.json();
+          if (d.ok) {
+            logConsole("rx", `ESP-NOW: Peer ${mac} removed`);
+            loadEspNowPeers();
+          }
+        } catch (e) {
+          logConsole("err", `ESP-NOW: Delete failed: ${e.message}`);
+        }
+      }
+
+      // ── Serial Hub / Satellite Provisioning ──
+      async function refreshSerialPorts() {
+        const el = document.getElementById("serial-peripherals-list");
+        const status = document.getElementById("serial-hub-status");
+        if (!el) return;
+
+        status.textContent = "Scanning Hub...";
+        try {
+          const r = await fetch("/api/serial/discover");
+          const d = await r.json();
+          const ports = d.ports || [];
+
+          if (ports.length === 0) {
+            el.innerHTML = '<div class="list-empty">No USB satellites detected.</div>';
+            status.textContent = "Scan complete (0)";
+            return;
+          }
+
+          const template = document.getElementById("serial-card-template");
+          el.innerHTML = "";
+          ports.forEach(p => {
+            const clone = template.content.cloneNode(true);
+            clone.querySelector(".peripheral-name").textContent = p.description || "Satellite";
+            clone.querySelector(".peripheral-port").textContent = p.port;
+            clone.querySelector(".peripheral-hw").textContent = p.hw || "Unknown";
+            clone.querySelector(".peripheral-fw").textContent = p.fw || "v0.0";
+            clone.querySelector(".peripheral-status").textContent = p.connected ? "ONLINE" : "OFFLINE";
+            clone.querySelector(".peripheral-status").className = "card-badge " + (p.connected ? "bg-ok" : "bg-stale");
+
+            const btn = clone.querySelector(".provision-btn");
+            btn.onclick = () => openProvisionModal(p.port, p.hw, p.fw);
+
+            el.appendChild(clone);
+          });
+          status.textContent = `Scan complete (${ports.length})`;
+        } catch (e) {
+          el.innerHTML = `<div class="list-empty text-err">Error: ${e.message}</div>`;
+          status.textContent = "Scan failed";
+        }
+      }
+
+      function openProvisionModal(port, hw, fw) {
+        document.getElementById("provision-title").textContent = `Provision ${port}`;
+        // Set default name and ID based on port
+        const id = port.split("/").pop().split("\\").pop().toLowerCase().replace(/[^a-z0-9]/g, "-");
+        document.getElementById("provision-name").value = `Satellite-${id.toUpperCase()}`;
+        document.getElementById("provision-id").value = id;
+        document.getElementById("modal-provision").style.display = "flex";
+
+        // Save port for exec
+        window._provisioningPort = port;
+      }
+
+      function closeProvisionModal() {
+        document.getElementById("modal-provision").style.display = "none";
+      }
+
+      async function saveProvisionedDevice() {
+        const name = document.getElementById("provision-name").value.trim();
+        const id = document.getElementById("provision-id").value.trim();
+        const type = document.getElementById("provision-type").value;
+        const location = document.getElementById("provision-location").value.trim();
+        const port = window._provisioningPort;
+
+        if (!name || !id) {
+          alert("Name and ID are required");
+          return;
+        }
+
+        try {
+          const r = await fetch("/api/nodes", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              id, name, type: "serial", address: port, location
+            })
+          });
+          if (r.ok) {
+            logConsole("rx", `Satellite ${name} provisioned at ${port}`);
+            closeProvisionModal();
+            loadNodes();
+          }
+        } catch (e) {
+          logConsole("err", `Provisioning failed: ${e.message}`);
+        }
+      }
+
 
       async function setBlePeer(peer, name) {
         const inputId = peer === "a" ? "ble-prefix-a" : "ble-prefix-b";
@@ -6847,7 +7010,7 @@
         heap:  { warn: 30000, crit: 20000, dir: "lo", fmt: v => (v / 1024).toFixed(1) + " KB"  },
         l_avg: { warn: 50,    crit: 100,   dir: "hi", fmt: v => v.toFixed(1)           + " ms"  },
         l_max: { warn: 100,   crit: 200,   dir: "hi", fmt: v => v.toFixed(1)           + " ms"  },
-        bat:   { warn: 3.6,   crit: 3.3,   dir: "lo", fmt: v => v.toFixed(2)           + " V"   },
+        bat:   { warn: 3.6,   crit: 3.3,   dir: "lo", fmt: v => v < 0.1 ? "USB" : (v > 4.11 ? v.toFixed(2) + " V (CHG)" : v.toFixed(2) + " V") },
         rssi:  { warn: -90,   crit: -105,  dir: "lo", fmt: v => v.toFixed(0)           + " dBm" },
       };
 
@@ -7029,12 +7192,17 @@
                 m = Math.floor((s % 3600) / 60), ss = s % 60;
           return h ? `${h}h ${m}m` : m ? `${m}m ${ss}s` : `${ss}s`;
         };
-        setPC("perf-uptime",  uptimeFmt(d.uptime));
-        setPC("perf-enow-tx", d.espnow_tx);
-        setPC("perf-enow-rx", d.espnow_rx);
-        setPC("perf-peers",   d.espnow_peers);
-        setPC("perf-rst",     d.sys_reset);
-        setPC("perf-loratoa", d.lora_toa_ms != null ? d.lora_toa_ms + " ms" : "--");
+        setPC("perf-uptime",      uptimeFmt(d.uptime));
+        setPC("perf-enow-tx",     d.espnow_tx);
+        setPC("perf-enow-rx",     d.espnow_rx);
+        setPC("perf-enow-drop",   d.espnow_drop != null ? d.espnow_drop : "--");
+        setPC("perf-peers",       d.espnow_peers);
+        setPC("perf-rst",         d.sys_reset);
+        setPC("perf-loratoa",     d.lora_toa_ms != null ? d.lora_toa_ms + " ms" : "--");
+        setPC("perf-lora-tx",     d.lora_tx != null ? d.lora_tx : "--");
+        setPC("perf-lora-rx",     d.lora_rx != null ? d.lora_rx : "--");
+        setPC("perf-lora-drop",   d.lora_drop != null ? d.lora_drop : "--");
+        setPC("perf-radio-state", d.radio_state != null ? d.radio_state.toUpperCase() : "--");
       }
 
       // ── Aggregated Duty Cycle Calculator ─────────────────────────────
@@ -8207,6 +8375,7 @@
               <option value="LORA">LoRa</option>
               <option value="BLE">BLE</option>
               <option value="WIFI">WiFi</option>
+              <option value="SERIAL">Serial Satellite</option>
             </select>
           </div>
           <div class="editor-field">
@@ -8215,7 +8384,7 @@
           </div>
         </div>
         <div class="mt-4 flex-row-sb">
-          <button class="btn btn-danger" onclick="deleteProvisionedDevice()">Delete Device</button>
+          <button class="btn btn-secondary" style="visibility:hidden">Delete</button>
           <div class="flex-row flex-gap-10">
             <button class="btn btn-secondary" onclick="closeProvisionModal()">Cancel</button>
             <button class="btn" onclick="saveProvisionedDevice()">✓ Apply Device</button>
@@ -8248,6 +8417,7 @@
               <option value="SERVO">Servo Angle</option>
               <option value="READ">Analog Read</option>
               <option value="LORA_TX">LoRa Transmission</option>
+              <option value="FAILOVER_PING">Protocol Failover Ping</option>
             </select>
           </div>
 

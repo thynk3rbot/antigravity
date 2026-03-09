@@ -1072,6 +1072,22 @@ def build_app(
         except Exception as e:
             return PlainTextResponse(f"Error loading index.html: {e}", status_code=500)
 
+    @app.get("/devqa")
+    async def _devqa():
+        try:
+            with open(STATIC_DIR / "devqa.html", "r", encoding="utf-8") as f:
+                return HTMLResponse(f.read())
+        except Exception as e:
+            return PlainTextResponse(f"Error loading devqa.html: {e}", status_code=500)
+
+    @app.get("/product-builder")
+    async def _product_builder():
+        try:
+            with open(STATIC_DIR / "product_builder.html", "r", encoding="utf-8") as f:
+                return HTMLResponse(f.read())
+        except Exception as e:
+            return PlainTextResponse(f"Error loading product_builder.html: {e}", status_code=500)
+
     # ── WebSocket ─────────────────────────────────────────────────────────
 
     @app.websocket("/ws")
@@ -1109,6 +1125,81 @@ def build_app(
             return PlainTextResponse("No transport available", status_code=503)
         ok = await _transport.send_command(cmd)
         return PlainTextResponse("OK" if ok else "ERR", status_code=200 if ok else 502)
+
+    # ── AI command recommendation ─────────────────────────────────────────
+
+    @app.post("/api/recommend")
+    async def _recommend(body: dict) -> JSONResponse:
+        """Call Claude API to suggest the next test command based on history."""
+        import os
+        import json as _json
+
+        try:
+            import anthropic as _anthropic
+        except ImportError:
+            return JSONResponse({"error": "anthropic package not installed"}, status_code=503)
+
+        api_key = os.environ.get("ANTHROPIC_API_KEY")
+        if not api_key:
+            return JSONResponse({"error": "ANTHROPIC_API_KEY not set"}, status_code=503)
+
+        # Sanitise inputs — never trust client-provided strings past a length cap
+        cmd  = str(body.get("cmd",      "")).strip()[:200]
+        resp = str(body.get("response", "")).strip()[:500]
+        raw_hist = body.get("history", [])
+        if not isinstance(raw_hist, list):
+            raw_hist = []
+
+        # Build a compact history block (last 6 exchanges)
+        history_lines: list[str] = []
+        for h in raw_hist[-6:]:
+            if not isinstance(h, dict):
+                continue
+            hcmd = str(h.get("cmd", "")).strip()[:200]
+            hresp = str(h.get("response", "")).strip()[:150]
+            if hcmd:
+                history_lines.append(f"→ {hcmd}")
+            if hresp:
+                history_lines.append(f"← {hresp}")
+
+        user_content = ""
+        if history_lines:
+            user_content += "Recent exchanges:\n" + "\n".join(history_lines) + "\n\n"
+        user_content += f"Last command sent: {cmd}\nDevice response:   {resp}\n\nSuggest the single most useful next test command."
+
+        try:
+            client = _anthropic.AsyncAnthropic(api_key=api_key)
+            message = await client.messages.create(
+                model="claude-opus-4-6",
+                max_tokens=200,
+                system=(
+                    "You are a concise test engineer assistant for embedded IoT devices. "
+                    "Based on the command history and last device response, suggest the single "
+                    "most useful next test command. The command must be a raw device command string. "
+                    "Respond with valid JSON only — no extra text."
+                ),
+                messages=[{"role": "user", "content": user_content}],
+                output_config={
+                    "format": {
+                        "type": "json_schema",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "command": {"type": "string"},
+                                "reason":  {"type": "string"},
+                            },
+                            "required": ["command", "reason"],
+                            "additionalProperties": False,
+                        },
+                    }
+                },
+            )
+            # Extract the text block (structured output is always the last text block)
+            text = next((b.text for b in message.content if b.type == "text"), "{}")
+            data = _json.loads(text)
+            return JSONResponse(data)
+        except Exception as exc:
+            return JSONResponse({"error": str(exc)}, status_code=500)
 
     # ── Transport status ──────────────────────────────────────────────────
 
@@ -1413,6 +1504,37 @@ def build_app(
             if _transport:
                 _transport._serial = _serial_link
         return JSONResponse({"ok": True, "node": node.to_dict()})
+
+    # ── ESP-NOW Peer Management ───────────────────────────────────────────
+
+    @app.get("/api/espnow/peers")
+    async def _espnow_list() -> JSONResponse:
+        """Fetch list of ESP-NOW peers from the device."""
+        if not _transport:
+            return JSONResponse({"ok": False, "error": "No transport"}, status_code=503)
+        await _transport.send_command("LISTPEERS")
+        await asyncio.sleep(0.5)
+        peers = state.status.get("esp_now_peers", [])
+        return JSONResponse({"ok": True, "peers": peers})
+
+    @app.post("/api/espnow/peers/add")
+    async def _espnow_add(body: dict) -> JSONResponse:
+        mac = body.get("mac", "").strip()
+        name = body.get("name", "").strip()
+        if not mac:
+            return JSONResponse({"ok": False, "error": "MAC address required"}, status_code=400)
+        cmd = f"ADDPEER {mac} {name}" if name else f"ADDPEER {mac}"
+        ok = await _transport.send_command(cmd)
+        return JSONResponse({"ok": ok})
+
+    @app.post("/api/espnow/peers/remove")
+    async def _espnow_remove(body: dict) -> JSONResponse:
+        mac = body.get("mac", "").strip()
+        if not mac:
+            return JSONResponse({"ok": False, "error": "MAC address required"}, status_code=400)
+        ok = await _transport.send_command(f"RMPEER {mac}")
+        return JSONResponse({"ok": ok})
+
 
     @app.get("/api/nodes/{node_id}/snapshot")
     async def _nodes_snapshot(node_id: str) -> JSONResponse:

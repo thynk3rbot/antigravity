@@ -15,15 +15,14 @@
   {
     "name": "TestBlink",
     "type": "TOGGLE",
-    "pin": "35",
-    "pinName": "LED_Write",
+    "pin": "5",
     "interval": 1000000,
-    "duration": 1705032,
+    "duration": 5000,
     "value": 0,
     "enabled": true,
-    "state": 1,
-    "nextRun": 993846,
+    "state": 0,
+    "nextRun": 971788,
     "updatedBy": "WEB",
-    "lastUpdated": "0h 26m"
+    "lastUpdated": "1h 47m"
   }
 ]

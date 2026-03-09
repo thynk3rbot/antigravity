@@ -18,6 +18,8 @@ void DisplayManager::Init() {
 
   pinMode(PIN_VEXT_CTRL, OUTPUT);
   digitalWrite(PIN_VEXT_CTRL, LOW);
+  pinMode(PIN_BAT_CTRL, OUTPUT);
+  digitalWrite(PIN_BAT_CTRL, LOW);
   delay(100);
 
   displayActive = true;
@@ -25,6 +27,10 @@ void DisplayManager::Init() {
   Serial.println("Display: VEXT OK");
   Serial.flush();
 
+  if (Heltec.display) {
+    Heltec.display->setContrast(255);
+    Heltec.display->setBrightness(255);
+  }
   ShowSplash();
   delay(2000);
 }
@@ -91,7 +97,7 @@ void DisplayManager::DrawUi() {
   Heltec.display->clear();
   Heltec.display->setColor(WHITE);
 
-  batteryVolts = analogRead(PIN_BAT_ADC) / 4095.0 * 3.3 * 2.0;
+  batteryVolts = analogRead(PIN_BAT_ADC) / 4095.0 * 3.3 * BAT_VOLT_MULTI;
 
   for (int i = 0; i < NUM_PAGES; i++) {
     int x = 128 - (NUM_PAGES - i) * 8;
@@ -217,9 +223,9 @@ void DisplayManager::drawLog(DataManager &data) {
 
   for (int i = 0; i < 4; i++) {
     int idx = (data.logIndex - 1 - i + LOG_SIZE) % LOG_SIZE;
-    if (data.msgLog[idx].message.length() > 0) {
-      Heltec.display->drawString(0, 14 + i * 12,
-                                 data.msgLog[idx].message.substring(0, 21));
+    if (strlen(data.msgLog[idx].message) > 0) {
+      String msg = String(data.msgLog[idx].message);
+      Heltec.display->drawString(0, 14 + i * 12, msg.substring(0, 21));
     }
   }
   Heltec.display->setTextAlignment(TEXT_ALIGN_RIGHT);

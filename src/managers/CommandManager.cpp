@@ -1,12 +1,14 @@
 #include "CommandManager.h"
 #include "../crypto.h"
 #include "../utils/DebugMacros.h"
+#include "BLEManager.h"
 #include "DataManager.h"
 #include "DisplayManager.h"
 #include "ESPNowManager.h"
 #include "LoRaManager.h"
 #include "MCPManager.h"
 #include "MQTTManager.h"
+#include "PowerManager.h"
 #include "ProductManager.h"
 #include "ScheduleManager.h"
 #include "WiFiManager.h"
@@ -137,6 +139,7 @@ void CommandManager::handleCommand(const String &fullCmdIn,
   int space = fullCmd.indexOf(' ');
   String potentialCmd = (space > 0) ? fullCmd.substring(0, space) : fullCmd;
 
+  potentialCmd.toUpperCase();
   auto it = _commandRegistry.find(potentialCmd);
   if (it != _commandRegistry.end()) {
     // It's a registered untargeted/global command (e.g. SETWIFI, STATUS...)
@@ -217,8 +220,6 @@ void CommandManager::executeSleep(float hours, const String &trigger) {
   LoRaManager &lora = LoRaManager::getInstance();
   WiFiManager &wifi = WiFiManager::getInstance();
 
-  unsigned int mins = (unsigned int)(hours * 60.0f);
-
   // ── Guard: mains / USB power ─────────────────────────────────────────────
   if (WiFiManager::isPowered()) {
     String msg =
@@ -230,47 +231,23 @@ void CommandManager::executeSleep(float hours, const String &trigger) {
   }
 
   // ── Guard: PC webapp attached ─────────────────────────────────────────────
+  unsigned long initialDelayMs = 0;
   if (wifi.isPCAttached()) {
     String alert =
-        "SYS: Sleep in 10s — PC attached, no cancel received [" + trigger + "]";
+        "SYS: Sleep in 3s — PC attached, no cancel received [" + trigger + "]";
     data.LogMessage("SYS", 0, alert);
     lora.lastMsgReceived = "SLEEP WARN: PC attached";
     LOG_PRINTLN(alert);
     if (lora.loraActive)
       lora.SendLoRa(data.myId + " " + alert);
-    // Brief pause so the LoRa frame clears and the webapp sees the log entry
-    delay(3000);
+    // Deferred sequence will wait SLEEP_PC_GUARD_MS before countdown
+    initialDelayMs = SLEEP_PC_GUARD_MS;
   }
 
-  // ── Countdown broadcast ───────────────────────────────────────────────────
-  for (int i = 3; i >= 1; i--) {
-    String cd =
-        data.myId + " SLEEP " + String(mins) + "min in " + String(i) + "s";
-    data.LogMessage("SYS", 0,
-                    "Sleep " + String(mins) + "min in " + String(i) + "s");
-    if (lora.loraActive)
-      lora.SendLoRa(cd);
-    LOG_PRINTLN(cd);
-    delay(1200);
-  }
-
-  // ── Execute deep sleep ────────────────────────────────────────────────────
-  data.LogMessage("SYS", 0,
-                  "Sleeping " + String(mins) + "min [" + trigger + "]");
-  lora.lastMsgReceived = "SYS: Sleeping " + String(mins) + "min";
-
-  digitalWrite(PIN_LED_BUILTIN, LOW);
-  if (Heltec.display) {
-    Heltec.display->clear();
-    Heltec.display->drawString(0, 0, "SLEEP " + String(mins) + "min");
-    Heltec.display->display();
-    delay(500);
-    Heltec.display->displayOff();
-  }
-
-  uint64_t sleepUs = (uint64_t)(hours * 3600.0f * 1000000.0f);
-  esp_sleep_enable_timer_wakeup(sleepUs);
-  esp_deep_sleep_start();
+  // ── Arm non-blocking sleep sequence via TaskScheduler ────────────────────
+  ScheduleManager::getInstance().startSleepSequence(hours, trigger,
+                                                    initialDelayMs);
+  LOG_PRINTLN("SCHED: Non-blocking sleep sequence armed");
 }
 
 void CommandManager::initRegistry() {
@@ -291,7 +268,7 @@ void CommandManager::initRegistry() {
   registerCommand("STATUS", [](const String &args, CommInterface source) {
     DataManager &data = DataManager::getInstance();
     LoRaManager &lora = LoRaManager::getInstance();
-    float bat = analogRead(PIN_BAT_ADC) / 4095.0 * 3.3 * 2.0;
+    float bat = analogRead(PIN_BAT_ADC) / 4095.0 * 3.3 * BAT_VOLT_MULTI;
     String ip = (WiFi.status() == WL_CONNECTED) ? WiFi.localIP().toString()
                                                 : "DISCONNECTED";
     String msg =
@@ -604,17 +581,122 @@ void CommandManager::initRegistry() {
       data.SetBleEnabled(true);
       lora.lastMsgReceived = "SYS: RADIO LORA+BLE (Reboot)";
       ScheduleManager::getInstance().triggerRestart(1000);
-    } else if (args.equalsIgnoreCase("MODE LORA_WIFI")) {
-      data.SetWifiEnabled(true);
-      data.SetBleEnabled(false);
-      lora.lastMsgReceived = "SYS: RADIO LORA+WIFI (Reboot)";
-      ScheduleManager::getInstance().triggerRestart(1000);
     } else if (args.equalsIgnoreCase("MODE LORA_ONLY")) {
       data.SetWifiEnabled(false);
       data.SetBleEnabled(false);
       lora.lastMsgReceived = "SYS: RADIO LORA ONLY (Reboot)";
       ScheduleManager::getInstance().triggerRestart(1000);
     }
+  });
+
+  registerCommand("ADDPEER", [](const String &args, CommInterface source) {
+    int sep = args.indexOf(' ');
+    String macStr = (sep > 0) ? args.substring(0, sep) : args;
+    String name = (sep > 0) ? args.substring(sep + 1) : "PEER";
+    uint8_t mac[6];
+    int parsed = 0;
+    if (macStr.indexOf(':') > 0) {
+      parsed = sscanf(macStr.c_str(), "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx", &mac[0],
+                      &mac[1], &mac[2], &mac[3], &mac[4], &mac[5]);
+    } else {
+      parsed = sscanf(macStr.c_str(), "%02hhx%02hhx%02hhx%02hhx%02hhx%02hhx",
+                      &mac[0], &mac[1], &mac[2], &mac[3], &mac[4], &mac[5]);
+    }
+
+    if (parsed == 6) {
+      bool ok = ESPNowManager::getInstance().addPeer(mac, name.c_str());
+      CommandManager::getInstance().sendResponse(
+          ok ? "PEER ADDED" : "ADD FAILED", source);
+    } else {
+      CommandManager::getInstance().sendResponse(
+          "ERR: MAC format AA:BB:CC... or AABBCCDDEEFF", source);
+    }
+  });
+
+  registerCommand("RMPEER", [](const String &args, CommInterface source) {
+    uint8_t mac[6];
+    int parsed = 0;
+    if (args.indexOf(':') > 0) {
+      parsed = sscanf(args.c_str(), "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx", &mac[0],
+                      &mac[1], &mac[2], &mac[3], &mac[4], &mac[5]);
+    } else {
+      parsed = sscanf(args.c_str(), "%02hhx%02hhx%02hhx%02hhx%02hhx%02hhx",
+                      &mac[0], &mac[1], &mac[2], &mac[3], &mac[4], &mac[5]);
+    }
+
+    if (parsed == 6) {
+      bool ok = ESPNowManager::getInstance().removePeer(mac);
+      CommandManager::getInstance().sendResponse(
+          ok ? "PEER REMOVED" : "PEER NOT FOUND", source);
+    } else {
+      CommandManager::getInstance().sendResponse("ERR: MAC format", source);
+    }
+  });
+
+  registerCommand("PMISER", [](const String &args, CommInterface source) {
+    PowerManager &pm = PowerManager::getInstance();
+    if (args.equalsIgnoreCase("NORMAL")) {
+      pm.setManualMode(PowerMode::NORMAL, true);
+      CommandManager::getInstance().sendResponse("PMISER: Manual NORMAL",
+                                                 source);
+    } else if (args.equalsIgnoreCase("CONSERVE")) {
+      pm.setManualMode(PowerMode::CONSERVE, true);
+      CommandManager::getInstance().sendResponse("PMISER: Manual CONSERVE",
+                                                 source);
+    } else if (args.equalsIgnoreCase("CRITICAL")) {
+      pm.setManualMode(PowerMode::CRITICAL, true);
+      CommandManager::getInstance().sendResponse("PMISER: Manual CRITICAL",
+                                                 source);
+    } else if (args.equalsIgnoreCase("AUTO")) {
+      pm.setManualMode(PowerMode::NORMAL, false);
+      CommandManager::getInstance().sendResponse("PMISER: Auto Mode Enabled",
+                                                 source);
+    } else {
+      CommandManager::getInstance().sendResponse(
+          "USAGE: PMISER NORMAL|CONSERVE|CRITICAL|AUTO", source);
+    }
+  });
+
+  registerCommand("BINCMD", [](const String &args, CommInterface source) {
+    int cmd = 0, val = 0;
+    if (sscanf(args.c_str(), "%d %d", &cmd, &val) >= 1) {
+      LoRaManager::getInstance().QueueReliableBinaryCommand("ALL", (uint8_t)cmd,
+                                                            (uint8_t)val);
+      CommandManager::getInstance().sendResponse("BINCMD QUEUED (Reliable)",
+                                                 source);
+    } else {
+      CommandManager::getInstance().sendResponse(
+          "USAGE: BINCMD [CmdCode] [Val]", source);
+    }
+  });
+
+  registerCommand("FPING", [](const String &args, CommInterface source) {
+    String target = args;
+    target.trim();
+    if (target.isEmpty())
+      target = "SLAVE"; // Default target if none provided
+    LoRaManager::getInstance().QueueFailoverPing(target);
+    CommandManager::getInstance().sendResponse(
+        "FAILOVER PING QUEUED (" + target + ")", source);
+  });
+
+  registerCommand("LISTPEERS", [](const String &args, CommInterface source) {
+    DataManager &data = DataManager::getInstance();
+    String list = "PEERS: ";
+    int count = 0;
+    for (int i = 0; i < ESPNOW_MAX_PEERS; i++) {
+      if (data.espNowPeers[i].active) {
+        char macStr[18];
+        sprintf(macStr, "%02X%02X%02X", data.espNowPeers[i].mac[3],
+                data.espNowPeers[i].mac[4], data.espNowPeers[i].mac[5]);
+        list +=
+            String(data.espNowPeers[i].name) + "(.." + String(macStr) + ") ";
+        count++;
+      }
+    }
+    if (count == 0)
+      list = "PEERS: none";
+    CommandManager::getInstance().sendResponse(list, source);
   });
 
   registerCommand("SETKEY", [](const String &args, CommInterface source) {
@@ -1082,15 +1164,66 @@ void CommandManager::initRegistry() {
       data.ResetProbeState();
     }
   });
+
+  registerCommand("PING", [](const String &args, CommInterface source) {
+    LoRaManager &lora = LoRaManager::getInstance();
+    String msg = args.length() > 0 ? args : "PING";
+    lora.SendLoRa(msg);
+    CommandManager::getInstance().sendResponse("PING SENT", source);
+  });
+
+  registerCommand("RTEST", [](const String &args, CommInterface source) {
+    LoRaManager &lora = LoRaManager::getInstance();
+    String msg = "RANGE_TEST_MSG";
+
+    LOG_PRINTLN("RTEST: Starting comparison pulse...");
+    lora.SendLoRa(msg); // Boosted
+    delay(500);
+    lora.SendLegacyLoRa(msg); // Legacy
+
+    CommandManager::getInstance().sendResponse(
+        "RTEST PULSE SENT (Check Serial for ToA)", source);
+  });
+
+  registerCommand("BEACON", [](const String &args, CommInterface source) {
+    LoRaManager &lora = LoRaManager::getInstance();
+    if (args.equalsIgnoreCase("ON") || args == "1") {
+      lora.beaconActive = true;
+      lora.lastBeaconMs = 0; // Trigger immediately
+      CommandManager::getInstance().sendResponse(
+          "BEACON MODE ENABLED (1 pulse/min)", source);
+    } else if (args.equalsIgnoreCase("OFF") || args == "0") {
+      lora.beaconActive = false;
+      CommandManager::getInstance().sendResponse("BEACON MODE DISABLED",
+                                                 source);
+    } else {
+      CommandManager::getInstance().sendResponse("USAGE: BEACON ON|OFF",
+                                                 source);
+    }
+  });
 }
 
 void CommandManager::sendResponse(const String &msg, CommInterface source) {
   LoRaManager &lora = LoRaManager::getInstance();
-  lora.lastMsgReceived = msg;
-  if (source == CommInterface::COMM_LORA)
+
+  switch (source) {
+  case CommInterface::COMM_SERIAL:
+    Serial.println(msg);
+    break;
+  case CommInterface::COMM_LORA:
     lora.SendLoRa(DataManager::getInstance().myId + " " + msg);
-  else
+    break;
+  case CommInterface::COMM_BLE:
+    BLEManager::getInstance().notify(msg);
+    break;
+  case CommInterface::COMM_ESPNOW:
+    ESPNowManager::getInstance().sendToAll(DataManager::getInstance().myId +
+                                           " " + msg);
+    break;
+  default:
     LOG_PRINTLN(msg);
+    break;
+  }
 }
 
 void CommandManager::executeLocalCommand(const String &cmd,

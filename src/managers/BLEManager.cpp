@@ -95,21 +95,23 @@ void BLEManager::init() {
 
   BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
 
-  // [CONFIG] ONE PACKET STRATEGY (The "Compact" Fix)
-  // Diagnosis: Scan Response is unreliable or timing out.
-  // Solution: Put EVERYTHING in the primary Advertisement packet.
-  // Capacity: 31 Bytes.
-  // Payload: Flags(3) + UUID16(4) + Name(9) = 16 Bytes. FITS!
+  // [CONFIG] DUAL PACKET STRATEGY (Discovery Fix)
+  // Solution: UUID in primary Advertisement, Name in Scan Response.
+  pAdvertising->addServiceUUID(SERVICE_UUID);
+
   BLEAdvertisementData oAdvertisementData = BLEAdvertisementData();
   oAdvertisementData.setFlags(0x06); // General Discoverable
-  oAdvertisementData.setCompleteServices(BLEUUID((uint16_t)0x180F)); // UUID
-  oAdvertisementData.setName(devName.c_str());                       // Name
+  oAdvertisementData.setCompleteServices(BLEUUID(SERVICE_UUID));
   pAdvertising->setAdvertisementData(oAdvertisementData);
 
-  // DISABLE Scan Response (Not needed, everything is in Advert)
-  pAdvertising->setScanResponse(false);
+  BLEAdvertisementData oScanResponseData = BLEAdvertisementData();
+  oScanResponseData.setName(devName.c_str());
+  pAdvertising->setScanResponseData(oScanResponseData);
 
-  // [CONFIG] RELAXED TIMING (Keep Safe)
+  // Enable Scan Response
+  pAdvertising->setScanResponse(true);
+
+  // [CONFIG] RELAXED TIMING
   pAdvertising->setMinInterval(0x100); // 160ms
   pAdvertising->setMaxInterval(0x200); // 320ms
 
@@ -120,6 +122,25 @@ void BLEManager::init() {
   pAdvertising->start();
   delay(100);
   Serial.println("BLE: Started as " + devName);
+}
+
+void BLEManager::boostAdvertising(bool active) {
+  if (!pServer)
+    return;
+  BLEAdvertising *pAdvertising = pServer->getAdvertising();
+  pAdvertising->stop();
+
+  if (active) {
+    LOG_PRINTLN("BLE: Boosting advertisement rate (Proactive Fallback)");
+    pAdvertising->setMinInterval(0x20); // 20ms
+    pAdvertising->setMaxInterval(0x40); // 40ms
+  } else {
+    LOG_PRINTLN("BLE: Normalizing advertisement rate");
+    pAdvertising->setMinInterval(0x100); // 160ms
+    pAdvertising->setMaxInterval(0x200); // 320ms
+  }
+
+  pAdvertising->start();
 }
 
 void BLEManager::notify(const String &text) {

@@ -1,0 +1,13 @@
+
+Pinging 172.16.0.27 with 32 bytes of data:
+Reply from 172.16.0.27: bytes=32 time=61ms TTL=64
+Reply from 172.16.0.27: bytes=32 time=89ms TTL=64
+Reply from 172.16.0.27: bytes=32 time=5ms TTL=64
+Reply from 172.16.0.27: bytes=32 time=119ms TTL=64
+Reply from 172.16.0.27: bytes=32 time=27ms TTL=64
+Reply from 172.16.0.27: bytes=32 time=44ms TTL=64
+
+Ping statistics for 172.16.0.27:
+    Packets: Sent = 6, Received = 6, Lost = 0 (0% loss),
+Approximate round trip times in milli-seconds:
+    Minimum = 5ms, Maximum = 119ms, Average = 57ms

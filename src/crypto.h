@@ -51,9 +51,9 @@ inline bool parseHexKey(const char *hex, uint8_t *out) {
 #define GCM_IV_SIZE 12
 #define GCM_TAG_SIZE 16
 
-// Encrypt a MessagePacket (64 bytes) into a 92-byte output buffer.
-inline void encryptPacket(const void *plainPacket, uint8_t *outBuf,
-                          const uint8_t *key) {
+// General purpose GCM encrypt/decrypt for variable-sized data
+inline void encryptData(const uint8_t *plain, size_t size, uint8_t *outBuf,
+                        const uint8_t *key) {
   uint8_t iv[GCM_IV_SIZE];
   esp_fill_random(iv, GCM_IV_SIZE);
   memcpy(outBuf, iv, GCM_IV_SIZE);
@@ -63,25 +63,36 @@ inline void encryptPacket(const void *plainPacket, uint8_t *outBuf,
   mbedtls_gcm_setkey(&gcm, MBEDTLS_CIPHER_ID_AES, key, 128);
 
   mbedtls_gcm_crypt_and_tag(
-      &gcm, MBEDTLS_GCM_ENCRYPT, ENCRYPTED_PAYLOAD_SIZE, iv, GCM_IV_SIZE,
-      nullptr, 0, (const uint8_t *)plainPacket,
+      &gcm, MBEDTLS_GCM_ENCRYPT, size, iv, GCM_IV_SIZE, nullptr, 0, plain,
       outBuf + GCM_IV_SIZE + GCM_TAG_SIZE, GCM_TAG_SIZE, outBuf + GCM_IV_SIZE);
 
   mbedtls_gcm_free(&gcm);
 }
 
-// Decrypt a 92-byte buffer into a 64-byte MessagePacket.
-inline bool decryptPacket(const uint8_t *inBuf, void *plainPacket,
-                          const uint8_t *key) {
+inline bool decryptData(const uint8_t *inBuf, size_t payloadSize,
+                        uint8_t *outPlain, const uint8_t *key) {
   mbedtls_gcm_context gcm;
   mbedtls_gcm_init(&gcm);
   mbedtls_gcm_setkey(&gcm, MBEDTLS_CIPHER_ID_AES, key, 128);
 
   int ret = mbedtls_gcm_auth_decrypt(
-      &gcm, ENCRYPTED_PAYLOAD_SIZE, inBuf, GCM_IV_SIZE, nullptr, 0,
-      inBuf + GCM_IV_SIZE, GCM_TAG_SIZE, inBuf + GCM_IV_SIZE + GCM_TAG_SIZE,
-      (uint8_t *)plainPacket);
+      &gcm, payloadSize, inBuf, GCM_IV_SIZE, nullptr, 0, inBuf + GCM_IV_SIZE,
+      GCM_TAG_SIZE, inBuf + GCM_IV_SIZE + GCM_TAG_SIZE, outPlain);
 
   mbedtls_gcm_free(&gcm);
   return (ret == 0);
+}
+
+// Encrypt a MessagePacket (64 bytes) into a 92-byte output buffer.
+inline void encryptPacket(const void *plainPacket, uint8_t *outBuf,
+                          const uint8_t *key) {
+  encryptData((const uint8_t *)plainPacket, ENCRYPTED_PAYLOAD_SIZE, outBuf,
+              key);
+}
+
+// Decrypt a 92-byte buffer into a 64-byte MessagePacket.
+inline bool decryptPacket(const uint8_t *inBuf, void *plainPacket,
+                          const uint8_t *key) {
+  return decryptData(inBuf, ENCRYPTED_PAYLOAD_SIZE, (uint8_t *)plainPacket,
+                     key);
 }
