@@ -29,6 +29,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional, Set
 
+# Add tools directory to path for cross-module imports
+sys.path.append(str(Path(__file__).resolve().parent.parent))
+from testing.engine import TestEngine
+
 import uuid
 import aiofiles
 
@@ -1125,6 +1129,44 @@ def build_app(
             return PlainTextResponse("No transport available", status_code=503)
         ok = await _transport.send_command(cmd)
         return PlainTextResponse("OK" if ok else "ERR", status_code=200 if ok else 502)
+
+    # ── Test Regression ───────────────────────────────────────────────────
+
+    @app.post("/api/test/regression")
+    async def _regression_test(body: dict) -> JSONResponse:
+        """Run a full regression suite using the shared TestEngine."""
+        if _transport is None:
+            return JSONResponse({"ok": False, "error": "No transport"}, status_code=503)
+
+        target = body.get("target")
+        if target:
+            # Resolve UUID to a friendly node name if it exists in the registry
+            node = node_reg.get(target)
+            if node:
+                target = node.name
+
+        async def transport_executor(cmd: str) -> tuple[bool, str]:
+            # Apply routing prefix if target is provided
+            final_cmd = f"{target} {cmd}" if target else cmd
+            
+            # This executes via the currently active transport (HTTP/BLE/Serial)
+            ok = await _transport.send_command(final_cmd)
+            # Fetch last response from state (status poller or direct)
+            resp = state.status.get("last_cmd_response", "OK")
+            return ok, str(resp)
+
+        engine = TestEngine(transport_executor)
+        commands = body.get("commands") # Optional custom command list
+        results = await engine.run_suite(commands=commands)
+        
+        passed = all(r["status"] == "PASS" for r in results)
+        return JSONResponse({
+            "ok": True,
+            "passed": passed,
+            "results": results,
+            "target": target or "Local",
+            "transport": state.transport
+        })
 
     # ── AI command recommendation ─────────────────────────────────────────
 

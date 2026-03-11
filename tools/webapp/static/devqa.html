@@ -232,6 +232,12 @@
       <ul id="dq-history-list" data-debug-id="DQ-CMD-HISTORY-LIST"></ul>
     </div>
 
+    <div class="cmd-section" data-debug-id="DQ-CMD-REGRESSION">
+      <div class="cmd-label">Regression Suite</div>
+      <button class="btn primary" id="dq-regression-btn" data-debug-id="DQ-CMD-REG-RUN" onclick="runRegression()">Run Nightly Suite</button>
+      <div id="dq-reg-results" style="margin-top:8px; font:10px var(--mono); color:var(--dim)"></div>
+    </div>
+
   </section>
 
   <!-- ── LOG Panel ──────────────────────────────────────── -->
@@ -684,6 +690,46 @@ function renderStatus(d) {
 
   // Mirror transport to header badge
   if (d.transport) setBadge('dq-transport-badge', 'ok', 'transport: ' + d.transport);
+}
+
+async function runRegression() {
+  const btn = document.getElementById('dq-regression-btn');
+  const resultsEl = document.getElementById('dq-reg-results');
+  
+  btn.disabled = true;
+  btn.textContent = 'Running...';
+  resultsEl.textContent = 'Executing suite...';
+  logSys('Regression Suite Started');
+
+  try {
+    const target = (_deviceId === '__primary__') ? null : _deviceId;
+    const r = await fetch('/api/test/regression', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ target }),
+    });
+    
+    if (!r.ok) throw new Error('Regression API failed');
+    
+    const d = await r.json();
+    const passed = d.results.filter(x => x.status === 'PASS').length;
+    const total = d.results.length;
+    
+    resultsEl.textContent = `Results: ${passed}/${total} passed`;
+    if (d.passed) {
+      logSys('Regression Suite: ALL PASSED');
+      resultsEl.style.color = 'var(--green)';
+    } else {
+      logErr('Regression Suite: FAILED');
+      resultsEl.style.color = 'var(--red)';
+    }
+  } catch (err) {
+    logErr('Regression failed: ' + err.message);
+    resultsEl.textContent = 'Error: ' + err.message;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Run Nightly Suite';
+  }
 }
 
 // ── Debug ID toggle ───────────────────────────────────────────────────────

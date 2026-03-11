@@ -5,6 +5,10 @@ This document outlines the validation steps for the **Range Boost (Binary Mode)*
 
 ## 📦 Release v1.6.0 Components
 
+- **Current Baseline (Verified 2026-03-11):**
+  - **Master:** v1.6.37 (IP: 172.16.0.27) -> **PASS (11/11)**
+  - **Slave:** v1.6.34 (IP: 172.16.0.26) -> **PASS (11/11)**
+
 1. **Range Boost Core:** Implementation of variable-sized physical packets (ToA reduction).
 2. **Binary Protocol Layer:** Byte-oriented command structure (`0xAA` token) for 40% bandwidth efficiency.
 3. **Reliable Binary Transport:** Automatic `BC_ACK` and retry logic (3 tries) for core commands.
