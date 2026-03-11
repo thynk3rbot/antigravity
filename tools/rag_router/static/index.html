@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RAG Router -- LoRaLink Sensor Console</title>
+<style>
+  :root { --bg: #0a0e17; --surface: #111827; --border: #1f2937; --text: #e5e7eb; --dim: #6b7280; --accent: #3b82f6; --green: #10b981; --red: #ef4444; --yellow: #f59e0b; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'JetBrains Mono', 'Fira Code', monospace; background: var(--bg); color: var(--text); min-height: 100vh; }
+  header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 12px 24px; display: flex; align-items: center; gap: 16px; }
+  header h1 { font-size: 16px; font-weight: 600; }
+  header .status { font-size: 11px; padding: 2px 8px; border-radius: 4px; }
+  header .status.ok { background: #064e3b; color: var(--green); }
+  header .status.err { background: #450a0a; color: var(--red); }
+  .layout { display: grid; grid-template-columns: 300px 1fr; height: calc(100vh - 49px); }
+  .sidebar { background: var(--surface); border-right: 1px solid var(--border); overflow-y: auto; }
+  .sidebar h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--dim); padding: 16px 16px 8px; }
+  .node-card { padding: 12px 16px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.15s; }
+  .node-card:hover, .node-card.selected { background: #1e293b; }
+  .node-card .id { font-weight: 600; font-size: 13px; }
+  .node-card .domain { font-size: 10px; padding: 1px 6px; border-radius: 3px; margin-left: 8px; }
+  .domain-NUTRIENT { background: #064e3b; color: var(--green); }
+  .domain-BOTANICAL { background: #422006; color: var(--yellow); }
+  .domain-HARDWARE { background: #1e1b4b; color: #818cf8; }
+  .node-card .readings { font-size: 11px; color: var(--dim); margin-top: 4px; }
+  .main { display: flex; flex-direction: column; overflow: hidden; }
+  .query-bar { padding: 16px; background: var(--surface); border-bottom: 1px solid var(--border); display: flex; gap: 8px; }
+  .query-bar input { flex: 1; background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 8px 12px; border-radius: 6px; font-family: inherit; font-size: 13px; }
+  .query-bar input:focus { outline: none; border-color: var(--accent); }
+  .query-bar button { background: var(--accent); color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-family: inherit; font-size: 13px; font-weight: 600; }
+  .query-bar button:hover { background: #2563eb; }
+  .query-bar button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .results { flex: 1; overflow-y: auto; padding: 16px; }
+  .result-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 12px; }
+  .result-card .meta { display: flex; gap: 12px; font-size: 11px; color: var(--dim); margin-bottom: 8px; }
+  .result-card .answer { font-size: 13px; line-height: 1.6; white-space: pre-wrap; }
+  .result-card.guard { border-color: var(--red); }
+  .result-card.guard .answer { color: var(--red); }
+  .result-card .sources { margin-top: 8px; font-size: 11px; color: var(--dim); }
+  .test-panel { padding: 16px; background: var(--surface); border-top: 1px solid var(--border); }
+  .test-panel summary { font-size: 11px; color: var(--dim); cursor: pointer; text-transform: uppercase; letter-spacing: 1px; }
+  .test-panel .presets { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  .test-panel .presets button { background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 4px 10px; border-radius: 4px; font-size: 11px; cursor: pointer; font-family: inherit; }
+  .test-panel .presets button:hover { border-color: var(--accent); }
+  .empty { display: flex; align-items: center; justify-content: center; height: 100%; color: var(--dim); font-size: 13px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>RAG Router</h1>
+  <span id="ws-status" class="status err">DISCONNECTED</span>
+  <span id="mqtt-status" class="status err">MQTT --</span>
+  <span style="flex:1"></span>
+  <span style="font-size:11px;color:var(--dim)">LoRaLink Sensor Console</span>
+</header>
+
+<div class="layout">
+  <div class="sidebar">
+    <h2>Sensor Nodes</h2>
+    <div id="node-list"><div class="empty" style="padding:40px">No nodes yet</div></div>
+  </div>
+
+  <div class="main">
+    <div class="query-bar">
+      <input id="query-input" placeholder="Select a node, then ask a question or press Query to auto-analyze..." />
+      <button id="query-btn" onclick="doQuery()" disabled>Query RAG</button>
+    </div>
+
+    <div class="results" id="results">
+      <div class="empty">Ingest sensor data or select a node to begin analysis</div>
+    </div>
+
+    <div class="test-panel">
+      <details>
+        <summary>Test Data Injection</summary>
+        <div class="presets">
+          <button onclick="injectTest('nutrient-ok')">pH+EC OK</button>
+          <button onclick="injectTest('nutrient-low-ph')">pH Low (lockout)</button>
+          <button onclick="injectTest('nutrient-no-ec')">pH only (guard)</button>
+          <button onclick="injectTest('botanical')">DHT22 readings</button>
+          <button onclick="injectTest('hardware')">Relay status</button>
+        </div>
+      </details>
+    </div>
+  </div>
+</div>
+
+<script>
+const TEST_DATA = {
+  "nutrient-ok": {id:"PH-01", hwType:"ph-ec-sensor", caps:"ph,ec,temp", data:{ph:6.1, ec:1.8, temp:22.5}},
+  "nutrient-low-ph": {id:"PH-01", hwType:"ph-ec-sensor", caps:"ph,ec,temp", data:{ph:4.8, ec:2.1, temp:23.0}},
+  "nutrient-no-ec": {id:"PH-02", hwType:"ph-sensor", caps:"ph", data:{ph:6.0}},
+  "botanical": {id:"DHT-01", hwType:"DHT22", caps:"temp,humidity", data:{temp:28.5, humidity:72.3}},
+  "hardware": {id:"RELAY-A", hwType:"relay", caps:"state,cycles", data:{state:1, cycles:1420}},
+};
+
+let ws = null;
+let selectedNode = null;
+
+function connectWS() {
+  const proto = location.protocol === "https:" ? "wss:" : "ws:";
+  ws = new WebSocket(proto + "//" + location.host + "/ws");
+  ws.onopen = function() {
+    document.getElementById("ws-status").className = "status ok";
+    document.getElementById("ws-status").textContent = "CONNECTED";
+  };
+  ws.onclose = function() {
+    document.getElementById("ws-status").className = "status err";
+    document.getElementById("ws-status").textContent = "DISCONNECTED";
+    setTimeout(connectWS, 3000);
+  };
+  ws.onmessage = function(e) {
+    const msg = JSON.parse(e.data);
+    if (msg.event === "rag_response" || msg.event === "guard_rejection" || msg.event === "query_result") {
+      addResult(msg.data);
+    }
+    refreshNodes();
+  };
+}
+
+function refreshNodes() {
+  fetch("/api/nodes").then(function(r) { return r.json(); }).then(function(nodes) {
+    const el = document.getElementById("node-list");
+    if (!nodes.length) {
+      el.textContent = "";
+      const empty = document.createElement("div");
+      empty.className = "empty";
+      empty.style.padding = "40px";
+      empty.textContent = "No nodes yet";
+      el.appendChild(empty);
+      return;
+    }
+    el.textContent = "";
+    nodes.forEach(function(n) {
+      const domain = classifyDomain(n.hw_type, n.node_id);
+      const card = document.createElement("div");
+      card.className = "node-card" + (selectedNode === n.node_id ? " selected" : "");
+      card.onclick = function() { selectNode(n.node_id); };
+
+      const idSpan = document.createElement("span");
+      idSpan.className = "id";
+      idSpan.textContent = n.node_id;
+      card.appendChild(idSpan);
+
+      const domSpan = document.createElement("span");
+      domSpan.className = "domain domain-" + domain;
+      domSpan.textContent = domain;
+      card.appendChild(domSpan);
+
+      const rdDiv = document.createElement("div");
+      rdDiv.className = "readings";
+      rdDiv.textContent = Object.entries(n.readings).map(function(kv) {
+        return kv[0] + ":" + (typeof kv[1] === "number" ? kv[1].toFixed(1) : kv[1]);
+      }).join(" | ") || "no data";
+      card.appendChild(rdDiv);
+
+      el.appendChild(card);
+    });
+  });
+}
+
+function classifyDomain(hwType, id) {
+  var c = (hwType + " " + id).toLowerCase();
+  if (["ph","ec","tds","ppm","nutrient","dose","pump"].some(function(k) { return c.indexOf(k) >= 0; })) return "NUTRIENT";
+  if (["dht","humidity","soil","moisture","light","temp","co2"].some(function(k) { return c.indexOf(k) >= 0; })) return "BOTANICAL";
+  return "HARDWARE";
+}
+
+function selectNode(id) {
+  selectedNode = id;
+  document.getElementById("query-btn").disabled = false;
+  refreshNodes();
+}
+
+async function doQuery() {
+  if (!selectedNode) return;
+  var q = document.getElementById("query-input").value;
+  document.getElementById("query-btn").disabled = true;
+  try {
+    var resp = await fetch("/api/query", {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({node_id: selectedNode, query: q})
+    });
+    var data = await resp.json();
+    addResult(data);
+    refreshNodes();
+  } finally {
+    document.getElementById("query-btn").disabled = false;
+  }
+}
+
+async function injectTest(preset) {
+  var payload = TEST_DATA[preset];
+  if (!payload) return;
+  var resp = await fetch("/api/ingest-and-query", {
+    method: "POST", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify(payload)
+  });
+  var data = await resp.json();
+  addResult(data);
+  selectedNode = payload.id;
+  refreshNodes();
+}
+
+function addResult(data) {
+  var container = document.getElementById("results");
+  var emptyEl = container.querySelector(".empty");
+  if (emptyEl) container.removeChild(emptyEl);
+
+  var isGuard = data.guard_rejected;
+  var sources = (data.sources || []).map(function(s) { return s.document_name || s.title || "source"; }).join(", ");
+
+  var card = document.createElement("div");
+  card.className = "result-card" + (isGuard ? " guard" : "");
+
+  var meta = document.createElement("div");
+  meta.className = "meta";
+  meta.textContent = (data.node_id || selectedNode || "--") + "  |  " + (data.domain || "?") + "  |  " + new Date().toLocaleTimeString() + (isGuard ? "  |  GUARD REJECTED" : "");
+  card.appendChild(meta);
+
+  var answer = document.createElement("div");
+  answer.className = "answer";
+  answer.textContent = data.answer || data.error || "No response";
+  card.appendChild(answer);
+
+  if (sources) {
+    var srcDiv = document.createElement("div");
+    srcDiv.className = "sources";
+    srcDiv.textContent = "Sources: " + sources;
+    card.appendChild(srcDiv);
+  }
+
+  container.insertBefore(card, container.firstChild);
+}
+
+document.getElementById("query-input").addEventListener("keydown", function(e) { if (e.key === "Enter") doQuery(); });
+
+connectWS();
+refreshNodes();
+setInterval(refreshNodes, 5000);
+</script>
+</body>
+</html>

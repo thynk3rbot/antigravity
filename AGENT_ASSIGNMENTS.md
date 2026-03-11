@@ -1,265 +1,244 @@
-# Agent Assignments & Lock File System
+# Agent Assignments & Roles
 
-**Purpose:** Prevent multiple AI agents from overwriting each other's work on shared components. Uses file-based locking and version-based merging.
+## Purpose
 
----
+Defines the agent roles for LoRaLink development and release work. This project uses a multi-agent workflow where agents act like team members with clear boundaries.
 
-## Core Principle
-
-1. **PC is Source of Truth** — All work happens locally; GitHub is backup/archive
-2. **Lock Files Prevent Conflicts** — Agent acquires lock before modifying assigned files
-3. **Version-Based Consolidation** — Merge all agent work to GitHub when version increments
-4. **Manual Merge on Version Change** — When `.h` file version changes, consolidate and push
+Core rules:
+- No agent writes directly to `main`.
+- All implementation happens on feature branches.
+- Release flow is planned, reviewed, tested, and then merged.
 
 ---
 
-## Current Component Assignments
+## Primary Environments
 
-| Agent | Primary Focus | Lock File | Root Directories |
-|---|---|---|---|
-| **Claude** | LoRaLink firmware core, managers, command routing | `.locks/claude.lock` | `src/managers/`, `src/config.h`, `src/crypto.h` |
-| **Antigravity** | NutriCalc server, MQTT integration, solver algorithm | `.locks/antigravity.lock` | `tools/webapp/`, `tools/requirements.txt` |
-| **Codex** | Firmware optimizations, performance tuning, watchdog | `.locks/codex.lock` | `src/main.cpp`, `src/managers/PerformanceManager.*` |
+### Antigravity
+Use for:
+- Orchestration
+- Architecture planning
+- Cross-agent coordination
+- Broad QA analysis
+- Release readiness review
 
-**Secondary (shared read-only unless assigned):**
-- `README.md`, `CLAUDE.md`, `INTEGRATION.md` — shared documentation
-- `tools/ble_instrument.py` — anyone can use, only assigned agent modifies
-- GitHub workflows, CI/CD configuration — centralized
-
----
-
-## Lock File Structure
-
-Location: `.locks/` directory (git-ignored)
-
-Each lock file contains:
-```
-agent_name
-timestamp_acquired
-session_start_time
-task_description
-```
-
-**Example:** `.locks/claude.lock`
-```
-Claude
-2026-03-09T14:30:00Z
-session-20260309-1430
-"Refactoring BLEManager GATT response callback"
-```
+### Claude Desktop
+Use for:
+- Guarded code implementation
+- Branch-scoped edits
+- Reviewable refactors
+- Policy-respecting code changes
+- Merge prep
 
 ---
 
-## How Agents Use Locks
+## Active Agent Assignments
 
-### Before Working on Assigned Component
-
-```bash
-# 1. Check if lock already exists and is fresh
-if [ -f ".locks/claude.lock" ]; then
-    # If older than 2 hours, safe to overwrite (agent abandoned it)
-    # If recent, wait or coordinate with other agent
-fi
-
-# 2. Create lock file
-cat > .locks/claude.lock << EOF
-Claude
-$(date -u +%Y-%m-%dT%H:%M:%SZ)
-session-$(date +%Y%m%d-%H%M)
-"Brief description of work"
-EOF
-
-# 3. Do work on assigned files
-
-# 4. Run session-commit.py to save changes
-python3 ~/session-commit.py
-
-# 5. Remove lock when done (optional but clean)
-rm .locks/claude.lock
-```
-
-### Lock Timeout
-
-If a lock file is **>2 hours old**, it's considered abandoned and can be safely removed:
-
-```bash
-# Check lock age
-find .locks -name "*.lock" -mmin +120 -delete
-```
+| Role | Agent | Primary Environments |
+| --- | --- | --- |
+| **Orchestrator** | Antigravity | Antigravity |
+| **Architect** | Claude | Claude Code / Claude Web |
+| **Developer** | Codex | Codex App / Codex Web |
+| **Integrator** | Claude | Claude Code / Antigravity |
+| **QA** | Gemini / ChatGPT | Gemini Web Chat / ChatGPT Web Chat |
+| **Release** | chatbot | Antigravity |
 
 ---
 
-## Merge-to-GitHub Workflow
+## Component Ownership (Resource-Based)
 
-### When Version Changes (Triggers Consolidation)
+To prevent concurrent editing conflicts on the source of truth, primary file ownership remains:
 
-**File:** `src/config.h`
-```c
-#define FIRMWARE_VERSION "v0.0.2"  // Changed from v0.0.1
-```
-
-**Automatic Actions:**
-1. `merge-to-github.py` detects version change
-2. Consolidates all agent lock files into session summary
-3. Stages all changes: `git add -A`
-4. Creates consolidation commit with all agent work
-5. Pushes to `main` (or current branch)
-
-**Example Consolidation Commit:**
-```
-consolidate: v0.0.1 → v0.0.2 (all agents)
-
-Claude: Updated BLEManager GATT callbacks (src/managers/BLEManager.cpp)
-Antigravity: Improved MQTT payload validation (tools/webapp/server.py)
-Codex: Optimized ScheduleManager task queue (src/managers/ScheduleManager.cpp)
-
-Lock files cleared. Session summary: See session-20260309-1430.log
-```
+| Agent/Environment | Primary Focus | Lock File | Root Directories |
+| --- | --- | --- | --- |
+| **Antigravity** | LoRaLink firmware core, managers, radio stack | `.locks/antigravity.lock` | `src/managers/`, `src/config.h`, `src/crypto.h`, `src/main.cpp` |
+| **Claude Desktop** | PC and Web applications, code reviews, integration tests | `.locks/claude.lock` | `tools/webapp/`, `tools/pc_app/`, `docs/`, `INTEGRATION.md` |
+| **Codex** | Firmware optimizations, performance tuning, watchdog | `.locks/codex.lock` | `src/managers/PerformanceManager.*`, `src/managers/PowerManager.*` |
 
 ---
 
-## File Modification Rules
+## Agent Roles
 
-### If Your Agent is NOT Assigned to Component
+### 1. Orchestrator Agent
+**Purpose**: Coordinates the overall workflow.
+**Environment**: Antigravity
+**Assigned Agent**: Antigravity
+**Responsibilities**:
+- Receives user goals
+- Selects which agent acts next
+- Maintains task order
+- Prevents overlapping work
+- Tracks release readiness
+- Ensures branch discipline is followed
 
-- **Read:** ✓ Yes (review code, understand architecture)
-- **Modify:** ✗ No (must coordinate with assigned agent)
-- **Comment:** ✓ Yes (add inline TODO, request in issue)
+**Can**:
+- Assign work
+- Request reviews
+- Request QA passes
+- Request release prep
 
-### If Your Agent IS Assigned
+**Cannot**:
+- Directly merge to `main`
+- Bypass QA or release checks
 
-- **Acquire Lock:** Required (protects from concurrent edits)
-- **Modify:** Full authority over assigned files
-- **Commit:** Via `session-commit.py` (not direct git)
-- **Push:** Only on version change or explicit user request
+### 2. Architecture Agent
+**Purpose**: Plans changes before implementation begins.
+**Environment**: Antigravity or Claude Desktop in read/analyze mode
+**Assigned Agent**: Claude
+**Responsibilities**:
+- Inspect repository structure
+- Understand current manager interactions
+- Identify affected files
+- Identify tool coupling impacts
+- Propose implementation phases
+- Identify risks and validation needs
 
----
+**Outputs**:
+- Implementation plan
+- Affected files list
+- Risk notes
+- Commit grouping suggestion
 
-## Preventing Conflicts: Checklist
+**Cannot**:
+- Start coding before analysis is complete
 
-- [ ] Check `.locks/` before starting work
-- [ ] Create lock file with timestamp and description
-- [ ] Only modify files in your assigned directories
-- [ ] Run `session-status.py` to verify no other agent is modifying
-- [ ] Use `session-commit.py` to save (creates backup to `~/backups/`)
-- [ ] Remove lock file when done
-- [ ] Coordinate with other agents if overlapping work needed
+### 3. Implementation Agent
+**Purpose**: Makes code changes on a feature branch.
+**Environment**: Claude Desktop
+**Assigned Agent**: Codex (Developer)
+**Responsibilities**:
+- Create or use assigned feature branch
+- Modify only the files needed
+- Preserve existing architecture unless refactor is intentional
+- Update coupled tooling when firmware behavior changes
+- Update docs when commands, workflow, or architecture change
 
----
+**Required checks before commit**:
+- Firmware builds (`pio run`)
+- Changed files are scoped to the task
+- Docs/tool coupling reviewed
 
-## Quick Reference: Component Ownership
+**Can**:
+- Edit source
+- Edit docs
+- Update tools
 
-### Claude Owns (Firmware Core)
+**Cannot**:
+- Commit to `main`
+- Merge its own work into `main`
+- Skip build verification
 
-```
-src/managers/BLEManager.cpp
-src/managers/BLEManager.h
-src/managers/CommandManager.cpp
-src/managers/CommandManager.h
-src/managers/LoRaManager.cpp
-src/managers/LoRaManager.h
-src/managers/ScheduleManager.cpp
-src/managers/ScheduleManager.h
-src/managers/WiFiManager.cpp
-src/managers/WiFiManager.h
-src/config.h
-src/crypto.h
-```
+### 4. Integration Agent
+**Purpose**: Prepares completed work for merge.
+**Environment**: Antigravity or Claude Desktop
+**Assigned Agent**: Claude
+**Responsibilities**:
+- Inspect diffs from feature branch
+- Verify intended files changed
+- Detect missing tool/doc updates
+- Resolve merge conflicts if needed
+- Ensure branch is ready for QA/release
 
-### Antigravity Owns (NutriCalc & Integrations)
+**Checks**:
+- Command changes reflected in docs
+- Tool changes applied if firmware/API/commands changed
+- No accidental unrelated edits
+- Branch merges cleanly with current `main`
 
-```
-tools/webapp/server.py
-tools/webapp/static/
-tools/requirements.txt
-tools/webapp/configs/
-INTEGRATION.md (co-authored)
-```
+**Cannot**:
+- Approve broken builds
+- Skip required coupling updates
 
-### Codex Owns (Performance & Optimization)
+### 5. QA Agent
+**Purpose**: Validates functionality and regression risk.
+**Environment**: Antigravity preferred for broad analysis
+**Assigned Agent**: Gemini
+**Responsibilities**:
+- Verify build success
+- Inspect core behavior affected by the change
+- Check routing, scheduler, transport, and tool compatibility as relevant
+- Identify regressions
+- Produce **PASS** / **FAIL** result
 
-```
-src/main.cpp
-src/managers/PerformanceManager.cpp
-src/managers/PerformanceManager.h
-src/managers/PowerManager.cpp
-src/managers/PowerManager.h
-```
+**Typical checks**:
+- `pio run`
+- Command routing behavior
+- LoRa behavior
+- BLE behavior if touched
+- WiFi/API behavior if touched
+- Scheduler stability if touched
+- Docs/tool sync if command or API behavior changed
 
----
+**Output**:
+- **PASS** or **FAIL** with bug list
 
-## Lock File Troubleshooting
+### 6. Release Agent
+**Purpose**: Handles stable merge and version release steps.
+**Environment**: Antigravity for coordination
+**Assigned Agent**: lightweight chatbot
+**Responsibilities**:
+- Confirm QA pass
+- Verify release checklist
+- Update version if appropriate
+- Merge approved work to `main`
+- Create release notes
+- Tag release if used in workflow
 
-**Q: Lock file stuck from interrupted session?**
-```bash
-# Check age
-ls -l .locks/*.lock
-# If >2 hours, safe to remove
-rm .locks/agent_name.lock
-```
-
-**Q: Merge failed because files were edited by multiple agents?**
-```bash
-# Review git diff to find conflicting edits
-git diff --check
-# If conflicts minor, use git merge conflict resolution
-# If conflicts major, coordinate with other agents and re-do
-```
-
-**Q: How do I know if another agent is working?**
-```bash
-# Check all active locks
-cat .locks/*.lock 2>/dev/null
-
-# Check modified files since lock was created
-git status --short
-```
-
----
-
-## Session Summary Format
-
-After each session ends (via `session-commit.py`), a summary appears:
-
-```
-============================================================
-SESSION COMPLETE
-============================================================
-Agent: Claude
-Duration: 1h 22m
-Files changed: 8
-Commits created: 1
-Lock file: .locks/claude.lock (removed)
-Backup location: ~/backups/loralink-20260309-1430
-GitHub status: Not pushed (version unchanged)
-============================================================
-```
-
----
-
-## Version Auto-Increment on Firmware Upload
-
-When `pio run -t upload` or OTA deployment occurs, a post-build hook should:
-
-1. Read current `FIRMWARE_VERSION` from `src/config.h`
-2. Parse semantic version (e.g., `v0.0.1` → `[0, 0, 1]`)
-3. Increment patch version: `[0, 0, 2]`
-4. Write back: `#define FIRMWARE_VERSION "v0.0.2"`
-5. Auto-stage and commit: `"fw: auto-bump v0.0.1 → v0.0.2"`
-
-**See:** `platformio.ini` post-build hook configuration (TODO: add exact snippet when implementing)
-
----
-
-## Next Steps
-
-1. Create `.locks/` directory (git-ignored)
-2. Each agent creates initial lock file before starting work
-3. Run `agent-tracking.py` to log which files each agent modifies
-4. On version change, run `merge-to-github.py` to consolidate
-5. Clear locks after merge, start fresh on new feature branch
+**Cannot**:
+- Release unreviewed work
+- Bypass QA
+- Ignore versioning rules
 
 ---
 
-**Last Updated:** 2026-03-09
-**Version:** 1.0 (Lock System v0.0.1)
+## Repo Rules for All Agents
+
+- Never commit directly to `main`.
+- Always work on `feature/<topic>`, `bugfix/<topic>`, `refactor/<topic>`, or `release/<version>`.
+- Always review tool coupling.
+- Always preserve firmware/tool compatibility.
+- Always build (`pio run`) before commit when code changed.
+
+---
+
+## Documentation Rules
+
+Agents must update relevant docs when behavior changes.
+
+### If commands change
+Update: `docs/COMMAND_INDEX.md`
+
+### If workflow changes
+Update: `AGENT_ASSIGNMENTS.md` and `MULTI_AGENT_WORKFLOW.md`
+
+### If architecture changes materially
+Update: `ARCHITECTURE_MAP.md`
+
+### If firmware behavior affects tools
+Review/update:
+- `tools/ble_instrument.py`
+- `tools/webapp/server.py`
+- `tools/webapp/static/index.html`
+
+---
+
+## Branch Ownership Rule
+
+One implementation agent owns one working branch at a time. If parallel work is needed:
+- Use separate branches.
+- Merge only after integration review.
+- Avoid two agents editing the same feature branch simultaneously.
+
+---
+
+## ⚠️ Fallback Strategy
+
+If a model or environment becomes unavailable (rate limits, downtime, context limits):
+- **Redundancy**: Orchestrator re-assigns the task to the next available environment (e.g., Claude ➔ Antigravity).
+- **Decomposition**: Large tasks are split into smaller sub-tasks to fit context windows.
+- **Manual Intervention**: The user may act as a human agent to clear blockers or perform manual integration.
+
+---
+
+## Release Principle
+
+Stable firmware lives on `main`. Everything else is staging, feature work, or validation.

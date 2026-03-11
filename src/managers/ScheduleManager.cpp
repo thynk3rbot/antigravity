@@ -50,9 +50,8 @@ ScheduleManager::ScheduleManager()
                         &ScheduleManager::peripheralSerialTask),
       tBatteryMonitor(300000, TASK_FOREVER,
                       &ScheduleManager::batteryMonitorCallback),
-      blinkCount(0),
-      tRepeaterDefer(REPEATER_JITTER_MAX_MS, TASK_ONCE,
-                     &ScheduleManager::repeaterDeferCallback),
+      blinkCount(0), tRepeaterDefer(REPEATER_JITTER_MAX_MS, TASK_ONCE,
+                                    &ScheduleManager::repeaterDeferCallback),
       tBeaconLegacy(BEACON_LEGACY_DELAY_MS, TASK_ONCE,
                     &ScheduleManager::beaconLegacyCallback),
       tSleepSequence(SLEEP_PC_GUARD_MS, TASK_ONCE,
@@ -142,8 +141,10 @@ void ScheduleManager::init() {
   }
 
   // Peripheral Serial task (Serial1 on G47/G48)
-  Serial1.begin(115200, SERIAL_8N1, PIN_GPS_RX, PIN_GPS_TX);
-  tPeripheralSerial.enable();
+  // WARNING: GPIO 47/48 are strapping/flash pins on some S3 variants.
+  // Temporarily DISABLED to ensure boot stability.
+  // Serial1.begin(115200, SERIAL_8N1, PIN_GPS_RX, PIN_GPS_TX);
+  // tPeripheralSerial.enable();
 
   // Battery protection monitor
   tBatteryMonitor.enableDelayed(10000);
@@ -308,7 +309,8 @@ void ScheduleManager::espNowTask() {
   String msg;
   while (espnow.poll(msg)) {
     DataManager::getInstance().LogMessage("ESPNOW", 0, msg);
-    CommandManager::getInstance().handleCommand(msg, CommInterface::COMM_ESPNOW);
+    CommandManager::getInstance().handleCommand(msg,
+                                                CommInterface::COMM_ESPNOW);
   }
 }
 
@@ -461,8 +463,7 @@ void ScheduleManager::sleepSequenceCallback() {
     return;
   LoRaManager &lora = LoRaManager::getInstance();
   DataManager &data = DataManager::getInstance();
-  unsigned int mins =
-      (unsigned int)(instance_ptr->_sleepHours * 60.0f);
+  unsigned int mins = (unsigned int)(instance_ptr->_sleepHours * 60.0f);
 
   switch (instance_ptr->_sleepStep) {
   case 0: // PC guard elapsed — start countdown from 3
@@ -473,8 +474,8 @@ void ScheduleManager::sleepSequenceCallback() {
     if (count > 0) {
       String cd = data.myId + " SLEEP " + String(mins) + "min in " +
                   String(count) + "s";
-      data.LogMessage("SYS", 0,
-                      "Sleep " + String(mins) + "min in " + String(count) + "s");
+      data.LogMessage(
+          "SYS", 0, "Sleep " + String(mins) + "min in " + String(count) + "s");
       if (lora.loraActive)
         lora.SendLoRa(cd);
       LOG_PRINTLN(cd);
@@ -486,8 +487,7 @@ void ScheduleManager::sleepSequenceCallback() {
       data.LogMessage("SYS", 0,
                       "Sleeping " + String(mins) + "min [" +
                           instance_ptr->_sleepTrigger + "]");
-      lora.lastMsgReceived =
-          "SYS: Sleeping " + String(mins) + "min";
+      lora.lastMsgReceived = "SYS: Sleeping " + String(mins) + "min";
       digitalWrite(PIN_LED_BUILTIN, LOW);
       if (Heltec.display) {
         Heltec.display->clear();
@@ -602,6 +602,17 @@ void ScheduleManager::dynamicTaskCallback() {
     return;
 
   DynamicTaskConfig &cfg = instance_ptr->dynamicConfigs[idx];
+
+  // SAFETY: Never allow dynamic tasks to touch USB Serial pins (19/20) on
+  // ESP32-S3
+  if (cfg.pin == 19 || cfg.pin == 20) {
+    static bool warned = false;
+    if (!warned) {
+      Serial.println("SAFETY: Blocked task from touching USB pins (19/20)!");
+      warned = true;
+    }
+    return;
+  }
 
   // THRESHOLD Trigger Check
   if (cfg.threshold > 0) {
@@ -749,6 +760,12 @@ void ScheduleManager::batteryMonitorCallback() {
     return;
 
   if (bat > 0.5f && bat < POWER_MISER_VOLT_CRITICAL) {
+    // Safety: don't sleep if we're likely on USB power (bat > 4.2V usually
+    // indicates charging or USB)
+    if (bat > 4.25f) {
+      LOG_PRINTLN("SCHED: Battery check skipped (USB Power Detected)");
+      return;
+    }
     LOG_PRINTLN("SCHED: Power-Miser CRITICAL! Routing through executeSleep.");
     CommandManager::executeSleep(6.0f, "PM-CRIT:" + String(bat, 2) + "V");
   }

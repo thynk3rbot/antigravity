@@ -15,6 +15,11 @@ void PowerManager::Init() {
   LOG_PRINTLN("POWER: Miser initializing...");
   pinMode(PIN_BAT_ADC, INPUT);
 
+#if defined(ARDUINO_ARCH_ESP32)
+  analogReadResolution(12);
+  analogSetAttenuation(ADC_11db); // 0 - 3.1V range
+#endif
+
   // Heltec V3 External Power Control
   pinMode(PIN_VEXT_CTRL, OUTPUT);
   digitalWrite(PIN_VEXT_CTRL, LOW);
@@ -28,10 +33,10 @@ void PowerManager::Init() {
 
 float PowerManager::getBatteryVoltage() {
   uint32_t raw = analogRead(PIN_BAT_ADC);
-  // Heltec V3: 1M / 390k divider (approx 1/2.766 multiplier)
-  // ADC is 12-bit (4095). 3.3V reference.
   float volt = (raw / 4095.0f) * 3.3f * BAT_VOLT_MULTI;
   _lastVoltage = volt;
+  LOG_PRINTF("POWER: Battery ADC=%u, V=%.2fV (Multi=%.2f)\n", raw, volt,
+             (float)BAT_VOLT_MULTI);
   return volt;
 }
 
@@ -51,17 +56,28 @@ void PowerManager::evaluateMode() {
 
   PowerMode prev = _currentMode;
 
-  // USB/Mains detection: If voltage is near 0 or very low (No battery),
-  // we force NORMAL mode and skip power-saving logic.
-  // 2.0V is a safe threshold since a dead LiPo is ~3.0V.
-  if (_lastVoltage < 2.0f || _lastVoltage > 4.1f) {
-    _currentMode = PowerMode::NORMAL;
+  // USB/Mains detection: If voltage is < 3.0V (Heltec V3 divider often floats
+  // at 2.8V on USB) or > 4.4V (USB 5V Rail), force NORMAL mode.
+  if (_lastVoltage < 3.0f || _lastVoltage > 4.4f) {
+    if (_currentMode != PowerMode::NORMAL) {
+      _currentMode = PowerMode::NORMAL;
+      LOG_PRINTLN("POWER: Miser -> NORMAL (USB Detection)");
+    }
   } else if (_lastVoltage >= POWER_MISER_VOLT_NORMAL) {
-    _currentMode = PowerMode::NORMAL;
+    if (_currentMode != PowerMode::NORMAL) {
+      _currentMode = PowerMode::NORMAL;
+      LOG_PRINTLN("POWER: Miser -> NORMAL (Battery High)");
+    }
   } else if (_lastVoltage >= POWER_MISER_VOLT_CONSERVE) {
-    _currentMode = PowerMode::CONSERVE;
+    if (_currentMode != PowerMode::CONSERVE) {
+      _currentMode = PowerMode::CONSERVE;
+      LOG_PRINTLN("POWER: Miser -> CONSERVE (Battery Low)");
+    }
   } else {
-    _currentMode = PowerMode::CRITICAL;
+    if (_currentMode != PowerMode::CRITICAL) {
+      _currentMode = PowerMode::CRITICAL;
+      LOG_PRINTLN("POWER: Miser -> CRITICAL (Battery Empty)");
+    }
   }
 
   if (prev != _currentMode) {

@@ -30,11 +30,12 @@
 void setup() {
   // 1. Serial
   Serial.begin(115200);
-  delay(1000);
+  delay(2000);
   Serial.println("\n\n########################################");
   Serial.println("#  LORALINK-ANY2ANY " FIRMWARE_VERSION "             #");
   Serial.println("#  Unified Wireless Gateway            #");
   Serial.println("########################################");
+  Serial.println("BOOT: Serial Started.");
 
   // 2. PRG button factory reset window
   pinMode(PIN_BUTTON_PRG, INPUT_PULLUP);
@@ -65,18 +66,20 @@ void setup() {
     ESP.restart();
   }
 
-  // 3. Power rail initialization (critical for Heltec V3 peripherals)
+  // 3. Power rail initialization (PREPARE only)
   pinMode(PIN_VEXT_CTRL, OUTPUT);
-  digitalWrite(PIN_VEXT_CTRL, LOW); // Power ON display/LoRa rail
+  digitalWrite(PIN_VEXT_CTRL,
+               HIGH); // Start with Display/LoRa OFF to save current
   pinMode(PIN_BAT_CTRL, OUTPUT);
   digitalWrite(PIN_BAT_CTRL, LOW); // Power ON battery divider
-  delay(100);
+  delay(500);
 
-  // 4. CPU clock optimization - Temporarily DISABLED to rule out clock
-  // instability setCpuFrequencyMhz(80);
+  // 4. CPU clock optimization
   Serial.printf("SYS: CPU Clock = %dMHz\n", getCpuFrequencyMhz());
 
-  // 5. Heltec init (display only, LoRa handled by LoRaManager)
+  // 5. Heltec init
+  Serial.println("BOOT: Heltec.begin...");
+  Serial.flush();
   Heltec.begin(true, false, true, false, 0);
   if (Heltec.display) {
     Heltec.display->setContrast(255);
@@ -85,6 +88,7 @@ void setup() {
 
   // 6. Data Manager
   Serial.println("BOOT: DataManager...");
+  Serial.flush();
   DataManager &data = DataManager::getInstance();
   data.Init();
 
@@ -94,19 +98,20 @@ void setup() {
   Serial.println("ID: " + data.myId + " [VAL:" + data.getMacSuffix() + "]");
   Serial.flush();
 
-  // 6.5. MCP23017 I2C GPIO Expander (DISABLED — not on this board, causes I2C hang)
-  // delay(50);
-  // MCPManager::getInstance().init();
-  // Serial.flush();
-
   // 6.6. Product Manager - restore active product pin modes
+  Serial.println("BOOT: ProductManager...");
   ProductManager::getInstance().restoreActiveProduct();
   Serial.flush();
 
   // 7. Command Manager - restore hardware state
-  Serial.println("BOOT: Restoring hardware state...");
+  Serial.println("BOOT: CommandManager...");
   CommandManager::getInstance().restoreHardwareState();
   Serial.flush();
+
+  // --- SAFE POWER STAGGER ---
+  Serial.println("SYS: Powering ON Peripherals (VExt)...");
+  digitalWrite(PIN_VEXT_CTRL, LOW); // Power ON Display/LoRa
+  delay(1000);
 
   // 8. LoRa Manager
   Serial.println("BOOT: LoRaManager...");
@@ -114,64 +119,36 @@ void setup() {
   LoRaManager::SetCallback([](const String &msg, CommInterface ifc) {
     CommandManager::getInstance().handleCommand(msg, ifc);
   });
-  Serial.flush();
 
-  // 9. BLE Manager (deferred to ScheduleManager task for staggered start)
-  Serial.println("BOOT: BLEManager... (Deferred)");
-  Serial.flush();
+  // --- SAFE POWER STAGGER ---
+  Serial.println("SYS: Waiting for USB stabilize... (5000ms)");
+  delay(5000);
+
+  // 9. BLE Manager (Step 3: Re-enabled)
+  Serial.println("BOOT: BLEManager...");
+  BLEManager::getInstance().init();
 
   // 10. WiFi Manager
   Serial.println("BOOT: WiFiManager...");
-  if (DataManager::getInstance().wifiEnabled) {
-    WiFiManager::getInstance().init();
-  } else {
-    Serial.println("WiFi: Disabled by RADIO profile.");
-  }
-  setWebCallback([](const String &cmd, CommInterface ifc) {
-    CommandManager::getInstance().handleCommand(cmd, ifc);
-  });
-  Serial.flush();
-
-  // 10.5 Transport negotiation window
-  // Spend up to transNegotiateMs probing the preferred transport, then lock
-  // currentLink. Configurable via NVS "trans_neg_ms" (default 10 000ms).
-  {
-    DataManager &d = DataManager::getInstance();
-    Serial.printf("BOOT: Link pref=%s  negotiate=%lums\n",
-                  DataManager::linkName(d.preferredLink), d.transNegotiateMs);
-    if (d.wifiEnabled) {
-      WiFiManager::getInstance().negotiate(d.transNegotiateMs);
-    } else {
-      d.currentLink = LinkPreference::LINK_LORA;
-      Serial.println("BOOT: WiFi disabled — locked to LORA");
-    }
-    Serial.printf("BOOT: Current link → %s\n",
-                  DataManager::linkName(d.currentLink));
-  }
-  Serial.flush();
+  WiFiManager::getInstance().init();
 
   // 11. ESP-NOW Manager
   Serial.println("BOOT: ESPNowManager...");
   ESPNowManager::getInstance().init();
-  Serial.flush();
 
-  // 12. Display Manager
-  Serial.println("BOOT: DisplayManager...");
-  DisplayManager::getInstance().Init();
-  Serial.flush();
-
-  // 13. MQTT Manager
+  // 11.5 MQTT Manager
   Serial.println("BOOT: MQTTManager...");
   MQTTManager::getInstance().Init();
-  Serial.flush();
 
-  // 13. Schedule Manager - start all tasks
+  // 12. Display Manager (Step 1: Re-enabled)
+  Serial.println("BOOT: DisplayManager...");
+  DisplayManager::getInstance().Init();
+
+  // 13. Schedule Manager
   Serial.println("BOOT: ScheduleManager...");
   ScheduleManager::getInstance().init();
-  Serial.flush();
 
-  Serial.println("BOOT: Setup OK — Entering Event Loop.");
-  Serial.printf("BOOT: Free Heap: %u bytes\n", ESP.getFreeHeap());
+  Serial.println("SYS: Master Unit Boot (OLED+BLE Active)");
   Serial.println("########################################\n");
 }
 

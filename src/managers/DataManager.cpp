@@ -75,6 +75,11 @@ void DataManager::Init() {
   Serial.println("INIT: Loading Settings...");
   Serial.flush();
   p.end();
+
+  // SAFETY: Force-disable traceLogging during boot to prevent Flash-write hangs
+  // that kill the USB Serial task.
+  traceLogging = false;
+
   LoadSettings();
 
   Serial.printf("BOOT: Heap Free: %u bytes\n", ESP.getFreeHeap());
@@ -471,6 +476,13 @@ void DataManager::LogMessage(const String &source, int rssi,
   logIndex = (logIndex + 1) % LOG_SIZE;
 
   if (traceLogging) {
+    // SAFETY: Limit Flash-based tracing to avoid USB Task starvation
+    static unsigned long lastTraceMs = 0;
+    if (millis() - lastTraceMs < 250) { // Max 4 logs per second to LittleFS
+      return;
+    }
+    lastTraceMs = millis();
+
     String formattedMsg =
         String("[") + (millis() / 1000) + "] " + source + ": " + msg;
 

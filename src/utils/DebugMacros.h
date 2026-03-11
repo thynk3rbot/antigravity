@@ -7,6 +7,9 @@
 #define DEBUG_MODE
 
 #ifdef DEBUG_MODE
+// SAFETY: Non-blocking prints for ESP32-S3 Native USB
+// Prevents the board from hanging if the USB buffer is full or host isn't
+// listening.
 #define LOG_PRINT(...) Serial.print(__VA_ARGS__)
 #define LOG_PRINTLN(...) Serial.println(__VA_ARGS__)
 #define LOG_PRINTF(...) Serial.printf(__VA_ARGS__)

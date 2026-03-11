@@ -1,472 +1,345 @@
-# Multi-Agent Workflow — Complete System Guide
+# Multi-Agent Workflow — SDLC Guide
 
-This document ties together the complete local-first, multi-agent development system for LoRaLink and NutriCalc.
+## Purpose
 
----
+Defines the working process for multiple agents acting as a coordinated firmware team for LoRaLink.
 
-## System Architecture
+This workflow is designed to support:
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│  Your PC (Source of Truth)                                       │
-│  ├─ ~/loralink/ (local workspace)                                │
-│  ├─ ~/nutricalc/ (local workspace)                               │
-│  └─ ~/backups/ (automatic session backups)                       │
-└─────────────────────────────────────────────────────────────────┘
-           ↓
-┌─────────────────────────────────────────────────────────────────┐
-│  Git + Lock Files (Multi-Agent Coordination)                     │
-│  ├─ .locks/ directory (file-based agent locks)                  │
-│  ├─ .gitignore (ignores .locks/ and ~/backups/)                 │
-│  └─ session-commit.py (saves work safely)                        │
-└─────────────────────────────────────────────────────────────────┘
-           ↓
-┌─────────────────────────────────────────────────────────────────┐
-│  GitHub (Backup / Archive)                                       │
-│  ├─ https://github.com/thynk3rbot/loralink                      │
-│  ├─ https://github.com/thynk3rbot/nutricalc                     │
-│  └─ Consolidation happens on VERSION CHANGE                      │
-└─────────────────────────────────────────────────────────────────┘
-```
+- Architecture planning
+- Guarded implementation
+- Integration review
+- QA validation
+- Versioned releases
 
-**Key Principle:** PC is source of truth. GitHub is only for backups and coordination points.
+Primary goal: **Ship stable firmware without letting multiple agents conflict, drift, or bypass review.**
 
 ---
 
-## Component Ownership
+## Operating Model
 
-| Agent | Primary Responsibility | Lock File | Files |
-|---|---|---|---|
-| **Claude** | LoRaLink firmware core managers, command routing, radio stack | `.locks/claude.lock` | `src/managers/`, `src/config.h`, `src/crypto.h` |
-| **Antigravity** | NutriCalc server, MQTT integration, solver algorithm | `.locks/antigravity.lock` | `tools/webapp/server.py`, `tools/webapp/static/`, `INTEGRATION.md` |
-| **Codex** | Firmware optimizations, performance tuning, watchdog | `.locks/codex.lock` | `src/main.cpp`, `src/managers/Performance*.`, `src/managers/Power*.` |
+The workflow follows a linear stage-gate model:
+**Orchestrator** ➔ **Architecture** ➔ **Implementation** ➔ **Integration** ➔ **QA** ➔ **Release**
 
----
-
-## Session Workflow (Step-by-Step)
-
-### Before You Start Working
-
-**1. Pull Latest**
-```bash
-cd ~/loralink
-git pull origin main
-
-cd ~/nutricalc
-git pull origin main
-```
-
-**2. Check Status**
-```bash
-python3 ~/session-status.py
-```
-Shows you:
-- Current branch
-- Latest commit hash
-- Uncommitted changes
-- Sync status with GitHub
-
-**3. For Your Assigned Components:**
-
-If you're Claude and want to work on BLEManager:
-```bash
-cd ~/loralink
-python3 agent-tracking.py acquire Claude "Refactoring BLE GATT response callback"
-```
-
-This creates `.locks/claude.lock` with:
-- Agent name (Claude)
-- Timestamp (2026-03-09T14:30:00Z)
-- Session ID (session-20260309-1430)
-- Task description
-
-### During Your Session
-
-**Work normally:**
-- Edit files in your assigned directories
-- Test locally
-- Make incremental git commits if desired (optional)
-- Don't touch files assigned to other agents
-
-**Check status anytime:**
-```bash
-python3 agent-tracking.py status
-```
-
-Shows:
-- Active locks (which agents are working)
-- Which files have been modified
-- Who owns each modified file
-- Conflict detection
-
-### End of Session (Critical!)
-
-**1. Use session-commit.py**
-```bash
-python3 ~/session-commit.py
-```
-
-This automatically:
-- Shows what changed
-- Asks for confirmation
-- Creates timestamped commit
-- Backs up to `~/backups/loralink-TIMESTAMP/`
-- (Optional) Pushes to GitHub
-
-**2. Release Your Lock**
-```bash
-cd ~/loralink
-python3 agent-tracking.py release Claude
-```
-
-**3. Check Final Status**
-```bash
-python3 ~/session-status.py
-```
+Each stage has a distinct owner. No stage should be skipped for meaningful firmware changes.
 
 ---
 
-## Version Management System
+## 🔄 The Continuous Product Cycle
 
-### Current Version
+To maintain momentum and quality, we operate in a rotating cycle across environments:
 
-Stored in `src/config.h`:
-```c
-#define FIRMWARE_VERSION "v0.0.1"
-```
-
-**Starting point:** v0.0.1 (as of this session)
-
-### When Version Changes
-
-**Automatic trigger:** When you upload firmware via PlatformIO:
-```bash
-pio run -t upload
-# Firmware uploads with v0.0.1
-```
-
-**After upload**, a post-build hook (TODO: implement) should:
-1. Read `src/config.h` → get current version
-2. Parse semantic version: `v0.0.1` → `[0, 0, 1]`
-3. Increment patch: `[0, 0, 2]`
-4. Write back: `#define FIRMWARE_VERSION "v0.0.2"`
-5. Auto-commit: `"fw: auto-bump v0.0.1 → v0.0.2"`
-
-### Consolidation on Version Change
-
-When version in `src/config.h` changes (e.g., v0.0.1 → v0.0.2):
-
-**Manually trigger consolidation:**
-```bash
-cd ~/loralink
-python3 merge-to-github.py detect           # Check if version changed
-python3 merge-to-github.py consolidate       # Consolidate all agent work
-python3 merge-to-github.py --auto-push       # Consolidate AND push
-```
-
-**What happens:**
-1. Detects version change from git history
-2. Gathers all modified files by agent
-3. Creates single consolidation commit like:
-   ```
-   consolidate: v0.0.1 → v0.0.2 (all agents)
-
-   Agent contributions:
-     Claude: 5 file(s) modified
-       • src/managers/BLEManager.cpp
-       • src/managers/CommandManager.h
-       ... and 3 more
-     Antigravity: 2 file(s) modified
-       • tools/webapp/server.py
-       ... and 1 more
-     Codex: 3 file(s) modified
-       • src/main.cpp
-       ... and 2 more
-
-   Lock files cleared.
-   ```
-4. Clears all `.locks/` files
-5. (Optional) Pushes to GitHub `main`
+1.  **Discuss Requirements**: (Antigravity + Orchestrator)
+    - Review goals, prioritize features, and define scope.
+    - *Environment*: Antigravity.
+2.  **Spec & Test Plan**: (Architect)
+    - Write technical specs, command definitions, and verification criteria.
+    - *Environment*: Claude Code / Claude Web.
+3.  **Code & Unit Test**: (Developer)
+    - Implement firmware/app logic on feature branches and verify builds.
+    - *Environment*: Codex App / Codex Web.
+4.  **Assure (QA)**: (QA Agent)
+    - Execute test plan, perform broad analysis, and check for regressions.
+    - *Environment*: Gemini Web Chat / ChatGPT Web Chat.
+5.  **Integrate**: (Integrator)
+    - Review code, verify tool/doc coupling, and prepare merge readiness.
+    - *Environment*: Claude Code / Antigravity.
+6.  **Release**: (Release Agent)
+    - Consolidate stable work, update versions, and merge to `main`.
+    - *Environment*: Antigravity.
 
 ---
 
-## Discrete Web Page Timestamps
+## Environment Strategy
 
-Each web page in the LoRaLink webapp will have a subtle timestamp showing when it was built.
+### Antigravity
 
-**Where to look:** Bottom-right corner of each page (very small, low contrast)
+Use for:
 
-**Format:** `Build: 2026-03-09T14:30:00Z` (ISO 8601)
+- Orchestration
+- Architecture planning
+- Broad QA analysis
+- Release readiness coordination
 
-**Implementation in server.py:**
-```python
-# At app startup
-APP_BUILD_TIMESTAMP = datetime.utcnow().isoformat() + "Z"
+### Claude Desktop
 
-@app.get("/")
-async def serve_index():
-    with open("static/index.html") as f:
-        html = f.read()
-    # Inject timestamp before closing </body>
-    html = html.replace(
-        "</body>",
-        f'<span class="build-timestamp">Build: {APP_BUILD_TIMESTAMP}</span></body>'
-    )
-    return HTMLResponse(html)
-```
+Use for:
 
-**CSS (in shared.css):**
-```css
-.build-timestamp {
-    position: fixed;
-    bottom: 4px;
-    right: 4px;
-    font-size: 8px;
-    color: rgba(255, 255, 255, 0.15);
-    font-family: monospace;
-    opacity: 0.3;
-    pointer-events: none;
-}
-```
+- Code implementation
+- Guarded refactors
+- Integration review
+- Scoped repository changes
 
-This way:
-- Timestamp is always fresh (generated when server starts)
-- Never synced to git (not saved to file)
-- Visible only if you know to look
-- Indicates when each page was last served
+This split keeps planning and coordination separate from code execution.
 
 ---
 
-## Lock File Lifecycle
+## Branch Strategy
 
-### Creation
-```
-Agent starts work → python3 agent-tracking.py acquire <name> "<task>"
-↓
-Creates: .locks/claude.lock (example)
-Contains: agent name, timestamp, session ID, task description
-```
+### Stable Branch
+- `main`
 
-### Active
-```
-Agent works on files → .locks/claude.lock remains
-↓
-Other agents can see lock and know Claude is working
-Lock prevents accidental overwrites
-```
+### Working Branch Types
+- `feature/<topic>`
+- `bugfix/<topic>`
+- `refactor/<topic>`
+- `release/<version>`
 
-### Timeout
-```
-Lock file exists for >2 hours → considered abandoned
-↓
-Manual cleanup: rm .locks/claude.lock (or let merge-to-github.py do it)
-```
+### Rules
+- Never commit directly to `main`.
+- Implementation always happens on a working branch.
+- Release merges only happen after QA PASS.
 
-### Release
-```
-Agent finishes work → python3 agent-tracking.py release Claude
-↓
-Removes: .locks/claude.lock
-Lock file gone, agent is "offline"
+---
+
+## Agent Roles
+
+### 1. Orchestrator Agent
+
+**Purpose**: Coordinates the overall workflow.
+**Environment**: Antigravity
+**Assigned Agent**: Antigravity
+
+### 2. Architecture Agent
+
+**Purpose**: Plans changes before implementation begins.
+**Environment**: Antigravity or Claude Desktop in read/analyze mode
+**Assigned Agent**: Claude
+
+### 3. Implementation Agent
+
+**Purpose**: Develops and tests code changes.
+**Environment**: Claude Code / Codex App
+**Assigned Agent**: Codex
+
+### 4. Integration Agent
+
+**Purpose**: Reviews code and ensures system compatibility.
+**Environment**: Claude Code / Antigravity
+**Assigned Agent**: Claude
+
+### 5. QA Agent
+
+**Purpose**: Validates changes and checks for regressions.
+**Environment**: Gemini Web Chat / ChatGPT Web Chat / Antigravity
+**Assigned Agent**: Gemini / ChatGPT
+
+### 6. Release Agent
+
+**Purpose**: Manages releases and merges to `main`.
+**Environment**: Antigravity
+**Assigned Agent**: Antigravity
+
+---
+
+## Workflow Stages
+
+### Stage 1: Intake
+The user requests a change, fix, refactor, or release.
+**Handled by**: Orchestrator Agent
+**Outputs**: Task summary, priority, and assigned agent sequence.
+
+---
+
+### Stage 2: Architecture Review
+The change is analyzed before coding begins.
+**Handled by**: Architecture Agent
+**Required outputs**:
+- Affected files
+- Manager interactions involved
+- Tool coupling impacts
+- Risk notes
+- Recommended implementation phases
+
+**Typical questions answered**:
+- What part of the firmware is affected?
+- What tools/docs must stay aligned?
+- What validation is required?
+
+---
+
+### Stage 3: Branch Preparation
+A working branch is selected or created.
+**Handled by**: Implementation Agent
+**Typical commands**:
+```bash
+git checkout main
+git pull
+git checkout -b feature/<topic>
 ```
 
 ---
 
-## Preventing Conflicts: Decision Tree
+### Stage 4: Implementation
+Code and docs are updated.
+**Handled by**: Implementation Agent
+**Requirements**:
+- Work only within task scope.
+- Preserve architecture unless refactor is explicit.
+- Update tools if firmware/API/command behavior changes.
+- Update docs if commands/workflow/architecture changed.
 
-```
-Before modifying a file:
-│
-├─ Is it in my assigned directory? (See AGENT_ASSIGNMENTS.md)
-│  │
-│  ├─ YES → Check if my lock exists
-│  │  │
-│  │  ├─ NO lock yet → Create it: agent-tracking.py acquire <name> "<task>"
-│  │  │
-│  │  └─ Lock exists → Good, I'm "locked in", proceed
-│  │
-│  └─ NO → Do NOT modify it
-│     │
-│     └─ Instead: Create issue/comment for assigned agent
-│
-└─ Modify, test, commit locally
-   │
-   └─ End of session → session-commit.py + agent-tracking.py release
-```
+**Required check before commit**: `pio run`
 
----
-
-## Emergency Procedures
-
-### Lock File Stuck (Agent Abandoned Work)
-
+**Typical implementation cycle**:
 ```bash
-# Check lock age
-ls -l .locks/*.lock
-
-# If >2 hours old, safe to remove
-rm .locks/claude.lock
-```
-
-### Merge Conflict After Consolidation
-
-```bash
-# Review conflicts
 git status
-
-# Edit files to resolve
-
-# Stage resolution
+pio run
 git add .
-
-# Complete merge
-git commit -m "resolve: merge conflicts from consolidation"
+git commit -m "feat: describe change"
+git push
 ```
 
-### Need to Undo Last Session
+---
 
+### Stage 5: Integration Review
+The working branch is reviewed for completeness and merge readiness.
+**Handled by**: Integration Agent
+**Checks**:
+- Right files changed.
+- No unrelated edits included.
+- Docs updated where needed.
+- Tools updated if coupling exists.
+- Branch is mergeable with current `main`.
+
+If issues are found: Return branch to Implementation stage.
+
+---
+
+### Stage 6: QA Validation
+The change is validated.
+**Handled by**: QA Agent
+**Required checks**:
+- Build passes (`pio run`).
+- Affected managers behave as expected.
+- Command routing still works.
+- Transport and Scheduler behavior still work.
+- Tools remain compatible.
+- No obvious regressions.
+
+**Result**: **PASS** or **FAIL**. If **FAIL**, list issues clearly and return to Implementation.
+
+---
+
+### Stage 7: Release Readiness
+Approved work is prepared for stable merge.
+**Handled by**: Release Agent
+**Checks**:
+- Integration review passed.
+- QA passed.
+- Version update considered.
+- Release notes prepared.
+
+---
+
+### Stage 8: Merge / Release
+Stable code is merged to `main`.
+**Handled by**: Release Agent
+**Typical commands**:
 ```bash
-# Find recent backup
-ls ~/backups/loralink-*
-
-# Restore (WARNING: overwrites current work!)
-cp -r ~/backups/loralink-20260309-1430/* ~/loralink/
+git checkout main
+git pull
+git merge feature/<topic>
+git push
 ```
 
 ---
 
-## Tools Reference
+## Required Documentation Maintenance
 
-| Script | Purpose | Location | Usage |
-|---|---|---|---|
-| `session-status.py` | Check repo status before work | `~/` | `python session-status.py` |
-| `session-commit.py` | Save work safely at end of session | `~/` | `python session-commit.py` |
-| `agent-tracking.py` | Manage locks and audit trail | Repo root | `python agent-tracking.py status` |
-| `merge-to-github.py` | Consolidate on version change | Repo root | `python merge-to-github.py detect` |
-| `AGENT_ASSIGNMENTS.md` | Component ownership | Repo root | Reference |
+Update the matching documents in the same branch where behavior changes:
+- **Command changes**: Update `docs/COMMAND_INDEX.md`
+- **Workflow changes**: Update `AGENT_ASSIGNMENTS.md` and `MULTI_AGENT_WORKFLOW.md`
+- **Architecture changes**: Update `ARCHITECTURE_MAP.md`
+- **Git/Process changes**: Update `docs/GIT_QUICK_REFERENCE.md`
 
 ---
 
-## File Locations Summary
+## Tool Coupling Rule
 
-```
-~/
-├── session-commit.py          ← Save work at session end
-├── session-status.py          ← Check status before/after
-├── SESSION_WORKFLOW.md        ← Full session guide
-├── SESSION_CHECKLIST.md       ← Per-session template
-├── QUICKSTART.md              ← 5-minute setup
-│
-├── loralink/                  ← LoRaLink workspace
-│   ├── .locks/                ← Agent lock files (git-ignored)
-│   ├── src/config.h           ← Firmware version (v0.0.1)
-│   ├── agent-tracking.py      ← Lock management
-│   ├── merge-to-github.py     ← Version consolidation
-│   └── AGENT_ASSIGNMENTS.md   ← Component ownership
-│
-├── nutricalc/                 ← NutriCalc workspace
-│   └── (same structure)
-│
-├── backups/                   ← Auto-created by session-commit.py
-│   ├── loralink-20260309-1430/
-│   ├── loralink-20260309-1500/
-│   └── ...
-│
-└── logs/                      ← Auto-created by scripts
-    ├── session-20260309-1430.log
-    ├── agent-audit.log
-    └── ...
-```
+Firmware and tools must stay synchronized. If firmware changes affect commands, API endpoints, scheduler behavior, BLE interfaces, or pin behavior, then you **MUST** review and update:
+- `tools/ble_instrument.py`
+- `tools/webapp/server.py`
+- `tools/webapp/static/index.html`
 
 ---
 
-## Quick Reference: Most Common Tasks
+## Commit Style
 
-### "I want to work on BLEManager"
+Recommended commit message format:
+- `feat: ...`
+- `fix: ...`
+- `refactor: ...`
+- `docs: ...`
+- `release: ...`
+
+---
+
+## Parallel Agent Rule
+
+Parallel work is allowed only when agents are isolated by branch or task scope.
+- **Allowed**: Separate branches for separate features; read-only review in parallel with coding.
+- **Not allowed**: Two implementation agents editing the same branch without coordination; QA validating code that is still changing.
+
+---
+
+## Minimal Daily Command Cadence
+
+**Start of work**:
 ```bash
-cd ~/loralink
-python3 agent-tracking.py acquire Claude "Updating GATT response handling"
-# ...edit and test...
-python3 ~/session-commit.py
-python3 agent-tracking.py release Claude
+git checkout main
+git pull
+git checkout feature/<topic>
 ```
 
-### "Check if anyone else is working"
+**During work**:
 ```bash
-cd ~/loralink
-python3 agent-tracking.py status
+git status
+pio run
+git add .
+git commit -m "type: summary"
+git push
 ```
 
-### "I uploaded firmware, consolidate and push"
+**Before merge**:
 ```bash
-cd ~/loralink
-python3 merge-to-github.py --auto-push
-```
-
-### "Show my modification history"
-```bash
-cd ~/loralink
-python3 agent-tracking.py log
-```
-
-### "Restore from backup if I messed up"
-```bash
-ls ~/backups/
-cp -r ~/backups/loralink-20260309-1430/* ~/loralink/
-# WARNING: This overwrites current work
+git checkout main
+git pull
+git merge feature/<topic>
 ```
 
 ---
 
-## Version Numbering Scheme
+## Release Standard
 
-**Format:** `vMAJOR.MINOR.PATCH` (e.g., `v0.0.1`)
-
-**When to increment:**
-- **MAJOR:** Major breaking changes to protocol or architecture
-- **MINOR:** New features, significant refactors
-- **PATCH:** Bug fixes, small improvements (AUTO-INCREMENTED on firmware upload)
-
-**Example progression:**
-```
-v0.0.1 (initial)
-  ↓ (upload firmware)
-v0.0.2 (auto-bumped patch)
-  ↓ (add new feature, manual bump to minor)
-v0.1.0 (new feature release)
-  ↓ (upload)
-v0.1.1 (auto-bumped)
-```
+A version release includes:
+- Merged approved branch.
+- Passing build and QA.
+- Updated version and documentation.
+- Stable `main`.
 
 ---
 
-## Summary: What's Different Now
+## ⚠️ Workflow Fallback Strategy
 
-| Before | Now |
-|---|---|
-| Multiple agents overwriting each other's work | Lock files prevent conflicts |
-| No version tracking | Version in `src/config.h`, auto-increments on upload |
-| Manual consolidation to GitHub | Automatic on version change via `merge-to-github.py` |
-| No session workflow | `session-commit.py` handles safe storage |
-| No audit trail | `agent-tracking.py` logs all modifications |
-| GitHub is source of truth | PC is source of truth, GitHub is backup |
-| Daily git chaos | Version-based consolidation (clean, intentional merges) |
+In the event of model constraints, rate limits, or environment outages, follow these protocols:
 
----
+1. **Environment Swap**:
+   - If **Claude Code/Desktop** is unavailable ➔ Shift Implementation to **Antigravity**.
+   - If **Codex App/Web** is unavailable ➔ Shift Development to **Claude Code**.
+   - If **Gemini/ChatGPT Web** is unavailable ➔ Perform QA analysis in **Antigravity**.
 
-## Next Steps (Immediate)
+2. **Context Pressure**:
+   - If a task exceeds context limits ➔ **Orchestrator** must split the task into "Micro-Sprints" with their own Architecture and QA gates.
 
-1. ✓ Create `.locks/` directory in both repos
-2. ✓ Agents acquire locks before starting work
-3. ✓ Use `agent-tracking.py status` to check conflict
-4. ✓ Use `session-commit.py` at session end
-5. ⚠️ **TODO:** Implement post-build hook in `platformio.ini` for auto-version-increment
-6. ⚠️ **TODO:** Add discrete timestamp injection to web pages
-7. ⚠️ **TODO:** Set up `.gitignore` to exclude `.locks/` and `~/backups/`
+3. **Model Performance Degradation**:
+   - If an agent consistently fails a stage (e.g., QA rejects Implementation 3+ times) ➔ **Orchestrator** must re-assign the role to a different model for a fresh review.
+
+4. **Manual Override**:
+   - If automation/locking scripts fail ➔ Revert to standard Git CLI. Clear all locks via `python agent-tracking.py --clear` before resuming.
 
 ---
 
-**System Created:** 2026-03-09
-**Firmware Version:** v0.0.1
-**Lock System:** Enabled
-**Consolidation:** Ready (trigger on version change)
+## Final Principle
+
+Agents are not free-roaming assistants. They are **role-bound team members** operating inside a controlled firmware workflow.

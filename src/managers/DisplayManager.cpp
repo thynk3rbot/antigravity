@@ -28,8 +28,8 @@ void DisplayManager::Init() {
   Serial.flush();
 
   if (Heltec.display) {
-    Heltec.display->setContrast(255);
-    Heltec.display->setBrightness(255);
+    Heltec.display->setContrast(200);
+    Heltec.display->setBrightness(200);
   }
   ShowSplash();
   delay(2000);

@@ -9,6 +9,7 @@ Usage:
     python agent-tracking.py status           # Show current locks and modified files
     python agent-tracking.py acquire <name>   # Agent acquires lock before work
     python agent-tracking.py release <name>   # Agent releases lock after work
+    python agent-tracking.py clear             # Clear all active locks
     python agent-tracking.py log              # Show modification audit trail
 """
 
@@ -16,31 +17,32 @@ import subprocess
 import sys
 import json
 from pathlib import Path
-from datetime import datetime, timedelta
-import os
+from datetime import datetime
 
 HOME_DIR = Path.home()
 REPO_PATH = Path.cwd()
 LOCKS_DIR = REPO_PATH / ".locks"
 AUDIT_LOG = HOME_DIR / "logs" / "agent-audit.log"
 
+
 # Color codes for terminal output
 class Colors:
-    OKGREEN = '\033[92m'
-    WARNING = '\033[93m'
-    OKBLUE = '\033[94m'
-    FAIL = '\033[91m'
-    ENDC = '\033[0m'
-    BOLD = '\033[1m'
+    OKGREEN = "\033[92m"
+    WARNING = "\033[93m"
+    OKBLUE = "\033[94m"
+    FAIL = "\033[91m"
+    ENDC = "\033[0m"
+    BOLD = "\033[1m"
 
     @staticmethod
     def disable():
-        Colors.OKGREEN = ''
-        Colors.WARNING = ''
-        Colors.OKBLUE = ''
-        Colors.FAIL = ''
-        Colors.ENDC = ''
-        Colors.BOLD = ''
+        Colors.OKGREEN = ""
+        Colors.WARNING = ""
+        Colors.OKBLUE = ""
+        Colors.FAIL = ""
+        Colors.ENDC = ""
+        Colors.BOLD = ""
+
 
 if sys.platform == "win32":
     Colors.disable()
@@ -49,6 +51,7 @@ if sys.platform == "win32":
 # ============================================================================
 # LOCK FILE MANAGEMENT
 # ============================================================================
+
 
 def acquire_lock(agent_name, task_description=""):
     """Create lock file for agent."""
@@ -72,7 +75,7 @@ def acquire_lock(agent_name, task_description=""):
         "action": "lock_acquired",
         "agent": agent_name,
         "task": task_description,
-        "lock_file": str(lock_file)
+        "lock_file": str(lock_file),
     }
     _append_audit_log(audit_entry)
 
@@ -97,11 +100,43 @@ def release_lock(agent_name):
         "timestamp": datetime.now().isoformat(),
         "action": "lock_released",
         "agent": agent_name,
-        "lock_file": str(lock_file)
+        "lock_file": str(lock_file),
     }
     _append_audit_log(audit_entry)
 
     print(f"{Colors.OKGREEN}✓ Lock released: {agent_name}{Colors.ENDC}")
+    print()
+
+
+def clear_locks():
+    """Remove all lock files."""
+    if not LOCKS_DIR.exists():
+        print(f"{Colors.OKBLUE}No locks directory found.{Colors.ENDC}")
+        return
+
+    lock_files = list(LOCKS_DIR.glob("*.lock"))
+    if not lock_files:
+        print(f"{Colors.OKBLUE}No lock files to clear.{Colors.ENDC}")
+        return
+
+    count = 0
+    for lock_file in lock_files:
+        try:
+            lock_file.unlink()
+            count += 1
+        except Exception as e:
+            print(f"{Colors.FAIL}Error removing {lock_file.name}: {e}{Colors.ENDC}")
+
+    # Log to audit trail
+    audit_entry = {
+        "timestamp": datetime.now().isoformat(),
+        "action": "locks_cleared",
+        "agent": "system",
+        "count": count,
+    }
+    _append_audit_log(audit_entry)
+
+    print(f"{Colors.OKGREEN}✓ {count} lock(s) cleared.{Colors.ENDC}")
     print()
 
 
@@ -114,7 +149,7 @@ def check_locks():
     locks = {}
     for lock_file in LOCKS_DIR.glob("*.lock"):
         try:
-            content = lock_file.read_text().strip().split('\n')
+            content = lock_file.read_text().strip().split("\n")
             agent = content[0] if len(content) > 0 else "unknown"
             timestamp = content[1] if len(content) > 1 else "unknown"
             session = content[2] if len(content) > 2 else "unknown"
@@ -131,7 +166,7 @@ def check_locks():
                 "session": session,
                 "task": task,
                 "age_minutes": age_minutes,
-                "abandoned": age_minutes > 120  # >2 hours
+                "abandoned": age_minutes > 120,  # >2 hours
             }
         except Exception as e:
             print(f"{Colors.FAIL}Error reading {lock_file}: {e}{Colors.ENDC}")
@@ -143,6 +178,7 @@ def check_locks():
 # GIT MODIFICATION TRACKING
 # ============================================================================
 
+
 def get_modified_files():
     """Get all modified files since last commit."""
     try:
@@ -151,11 +187,14 @@ def get_modified_files():
             cwd=REPO_PATH,
             capture_output=True,
             text=True,
-            shell=True
+            shell=True,
         )
 
         files = {}
-        for line in result.stdout.strip().split('\n'):
+        # Don't strip() the whole output as it removes leading spaces from the first line
+        # porcelain format depends on exact positioning (3 chars prefix)
+        lines = result.stdout.split("\n")
+        for line in lines:
             if not line.strip():
                 continue
             status = line[:2]
@@ -172,60 +211,43 @@ def get_last_commit_author(file_path):
     """Get author of last commit for file."""
     try:
         result = subprocess.run(
-            f"git log -1 --format=%an -- \"{file_path}\"",
+            f'git log -1 --format=%an -- "{file_path}"',
             cwd=REPO_PATH,
             capture_output=True,
             text=True,
-            shell=True
+            shell=True,
         )
         return result.stdout.strip() or "unknown"
-    except:
+    except Exception:
         return "unknown"
 
 
 def get_file_owner(file_path):
     """Determine which agent owns a file based on AGENT_ASSIGNMENTS."""
-    path = Path(file_path)
+    file_str = str(file_path).replace("\\", "/")
 
-    # Claude's directories
-    claude_dirs = [
-        "src/managers/BLEManager",
-        "src/managers/CommandManager",
-        "src/managers/LoRaManager",
-        "src/managers/ScheduleManager",
-        "src/managers/WiFiManager",
-        "src/config.h",
-        "src/crypto.h"
-    ]
+    # Determine owner (sync'd with AGENT_ASSIGNMENTS.md)
+    # Codex (Specific managers)
+    if "PerformanceManager" in file_str or "PowerManager" in file_str:
+        return "Codex"
 
-    # Antigravity's directories
-    antigravity_dirs = [
-        "tools/webapp/server.py",
-        "tools/webapp/static/",
-        "tools/requirements.txt",
-        "INTEGRATION.md"
-    ]
+    # Antigravity (Firmware Core)
+    if (
+        "src/managers/" in file_str
+        or "src/config.h" in file_str
+        or "src/crypto.h" in file_str
+        or "src/main.cpp" in file_str
+    ):
+        return "Antigravity"
 
-    # Codex's directories
-    codex_dirs = [
-        "src/main.cpp",
-        "src/managers/PerformanceManager",
-        "src/managers/PowerManager"
-    ]
-
-    file_str = str(path)
-
-    for pattern in claude_dirs:
-        if pattern in file_str:
-            return "Claude"
-
-    for pattern in antigravity_dirs:
-        if pattern in file_str:
-            return "Antigravity"
-
-    for pattern in codex_dirs:
-        if pattern in file_str:
-            return "Codex"
+    # Claude (Webapp, Tools, Docs)
+    if (
+        "tools/webapp/" in file_str
+        or "tools/pc_app/" in file_str
+        or "docs/" in file_str
+        or "INTEGRATION.md" in file_str
+    ):
+        return "Claude"
 
     return "unassigned"
 
@@ -234,12 +256,13 @@ def get_file_owner(file_path):
 # AUDIT LOGGING
 # ============================================================================
 
+
 def _append_audit_log(entry):
     """Append entry to audit log file."""
     AUDIT_LOG.parent.mkdir(parents=True, exist_ok=True)
 
-    with open(AUDIT_LOG, 'a') as f:
-        f.write(json.dumps(entry) + '\n')
+    with open(AUDIT_LOG, "a") as f:
+        f.write(json.dumps(entry) + "\n")
 
 
 def show_audit_log(limit=20):
@@ -249,19 +272,19 @@ def show_audit_log(limit=20):
         return
 
     try:
-        with open(AUDIT_LOG, 'r') as f:
+        with open(AUDIT_LOG, "r") as f:
             lines = f.readlines()
 
         print(f"\n{Colors.BOLD}AUDIT LOG (last {limit} entries){Colors.ENDC}")
-        print(f"{Colors.BOLD}{'='*70}{Colors.ENDC}\n")
+        print(f"{Colors.BOLD}{'=' * 70}{Colors.ENDC}\n")
 
         for line in lines[-limit:]:
             try:
                 entry = json.loads(line)
-                timestamp = entry.get('timestamp', 'unknown')
-                action = entry.get('action', 'unknown')
-                agent = entry.get('agent', 'system')
-                task = entry.get('task', '')
+                timestamp = entry.get("timestamp", "unknown")
+                action = entry.get("action", "unknown")
+                agent = entry.get("agent", "system")
+                task = entry.get("task", "")
 
                 # Format output
                 if action == "lock_acquired":
@@ -276,10 +299,12 @@ def show_audit_log(limit=20):
 
                 elif action == "files_modified":
                     print(f"{timestamp}")
-                    print(f"  {Colors.WARNING}⊙ {agent} modified {len(entry.get('files', []))} files{Colors.ENDC}")
-                    for f in entry.get('files', [])[:3]:
+                    print(
+                        f"  {Colors.WARNING}⊙ {agent} modified {len(entry.get('files', []))} files{Colors.ENDC}"
+                    )
+                    for f in entry.get("files", [])[:3]:
                         print(f"    - {f}")
-                    if len(entry.get('files', [])) > 3:
+                    if len(entry.get("files", [])) > 3:
                         print(f"    ... and {len(entry.get('files', [])) - 3} more")
 
                 print()
@@ -294,12 +319,13 @@ def show_audit_log(limit=20):
 # STATUS DISPLAY
 # ============================================================================
 
+
 def show_status():
     """Show current agent status and modifications."""
     print()
-    print(f"{Colors.BOLD}{'='*70}{Colors.ENDC}")
+    print(f"{Colors.BOLD}{'=' * 70}{Colors.ENDC}")
     print(f"{Colors.BOLD}AGENT TRACKING STATUS{Colors.ENDC}")
-    print(f"{Colors.BOLD}{'='*70}{Colors.ENDC}\n")
+    print(f"{Colors.BOLD}{'=' * 70}{Colors.ENDC}\n")
 
     # Show active locks
     locks = check_locks()
@@ -307,7 +333,11 @@ def show_status():
 
     if locks:
         for agent, info in locks.items():
-            status_str = f"{Colors.FAIL}[ABANDONED]{Colors.ENDC}" if info['abandoned'] else f"{Colors.OKGREEN}[ACTIVE]{Colors.ENDC}"
+            status_str = (
+                f"{Colors.FAIL}[ABANDONED]{Colors.ENDC}"
+                if info["abandoned"]
+                else f"{Colors.OKGREEN}[ACTIVE]{Colors.ENDC}"
+            )
             print(f"  {status_str} {agent}")
             print(f"    Acquired: {info['acquired']}")
             print(f"    Session: {info['session']}")
@@ -357,12 +387,13 @@ def show_status():
     if not has_conflict:
         print(f"  {Colors.OKGREEN}✓ No conflicts detected{Colors.ENDC}\n")
 
-    print(f"{Colors.BOLD}{'='*70}{Colors.ENDC}\n")
+    print(f"{Colors.BOLD}{'=' * 70}{Colors.ENDC}\n")
 
 
 # ============================================================================
 # MAIN
 # ============================================================================
+
 
 def main():
     """Main entry point."""
@@ -377,7 +408,9 @@ def main():
 
     elif command == "acquire":
         if len(sys.argv) < 3:
-            print("Usage: python agent-tracking.py acquire <agent_name> [task_description]")
+            print(
+                "Usage: python agent-tracking.py acquire <agent_name> [task_description]"
+            )
             sys.exit(1)
         agent_name = sys.argv[2]
         task_description = " ".join(sys.argv[3:]) if len(sys.argv) > 3 else ""
@@ -389,6 +422,9 @@ def main():
             sys.exit(1)
         agent_name = sys.argv[2]
         release_lock(agent_name)
+
+    elif command == "clear" or command == "--clear":
+        clear_locks()
 
     elif command == "log":
         show_audit_log(limit=30)

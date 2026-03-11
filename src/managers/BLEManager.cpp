@@ -3,6 +3,8 @@
 #include "CommandManager.h"
 #include "DataManager.h"
 #include <WiFi.h>
+#include <esp_bt.h>
+#include <esp_gap_ble_api.h>
 #include <esp_mac.h>
 #include <string>
 
@@ -71,6 +73,12 @@ void BLEManager::init() {
     devName = "HT-LoRa";
 
   BLEDevice::init(devName.c_str());
+
+  // [POWER] Increased TX Power - Battery connected
+  // ESP_PWR_LVL_P3 = +3dBm
+  esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_DEFAULT, ESP_PWR_LVL_P3);
+  esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_ADV, ESP_PWR_LVL_P3);
+  esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_SCAN, ESP_PWR_LVL_P3);
 
   pServer = BLEDevice::createServer();
   pServer->setCallbacks(new MyServerCallbacks());

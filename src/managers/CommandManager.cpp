@@ -59,6 +59,13 @@ int CommandManager::getPinFromName(const String &name) {
   upperName.toUpperCase();
   upperName.trim();
 
+  // SAFETY: Blacklist USB Serial pins (19, 20) on ESP32-S3 to prevent port
+  // hijacking
+  if (upperName == "19" || upperName == "20" || upperName == "IO19" ||
+      upperName == "IO20" || upperName == "USB") {
+    return -1;
+  }
+
   for (int i = 0; PIN_LOOKUP[i].mnemonic != NULL; i++) {
     if (upperName == PIN_LOOKUP[i].mnemonic) {
       return PIN_LOOKUP[i].pin;
@@ -83,8 +90,7 @@ int CommandManager::getPinFromName(const String &name) {
 }
 
 void CommandManager::restoreHardwareState() {
-  Serial.println("CMD: Restore Hardware START");
-  Serial.flush();
+  LOG_PRINTLN("CMD: Restore Hardware START");
   DataManager &data = DataManager::getInstance();
   LOG_PRINTLN("SYS: Restoring Relay/LED States...");
 
@@ -100,10 +106,8 @@ void CommandManager::restoreHardwareState() {
     pinMode(outPins[i], OUTPUT);
     digitalWrite(outPins[i], state ? HIGH : LOW);
     LOG_PRINTF("  %s -> %s\n", outputs[i], state ? "ON" : "OFF");
-    Serial.flush();
   }
-  Serial.println("CMD: Restore Hardware OK");
-  Serial.flush();
+  LOG_PRINTLN("CMD: Restore Hardware OK");
 }
 
 void CommandManager::handleCommand(const String &fullCmdIn,

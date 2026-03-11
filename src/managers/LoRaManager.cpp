@@ -285,7 +285,8 @@ void LoRaManager::HandleRx() {
 
   // Periodic diagnostic: every 120 polls (~60s at 50ms interval)
   if (rxPollCount % 1200 == 0) {
-    LOG_PRINTF("LORA-DIAG: poll=%d, flag=%d, active=%d, DIO1=%d, tx=%lu rx=%lu drop=%lu\n",
+    LOG_PRINTF("LORA-DIAG: poll=%d, flag=%d, active=%d, DIO1=%d, tx=%lu rx=%lu "
+               "drop=%lu\n",
                rxPollCount, receivedFlag ? 1 : 0, loraActive ? 1 : 0,
                digitalRead(PIN_LORA_DIO1), _txCount, _rxCount, _txDropCount);
     // Force re-arm the receiver
@@ -469,10 +470,10 @@ void LoRaManager::ProcessPacket(uint8_t *rxEncBuf, int size) {
         uint8_t fwdEncBuf[ENCRYPTED_PACKET_SIZE];
         encryptPacket(&rxPacket, fwdEncBuf, currentKey);
         // Defer the actual TX by jitter ms — zero blocking in this path
-        ScheduleManager::getInstance().deferRepeaterSend(fwdEncBuf,
-                                                         ENCRYPTED_PACKET_SIZE,
-                                                         jitter);
-        data.LogMessage("RPTR", radio->getRSSI(), "Queued propagation: " + text);
+        ScheduleManager::getInstance().deferRepeaterSend(
+            fwdEncBuf, ENCRYPTED_PACKET_SIZE, jitter);
+        data.LogMessage("RPTR", radio->getRSSI(),
+                        "Queued propagation: " + text);
         LOG_PRINTF("RPTR: Queued deferred TX (jitter=%d ms)\n", jitter);
       } else {
         LOG_PRINTLN("RPTR: Packet dropped (TTL=0)");
@@ -529,8 +530,10 @@ void LoRaManager::SendHeartbeat() {
 
   if (!batChanged && !rstChanged && !forceTX) {
     _hbSkipCount++;
-    LOG_PRINTF("LORA: HB suppressed (skip %d/%d, bat=%.2f)\n", _hbSkipCount,
-               HB_FORCE_INTERVAL, batVal);
+    LOG_PRINTF(
+        "LORA: HB suppressed (skip %d/%d, raw=%u, bat=%.2f, multi=%.2f)\n",
+        _hbSkipCount, HB_FORCE_INTERVAL, analogRead(PIN_BAT_ADC), batVal,
+        (float)BAT_VOLT_MULTI);
     return;
   }
 
