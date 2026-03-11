@@ -161,10 +161,17 @@ void DisplayManager::drawNetwork(DataManager &data) {
   if (WiFi.status() == WL_CONNECTED) {
     Heltec.display->setFont(ArialMT_Plain_16);
     Heltec.display->setTextAlignment(TEXT_ALIGN_CENTER);
-    Heltec.display->drawString(64, 16, WiFi.localIP().toString());
+    Heltec.display->drawString(64, 14, WiFi.localIP().toString());
     Heltec.display->setFont(ArialMT_Plain_10);
-    Heltec.display->drawString(64, 36, "SSID: " + WiFi.SSID());
-    Heltec.display->drawString(64, 48, String(WiFi.RSSI()) + " dBm");
+    Heltec.display->drawString(64, 33, "SSID: " + WiFi.SSID());
+
+    // Show first peer's resolved IP if available
+    if (data.numNodes > 0 && data.remoteNodes[0].ip[0] != '\0') {
+      Heltec.display->drawString(64, 45,
+        String(data.remoteNodes[0].id) + ": " + String(data.remoteNodes[0].ip));
+    } else {
+      Heltec.display->drawString(64, 45, String(WiFi.RSSI()) + " dBm");
+    }
     Heltec.display->setTextAlignment(TEXT_ALIGN_RIGHT);
     Heltec.display->drawString(128, 0, "[" + data.getMacSuffix() + "]");
   } else {

@@ -166,6 +166,14 @@ void CommandManager::handleCommand(const String &fullCmdIn,
     if (target.equalsIgnoreCase(data.myId) ||
         target.equalsIgnoreCase(data.getMacSuffix()) ||
         target.equalsIgnoreCase("ALL")) {
+      
+      // Swarm Intelligence: Jitter response to "ALL" commands to prevent ACK storm
+      if (fromLoRa && target.equalsIgnoreCase("ALL")) {
+        int jitter = random(250, 3000);
+        LOG_PRINTF("CMD: Broadcast command (ALL) - Jittering response by %d ms\n", jitter);
+        delay(jitter); 
+      }
+
       executeLocalCommand(subCmd, source);
       if (fromLoRa && !target.equalsIgnoreCase("ALL")) {
         lora.SendLoRa("ACK: " + subCmd);
@@ -272,18 +280,17 @@ void CommandManager::initRegistry() {
   registerCommand("STATUS", [](const String &args, CommInterface source) {
     DataManager &data = DataManager::getInstance();
     LoRaManager &lora = LoRaManager::getInstance();
-    float bat = analogRead(PIN_BAT_ADC) / 4095.0 * 3.3 * BAT_VOLT_MULTI;
+    float bat = PowerManager::getInstance().getBatteryVoltage();
     String ip = (WiFi.status() == WL_CONNECTED) ? WiFi.localIP().toString()
                                                 : "DISCONNECTED";
+    String mode = PowerManager::getInstance().getModeString();
     String msg =
         "ID: " + data.myId + " (HW: [" + data.getMacSuffix() + "]) " +
         "VER: " FIRMWARE_VERSION " IP: " + ip + " BAT: " + String(bat, 2) +
-        "V LoRa: " + String(lora.lastRssi) + "dBm EN:" +
+        "V [" + mode + "] LoRa: " + String(lora.lastRssi) + "dBm EN:" +
         String(ESPNowManager::getInstance().espNowActive ? "ON" : "OFF");
-    if (source == CommInterface::COMM_LORA)
-      lora.SendLoRa(data.myId + " " + msg);
-    else
-      LOG_PRINTLN(msg);
+
+    CommandManager::getInstance().sendResponse(msg, source);
     lora.lastMsgReceived = "SYS: STATUS SENT";
   });
 
@@ -294,14 +301,10 @@ void CommandManager::initRegistry() {
 
   registerCommand("READMAC", [](const String &args, CommInterface source) {
     DataManager &data = DataManager::getInstance();
-    LoRaManager &lora = LoRaManager::getInstance();
     String mac = WiFi.macAddress();
     data.LogMessage("READMAC", 0, "MAC: " + mac);
-    if (source == CommInterface::COMM_LORA)
-      lora.SendLoRa("MAC: " + mac);
-    else
-      LOG_PRINTLN("MAC: " + mac);
-    lora.lastMsgReceived = "SYS: MAC SENT";
+    CommandManager::getInstance().sendResponse("MAC: " + mac, source);
+    LoRaManager::getInstance().lastMsgReceived = "SYS: MAC SENT";
   });
 
   registerCommand("RADIO", [](const String &args, CommInterface source) {
@@ -311,15 +314,11 @@ void CommandManager::initRegistry() {
   });
 
   registerCommand("HELP", [](const String &args, CommInterface source) {
-    LoRaManager &lora = LoRaManager::getInstance();
     String help = "LED ON/OFF, BLINK, STATUS, READMAC, RADIO, SETNAME, "
                   "SETWIFI, ESPNOW ON/OFF, STREAM ON/OFF, "
                   "GPIO pin 0|1, PWM pin duty(0-255), SERVO pin angle(0-180), "
-                  "READ pin, APC pin 0|1";
-    if (source == CommInterface::COMM_LORA)
-      lora.SendLoRa(help);
-    else
-      LOG_PRINTLN(help);
+                  "READ pin, APC pin 0|1, NOLORA ON/OFF";
+    CommandManager::getInstance().sendResponse(help, source);
   });
 
   registerCommand("STREAM", [](const String &args, CommInterface source) {
@@ -392,6 +391,17 @@ void CommandManager::initRegistry() {
 #endif
     } else {
       lora.lastMsgReceived = "ERR: SETWIFI ssid pass";
+    }
+  });
+
+  registerCommand("NOLORA", [](const String &args, CommInterface source) {
+    if (args.equalsIgnoreCase("ON") || args == "1") {
+      LoRaManager::getInstance().sleepRadio();
+      CommandManager::getInstance().sendResponse(
+          "SYS: LoRa Radio OFF (Power Saving)", source);
+    } else {
+      LoRaManager::getInstance().wakeRadio();
+      CommandManager::getInstance().sendResponse("SYS: LoRa Radio ON", source);
     }
   });
 

@@ -16,11 +16,11 @@ class MyServerCallbacks : public BLEServerCallbacks {
 public:
   void onConnect(BLEServer *pServer, esp_ble_gatts_cb_param_t *param) override {
     BLEManager::getInstance().deviceConnected = true;
-    Serial.println("BLE: Connected");
+    // Serial.println("BLE: Connected");
   };
   void onDisconnect(BLEServer *pServer) override {
     BLEManager::getInstance().deviceConnected = false;
-    Serial.println("BLE: Disconnected");
+    // Serial.println("BLE: Disconnected");
     pServer->getAdvertising()->start();
   }
 };

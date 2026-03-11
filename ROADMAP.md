@@ -27,12 +27,13 @@ Focus: Improving reliability, protocol support, and the embedded core.
 
 Focus: Ultra-low-power autonomous operation for solar-field units.
 
-- [x] **Voltage-Aware Intelligence**: Multi-tier throttling for heartbeats and OLED (Normal/Conserve/Critical).
-- [x] **Safe-Shutdown (Critical Mode)**: Implemented proactive radio lockout and link downgrade when battery hits <3.45V to prevent deep-discharge damage.
-- [x] **Modem-Sleep (Conserve Mode)**: Integrated automatic 50% current reduction via WiFi PowerSave (Modem Sleep) when battery is <3.80V.
-- [x] **Peripheral Gating**: `VEXT_CTRL` management to physically cut power to sensors between samples.
+- [x] **Voltage-Aware Intelligence**: Multi-tier throttling with hysteresis (Normal/Conserve/Critical). 50mV deadband prevents oscillation.
+- [x] **Safe-Shutdown (Critical Mode)**: Proactive WiFi kill, LORA downgrade, and link lockout when battery hits <3.45V.
+- [x] **Modem-Sleep (Conserve Mode)**: Automatic 50% current reduction via WiFi PowerSave (Modem Sleep) when battery is <3.80V.
+- [x] **Peripheral Gating**: `VEXT_CTRL` dynamically managed — rail OFF in CONSERVE/CRITICAL, ON in NORMAL.
+- [x] **Solar Trend Analysis**: Ring buffer tracks charge/drain velocity (mV/min) and predicts "Time to Empty" (hours).
+- [x] **BLE Power Gating**: BLE task processing skipped entirely in CRITICAL mode.
 - [ ] **Wake-on-Radio (CAD)**: Pulse radio in low-power detection mode instead of constant RX.
-- [ ] **Solar Trend Analysis**: Track charge/drain velocity to predict "Time to Empty".
 - [ ] **NVS Hibernate**: Preserve state across multi-day deep-sleep cycles.
 
 ### Mid-Term

@@ -6,9 +6,15 @@
 
 PowerManager::PowerManager() {
   _currentMode = PowerMode::NORMAL;
+  _previousMode = PowerMode::NORMAL;
   _manualOverride = false;
   _lastVoltage = 4.2f;
   _lastSampleMs = 0;
+  _vextEnabled = false;
+  _ringHead = 0;
+  _ringCount = 0;
+  memset(_voltageRing, 0, sizeof(_voltageRing));
+  memset(_timestampRing, 0, sizeof(_timestampRing));
 }
 
 void PowerManager::Init() {
@@ -22,7 +28,7 @@ void PowerManager::Init() {
 
   // Heltec V3 External Power Control
   pinMode(PIN_VEXT_CTRL, OUTPUT);
-  digitalWrite(PIN_VEXT_CTRL, LOW);
+  enableVext(); // Start with peripherals ON
 
   // Heltec V3 Battery Divider Control
   pinMode(PIN_BAT_CTRL, OUTPUT);
@@ -42,55 +48,29 @@ float PowerManager::getBatteryVoltage() {
 
 void PowerManager::Update() {
   unsigned long now = millis();
-  if (now - _lastSampleMs > 30000 || _lastSampleMs == 0) { // Every 30s
+  if (now - _lastSampleMs > POWER_MISER_SAMPLE_INTERVAL_MS ||
+      _lastSampleMs == 0) {
     _lastSampleMs = now;
     float v = getBatteryVoltage();
+    recordSample(v);
     evaluateMode();
-    LOG_PRINTF("POWER: Miser V=%.2fV Mode=%s\n", v, getModeString().c_str());
+    LOG_PRINTF("POWER: Miser V=%.2fV Mode=%s Vel=%.1fmV/min TTE=%.1fh\n", v,
+               getModeString().c_str(), getVelocityMvMin(),
+               getTimeToEmptyHours());
   }
 }
 
+// ── Core Tier Intelligence (STABILITY LOCK) ─────────────────────────────────
 void PowerManager::evaluateMode() {
-  if (_manualOverride)
-    return;
+  // Policy engine disabled until main functionality verified.
+  // We keep the logic commented but force NORMAL.
+  _currentMode = PowerMode::NORMAL;
+  digitalWrite(PIN_VEXT_CTRL, LOW); // Force VEXT ON
+}
 
-  PowerMode prev = _currentMode;
-
-  // USB/Mains detection: If voltage is < 3.0V (Heltec V3 divider often floats
-  // at 2.8V on USB) or > 4.4V (USB 5V Rail), force NORMAL mode.
-  if (_lastVoltage < 3.0f || _lastVoltage > 4.4f) {
-    if (_currentMode != PowerMode::NORMAL) {
-      _currentMode = PowerMode::NORMAL;
-      LOG_PRINTLN("POWER: Miser -> NORMAL (USB Detection)");
-    }
-  } else if (_lastVoltage >= POWER_MISER_VOLT_NORMAL) {
-    if (_currentMode != PowerMode::NORMAL) {
-      _currentMode = PowerMode::NORMAL;
-      LOG_PRINTLN("POWER: Miser -> NORMAL (Battery High)");
-    }
-  } else if (_lastVoltage >= POWER_MISER_VOLT_CONSERVE) {
-    if (_currentMode != PowerMode::CONSERVE) {
-      _currentMode = PowerMode::CONSERVE;
-      LOG_PRINTLN("POWER: Miser -> CONSERVE (Battery Low)");
-    }
-  } else {
-    if (_currentMode != PowerMode::CRITICAL) {
-      _currentMode = PowerMode::CRITICAL;
-      LOG_PRINTLN("POWER: Miser -> CRITICAL (Battery Empty)");
-    }
-  }
-
-  if (prev != _currentMode) {
-    LOG_PRINTF("POWER: Miser switched to %s\n", getModeString().c_str());
-
-    // Apply instant policy changes
-    if (_currentMode == PowerMode::CRITICAL) {
-      DisplayManager::getInstance().SetDisplayActive(false);
-    }
-
-    // Notify WiFi Manager for immediate radio coordination
-    WiFiManager::getInstance().onPowerStateChange(_currentMode);
-  }
+// ── Side-effect policy engine (DEACTIVATED) ──────────────────────────────────
+void PowerManager::applyModePolicy(PowerMode newMode) {
+  // No-op for stability
 }
 
 PowerMode PowerManager::getCurrentMode() { return _currentMode; }
@@ -116,6 +96,10 @@ bool PowerManager::isWifiAllowed() {
   return (_currentMode != PowerMode::CRITICAL);
 }
 
+bool PowerManager::isBleAllowed() {
+  return (_currentMode != PowerMode::CRITICAL);
+}
+
 String PowerManager::getModeString() {
   switch (_currentMode) {
   case PowerMode::NORMAL:
@@ -131,6 +115,85 @@ String PowerManager::getModeString() {
 
 void PowerManager::setManualMode(PowerMode mode, bool manual) {
   _manualOverride = manual;
-  if (manual)
+  if (manual) {
+    PowerMode oldMode = _currentMode;
     _currentMode = mode;
+    if (oldMode != mode) {
+      _previousMode = oldMode;
+      applyModePolicy(mode);
+    }
+  }
+}
+
+// ── VEXT Peripheral Gating ──────────────────────────────────────────────────
+void PowerManager::enableVext() {
+  if (!_vextEnabled) {
+    digitalWrite(PIN_VEXT_CTRL, LOW); // LOW = ON on Heltec V3
+    _vextEnabled = true;
+    LOG_PRINTLN("POWER: VEXT rail ON");
+  }
+}
+
+void PowerManager::disableVext() {
+  if (_vextEnabled) {
+    digitalWrite(PIN_VEXT_CTRL, HIGH); // HIGH = OFF on Heltec V3
+    _vextEnabled = false;
+    LOG_PRINTLN("POWER: VEXT rail OFF");
+  }
+}
+
+bool PowerManager::isVextEnabled() { return _vextEnabled; }
+
+// ── Voltage Trend Ring Buffer ───────────────────────────────────────────────
+void PowerManager::recordSample(float voltage) {
+  _voltageRing[_ringHead] = voltage;
+  _timestampRing[_ringHead] = millis();
+  _ringHead = (_ringHead + 1) % POWER_MISER_TREND_SAMPLES;
+  if (_ringCount < POWER_MISER_TREND_SAMPLES)
+    _ringCount++;
+}
+
+bool PowerManager::isTrendValid() {
+  return (_ringCount >= 3); // Need at least 3 samples for a meaningful slope
+}
+
+float PowerManager::getVelocityMvMin() {
+  if (!isTrendValid())
+    return 0.0f;
+
+  // Linear regression: least-squares slope over ring buffer
+  // Using oldest and newest for simple two-point slope (robust enough for 6min)
+  uint8_t oldest =
+      (_ringCount < POWER_MISER_TREND_SAMPLES)
+          ? 0
+          : _ringHead; // Oldest is at head when buffer is full
+  uint8_t newest = (_ringHead == 0) ? (POWER_MISER_TREND_SAMPLES - 1)
+                                    : (_ringHead - 1);
+
+  float dV = _voltageRing[newest] - _voltageRing[oldest];
+  float dT_ms =
+      (float)(_timestampRing[newest] - _timestampRing[oldest]);
+
+  if (dT_ms < 1000.0f)
+    return 0.0f; // Guard against division by near-zero
+
+  float dT_min = dT_ms / 60000.0f;
+  return (dV * 1000.0f) / dT_min; // Convert V to mV, per minute
+}
+
+float PowerManager::getTimeToEmptyHours() {
+  float velocity = getVelocityMvMin();
+  if (velocity >= 0.0f)
+    return 99.0f; // Charging or flat — report "long time"
+
+  float headroom_mV =
+      (_lastVoltage - POWER_MISER_VOLT_CRITICAL) * 1000.0f;
+  if (headroom_mV <= 0.0f)
+    return 0.0f; // Already at or below critical
+
+  float drain_mV_per_hour = fabsf(velocity) * 60.0f;
+  if (drain_mV_per_hour < 0.1f)
+    return 99.0f; // Guard near-zero drain
+
+  return headroom_mV / drain_mV_per_hour;
 }

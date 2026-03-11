@@ -32,14 +32,14 @@ ScheduleManager::ScheduleManager()
     : dht(PIN_SENSOR_DHT, DHT22), dhtFailCount(0), safetyTripped(false),
       tEnvironmental(10000, TASK_FOREVER,
                      &ScheduleManager::environmentalCallback),
+      tHeartbeat(300000, TASK_FOREVER, &ScheduleManager::heartbeatTask),
+      // t110V and t12V disabled for stable side-by-side testing
       t110V(5000, TASK_FOREVER, &ScheduleManager::toggle110VCallback),
       t12V(3600000, TASK_FOREVER, &ScheduleManager::pulse12VCallback),
       t12VEnd(5000, TASK_ONCE, &ScheduleManager::endPulse12VCallback),
-      tLoRa(50, TASK_FOREVER, &ScheduleManager::loraTask), // Relaxed: 10->50ms
-      tWiFi(2000, TASK_FOREVER, &ScheduleManager::wifiTask), // Relaxed: 1s->2s
-      tSerial(50, TASK_FOREVER,
-              &ScheduleManager::serialTask), // Relaxed: 20->50ms
-      tHeartbeat(300000, TASK_FOREVER, &ScheduleManager::heartbeatTask),
+      tLoRa(50, TASK_FOREVER, &ScheduleManager::loraTask),
+      tWiFi(2000, TASK_FOREVER, &ScheduleManager::wifiTask),
+      tSerial(50, TASK_FOREVER, &ScheduleManager::serialTask),
       // tButton removed — replaced by attachInterrupt(buttonISR) in init()
       tDisplay(2000, TASK_FOREVER, &ScheduleManager::displayTask),
       tBlink(200, 20, &ScheduleManager::blinkTask),
@@ -222,6 +222,7 @@ void ScheduleManager::serialTask() {
       line.trim();
       serialBuffer = "";
       if (line.length() > 0) {
+        Serial.println("RX-SERIAL: " + line);
         if (inst.isStreaming) {
           inst.processStreamLine(line, CommInterface::COMM_SERIAL);
         } else {
@@ -261,37 +262,45 @@ void ScheduleManager::heartbeatTask() {
   static bool initial = true;
   if (initial) {
     showStartupText("Heartbeat... OK");
+    // Initial Peer Announcement: Let the swarm know we are alive immediately
+    LoRaManager::getInstance().SendLoRa("DISCOVERY: " + DataManager::getInstance().myId + " ONLINE");
     initial = false;
   }
 
   LoRaManager::getInstance().SendHeartbeat();
   DataManager::getInstance().PruneStaleNodes();
+  DataManager::getInstance().resolveAllNodeIps();
 
-  // Power-Miser Duty-Cycle Throttling
-  uint32_t targetIntervalSec = PowerManager::getInstance().getTargetInterval();
-
-  // Fast-Boot Status: Broadcast every 20s for the first 3 minutes
-  if (millis() < 180000) {
-    targetIntervalSec = 20;
+  // HEURISTIC: Calculate target interval based on power and uptime
+  uint32_t targetIntervalSec;
+  
+  if (PowerManager::isPowered()) {
+    // USB Mode: Fast updates (60s) for active monitoring
+    targetIntervalSec = USB_HEARTBEAT_S;
+  } else if (millis() < DISCOVERY_BURST_MS) {
+    // Discovery Mode: 20s burst for first 5 minutes on battery
+    targetIntervalSec = DISCOVERY_INTERVAL_S;
+  } else {
+    // Power-Miser Mode: Tiered based on battery voltage
+    targetIntervalSec = PowerManager::getInstance().getTargetInterval();
   }
 
   uint32_t targetIntervalMs = targetIntervalSec * 1000;
 
   if (instance_ptr->tHeartbeat.getInterval() != targetIntervalMs) {
     instance_ptr->tHeartbeat.setInterval(targetIntervalMs);
-    LOG_PRINTF("SCHED: Heartbeat throttled to %lu s (Power-Miser)\n",
-               targetIntervalSec);
+    LOG_PRINTF("SCHED: Heartbeat tuned to %lu s (%s)\n",
+               targetIntervalSec, 
+               PowerManager::isPowered() ? "USB" : (millis() < DISCOVERY_BURST_MS ? "DISCOVERY" : "MISER"));
   }
 }
 
 void ScheduleManager::bleTask() {
-  static bool initial = true;
-  if (initial) {
-    BLEManager::getInstance().init();
-    if (instance_ptr)
-      instance_ptr->tDisplay.enable();
-    initial = false;
+  // Power-Miser: Skip BLE processing entirely in CRITICAL mode
+  if (!PowerManager::getInstance().isBleAllowed()) {
+    return;
   }
+
   String cmd;
   while (BLEManager::getInstance().poll(cmd)) {
     DataManager::getInstance().LogMessage("BLE", 0, cmd);

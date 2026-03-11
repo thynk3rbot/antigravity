@@ -25,11 +25,7 @@ struct PendingAck {
 };
 
 // ── Radio State Machine ─────────────────────────────────────────────────────
-enum class RadioState : uint8_t {
-  RADIO_IDLE = 0,
-  RADIO_RX = 1,
-  RADIO_TX = 2
-};
+enum class RadioState : uint8_t { RADIO_IDLE = 0, RADIO_RX = 1, RADIO_TX = 2 };
 
 class LoRaManager {
 public:
@@ -56,6 +52,8 @@ public:
                                   uint8_t val);
   void QueueFailoverPing(const String &targetId);
   void periodicTick();
+  void sleepRadio();
+  void wakeRadio();
 
   bool loraActive;
   bool beaconActive;

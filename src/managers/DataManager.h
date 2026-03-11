@@ -161,6 +161,7 @@ public:
   String getMacSuffix();
   String getResetReason();
   uint8_t getMyShortId();
+  void resolveAllNodeIps();
 
 private:
   DataManager();

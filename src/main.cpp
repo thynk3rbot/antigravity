@@ -31,6 +31,7 @@ void setup() {
   // 1. Serial
   Serial.begin(115200);
   delay(2000);
+  Serial.println("\n\n>>> LORALINK DEBUG BOOT START <<<");
   Serial.println("\n\n########################################");
   Serial.println("#  LORALINK-ANY2ANY " FIRMWARE_VERSION "             #");
   Serial.println("#  Unified Wireless Gateway            #");
@@ -78,13 +79,13 @@ void setup() {
   Serial.printf("SYS: CPU Clock = %dMHz\n", getCpuFrequencyMhz());
 
   // 5. Heltec init
-  Serial.println("BOOT: Heltec.begin...");
-  Serial.flush();
   Heltec.begin(true, false, true, false, 0);
   if (Heltec.display) {
     Heltec.display->setContrast(255);
     Heltec.display->setBrightness(255);
   }
+  Serial.println("\n\n>>> LORALINK DEBUG BOOT START <<<");
+  Serial.flush();
 
   // 6. Data Manager
   Serial.println("BOOT: DataManager...");
@@ -160,6 +161,12 @@ void loop() {
 
   ScheduleManager::getInstance().execute();
   MQTTManager::getInstance().loop();
+
+  static unsigned long lastTic = 0;
+  if (millis() - lastTic > 5000) {
+    lastTic = millis();
+    Serial.println("SYS: Alive (Heartbeat)");
+  }
 
   PerformanceManager::getInstance().loopTickEnd();
 }

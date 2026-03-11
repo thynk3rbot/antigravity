@@ -3,9 +3,32 @@
 #include "../crypto.h"
 #include "../utils/DebugMacros.h"
 #include "MQTTManager.h"
+#include <ESPmDNS.h>
 #include <LittleFS.h>
 #include <Preferences.h>
+#include <WiFi.h>
 #include <esp_system.h>
+
+// ── mDNS peer IP resolution (called from slow periodic task, NOT hot path) ──
+void DataManager::resolveAllNodeIps() {
+  if (WiFi.status() != WL_CONNECTED) return;
+
+  for (int i = 0; i < numNodes; i++) {
+    if (remoteNodes[i].ip[0] != '\0') continue; // Already resolved
+
+    String hostname = "loralink-" + String(remoteNodes[i].id);
+    hostname.toLowerCase();
+
+    IPAddress resolved = MDNS.queryHost(hostname, 250); // 250ms timeout
+    if (resolved != IPAddress(0, 0, 0, 0)) {
+      String ipStr = resolved.toString();
+      strncpy(remoteNodes[i].ip, ipStr.c_str(), 15);
+      remoteNodes[i].ip[15] = '\0';
+      LOG_PRINTF("MDNS: %s -> %s\n", hostname.c_str(), remoteNodes[i].ip);
+    }
+    break; // Only resolve ONE per tick to avoid blocking
+  }
+}
 
 DataManager::DataManager() {
   numNodes = 0;
@@ -65,10 +88,10 @@ void DataManager::Init() {
   Serial.flush();
 
   // Initialize WiFi defaults if empty (first boot)
-  String savedSsid = p.getString("wifi_ssid", "");
+  String savedSsid = p.getString("wifi_ssid", "0.0.0.0");
   if (savedSsid.length() == 0) {
     Serial.println("INIT: No WiFi credentials found - using defaults...");
-    p.putString("wifi_ssid", "");
+    p.putString("wifi_ssid", "0.0.0.0");
     p.putString("wifi_pass", "");
   }
 
@@ -135,12 +158,23 @@ void DataManager::LoadSettings() {
   repeaterEnabled = p.getBool("repeater", false);
 
   LOG_PRINTLN("INIT: Loading WiFi...");
-  wifiSsid = p.getString("wifi_ssid", "");
-  if (wifiSsid.length() > 64)
-    wifiSsid = wifiSsid.substring(0, 64);
-  wifiPass = p.getString("wifi_pass", "");
-  if (wifiPass.length() > 64)
-    wifiPass = wifiPass.substring(0, 64);
+  // Preserve fallback defaults if preferences are empty
+  String ssidTmp = p.getString("wifi_ssid", "");
+  String passTmp = p.getString("wifi_pass", "");
+  if (ssidTmp.length() == 0) {
+    wifiSsid = "spw1-5g"; // fallback SSID
+  } else {
+    wifiSsid = ssidTmp;
+    if (wifiSsid.length() > 64)
+      wifiSsid = wifiSsid.substring(0, 64);
+  }
+  if (passTmp.length() == 0) {
+    wifiPass = "OPTMyxlpyx99!"; // fallback password
+  } else {
+    wifiPass = passTmp;
+    if (wifiPass.length() > 64)
+      wifiPass = wifiPass.substring(0, 64);
+  }
 
   LOG_PRINTLN("INIT: Loading IP...");
   staticIp = p.getString("static_ip", "");
@@ -390,6 +424,7 @@ void DataManager::UpdateNode(const char *id, uint32_t uptime, float battery,
     remoteNodes[numNodes].lat = lat;
     remoteNodes[numNodes].lon = lon;
     remoteNodes[numNodes].shortId = shortId;
+    remoteNodes[numNodes].ip[0] = '\0';
     numNodes++;
   }
 }
@@ -420,6 +455,7 @@ void DataManager::SawNode(const char *id, int rssi, uint8_t hops,
     remoteNodes[numNodes].lat = 0.0f;
     remoteNodes[numNodes].lon = 0.0f;
     remoteNodes[numNodes].shortId = shortId;
+    remoteNodes[numNodes].ip[0] = '\0';
     numNodes++;
   }
 }
@@ -544,7 +580,7 @@ void DataManager::ClearTrace() {
 }
 
 void DataManager::FactoryReset() {
-  LOG_PRINTLN("SYS: FACTORY RESET (Clearing NVS)...");
+  LOG_PRINTLN("SYS: FACTORY RESET (Clearing NVS & Filesystem)...");
   Preferences p;
   p.begin("loralink", false);
   p.clear();
@@ -555,6 +591,15 @@ void DataManager::FactoryReset() {
   p.begin("espnow", false);
   p.clear();
   p.end();
+  p.begin("pin_names", false);
+  p.clear();
+  p.end();
+
+  if (LittleFS.exists("/schedule.json")) LittleFS.remove("/schedule.json");
+  if (LittleFS.exists("/hw_reg.json")) LittleFS.remove("/hw_reg.json");
+  if (LittleFS.exists("/trace.log")) LittleFS.remove("/trace.log");
+  
+  LOG_PRINTLN("SYS: Factory Reset Complete");
 }
 
 String DataManager::getResetReason() {

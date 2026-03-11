@@ -7,7 +7,7 @@
 // ============================================================================
 //   FIRMWARE & FEATURE FLAGS
 // ============================================================================
-#define FIRMWARE_VERSION "v0.0.7"
+#define FIRMWARE_VERSION "v0.0.38"
 #define FIRMWARE_NAME "LoRaLink Any2Any"
 #define HARDWARE_ID "Heltec ESP32 LoRa V3"
 #define CONFIG_SCHEMA "1.0"
@@ -177,6 +177,7 @@ struct RemoteNode {
   float lat;
   float lon;
   uint8_t shortId; // Last byte of MAC for binary routing
+  char ip[16];     // mDNS-resolved IP (e.g. "172.16.0.26")
 };
 
 // ESP-NOW Peer Info
@@ -197,9 +198,17 @@ struct ESPNowPeer {
 #define POWER_MISER_VOLT_NORMAL 3.80f
 #define POWER_MISER_VOLT_CONSERVE 3.65f
 #define POWER_MISER_VOLT_CRITICAL 3.45f
+#define POWER_MISER_HYSTERESIS 0.05f   // 50mV deadband to prevent oscillation
 
 #define POWER_MISER_HB_NORMAL 300UL    // 5 min
 #define POWER_MISER_HB_CONSERVE 900UL  // 15 min
 #define POWER_MISER_HB_CRITICAL 3600UL // 60 min
+
+#define DISCOVERY_BURST_MS 300000UL    // 5 minutes of fast heartbeats on boot
+#define DISCOVERY_INTERVAL_S 20UL      // 20s interval during discovery
+#define USB_HEARTBEAT_S     60UL       // 60s interval when on USB power
+
+#define POWER_MISER_TREND_SAMPLES 12   // Ring buffer depth (12 × 30s = 6min)
+#define POWER_MISER_SAMPLE_INTERVAL_MS 30000UL // 30s between voltage samples
 
 #endif // CONFIG_H

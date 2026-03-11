@@ -1,4 +1,4 @@
-﻿#include "WiFiManager.h"
+#include "WiFiManager.h"
 #include "BLEManager.h"
 #include "CommandManager.h"
 #include "DataManager.h"
@@ -348,6 +348,14 @@ var pmStr = d.power_mode || 'NORMAL';
 var pmColor = (pmStr === 'NORMAL') ? '#00ff88' : (pmStr === 'CONSERVE' ? '#ffaa00' : '#ff4444');
 if (b >= 0.1 && b <= 4.1) {
   c += '<div class="card"><span class="dbg-id">DASH-POWER</span><div class="lbl">Power-Miser</div><div class="val" style="color:'+pmColor+'">'+pmStr+'</div></div>';
+  var vel = d.solar_vel || 0;
+  var velColor = vel >= 0 ? '#00ff88' : '#ff4444';
+  var velStr = (vel >= 0 ? '+' : '') + vel.toFixed(1) + ' mV/m';
+  c += '<div class="card"><span class="dbg-id">DASH-SOLAR</span><div class="lbl">Solar Vel</div><div class="val" style="font-size:0.85em;color:'+velColor+'">'+velStr+'</div></div>';
+  var tte = d.tte_hours || 99;
+  var tteColor = tte < 2 ? '#ff4444' : (tte < 6 ? '#ffaa00' : '#00ff88');
+  var tteStr = tte >= 99 ? '∞' : tte.toFixed(1) + 'h';
+  c += '<div class="card"><span class="dbg-id">DASH-TTE</span><div class="lbl">Time to Empty</div><div class="val" style="font-size:0.85em;color:'+tteColor+'">'+tteStr+'</div></div>';
 }
 c+='<div class="card"><span class="dbg-id">DASH-RSSI</span><div class="lbl">LoRa RSSI</div><div class="val">'+(d.rssi||'—')+'</div></div>';
 c+='<div class="card"><span class="dbg-id">DASH-NODES</span><div class="lbl">Nodes</div><div class="val ok">'+(d.nodes!=null?d.nodes:'—')+'</div></div>';
@@ -806,6 +814,12 @@ void WiFiManager::serveApiStatus() {
   json += "\"bytes_saved\":" + String(perf.getBytesSaved()) + ",";
   json +=
       "\"power_mode\":\"" + PowerManager::getInstance().getModeString() + "\",";
+  {
+    PowerManager &pm = PowerManager::getInstance();
+    json += "\"solar_vel\":" + String(pm.getVelocityMvMin(), 1) + ",";
+    json += "\"tte_hours\":" + String(pm.getTimeToEmptyHours(), 1) + ",";
+    json += "\"vext\":" + String(pm.isVextEnabled() ? "true" : "false") + ",";
+  }
   json += "\"sys_reset\":\"" + perf.getResetReason() + "\",";
 
   // Standard pins array for labeled diagnostics - FILTERED to "Usable" only
@@ -873,6 +887,7 @@ void WiFiManager::serveApiStatus() {
     json += "\"bat\":" + String(data.remoteNodes[i].battery, 2) + ",";
     json += "\"rssi\":" + String(data.remoteNodes[i].rssi) + ",";
     json += "\"hops\":" + String(data.remoteNodes[i].hops) + ",";
+    json += "\"ip\":\"" + String(data.remoteNodes[i].ip) + "\",";
     json += "\"ago\":" + String((now - data.remoteNodes[i].lastSeen) / 1000);
     json += "}";
     meshFirst = false;
@@ -2112,34 +2127,7 @@ void WiFiManager::checkProbeBackoff() {
 
 // ── Transport: onLinkDowngrade() / onLinkUpgrade() ───────────────────────────
 void WiFiManager::onPowerStateChange(PowerMode mode) {
-  if (mode == PowerMode::CRITICAL) {
-    // Force immediate downgrade to LORA mesh mode to save power
-    /*
-    onLinkDowngrade(DataManager::getInstance().currentLink,
-                    LinkPreference::LINK_LORA);
-    */
-
-    /*
-    // WiFi is handled proactively in handle() next tick, but we can nudge it
-    WiFi.disconnect(true);
-    WiFi.mode(WIFI_OFF);
-    isConnected = false;
-    serverStarted = false;
-    */
-  } else if (mode == PowerMode::CONSERVE) {
-    /*
-    // Enable WiFi Modem Sleep to reduce current draw by ~50%
-    WiFi.setSleep(true);
-    modemSleepEnabled = true;
-    Serial.println("POWER: Miser enabling WiFi Modem-Sleep (CONSERVE)");
-    */
-  } else {
-    /*
-    // NORMAL: Full performance
-    WiFi.setSleep(false);
-    modemSleepEnabled = false;
-    */
-  }
+  // Stability Lock: Side effects disabled
 }
 
 void WiFiManager::onLinkDowngrade(LinkPreference from, LinkPreference to) {

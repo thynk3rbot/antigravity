@@ -77,6 +77,19 @@ void LoRaManager::Init() {
   Serial.flush();
 }
 
+void LoRaManager::sleepRadio() {
+  if (radio) {
+    radio->sleep();
+    loraActive = false;
+  }
+}
+
+void LoRaManager::wakeRadio() {
+  if (radio) {
+    Init(); // Re-starting is safest for wake from deep radio sleep
+  }
+}
+
 // ── Async TX State Machine ──────────────────────────────────────────────────
 
 bool LoRaManager::_startAsyncTx(const uint8_t *data, size_t len) {
