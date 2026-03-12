@@ -176,24 +176,26 @@ def get_modified_files_by_agent():
             # porcelain format has 3 char prefix (XY )
             path = line[3:]
 
-            # Determine owner (sync'd with AGENT_ASSIGNMENTS.md)
+            # Determine owner (sync'd with AGENT_ASSIGNMENTS.md - 3-Phase Router)
             owner = "unassigned"
-            if (
-                "src/managers/" in path
-                or "src/config.h" in path
-                or "src/crypto.h" in path
-                or "src/main.cpp" in path
-            ):
-                owner = "Antigravity"
+            if "01_planning/" in path or "docs/plans/" in path:
+                owner = "OpenAI"
             elif (
-                "tools/webapp/" in path
+                "02_coding/" in path
+                or "src/" in path
+                or "tools/webapp/" in path
                 or "tools/pc_app/" in path
-                or "docs/" in path
-                or "INTEGRATION.md" in path
             ):
                 owner = "Claude"
-            elif "PerformanceManager" in path or "PowerManager" in path:
-                owner = "Codex"
+            elif (
+                "03_review/" in path
+                or "docs/" in path
+                or "main.cpp" in path
+                or "config.h" in path
+                or "crypto.h" in path
+                or "INTEGRATION.md" in path
+            ):
+                owner = "Antigravity"
 
             if owner not in files_by_agent:
                 files_by_agent[owner] = []

@@ -19,8 +19,12 @@ A complete automation pipeline for long-term endurance testing and analytical re
 - **Location**: `tools/start_bg_services.py`
 - **Function**: Manages Webapp, Website, Docs, and MQTT servers as silent background processes.
 - **Shortcuts**: `Start_Everything_BG.bat` / `Stop_Everything_BG.bat`.
+### 4. Fleet Verification (`deploy_dual.ps1`)
+- **Location**: `tools/deploy_dual.ps1`
+- **Function**: Standardizes rollout to multiple nodes (Peer1/Peer2).
+- **Goal**: Ensures version parity and eliminates drift caused by auto-increment scripts.
 
-### 4. Webapp Integration
+### 5. Webapp Integration
 - **Dev/QA Page**: `tools/webapp/static/devqa.html`
 - **Features**: 
     - Trigger Overdrive tests with custom cycles/delays.

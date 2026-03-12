@@ -37,12 +37,20 @@ Navigate to the device IP in any browser:
 - **Dashboard** (`/`) — Live status, protocol badges, message log, command input
 - **Config** (`/config`) — Device name, WiFi, LoRa params, ESP-NOW peers, factory reset
 
-## Quick Start
-
+### 1. Single Device (USB)
 1. **Install** [PlatformIO](https://platformio.org/)
 2. **Clone** this repo
 3. **Build & Upload**: `pio run -t upload`
 4. **Monitor**: `pio device monitor`
+
+### 2. Fleet Deployment (OTA)
+To deploy to multiple devices on the network simultaneously:
+1. Ensure devices are on WiFi (`172.16.0.26` and `172.16.0.27`).
+2. Run the dual deployment script:
+   ```powershell
+   .\tools\deploy_dual.ps1
+   ```
+   *Note: This ensures all devices run the exact same firmware version (currently v0.1.0).*
 
 ## Commands
 

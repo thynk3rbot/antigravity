@@ -1,244 +1,79 @@
-# Agent Assignments & Roles
+# AI Agent Assignments & Roadmap Router
 
-## Purpose
+## 1. Global State Rules
+All agents must read this file before executing tasks. The workspace operates on a strict **tollbooth state machine**. Do not modify files outside your designated phase directory or assigned scope.
 
-Defines the agent roles for LoRaLink development and release work. This project uses a multi-agent workflow where agents act like team members with clear boundaries.
+* **Status Flags:** All `.md` files in planning, review, or status must include a frontmatter block:
+  - `status`: [ backlog | planning | coding | testing | complete ]
+  - `owner`: [ openai | claude | antigravity | human ]
 
-Core rules:
-- No agent writes directly to `main`.
-- All implementation happens on feature branches.
-- Release flow is planned, reviewed, tested, and then merged.
-
----
-
-## Primary Environments
-
-### Antigravity
-Use for:
-- Orchestration
-- Architecture planning
-- Cross-agent coordination
-- Broad QA analysis
-- Release readiness review
-
-### Claude Desktop
-Use for:
-- Guarded code implementation
-- Branch-scoped edits
-- Reviewable refactors
-- Policy-respecting code changes
-- Merge prep
+* **Branch Discipline:** No agent writes directly to `main`. All work happens on feature branches.
 
 ---
 
-## Active Agent Assignments
+## 2. Directory Routing & Agent Scopes
 
-| Role | Agent | Primary Environments |
+| Phase | Directory | Primary Agent | Input | Output | Standards |
+| --- | --- | --- | --- | --- | --- |
+| **Phase 1: Planning** | `/01_planning/` | OpenAI (sgpt) | `idea.txt` | `spec.md` | Strict tech specs, pinouts, logic. No code. |
+| **Phase 2: Execution** | `/02_coding/` | Claude Code | `spec.md` | Source files | Code generation, build verify, log errors. |
+| **Phase 3: Review** | `/03_review/` | Antigravity | Source files | `audit_report.md`| Browser/test agents, QA pass, tag complete. |
+
+---
+
+## 3. Detailed Agent Roles
+
+### 1. Planning Agent (OpenAI / sgpt)
+**Purpose**: High-level architecture and requirement decomposition.
+**Environment**: Terminal (sgpt)
+**Phase Ownership**: Phase 1 (`/01_planning/`)
+**Responsibilities**:
+- Read `idea.txt` or user prompts.
+- Generate `spec.md` in `/01_planning/`.
+- Define exact pinouts (ESP32-S3), manager interactions, and logic flow.
+
+### 2. Execution Agent (Claude Code)
+**Purpose**: Implementation and local compilation.
+**Environment**: Claude Desktop / CLI
+**Phase Ownership**: Phase 2 (`/02_coding/`)
+**Responsibilities**:
+- Implement code based on Phase 1 spec.
+- Write source files to `/02_coding/` (or designated `src/` dirs if in-place).
+- Run `pio run` to verify build.
+- Log failures to `/02_coding/error.log`.
+- Halt after 3 failed retries.
+
+### 3. Review & Orchestration Agent (Antigravity)
+**Purpose**: Final QA, browser-based validation, and release gatekeeping.
+**Environment**: Antigravity Workspace
+**Phase Ownership**: Phase 3 (`/03_review/`)
+**Responsibilities**:
+- Review Phase 2 output.
+- Perform visual QA via browser sub-agents.
+- Execute regression tests.
+- Generate `audit_report.md` in `/03_review/`.
+- Transition status to `complete`.
+
+---
+
+## 4. Resource Ownership (Lock System)
+
+The `.locks/` system remains the source of truth for concurrency prevention.
+
+| Agent | Lock File | Root Directories / Scopes |
 | --- | --- | --- |
-| **Orchestrator** | Antigravity | Antigravity |
-| **Architect** | Claude | Claude Code / Claude Web |
-| **Developer** | Codex | Codex App / Codex Web |
-| **Integrator** | Claude | Claude Code / Antigravity |
-| **QA** | Gemini / ChatGPT | Gemini Web Chat / ChatGPT Web Chat |
-| **Release** | chatbot | Antigravity |
+| **OpenAI** | `.locks/openai.lock` | `/01_planning/`, `docs/plans/` |
+| **Claude** | `.locks/claude.lock` | `/02_coding/`, `src/`, `tools/webapp/` |
+| **Antigravity** | `.locks/antigravity.lock` | `/03_review/`, `docs/`, `main.cpp` |
 
 ---
 
-## Component Ownership (Resource-Based)
-
-To prevent concurrent editing conflicts on the source of truth, primary file ownership remains:
-
-| Agent/Environment | Primary Focus | Lock File | Root Directories |
-| --- | --- | --- | --- |
-| **Antigravity** | LoRaLink firmware core, managers, radio stack | `.locks/antigravity.lock` | `src/managers/`, `src/config.h`, `src/crypto.h`, `src/main.cpp` |
-| **Claude Desktop** | PC and Web applications, code reviews, integration tests | `.locks/claude.lock` | `tools/webapp/`, `tools/pc_app/`, `docs/`, `INTEGRATION.md` |
-| **Codex** | Firmware optimizations, performance tuning, watchdog | `.locks/codex.lock` | `src/managers/PerformanceManager.*`, `src/managers/PowerManager.*` |
+## 5. Workflow Fallback & Emergency
+If an agent hits rate limits or environment failure:
+1. **Antigravity** assumes Orchestrator role to re-route tasks.
+2. **Human** intervention kills stuck processes via `python agent-tracking.py clear`.
+3. **Rollback** to last known good state if Phase 2 fails 3x.
 
 ---
 
-## Agent Roles
-
-### 1. Orchestrator Agent
-**Purpose**: Coordinates the overall workflow.
-**Environment**: Antigravity
-**Assigned Agent**: Antigravity
-**Responsibilities**:
-- Receives user goals
-- Selects which agent acts next
-- Maintains task order
-- Prevents overlapping work
-- Tracks release readiness
-- Ensures branch discipline is followed
-
-**Can**:
-- Assign work
-- Request reviews
-- Request QA passes
-- Request release prep
-
-**Cannot**:
-- Directly merge to `main`
-- Bypass QA or release checks
-
-### 2. Architecture Agent
-**Purpose**: Plans changes before implementation begins.
-**Environment**: Antigravity or Claude Desktop in read/analyze mode
-**Assigned Agent**: Claude
-**Responsibilities**:
-- Inspect repository structure
-- Understand current manager interactions
-- Identify affected files
-- Identify tool coupling impacts
-- Propose implementation phases
-- Identify risks and validation needs
-
-**Outputs**:
-- Implementation plan
-- Affected files list
-- Risk notes
-- Commit grouping suggestion
-
-**Cannot**:
-- Start coding before analysis is complete
-
-### 3. Implementation Agent
-**Purpose**: Makes code changes on a feature branch.
-**Environment**: Claude Desktop
-**Assigned Agent**: Codex (Developer)
-**Responsibilities**:
-- Create or use assigned feature branch
-- Modify only the files needed
-- Preserve existing architecture unless refactor is intentional
-- Update coupled tooling when firmware behavior changes
-- Update docs when commands, workflow, or architecture change
-
-**Required checks before commit**:
-- Firmware builds (`pio run`)
-- Changed files are scoped to the task
-- Docs/tool coupling reviewed
-
-**Can**:
-- Edit source
-- Edit docs
-- Update tools
-
-**Cannot**:
-- Commit to `main`
-- Merge its own work into `main`
-- Skip build verification
-
-### 4. Integration Agent
-**Purpose**: Prepares completed work for merge.
-**Environment**: Antigravity or Claude Desktop
-**Assigned Agent**: Claude
-**Responsibilities**:
-- Inspect diffs from feature branch
-- Verify intended files changed
-- Detect missing tool/doc updates
-- Resolve merge conflicts if needed
-- Ensure branch is ready for QA/release
-
-**Checks**:
-- Command changes reflected in docs
-- Tool changes applied if firmware/API/commands changed
-- No accidental unrelated edits
-- Branch merges cleanly with current `main`
-
-**Cannot**:
-- Approve broken builds
-- Skip required coupling updates
-
-### 5. QA Agent
-**Purpose**: Validates functionality and regression risk.
-**Environment**: Antigravity preferred for broad analysis
-**Assigned Agent**: Gemini
-**Responsibilities**:
-- Verify build success
-- Inspect core behavior affected by the change
-- Check routing, scheduler, transport, and tool compatibility as relevant
-- Identify regressions
-- Produce **PASS** / **FAIL** result
-
-**Typical checks**:
-- `pio run`
-- Command routing behavior
-- LoRa behavior
-- BLE behavior if touched
-- WiFi/API behavior if touched
-- Scheduler stability if touched
-- Docs/tool sync if command or API behavior changed
-
-**Output**:
-- **PASS** or **FAIL** with bug list
-
-### 6. Release Agent
-**Purpose**: Handles stable merge and version release steps.
-**Environment**: Antigravity for coordination
-**Assigned Agent**: lightweight chatbot
-**Responsibilities**:
-- Confirm QA pass
-- Verify release checklist
-- Update version if appropriate
-- Merge approved work to `main`
-- Create release notes
-- Tag release if used in workflow
-
-**Cannot**:
-- Release unreviewed work
-- Bypass QA
-- Ignore versioning rules
-
----
-
-## Repo Rules for All Agents
-
-- Never commit directly to `main`.
-- Always work on `feature/<topic>`, `bugfix/<topic>`, `refactor/<topic>`, or `release/<version>`.
-- Always review tool coupling.
-- Always preserve firmware/tool compatibility.
-- Always build (`pio run`) before commit when code changed.
-
----
-
-## Documentation Rules
-
-Agents must update relevant docs when behavior changes.
-
-### If commands change
-Update: `docs/COMMAND_INDEX.md`
-
-### If workflow changes
-Update: `AGENT_ASSIGNMENTS.md` and `MULTI_AGENT_WORKFLOW.md`
-
-### If architecture changes materially
-Update: `ARCHITECTURE_MAP.md`
-
-### If firmware behavior affects tools
-Review/update:
-- `tools/ble_instrument.py`
-- `tools/webapp/server.py`
-- `tools/webapp/static/index.html`
-
----
-
-## Branch Ownership Rule
-
-One implementation agent owns one working branch at a time. If parallel work is needed:
-- Use separate branches.
-- Merge only after integration review.
-- Avoid two agents editing the same feature branch simultaneously.
-
----
-
-## ⚠️ Fallback Strategy
-
-If a model or environment becomes unavailable (rate limits, downtime, context limits):
-- **Redundancy**: Orchestrator re-assigns the task to the next available environment (e.g., Claude ➔ Antigravity).
-- **Decomposition**: Large tasks are split into smaller sub-tasks to fit context windows.
-- **Manual Intervention**: The user may act as a human agent to clear blockers or perform manual integration.
-
----
-
-## Release Principle
-
-Stable firmware lives on `main`. Everything else is staging, feature work, or validation.
+**Release Principle:** Only work tagged `status: complete` by Antigravity in `/03_review/` is eligible for merge to `main`.

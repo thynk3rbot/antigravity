@@ -226,28 +226,31 @@ def get_file_owner(file_path):
     """Determine which agent owns a file based on AGENT_ASSIGNMENTS."""
     file_str = str(file_path).replace("\\", "/")
 
-    # Determine owner (sync'd with AGENT_ASSIGNMENTS.md)
-    # Codex (Specific managers)
-    if "PerformanceManager" in file_str or "PowerManager" in file_str:
-        return "Codex"
+    # Determine owner (sync'd with AGENT_ASSIGNMENTS.md - 3-Phase Router)
+    
+    # Phase 1: Planning (OpenAI)
+    if "01_planning/" in file_str or "docs/plans/" in file_str:
+        return "OpenAI"
 
-    # Antigravity (Firmware Core)
+    # Phase 2: Execution (Claude)
     if (
-        "src/managers/" in file_str
-        or "src/config.h" in file_str
-        or "src/crypto.h" in file_str
-        or "src/main.cpp" in file_str
-    ):
-        return "Antigravity"
-
-    # Claude (Webapp, Tools, Docs)
-    if (
-        "tools/webapp/" in file_str
+        "02_coding/" in file_str
+        or "src/" in file_str
+        or "tools/webapp/" in file_str
         or "tools/pc_app/" in file_str
-        or "docs/" in file_str
-        or "INTEGRATION.md" in file_str
     ):
         return "Claude"
+
+    # Phase 3: Review & Orchestration (Antigravity)
+    if (
+        "03_review/" in file_str
+        or "docs/" in file_str
+        or "main.cpp" in file_str
+        or "config.h" in file_str
+        or "crypto.h" in file_str
+        or "INTEGRATION.md" in file_str
+    ):
+        return "Antigravity"
 
     return "unassigned"
 
