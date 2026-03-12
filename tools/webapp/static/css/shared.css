@@ -22,6 +22,20 @@
   --muted:    #4a5a7a;
   --text:     #dce8ff;
   --text-dim: #6a82a8;
+  --stale:    #4a5a7a;
+
+  /* ── Spacing (Compact) ────────────── */
+  --pad-xs: 4px;
+  --pad-sm: 8px;
+  --pad-md: 12px;
+  --gap-xs: 4px;
+  --gap-sm: 8px;
+
+  /* ── Transport States ────────────── */
+  --tp-active: #00d4ff;
+  --tp-ok:     #00ff88;
+  --tp-err:    #ff4444;
+  --tp-idle:   #1a2d52;
 
   /* ── Glassmorphism / Effects ─────────────────────────────────────────── */
   --glass:  rgba(13, 23, 48, 0.75);
@@ -96,7 +110,53 @@ body {
 .flex-col {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--gap-sm);
+}
+.flex-col-xs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-xs);
+}
+
+/* ── Compact Utility Classes ─────────────────────────────────────────── */
+.compact {
+  padding: var(--pad-xs) !important;
+}
+.m-0 { margin: 0 !important; }
+.p-0 { padding: 0 !important; }
+.p-1 { padding: var(--pad-xs) !important; }
+.p-2 { padding: var(--pad-sm) !important; }
+
+/* ── Transport Indicator Buttons ─────────────────────────────────────── */
+.tp-btn {
+  border: 1px solid var(--border);
+  background: var(--tp-idle);
+  color: var(--text-dim);
+  transition: all 0.2s ease;
+}
+.tp-btn.active {
+  background: var(--tp-active);
+  color: #fff;
+  border-color: #fff;
+  box-shadow: 0 0 10px rgba(0, 212, 255, 0.4);
+}
+.tp-btn.ok {
+  border-color: var(--tp-ok);
+  color: var(--tp-ok);
+}
+.tp-btn.active.ok {
+  background: var(--tp-ok);
+  color: #000;
+  border-color: #fff;
+}
+.tp-btn.err {
+  border-color: var(--tp-err);
+  color: var(--tp-err);
+}
+.tp-btn.active.err {
+  background: var(--tp-err);
+  color: #fff;
+  border-color: #fff;
 }
 .flex-col-sm {
   display: flex;
@@ -172,6 +232,11 @@ body {
 }
 .hidden {
   display: none !important;
+}
+.stale {
+  opacity: 0.5 !important;
+  filter: grayscale(1);
+  pointer-events: none;
 }
 
 .span-2 {

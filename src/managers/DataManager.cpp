@@ -14,6 +14,7 @@ void DataManager::resolveAllNodeIps() {
   if (WiFi.status() != WL_CONNECTED) return;
 
   for (int i = 0; i < numNodes; i++) {
+    if (!remoteNodes[i].online) continue; // Skip offline nodes for IP resolution
     if (remoteNodes[i].ip[0] != '\0') continue; // Already resolved
 
     String hostname = "loralink-" + String(remoteNodes[i].id);
@@ -158,23 +159,11 @@ void DataManager::LoadSettings() {
   repeaterEnabled = p.getBool("repeater", false);
 
   LOG_PRINTLN("INIT: Loading WiFi...");
-  // Preserve fallback defaults if preferences are empty
-  String ssidTmp = p.getString("wifi_ssid", "");
-  String passTmp = p.getString("wifi_pass", "");
-  if (ssidTmp.length() == 0) {
-    wifiSsid = "spw1-5g"; // fallback SSID
-  } else {
-    wifiSsid = ssidTmp;
-    if (wifiSsid.length() > 64)
-      wifiSsid = wifiSsid.substring(0, 64);
-  }
-  if (passTmp.length() == 0) {
-    wifiPass = "OPTMyxlpyx99!"; // fallback password
-  } else {
-    wifiPass = passTmp;
-    if (wifiPass.length() > 64)
-      wifiPass = wifiPass.substring(0, 64);
-  }
+  wifiSsid = p.getString("wifi_ssid", "spw1-5g");
+  wifiPass = p.getString("wifi_pass", "OPTMyxlpyx99!");
+  
+  if (wifiSsid.length() > 64) wifiSsid = wifiSsid.substring(0, 64);
+  if (wifiPass.length() > 64) wifiPass = wifiPass.substring(0, 64);
 
   LOG_PRINTLN("INIT: Loading IP...");
   staticIp = p.getString("static_ip", "");
@@ -409,6 +398,7 @@ void DataManager::UpdateNode(const char *id, uint32_t uptime, float battery,
       remoteNodes[i].lon = lon;
       if (shortId != 0xFF)
         remoteNodes[i].shortId = shortId;
+      remoteNodes[i].online = true;
       return;
     }
   }
@@ -425,6 +415,7 @@ void DataManager::UpdateNode(const char *id, uint32_t uptime, float battery,
     remoteNodes[numNodes].lon = lon;
     remoteNodes[numNodes].shortId = shortId;
     remoteNodes[numNodes].ip[0] = '\0';
+    remoteNodes[numNodes].online = true;
     numNodes++;
   }
 }
@@ -440,6 +431,7 @@ void DataManager::SawNode(const char *id, int rssi, uint8_t hops,
       remoteNodes[i].hops = hops;
       if (shortId != 0xFF)
         remoteNodes[i].shortId = shortId;
+      remoteNodes[i].online = true;
       return;
     }
   }
@@ -456,6 +448,7 @@ void DataManager::SawNode(const char *id, int rssi, uint8_t hops,
     remoteNodes[numNodes].lon = 0.0f;
     remoteNodes[numNodes].shortId = shortId;
     remoteNodes[numNodes].ip[0] = '\0';
+    remoteNodes[numNodes].online = true;
     numNodes++;
   }
 }
@@ -487,14 +480,12 @@ String DataManager::getNameByShortId(uint8_t shortId) {
 void DataManager::PruneStaleNodes() {
   unsigned long now = millis();
   for (int i = 0; i < numNodes; i++) {
-    if (now - remoteNodes[i].lastSeen > 300000) { // 5 minutes
-      LOG_PRINTF("MESH: Pruned stale node: %s\n", remoteNodes[i].id);
-      // Shift remaining nodes down
-      for (int j = i; j < numNodes - 1; j++) {
-        remoteNodes[j] = remoteNodes[j + 1];
+    // 5 minutes of silence = Offline, but NOT deleted
+    if (now - remoteNodes[i].lastSeen > 300000) {
+      if (remoteNodes[i].online) {
+        remoteNodes[i].online = false;
+        LOG_PRINTF("MESH: Node marked OFFLINE: %s\n", remoteNodes[i].id);
       }
-      numNodes--;
-      i--; // Re-check this index
     }
   }
 }

@@ -888,6 +888,7 @@ void WiFiManager::serveApiStatus() {
     json += "\"rssi\":" + String(data.remoteNodes[i].rssi) + ",";
     json += "\"hops\":" + String(data.remoteNodes[i].hops) + ",";
     json += "\"ip\":\"" + String(data.remoteNodes[i].ip) + "\",";
+    json += "\"on\":" + String(data.remoteNodes[i].online ? "true" : "false") + ",";
     json += "\"ago\":" + String((now - data.remoteNodes[i].lastSeen) / 1000);
     json += "}";
     meshFirst = false;

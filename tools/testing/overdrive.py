@@ -29,7 +29,7 @@ async def http_executor(target_ip: str, cmd: str, target_node: str = None):
         try:
             response = await client.post(
                 f"http://{target_ip}/api/cmd",
-                data={"cmd": cmd},
+                json={"cmd": cmd},
                 timeout=5.0
             )
             if response.status_code != 200:

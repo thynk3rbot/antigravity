@@ -215,12 +215,26 @@ void ScheduleManager::wifiTask() { WiFiManager::getInstance().handle(); }
 void ScheduleManager::serialTask() {
   ScheduleManager &inst = getInstance();
   static String serialBuffer = "";
+  static bool flowPaused = false;
+
   while (Serial.available()) {
+    // XON/XOFF Flow Control: Alert sender if our internal line buffer is near capacity
+    if (!flowPaused && serialBuffer.length() > 450) {
+      Serial.write(0x13); // XOFF
+      flowPaused = true;
+    }
+
     char c = Serial.read();
     if (c == '\n' || (c == '\r' && Serial.peek() != '\n')) {
       String line = serialBuffer;
       line.trim();
       serialBuffer = "";
+      
+      if (flowPaused) {
+        Serial.write(0x11); // XON
+        flowPaused = false;
+      }
+
       if (line.length() > 0) {
         Serial.println("RX-SERIAL: " + line);
         if (inst.isStreaming) {
@@ -231,7 +245,7 @@ void ScheduleManager::serialTask() {
         }
       }
     } else if (c != '\r') {
-      if (serialBuffer.length() < 128) {
+      if (serialBuffer.length() < 512) {
         serialBuffer += c;
       }
     }
@@ -251,7 +265,7 @@ void ScheduleManager::peripheralSerialTask() {
                                                     CommInterface::COMM_SERIAL);
       }
     } else if (c != '\r') {
-      if (pSerialBuffer.length() < 128) {
+      if (pSerialBuffer.length() < 512) {
         pSerialBuffer += c;
       }
     }

@@ -41,6 +41,7 @@ LoRaManager::LoRaManager() {
     ackQueue[i].active = false;
   }
   memcpy(currentKey, DEFAULT_AES_KEY, 16);
+  _lastRxSuccessMs = millis();
 }
 
 void LoRaManager::Init() {
@@ -296,14 +297,22 @@ void LoRaManager::HandleRx() {
     return; // Skip RX processing while in TX state
   }
 
-  // Periodic diagnostic: every 120 polls (~60s at 50ms interval)
+  // Periodic diagnostic: every 1200 polls (~60s at 50ms interval)
   if (rxPollCount % 1200 == 0) {
     LOG_PRINTF("LORA-DIAG: poll=%d, flag=%d, active=%d, DIO1=%d, tx=%lu rx=%lu "
                "drop=%lu\n",
                rxPollCount, receivedFlag ? 1 : 0, loraActive ? 1 : 0,
                digitalRead(PIN_LORA_DIO1), _txCount, _rxCount, _txDropCount);
-    // Force re-arm the receiver
-    _enterRx();
+    
+    // Self-healing check: if we haven't seen a successful RX in 15 minutes, re-init SPI
+    unsigned long silenceLimit = 15UL * 60UL * 1000UL;
+    if (_rxCount > 0 && (millis() - _lastRxSuccessMs > silenceLimit)) {
+        LOG_PRINTLN("LORA: Silence timeout (15m) — triggering Self-Heal");
+        _selfHealRadio();
+    } else {
+        // Force re-arm the receiver anyway
+        _enterRx();
+    }
   }
 
   if (!loraActive || !receivedFlag)
@@ -340,6 +349,9 @@ void LoRaManager::ProcessPacket(uint8_t *rxEncBuf, int size) {
     _enterRx();
     return;
   }
+
+  // Success! Record timestamp for self-healing logic
+  _lastRxSuccessMs = millis();
 
   // Check if it's a binary packet
   if (rxPlainBuf[0] == BINARY_TOKEN) {
@@ -707,4 +719,19 @@ void LoRaManager::periodicTick() {
       }
     }
   }
+}
+void LoRaManager::_selfHealRadio() {
+  LOG_PRINTLN("LoRa: Self-Heal Start...");
+  // 1. Physically toggle reset if pin available
+  digitalWrite(PIN_LORA_RST, LOW);
+  delay(100);
+  digitalWrite(PIN_LORA_RST, HIGH);
+  delay(100);
+
+  // 2. Re-run Init (includes SPI.begin and radio->begin)
+  Init();
+  
+  // 3. Reset silence tracker to give it another window
+  _lastRxSuccessMs = millis();
+  LOG_PRINTLN("LoRa: Self-Heal Complete");
 }

@@ -285,6 +285,9 @@ class SequenceRegistry:
 # ════════════════════════════════════════════════════════════════════════════
 
 
+_node_reg_singleton: Optional["NodeRegistry"] = None
+
+
 @dataclass
 class DeviceState:
     status: dict = field(default_factory=dict)
@@ -343,26 +346,110 @@ class WebSocketManager:
 class SerialLink:
     """Wraps a pyserial connection for use alongside BLE and HTTP transports."""
 
-    def __init__(self, port: str, baud: int = 115200) -> None:
+    def __init__(
+        self,
+        port: str,
+        baud: int = 115200,
+        state: "DeviceState" = None,
+        ws_mgr: "WebSocketManager" = None,
+    ) -> None:
         self._port = port
         self._baud = baud
+        self.state = state
+        self.ws_mgr = ws_mgr
         self._ser: Optional[serial.Serial] = None if PYSERIAL else None
         self._loop: Optional[asyncio.AbstractEventLoop] = None
+        self._monitor_task: Optional[asyncio.Task] = None
+        self._running = False
 
     async def connect(self) -> None:
         if not PYSERIAL:
             raise RuntimeError("pyserial not installed")
         self._loop = asyncio.get_event_loop()
         await self._loop.run_in_executor(None, self._open)
-        print(f"[Serial] Connected to {self._port}")
+        self._running = True
+        self._monitor_task = asyncio.create_task(self._monitor_loop())
+        print(f"[Serial] Connected to {self._port} (monitor active)")
+
+        # Auto-enable streaming on Peer 1 to receive spontaneous announcements
+        await asyncio.sleep(0.5)
+        await self.send_command("STREAM ON")
 
     def _open(self) -> None:
         self._ser = serial.Serial(self._port, self._baud, timeout=1)
 
     async def disconnect(self) -> None:
+        self._running = False
+        if self._monitor_task:
+            self._monitor_task.cancel()
         if self._ser and self._ser.is_open:
             self._ser.close()
         print(f"[Serial] Disconnected from {self._port}")
+
+    async def _monitor_loop(self) -> None:
+        """Background loop reading from Peer 1; handles announcements & logs."""
+        buffer = ""
+        while self._running and self._ser and self._ser.is_open:
+            try:
+                data = await self._loop.run_in_executor(None, self._ser.read, 128)
+                if data:
+                    buffer += data.decode(errors="ignore")
+                    if "\n" in buffer:
+                        lines = buffer.split("\n")
+                        buffer = lines.pop()
+                        for line in lines:
+                            await self._handle_line(line.strip())
+                else:
+                    await asyncio.sleep(0.01)
+            except Exception as e:
+                print(f"[Serial] Monitor error: {e}")
+                break
+
+    async def _handle_line(self, line: str) -> None:
+        """Parse DATA/TEL announcements from Peer 1 and relay to Webapp."""
+        if not line:
+            return
+
+        # DATA,sender,bat,rssi,hops (LoRa Stream)
+        if line.startswith("DATA,"):
+            parts = line.split(",")
+            if len(parts) >= 5:
+                sender, bat, rssi, hops = parts[1:5]
+                print(f"[Serial] Announcement from {sender}: {bat}V, {rssi}dBm")
+                
+                # Update Node Registry proactively
+                shared_reg = globals().get("_node_reg_singleton")
+                if shared_reg:
+                    # Type 'lora' indicates it's a remote peer found via entry node
+                    shared_reg.add(sender, "lora", sender)
+
+                if self.ws_mgr:
+                    await self.ws_mgr.broadcast(
+                        {
+                            "type": "announcement",
+                            "id": sender,
+                            "battery": bat,
+                            "rssi": rssi,
+                            "hops": hops,
+                        }
+                    )
+
+        # TEL: sender (hops=h, sid=0x... (Log-style telemetry)
+        elif "TEL:" in line:
+            # TEL: Mesh-2f (hops=0, sid=0x2F)
+            match = re.search(r"TEL:\s+([\w-]+)\s+\(hops=(\d+),\s+sid=(0x[0-9A-Fa-f]+)\)", line)
+            if match:
+                sender, hops, sid = match.groups()
+                print(f"[Serial] Telemetry observed for {sender} (SID {sid})")
+                if self.ws_mgr:
+                    await self.ws_mgr.broadcast(
+                        {"type": "announcement", "id": sender, "hops": hops, "sid": sid}
+                    )
+
+        # Fallback: relay logs for the 'Terminal' view
+        if self.ws_mgr:
+            # We tag logs from Peer 1 as 'serial_log'
+            await self.ws_mgr.broadcast({"type": "serial_log", "port": self._port, "text": line})
 
     async def send_command(self, cmd: str) -> bool:
         if not self.is_connected or not self._loop:
@@ -580,10 +667,15 @@ class TransportManager:
         http_ok = bool(_ip and AIOHTTP)
 
         if strategy == "ble_only":
-            # Always BLE — ignores HTTP entirely
             return "ble"
 
-        elif strategy == "readwrite_split":
+        # NEW: If we have an active serial connection, it SHOULD be the priority
+        # for a local desktop session, especially if HTTP/BLE aren't healthy.
+        if self.state.serial_ok and self._serial and self._serial.is_connected:
+            # We bypass the strategy if we're physically plugged in and it's working
+            return "serial"
+
+        if strategy == "readwrite_split":
             # STATUS / MESH queries → HTTP; mutating commands → BLE
             read_prefixes = ("STATUS", "SCHED LIST", "MESH", "LOG")
             is_read = any(cmd.upper().startswith(p) for p in read_prefixes)
@@ -734,6 +826,7 @@ class StatusPoller:
                         "transport": self.state.transport,
                         "http_ok": self.state.http_ok,
                         "ble_ok": self.state.ble_ok,
+                        "serial_ok": self.state.serial_ok,
                         "serial_peripherals": self.state.serial_peripherals,
                         **status,
                     }
@@ -747,7 +840,7 @@ class StatusPoller:
 
             # --- Multi-Peer Harvesting ---
             # Also harvest from any other active nodes in the registry that aren't the primary
-            # This ensures "Master" and "Slave" both get logs even if one isn't the current "Active" transport target.
+            # This ensures all reachable peers get logs even if they aren't the primary transport target.
             for node in self.node_reg.list():
                 if node.active and node.type == "wifi" and node.address:
                     # Avoid double-harvesting if this is already the primary active_ip
@@ -872,49 +965,75 @@ class StatusPoller:
 # ════════════════════════════════════════════════════════════════════════════
 
 
-async def _proxy_get(device_ip: Optional[str], path: str) -> Optional[dict]:
+async def _proxy_get(device_ip: Optional[str], path: str, retries: int = 3) -> Optional[dict]:
     if not AIOHTTP or not device_ip:
         return None
-    try:
-        async with aiohttp.ClientSession() as s:
-            async with s.get(
-                f"http://{device_ip}{path}",
-                timeout=aiohttp.ClientTimeout(total=12.0),
-            ) as r:
-                return await r.json(content_type=None)
-    except Exception:
-        return None
+    
+    for attempt in range(retries):
+        try:
+            async with aiohttp.ClientSession() as s:
+                async with s.get(
+                    f"http://{device_ip}{path}",
+                    timeout=aiohttp.ClientTimeout(total=8.0),
+                ) as r:
+                    if r.status == 200:
+                        return await r.json(content_type=None)
+                    elif r.status == 422:
+                        print(f"[http] 422 error on {path} (attempt {attempt+1}/{retries})")
+        except Exception as e:
+            if attempt == retries - 1:
+                print(f"[http] Proxy GET failed after {retries} attempts: {e}")
+        
+        if attempt < retries - 1:
+            await asyncio.sleep(0.5 * (attempt + 1))
+    return None
 
 
-async def _proxy_post(device_ip: Optional[str], path: str, data: dict) -> bool:
+async def _proxy_post(device_ip: Optional[str], path: str, data: dict, retries: int = 3) -> bool:
     if not AIOHTTP or not device_ip:
         return False
-    try:
-        async with aiohttp.ClientSession() as s:
-            async with s.post(
-                f"http://{device_ip}{path}",
-                data=data,
-                timeout=aiohttp.ClientTimeout(total=12.0),
-            ) as r:
-                return r.status == 200
-    except Exception:
-        return False
+        
+    for attempt in range(retries):
+        try:
+            async with aiohttp.ClientSession() as s:
+                async with s.post(
+                    f"http://{device_ip}{path}",
+                    data=data,
+                    timeout=aiohttp.ClientTimeout(total=8.0),
+                ) as r:
+                    if r.status == 200:
+                        return True
+                    print(f"[http] POST {path} status {r.status} (attempt {attempt+1}/{retries})")
+        except Exception as e:
+            if attempt == retries - 1:
+                print(f"[http] Proxy POST failed after {retries} attempts: {e}")
+        
+        if attempt < retries - 1:
+            await asyncio.sleep(0.5 * (attempt + 1))
+    return False
 
 
-async def _send_cmd_to_ip(ip: str, cmd: str) -> bool:
+async def _send_cmd_to_ip(ip: str, cmd: str, retries: int = 2) -> bool:
     """Send a single command directly to a specific device IP, bypassing TransportManager."""
     if not AIOHTTP or not ip:
         return False
-    try:
-        async with aiohttp.ClientSession() as s:
-            async with s.post(
-                f"http://{ip}/api/cmd",
-                data={"cmd": cmd},
-                timeout=aiohttp.ClientTimeout(total=12.0),
-            ) as r:
-                return r.status == 200
-    except Exception:
-        return False
+        
+    for attempt in range(retries):
+        try:
+            async with aiohttp.ClientSession() as s:
+                async with s.post(
+                    f"http://{ip}/api/cmd",
+                    data={"cmd": cmd},
+                    timeout=aiohttp.ClientTimeout(total=5.0),
+                ) as r:
+                    if r.status == 200:
+                        return True
+        except Exception:
+            pass
+            
+        if attempt < retries - 1:
+            await asyncio.sleep(0.3)
+    return False
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -933,7 +1052,9 @@ def build_app(
     state = DeviceState()
     ws_mgr = WebSocketManager()
 
+    global _node_reg_singleton
     node_reg = NodeRegistry()
+    _node_reg_singleton = node_reg
     seq_reg = SequenceRegistry()
     CONFIGS_DIR.mkdir(parents=True, exist_ok=True)
     _serial_link: Optional[SerialLink] = None
@@ -1008,7 +1129,7 @@ def build_app(
 
     @app.on_event("startup")
     async def _startup() -> None:
-        nonlocal _ble_peers, _transport, _poller, _poll_task, _serial_hub
+        nonlocal _ble_peers, _transport, _poller, _poll_task, _serial_hub, _serial_link
 
         # Initialize active IP to the startup device_ip
         state.active_ip = device_ip
@@ -1027,16 +1148,31 @@ def build_app(
 
         # HTTP transport + status poller start immediately — no waiting for BLE
         _serial_hub = SerialHub(state, ws_mgr)
+
+        # Proactive: auto-connect to the persisted active node if one exists
+        active = node_reg.active_node()
+        if active:
+            print(f"[nodes] Auto-connecting to {active.name}...")
+            state.active_node = active.name
+            if active.type in ("wifi", "lora") and active.address:
+                state.active_ip = active.address
+            else:
+                state.active_ip = None
+            if active.type == "serial" and PYSERIAL:
+                # IMPORTANT: Set state.serial_port BEFORE starting HUB to avoid race
+                state.serial_port = active.address
+                _serial_link = SerialLink(active.address, state=state, ws_mgr=ws_mgr)
+                try:
+                    await _serial_link.connect()
+                    state.serial_ok = _serial_link.is_connected
+                except Exception as e:
+                    print(f"[serial] Auto-connect failed: {e}")
+                    state.serial_ok = False
+
         _transport = TransportManager(state, device_ip, _ble_peers, _serial_link)
         _poller = StatusPoller(state, ws_mgr, device_ip, _ble_peers, node_reg)
         _poll_task = asyncio.create_task(_poller.run())
         asyncio.create_task(_serial_hub.start())
-        port = int(os.environ.get("PORT", 8000))
-        print(f"[server] Listening at http://localhost:{port}")
-
-        # BLE scan deferred to background task — won't block first HTTP poll
-        if BLEAK and not no_ble:
-            asyncio.create_task(_ble_scan())
 
     @app.on_event("shutdown")
     async def _shutdown() -> None:
@@ -1171,34 +1307,40 @@ def build_app(
     # ── Test Overdrive / Nightly Protocol ─────────────────────────────────
 
     @app.post("/api/test/overdrive")
-    async def _test_overdrive(body: dict) -> JSONResponse:
+    async def _test_overdrive(request: Request, body: dict) -> JSONResponse:
         """Trigger the nightly overdrive protocol in the background."""
         import subprocess
-        cycles = body.get("cycles", 50)
-        delay = body.get("delay", 300)
-        
-        # We target the local server's own API
-        target_ip = "127.0.0.1:8000"
-        
-        script_path = Path(__file__).parent.parent / "testing" / "overdrive.py"
-        
-        # Start processes detached so they survive server tick or restart
-        cmd = [sys.executable, str(script_path), 
-               "--cycles", str(cycles), 
-               "--delay", str(delay), 
-               "--ip", target_ip]
-        
-        subprocess.Popen(
-            cmd, 
-            cwd=str(Path(__file__).parent.parent.parent),
-            creationflags=0x00000008 if os.name == "nt" else 0, # DETACHED_PROCESS for Windows
-            stdout=None, stderr=None
-        )
-        
-        return JSONResponse({
-            "ok": True, 
-            "msg": f"Endurance overdrive started in background ({cycles} cycles)."
-        })
+        try:
+            cycles = body.get("cycles", 50)
+            delay = body.get("delay", 300)
+            
+            # Dynamically target this server's host for the script
+            host = request.headers.get("host", "127.0.0.1:8000")
+            
+            script_path = (Path(__file__).parent.parent / "testing" / "overdrive.py").resolve()
+            
+            # Start processes detached so they survive server tick or restart
+            cmd = [sys.executable, str(script_path), 
+                   "--cycles", str(cycles), 
+                   "--delay", str(delay), 
+                   "--ip", host]
+            
+            subprocess.Popen(
+                cmd, 
+                cwd=str(Path(__file__).resolve().parent.parent.parent),
+                creationflags=0x00000008 if os.name == "nt" else 0, # DETACHED_PROCESS for Windows
+                stdout=None, stderr=None
+            )
+            
+            return JSONResponse({
+                "ok": True, 
+                "msg": f"Endurance overdrive started in background ({cycles} cycles)."
+            })
+        except Exception as e:
+            return JSONResponse({
+                "ok": False,
+                "error": f"Failed to start overdrive script: {str(e)}"
+            }, status_code=500)
 
     @app.get("/api/test/reports")
     async def _list_reports() -> JSONResponse:
@@ -1598,7 +1740,7 @@ def build_app(
                     await _serial_link.disconnect()
                 except Exception:
                     pass
-            _serial_link = SerialLink(node.address)
+            _serial_link = SerialLink(node.address, state=state, ws_mgr=ws_mgr)
             try:
                 await _serial_link.connect()
                 state.serial_ok = _serial_link.is_connected
@@ -2393,8 +2535,8 @@ def main() -> None:
     ble_b = args.device2 or _saved_settings.get("ble_prefix_b") or None
 
     print("LoRaLink PC Control Webapp")
-    print(f"  Peer A     : {ble_a}")
-    print(f"  Peer B     : {ble_b or '(single-device mode)'}")
+    print(f"  Peer 1     : {ble_a}")
+    print(f"  Peer 2     : {ble_b or '(single-peer mode)'}")
     print(f"  Device IP  : {device_ip or 'not set (BLE only)'}")
     print(
         f"  BLE        : {'disabled (--no-ble)' if args.no_ble else 'enabled (background scan)'}"

@@ -114,7 +114,7 @@ void CommandManager::handleCommand(const String &fullCmdIn,
                                    CommInterface source) {
   String fullCmd = fullCmdIn;
   fullCmd.trim();
-  if (fullCmd.length() == 0 || fullCmd.length() > 256)
+  if (fullCmd.length() == 0 || fullCmd.length() > 512)
     return;
 
   bool fromLoRa = (source == CommInterface::COMM_LORA);

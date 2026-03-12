@@ -1,1 +1,9 @@
-[]
+[
+  {
+    "id": "ee13c769-6da1-47bc-835a-9dd8f12cdae6",
+    "name": "Peer 1",
+    "type": "serial",
+    "address": "COM7",
+    "active": true
+  }
+]

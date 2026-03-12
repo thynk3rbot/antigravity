@@ -4,148 +4,32 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Dev / QA — LoRaLink</title>
+  <link rel="stylesheet" href="/static/css/shared.css" />
+  <link rel="stylesheet" href="/static/css/devqa.css" />
   <style>
-    /* ── Reset & Variables ───────────────────────────────────────────────── */
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
-      --bg:       #0d0f12;
-      --surface:  #161a1f;
-      --border:   #252b33;
-      --dim:      #4a5568;
-      --text:     #cdd6e0;
-      --bright:   #eaf2fb;
-      --accent:   #3b9eff;
-      --green:    #3ecf8e;
-      --yellow:   #f6c90e;
-      --red:      #e05252;
-      --mono:     'Cascadia Code', 'Fira Code', 'Consolas', monospace;
-      --sans:     -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      /* Layout specific overrides */
       --hdr-h:    44px;
       --status-h: 32px;
       --cmd-w:    280px;
+      
+      /* Color mapping to shared.css */
+      --bg:       var(--bg-main);
+      --surface:  var(--bg-card);
+      --dim:      var(--text-dim);
+      --bright:   #fff;
+      --mono:     'JetBrains Mono', 'Cascadia Code', monospace;
+      --sans:     "Outfit", sans-serif;
     }
-    html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: var(--sans); font-size: 13px; }
-
-    /* ── Debug ID overlay (CSS-only, always in DOM, toggled by body class) ─ */
-    body.debug-ids [data-debug-id] { position: relative; outline: 1px dashed rgba(246,201,14,0.3); }
-    body.debug-ids [data-debug-id]::after {
-      content: attr(data-debug-id);
-      position: absolute; top: 0; right: 0; z-index: 9999;
-      font: 700 8px/1 var(--mono);
-      background: var(--yellow); color: #000;
-      padding: 1px 3px; border-radius: 0 0 0 3px;
-      pointer-events: none; white-space: nowrap;
+    
+    html, body { 
+      height: 100%; 
+      overflow: hidden; 
+      background: var(--bg); 
+      color: var(--text); 
+      font-family: var(--sans); 
+      font-size: 13px; 
     }
-
-    /* ── Layout ──────────────────────────────────────────────────────────── */
-    #dq-hdr    { height: var(--hdr-h); background: var(--surface); border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 12px; gap: 10px; flex-shrink: 0; }
-    #dq-main   { display: flex; height: calc(100vh - var(--hdr-h) - var(--status-h)); overflow: hidden; }
-    #dq-status { height: var(--status-h); background: var(--surface); border-top: 1px solid var(--border); display: flex; align-items: center; padding: 0 12px; overflow: hidden; }
-
-    /* ── Header ──────────────────────────────────────────────────────────── */
-    .hdr-brand { font-weight: 700; color: var(--bright); font-size: 14px; letter-spacing: .03em; white-space: nowrap; }
-    .hdr-sep   { width: 1px; height: 20px; background: var(--border); }
-    .hdr-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
-    #dq-nav    { display: flex; gap: 4px; }
-    .nav-link  { color: var(--dim); text-decoration: none; font-size: 12px; padding: 3px 8px; border-radius: 4px; transition: background .15s, color .15s; }
-    .nav-link:hover  { background: var(--border); color: var(--text); }
-    .nav-link.active { color: var(--accent); }
-
-    /* ── Badges ──────────────────────────────────────────────────────────── */
-    .badge { font: 700 11px/1 var(--mono); padding: 3px 7px; border-radius: 4px; background: var(--border); color: var(--dim); white-space: nowrap; }
-    .badge.ok  { background: rgba(62,207,142,.15); color: var(--green); }
-    .badge.err { background: rgba(224,82,82,.15);  color: var(--red); }
-    .badge.unk { background: var(--border); color: var(--dim); }
-
-    /* ── Buttons ─────────────────────────────────────────────────────────── */
-    .btn { cursor: pointer; border: 1px solid var(--border); border-radius: 5px; background: var(--surface); color: var(--text); padding: 4px 10px; font-size: 12px; transition: background .12s, border-color .12s; }
-    .btn:hover   { background: var(--border); }
-    .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-    .btn.primary:hover { background: #2d8be6; }
-    .btn.active  { border-color: var(--accent); color: var(--accent); }
-    .btn.sm      { padding: 2px 7px; font-size: 11px; }
-    .micro-btn   { cursor: pointer; background: none; border: none; color: var(--dim); font-size: 10px; padding: 0 4px; }
-    .micro-btn:hover { color: var(--text); }
-
-    /* ── Device select ───────────────────────────────────────────────────── */
-    #dq-device-select {
-      background: var(--bg); border: 1px solid var(--border); color: var(--text);
-      border-radius: 5px; padding: 3px 8px; font-size: 12px; cursor: pointer; max-width: 180px;
-    }
-
-    /* ── CMD panel ───────────────────────────────────────────────────────── */
-    #dq-cmd {
-      width: var(--cmd-w); flex-shrink: 0; border-right: 1px solid var(--border);
-      display: flex; flex-direction: column; overflow: hidden;
-    }
-    .cmd-section  { padding: 10px 12px; border-bottom: 1px solid var(--border); }
-    .cmd-label    { font-size: 10px; font-weight: 700; letter-spacing: .08em; color: var(--dim); text-transform: uppercase; margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
-    .tp-pills     { display: flex; gap: 4px; flex-wrap: wrap; }
-    .tp-pills .btn { padding: 3px 9px; font-size: 11px; }
-    .input-row    { display: flex; gap: 6px; }
-    #dq-cmd-input {
-      flex: 1; background: var(--bg); border: 1px solid var(--border); color: var(--bright);
-      border-radius: 5px; padding: 5px 9px; font: 13px var(--mono); outline: none;
-      transition: border-color .15s;
-    }
-    #dq-cmd-input:focus { border-color: var(--accent); }
-    .palette-grid { display: flex; flex-wrap: wrap; gap: 4px; }
-    .palette-btn  { font: 11px var(--mono); padding: 2px 7px; cursor: pointer; background: var(--bg); border: 1px solid var(--border); color: var(--text); border-radius: 4px; }
-    .palette-btn:hover { border-color: var(--accent); color: var(--accent); }
-    #dq-history-section { flex: 1; overflow: hidden; display: flex; flex-direction: column; padding: 10px 12px; }
-    #dq-history-section .cmd-label { margin-bottom: 6px; }
-    #dq-history-list { flex: 1; overflow-y: auto; font: 11px var(--mono); list-style: none; }
-    #dq-history-list li { padding: 3px 6px; border-radius: 3px; cursor: pointer; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    #dq-history-list li:hover { background: var(--border); color: var(--text); }
-    #dq-history-list li::before { content: '▸ '; color: var(--accent); }
-
-    /* ── LOG panel ───────────────────────────────────────────────────────── */
-    #dq-log { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-    #dq-log-toolbar {
-      display: flex; align-items: center; gap: 6px; padding: 6px 10px;
-      border-bottom: 1px solid var(--border); flex-shrink: 0; background: var(--surface);
-    }
-    #dq-log-filter {
-      flex: 1; max-width: 220px; background: var(--bg); border: 1px solid var(--border);
-      color: var(--text); border-radius: 4px; padding: 3px 8px; font: 12px var(--mono); outline: none;
-    }
-    #dq-log-filter:focus { border-color: var(--accent); }
-    #dq-log-count { margin-left: auto; font: 11px var(--mono); color: var(--dim); }
-    #dq-log-output { flex: 1; overflow-y: auto; padding: 8px 12px; font: 12px/1.6 var(--mono); }
-    .log-line { display: flex; gap: 8px; padding: 1px 0; }
-    .log-line.hidden { display: none; }
-    .log-ts   { color: var(--dim); flex-shrink: 0; }
-    .log-dir  { flex-shrink: 0; width: 14px; text-align: center; }
-    .log-dir.out { color: var(--accent); }
-    .log-dir.in  { color: var(--green); }
-    .log-dir.sys { color: var(--yellow); }
-    .log-dir.err { color: var(--red); }
-    .log-body     { color: var(--text); word-break: break-all; }
-    .log-body.cmd { color: var(--bright); font-weight: 600; }
-
-    /* ── Status bar ──────────────────────────────────────────────────────── */
-    #dq-status-fields { display: flex; gap: 14px; overflow: hidden; font: 11px var(--mono); }
-    .sf      { display: flex; gap: 4px; white-space: nowrap; }
-    .sf-key  { color: var(--dim); }
-    .sf-val  { color: var(--bright); }
-    .sf-val.ok  { color: var(--green); }
-    .sf-val.err { color: var(--red); }
-
-    /* ── AI Suggestion panel ─────────────────────────────────────────────── */
-    .suggest-box {
-      border: 1px solid var(--border); border-radius: 5px; padding: 7px 10px;
-      cursor: pointer; transition: border-color .15s, background .15s;
-      min-height: 36px;
-    }
-    .suggest-box:hover { border-color: var(--accent); background: rgba(59,158,255,.06); }
-    .suggest-cmd    { display: block; font: 600 12px var(--mono); color: var(--bright); }
-    .suggest-reason { display: block; font: 11px var(--sans); color: var(--dim); margin-top: 3px; }
-    .suggest-spin   { font: 11px var(--mono); color: var(--yellow); margin-left: 4px; }
-
-    /* ── Scrollbar ───────────────────────────────────────────────────────── */
-    ::-webkit-scrollbar { width: 5px; }
-    ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
   </style>
 </head>
 <body>
@@ -156,7 +40,7 @@
   <div class="hdr-sep"></div>
 
   <select id="dq-device-select" data-debug-id="DQ-HDR-DEVICE"
-          title="Select target device" onchange="onDeviceChange(this.value)">
+          title="Select entry node" onchange="onDeviceChange(this.value)">
     <option value="">— no device —</option>
   </select>
 
@@ -166,11 +50,11 @@
   <div class="hdr-sep"></div>
 
   <nav id="dq-nav" data-debug-id="DQ-HDR-NAV">
-    <a href="/"                        class="nav-link" data-debug-id="DQ-NAV-FLEET">Fleet Admin</a>
-    <a href="/product-builder"         class="nav-link" data-debug-id="DQ-NAV-BUILDER">Product Builder</a>
-    <a href="/static/scheduler.html"   class="nav-link" data-debug-id="DQ-NAV-SCHED">Scheduler</a>
+    <a href="/"                        class="nav-link" data-debug-id="DQ-NAV-FLEET">Fleet</a>
+    <a href="/product-builder"         class="nav-link" data-debug-id="DQ-NAV-BUILDER">Builder</a>
+    <a href="/static/scheduler.html"   class="nav-link" data-debug-id="DQ-NAV-SCHED">Sched</a>
     <a href="/static/mqtt_dashboard.html" class="nav-link" data-debug-id="DQ-NAV-MQTT">MQTT</a>
-    <a href="/static/devqa.html"       class="nav-link active" data-debug-id="DQ-NAV-DEVQA">Dev / QA</a>
+    <a href="/static/devqa.html"       class="nav-link active" data-debug-id="DQ-NAV-DEVQA">Dev/QA</a>
   </nav>
 
   <div class="hdr-right" data-debug-id="DQ-HDR-RIGHT">
@@ -188,10 +72,10 @@
     <div class="cmd-section" data-debug-id="DQ-CMD-TRANSPORT">
       <div class="cmd-label">Transport</div>
       <div class="tp-pills" data-debug-id="DQ-CMD-TP-PILLS">
-        <button class="btn active" data-debug-id="DQ-CMD-TP-AUTO"   onclick="setTransport('auto',   this)">Auto</button>
-        <button class="btn"        data-debug-id="DQ-CMD-TP-HTTP"   onclick="setTransport('http',   this)">HTTP</button>
-        <button class="btn"        data-debug-id="DQ-CMD-TP-BLE"    onclick="setTransport('ble',    this)">BLE</button>
-        <button class="btn"        data-debug-id="DQ-CMD-TP-SERIAL" onclick="setTransport('serial', this)">Serial</button>
+        <button id="dq-tp-auto"   class="btn tp-btn active" data-debug-id="DQ-CMD-TP-AUTO"   onclick="setTransport('auto',   this)">Auto</button>
+        <button id="dq-tp-http"   class="btn tp-btn"        data-debug-id="DQ-CMD-TP-HTTP"   onclick="setTransport('http',   this)">HTTP</button>
+        <button id="dq-tp-ble"    class="btn tp-btn"        data-debug-id="DQ-CMD-TP-BLE"    onclick="setTransport('ble',    this)">BLE</button>
+        <button id="dq-tp-serial" class="btn tp-btn"        data-debug-id="DQ-CMD-TP-SERIAL" onclick="setTransport('serial', this)">Serial</button>
       </div>
     </div>
 
@@ -206,18 +90,15 @@
       </div>
     </div>
 
-    <!-- AI suggestion panel -->
-    <div class="cmd-section" id="dq-suggest-section" data-debug-id="DQ-CMD-SUGGEST">
-      <div class="cmd-label">
-        AI Suggestion
-        <span id="dq-suggest-spinner" data-debug-id="DQ-CMD-SUGGEST-SPINNER" class="suggest-spin" style="display:none">…</span>
+      <div id="dq-ai-suggestion" class="ai-suggest-panel mt-2" data-debug-id="DQ-AI-SUGGESTION">
+        <div id="dq-ai-content" class="ai-bubble cursor-pointer" onclick="useSuggestion()">
+          <div id="dq-ai-header" class="flex-row items-center mb-1">
+            <div id="dq-ai-cmd" class="text-bold mono">...</div>
+            <div id="dq-ai-spinner" class="spinner ml-auto" style="display:none"></div>
+          </div>
+          <div id="dq-ai-reason" class="ai-reason">...</div>
+        </div>
       </div>
-      <div id="dq-suggest-box" data-debug-id="DQ-CMD-SUGGEST-BOX" class="suggest-box"
-           title="Click to use this command" onclick="useSuggestion()">
-        <span id="dq-suggest-cmd"    data-debug-id="DQ-CMD-SUGGEST-CMD"    class="suggest-cmd">—</span>
-        <span id="dq-suggest-reason" data-debug-id="DQ-CMD-SUGGEST-REASON" class="suggest-reason"></span>
-      </div>
-    </div>
 
     <div class="cmd-section" data-debug-id="DQ-CMD-PALETTE">
       <div class="cmd-label">Quick Commands</div>
@@ -234,23 +115,23 @@
 
     <div class="cmd-section" data-debug-id="DQ-CMD-REGRESSION">
       <div class="cmd-label">Regression & Endurance</div>
-      <div style="display: flex; gap: 4px; margin-bottom: 8px;">
+      <div class="flex-row flex-gap-4 mb-2">
         <button class="btn primary sm" id="dq-regression-btn" onclick="runRegression()">Run Suite</button>
         <button class="btn sm" id="dq-overdrive-btn" onclick="triggerOverdrive()">Start Overdrive</button>
       </div>
       
-      <div id="dq-overdrive-config" style="font-size: 11px; color: var(--dim); margin-bottom: 8px; border-top: 1px solid var(--border); padding-top: 8px;">
-        <label>Loops: <input type="number" id="dq-over-cycles" value="50" style="width: 35px; background: none; border: 1px solid var(--border); color: #fff;"></label>
-        <label style="margin-left:5px">Delay: <input type="number" id="dq-over-delay" value="300" style="width: 40px; background: none; border: 1px solid var(--border); color: #fff;">s</label>
+      <div id="dq-overdrive-config" class="overdrive-config flex-row flex-gap-8 border-top pt-2">
+        <label>Loops: <input type="number" id="dq-over-cycles" class="overdrive-input" value="50"></label>
+        <label>Delay: <input type="number" id="dq-over-delay" class="overdrive-input" value="300">s</label>
       </div>
 
-      <div id="dq-reg-results" style="margin-top:4px; font:10px var(--mono); color:var(--dim)"></div>
+      <div id="dq-reg-results" class="reg-results-log mt-1 text-xs text-dim"></div>
       
-      <div class="cmd-label" style="margin-top:12px">Historical Reports</div>
-      <ul id="dq-reports-list" style="max-height: 120px; overflow-y: auto; font: 11px var(--mono); list-style: none; padding: 0;">
-        <li style="color:var(--dim)">Loading reports...</li>
+      <div class="cmd-label mt-2">Historical Reports</div>
+      <ul id="dq-reports-list" class="reports-list-ul max-height-120 ov-y-auto mt-1">
+        <li class="text-dim">Loading reports...</li>
       </ul>
-      <button class="btn sm" onclick="loadReports()" style="margin-top: 4px; width: 100%;">↻ Refresh Reports</button>
+      <button class="btn sm mt-1 w-full" onclick="loadReports()">↻ Refresh Reports</button>
     </div>
 
   </section>
@@ -298,11 +179,12 @@ const MAX_LOG  = 500;
 // Default palette — device-agnostic.
 // Future devices extend this via GET /api/devqa_palette → { commands: [...] }
 const DEFAULT_PALETTE = [
-  'STATUS', 'RESET',
+  'STATUS', 'PEER ALL STATUS', 'MESH',
+  'STREAM ON', 'STREAM OFF',
   'SCHED LIST', 'SCHED CLEAR',
   'GPIO 6 HIGH', 'GPIO 6 LOW',
   'GPIO 7 HIGH', 'GPIO 7 LOW',
-  'LORA STATUS', 'WIFI STATUS', 'LOG',
+  'LORA STATUS', 'LOG',
 ];
 
 // ── Boot ──────────────────────────────────────────────────────────────────
@@ -467,11 +349,11 @@ async function sendCmd() {
 
 // ── AI recommendation ──────────────────────────────────────────────────────
 async function fetchRecommendation(cmd, response) {
-  const spinner = document.getElementById('dq-suggest-spinner');
-  const cmdEl   = document.getElementById('dq-suggest-cmd');
-  const reasonEl= document.getElementById('dq-suggest-reason');
+  const spinner = document.getElementById('dq-ai-spinner');
+  const cmdEl   = document.getElementById('dq-ai-cmd');
+  const reasonEl= document.getElementById('dq-ai-reason');
 
-  spinner.style.display = 'inline';
+  if (spinner) spinner.style.display = 'inline-block';
   try {
     const r = await fetch('/api/recommend', {
       method: 'POST',
@@ -491,13 +373,14 @@ async function fetchRecommendation(cmd, response) {
     }
   } catch {}
   finally {
-    spinner.style.display = 'none';
+    if (spinner) spinner.style.display = 'none';
   }
 }
 
 function useSuggestion() {
-  const cmd = document.getElementById('dq-suggest-cmd').textContent;
-  if (!cmd || cmd === '—') return;
+  const cmdObj = document.getElementById('dq-ai-cmd');
+  const cmd = cmdObj ? cmdObj.textContent : '';
+  if (!cmd || cmd === '...' || cmd === '—') return;
   document.getElementById('dq-cmd-input').value = cmd;
   document.getElementById('dq-cmd-input').focus();
 }
@@ -678,6 +561,23 @@ function applyFilter() {
 const STATUS_SKIP = new Set(['type', 'peer', 'log', 'pins', 'nodes', 'mesh']);
 
 function renderStatus(d) {
+  // Transport State Coloring
+  const httpBtn = document.getElementById('dq-tp-http');
+  const bleBtn = document.getElementById('dq-tp-ble');
+  const serBtn = document.getElementById('dq-tp-serial');
+
+  if (httpBtn) {
+    httpBtn.classList.toggle('ok', !!d.http_ok);
+    httpBtn.classList.toggle('err', !d.http_ok);
+  }
+  if (bleBtn) {
+    bleBtn.classList.toggle('ok', !!d.ble_ok);
+    bleBtn.classList.toggle('err', !d.ble_ok);
+  }
+  if (serBtn) {
+    serBtn.classList.toggle('ok', !!d.serial_ok);
+  }
+
   const fields = document.getElementById('dq-status-fields');
   while (fields.firstChild) fields.removeChild(fields.firstChild);
 

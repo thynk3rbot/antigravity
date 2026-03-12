@@ -97,6 +97,10 @@ private:
   static const int MAX_PENDING_ACKS = 5;
   PendingAck ackQueue[MAX_PENDING_ACKS];
 
+  // Self-healing
+  unsigned long _lastRxSuccessMs = 0;
+  void _selfHealRadio();
+
   // Dirty-flag heartbeat suppression — skip TX when state hasn't changed
   float _lastHBBat = -1.0f; // Last transmitted battery voltage
   String _lastHBRst;        // Last transmitted reset reason

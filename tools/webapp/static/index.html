@@ -198,11 +198,12 @@
       /* ═══════════════════════════════════════════════════════════
    WINBOX.JS STYLING
    ═══════════════════════════════════════════════════════════ */
-      .winbox { background: var(--bg-card) !important; border-radius: 8px !important; border: 1px solid var(--border) !important; box-shadow: 0 10px 40px rgba(0,0,0,0.6) !important; }
-      .wb-header { background: var(--bg-hdr) !important; border-bottom: 1px solid var(--border) !important; height: 32px !important; line-height: 32px !important; }
-      .wb-title { font-size: 0.75em !important; font-weight: 800 !important; color: var(--accent) !important; letter-spacing: 0.8px !important; text-transform: uppercase !important; }
+      .winbox { background: var(--bg-card) !important; border-radius: 6px !important; border: 1px solid var(--border) !important; box-shadow: 0 4px 20px rgba(0,0,0,0.5) !important; }
+      .wb-header { background: var(--bg-hdr) !important; border-bottom: 1px solid var(--border) !important; height: 26px !important; line-height: 26px !important; }
+      .wb-title { font-size: 0.68em !important; font-weight: 800 !important; color: var(--accent) !important; letter-spacing: 0.8px !important; text-transform: uppercase !important; }
       .wb-body { background: transparent !important; }
-      .wb-icon { filter: invert(1) brightness(2); } /* Ensure buttons are visible on dark bg */
+      .wb-icon { filter: invert(1) brightness(2); width: 22px !important; height: 22px !important; }
+      .wb-icon span { width: 14px !important; height: 14px !important; }
 
       /* ═══════════════════════════════════════════════════════════
    WEBAPP UX ENHANCEMENTS
@@ -273,13 +274,13 @@
       /* Fleet Dashboard Layout */
       .fleet-dashboard-mesh {
         position: relative;
-        height: calc(100vh - 110px);
-        padding: 12px;
+        height: calc(100vh - 84px);
+        padding: 8px;
         background: transparent;
         display: grid;
-        grid-template-columns: 320px 1fr 340px;
-        grid-template-rows: 1fr 1fr 1.2fr;
-        gap: 12px;
+        grid-template-columns: 280px 1fr 300px;
+        grid-template-rows: repeat(4, 1fr);
+        gap: 8px;
       }
       .dashboard-cell {
         position: relative;
@@ -1220,14 +1221,14 @@
 
     <!-- ── Top nav ───────────────────────────────────────────────────────────── -->
     <nav class="page-nav">
-      <a class="nav-link active" onclick="showPage('fleet')"><span class="dbg-id">NAV-FLEET</span>📡 Fleet</a>
-      <a class="nav-link" onclick="showPage('nodes')"><span class="dbg-id">NAV-NODES</span>🌐 Nodes</a>
-      <a class="nav-link" onclick="showPage('schedules')"><span class="dbg-id">NAV-SCHED</span>📅 Schedules</a>
-      <a class="nav-link" onclick="showPage('deploy')"><span class="dbg-id">NAV-DEPLOY</span>🚀 Deploy</a>
-      <a class="nav-link" onclick="showPage('hardware')"><span class="dbg-id">NAV-HARDWARE</span>🛠️ Hardware</a>
-      <a class="nav-link" onclick="showPage('config')"><span class="dbg-id">NAV-CONFIG</span>⚙️ Config</a>
-      <a class="nav-link" onclick="showPage('analysis')"><span class="dbg-id">NAV-ANALYSIS</span>🧪 Analysis</a>
-      <a class="nav-link" href="/devqa"><span class="dbg-id">NAV-DEVQA</span>🐛 Dev / QA</a>
+      <a class="nav-link active" onclick="showPage('fleet')"><span class="dbg-id">NAV-FLEET</span>Fleet</a>
+      <a class="nav-link" onclick="showPage('nodes')"><span class="dbg-id">NAV-NODES</span>Nodes</a>
+      <a class="nav-link" onclick="showPage('schedules')"><span class="dbg-id">NAV-SCHED</span>Sched</a>
+      <a class="nav-link" onclick="showPage('deploy')"><span class="dbg-id">NAV-DEPLOY</span>Deploy</a>
+      <a class="nav-link" onclick="showPage('hardware')"><span class="dbg-id">NAV-HARDWARE</span>HW</a>
+      <a class="nav-link" onclick="showPage('config')"><span class="dbg-id">NAV-CONFIG</span>Config</a>
+      <a class="nav-link" onclick="showPage('analysis')"><span class="dbg-id">NAV-ANALYSIS</span>Analysis</a>
+      <a class="nav-link" href="/devqa"><span class="dbg-id">NAV-DEVQA</span>Dev/QA</a>
       <div class="override-btns">
         <button
           class="btn-override danger"
@@ -1461,7 +1462,7 @@
                 <label class="text-xs text-dim uppercase">Name</label>
                 <input
                   id="node-name"
-                  placeholder="e.g. Master"
+                  placeholder="e.g. Peer 1"
                   class="input-styled p-3-7"
                 />
               </div>
@@ -2936,12 +2937,12 @@
           const now = Date.now();
           gridEl.innerHTML = nodes
             .map((n) => {
-              const stale = n.ago > 300;
-              const statusCls = n.isLocal
+            const stale = n.ago > 300 || n.on === false;
+            const statusCls = n.isLocal
+              ? "online"
+              : n.on === true
                 ? "online"
-                : n.ago < 120
-                  ? "online"
-                  : "offline";
+                : "offline";
               const hist = n.isLocal ? [] : _rssiHistory[n.id] || [];
               const spark = buildRssiSparkline(hist);
               // 2-factor health (bat + rssi) for field cards
@@ -3440,17 +3441,19 @@
 
           // Update state and layout
           row.className = "roster-row" + (stale ? " stale" : "") + (n.isLocal ? " local" : "");
+          if (n.on === false) row.classList.add("stale");
           if (row.dataset.selected === "true") row.classList.add("selected");
 
           const [dot, idWrap, bat, rssi, hops, ago] = row.children;
           const [idSpan, dbg] = idWrap.children;
 
-          dot.className = "status-dot " + (n.isLocal ? "online" : n.ago < 120 ? "online" : "offline");
+          const isOnline = n.isLocal || n.on === true;
+          dot.className = "status-dot " + (isOnline ? "online" : "offline");
           dot.style.cssText =
             "width:6px;height:6px;border-radius:50%;flex-shrink:0;background:" +
-            (n.isLocal || n.ago < 120 ? "var(--ok)" : "var(--err)") +
+            (isOnline ? "var(--ok)" : "var(--err)") +
             ";box-shadow:" +
-            (n.isLocal || n.ago < 120 ? "0 0 4px var(--ok)" : "none");
+            (isOnline ? "0 0 4px var(--ok)" : "none");
 
           idSpan.style.cssText =
             "font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:monospace;font-size:0.9em";
@@ -3659,7 +3662,8 @@
                   : "rssi-bad";
             const batColor =
               n.bat > 3.5 ? "#00ff88" : n.bat > 3.2 ? "#ffaa00" : "#ff4444";
-            return `<tr>
+            const isOffline = n.on === false;
+            return `<tr class="${isOffline ? "stale" : ""}">
       <td class="text-bold text-accent">${n.id}</td>
       <td style="color:${batColor}">${n.bat ? n.bat.toFixed(2) + "V" : "—"}</td>
       <td class="${rssiClass}">${n.rssi || "—"} dBm</td>

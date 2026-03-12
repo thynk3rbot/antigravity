@@ -7,7 +7,7 @@
 // ============================================================================
 //   FIRMWARE & FEATURE FLAGS
 // ============================================================================
-#define FIRMWARE_VERSION "v0.0.40"
+#define FIRMWARE_VERSION "v0.1.1"
 #define FIRMWARE_NAME "LoRaLink Any2Any"
 #define HARDWARE_ID "Heltec ESP32 LoRa V3"
 #define CONFIG_SCHEMA "1.0"
@@ -178,6 +178,7 @@ struct RemoteNode {
   float lon;
   uint8_t shortId; // Last byte of MAC for binary routing
   char ip[16];     // mDNS-resolved IP (e.g. "172.16.0.26")
+  bool online;     // Runtime state — true if seen within timeout
 };
 
 // ESP-NOW Peer Info
@@ -187,7 +188,7 @@ struct ESPNowPeer {
   bool active;
 };
 
-#define MAX_NODES 16
+#define MAX_NODES 64
 #define MAX_PERIPHERALS 8
 #define LOG_SIZE 20
 #define HASH_BUFFER_SIZE 20
