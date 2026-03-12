@@ -264,7 +264,11 @@ void WiFiManager::startServer() {
   mdnsName.toLowerCase();
   if (MDNS.begin(mdnsName.c_str())) {
     MDNS.addService("http", "tcp", 80);
-    Serial.println("mDNS: http://" + mdnsName + ".local");
+    // LOCKSTEP: Add metadata for secondary-instant discovery without HTTP probe
+    MDNS.addServiceTxt("http", "tcp", "id", data.myId);
+    MDNS.addServiceTxt("http", "tcp", "version", FIRMWARE_VERSION);
+    MDNS.addServiceTxt("http", "tcp", "type", "gateway");
+    Serial.println("mDNS: http://" + mdnsName + ".local (with Metadata)");
   }
 }
 

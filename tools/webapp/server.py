@@ -64,6 +64,16 @@ try:
 except ImportError:
     AIOHTTP = False
 
+# ── Zeroconf for mDNS discovery ──────────────────────────────────────────────
+try:
+    from zeroconf import ServiceBrowser, Zeroconf, ServiceInfo
+    import socket
+
+    ZEROCONF = True
+except ImportError:
+    ZEROCONF = False
+    print("WARNING: zeroconf not installed — mDNS discovery disabled")
+
 # ── BLE stack — import from sibling ble_instrument.py ────────────────────────
 _tools_dir = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_tools_dir))
@@ -315,6 +325,99 @@ class DeviceState:
 # ════════════════════════════════════════════════════════════════════════════
 # 2. WebSocketManager — browser connection pool
 # ════════════════════════════════════════════════════════════════════════════
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# 1b. MdnsBrowser — ZeroConf discovery
+# ════════════════════════════════════════════════════════════════════════════
+
+
+class MdnsBrowser:
+    """Listens for _http._tcp.local services and identifies LoRaLink devices."""
+
+    def __init__(self, state: "DeviceState", ws_mgr: "WebSocketManager") -> None:
+        self.state = state
+        self.ws_mgr = ws_mgr
+        self.zeroconf: Optional[Zeroconf] = None
+        self.browser: Optional[ServiceBrowser] = None
+
+    def start(self) -> None:
+        if not ZEROCONF:
+            return
+        try:
+            self.zeroconf = Zeroconf()
+            self.browser = ServiceBrowser(self.zeroconf, "_http._tcp.local.", self)
+            print("[mDNS] Browser started")
+        except Exception as e:
+            print(f"[mDNS] Startup failed: {e}")
+
+    def stop(self) -> None:
+        if self.zeroconf:
+            self.zeroconf.close()
+            self.zeroconf = None
+
+    def remove_service(self, zeroconf, type, name) -> None:
+        # Mark as offline in discovered_devices if found
+        for dev in self.state.discovered_devices:
+            if dev.get("mdns_name") == name:
+                dev["online"] = False
+        
+        if self.ws_mgr:
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    loop.create_task(self.ws_mgr.broadcast({"type": "mdns_update", "action": "remove", "name": name}))
+            except Exception:
+                pass
+
+    def add_service(self, zeroconf, type, name) -> None:
+        info = zeroconf.get_service_info(type, name)
+        if info:
+            try:
+                address = socket.inet_ntoa(info.addresses[0])
+                txt = {k.decode(): v.decode() for k, v in info.properties.items()}
+                
+                # Filter for LoRaLink devices via name or TXT record
+                is_loralink = "loralink" in name.lower() or txt.get("type") == "gateway"
+                if is_loralink:
+                    dev_id = txt.get("id", name.split(".")[0])
+                    dev_info = {
+                        "ip": address,
+                        "name": dev_id,
+                        "version": txt.get("version", "unknown"),
+                        "type": txt.get("type", "unknown"),
+                        "online": True,
+                        "mdns_name": name,
+                        "last_seen": time.time()
+                    }
+                    
+                    # Deduplicate in discovered_devices
+                    exists = False
+                    for i, dev in enumerate(self.state.discovered_devices):
+                        if dev["name"] == dev_id:
+                            self.state.discovered_devices[i] = dev_info
+                            exists = True
+                            break
+                    if not exists:
+                        self.state.discovered_devices.append(dev_info)
+                    
+                    print(f"[mDNS] Found {dev_id} at {address}")
+                    if self.ws_mgr:
+                        try:
+                            loop = asyncio.get_event_loop()
+                            if loop.is_running():
+                                loop.create_task(self.ws_mgr.broadcast({
+                                    "type": "mdns_update", 
+                                    "action": "add", 
+                                    "device": dev_info
+                                }))
+                        except Exception:
+                            pass
+            except Exception as e:
+                print(f"[mDNS] Error processing {name}: {e}")
+
+    def update_service(self, zeroconf, type, name) -> None:
+        self.add_service(zeroconf, type, name)
 
 
 class WebSocketManager:
@@ -1081,6 +1184,7 @@ def build_app(
     # Singletons populated at startup
     _ble_peers: list = []  # up to 2 BLELink instances
     _serial_hub: Optional[SerialHub] = None
+    _mdns_browser: Optional[MdnsBrowser] = None
     _transport: Optional[TransportManager] = None
     _poller: Optional[StatusPoller] = None
     _poll_task: Optional[asyncio.Task] = None
@@ -1148,7 +1252,7 @@ def build_app(
 
     @app.on_event("startup")
     async def _startup() -> None:
-        nonlocal _ble_peers, _transport, _poller, _poll_task, _serial_hub, _serial_link
+        nonlocal _ble_peers, _transport, _poller, _poll_task, _serial_hub, _serial_link, _mdns_browser
 
         # Initialize active IP to the startup device_ip
         state.active_ip = device_ip
@@ -1167,6 +1271,8 @@ def build_app(
 
         # HTTP transport + status poller start immediately — no waiting for BLE
         _serial_hub = SerialHub(state, ws_mgr)
+        _mdns_browser = MdnsBrowser(state, ws_mgr)
+        _mdns_browser.start()
 
         # Proactive: auto-connect to the persisted active node if one exists
         active = node_reg.active_node()
@@ -1195,6 +1301,8 @@ def build_app(
 
     @app.on_event("shutdown")
     async def _shutdown() -> None:
+        if _mdns_browser:
+            _mdns_browser.stop()
         if _poller:
             _poller.stop()
         if _poll_task:
@@ -1635,9 +1743,20 @@ def build_app(
             )
 
         async def _scan_subnet() -> None:
-            """Scan 172.16.0.1-254 for devices responding to /api/status."""
+            """Try to detect local subnet and scan for devices responding to /api/status."""
             found = []
-            base_ip = "172.16.0"
+            
+            # Dynamic Subnet Detection
+            try:
+                s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                s.connect(("8.8.8.8", 80))
+                local_ip = s.getsockname()[0]
+                s.close()
+                base_ip = ".".join(local_ip.split(".")[:-1])
+                print(f"[scan] Detected local subnet: {base_ip}.0/24")
+            except Exception:
+                base_ip = "172.16.0"
+                print(f"[scan] Subnet detection failed, using fallback: {base_ip}.0/24")
 
             async with aiohttp.ClientSession() as session:
                 tasks = []
@@ -1646,10 +1765,21 @@ def build_app(
                     tasks.append(_probe_device(session, ip))
 
                 results = await asyncio.gather(*tasks, return_exceptions=True)
-                found = [r for r in results if r is not None]
+                found = [r for r in results if r is not None and isinstance(r, dict)]
 
-            # Save discovery results
-            state.discovered_devices = found
+            # Merge results into state.discovered_devices (deduplicate by name)
+            for new_dev in found:
+                exists = False
+                for i, dev in enumerate(state.discovered_devices):
+                    if dev["name"] == new_dev["name"]:
+                        state.discovered_devices[i].update(new_dev)
+                        state.discovered_devices[i]["online"] = True
+                        exists = True
+                        break
+                if not exists:
+                    new_dev["online"] = True
+                    state.discovered_devices.append(new_dev)
+
             state.discovery_time = time.time()
 
         async def _probe_device(
@@ -1657,20 +1787,21 @@ def build_app(
         ) -> Optional[dict]:
             """Probe a single IP and return device info if it's a LoRaLink device."""
             try:
+                # Optimized timeout for LAN speed
                 async with session.get(
                     f"http://{ip}/api/status",
-                    timeout=aiohttp.ClientTimeout(total=4.0),
+                    timeout=aiohttp.ClientTimeout(total=2.0),
                 ) as r:
                     if r.status == 200:
                         data = await r.json()
-                        print(f"[scan] Found Antigravity device at {ip}")
-                        if "myId" in data or "id" in data:  # LoRaLink device
+                        if "myId" in data or "id" in data:  # LoRaLink device fingerprint
                             return {
                                 "ip": ip,
                                 "name": data.get("myId") or data.get("id", "Unknown"),
                                 "rssi": data.get("rssi"),
                                 "bat": data.get("bat"),
                                 "uptime": data.get("uptime"),
+                                "version": data.get("version", "unknown")
                             }
             except Exception:
                 pass
@@ -1679,7 +1810,7 @@ def build_app(
         # Start scan in background
         asyncio.create_task(_scan_subnet())
         return JSONResponse(
-            {"ok": True, "scanning": True, "msg": "Network scan started (≈15s)…"}
+            {"ok": True, "scanning": True, "msg": f"Auto-discovery active. {len(state.discovered_devices)} nodes currently known."}
         )
 
     @app.get("/api/discover/results")
@@ -1707,7 +1838,37 @@ def build_app(
 
     @app.get("/api/nodes")
     async def _nodes_list() -> JSONResponse:
-        return JSONResponse([n.to_dict() for n in node_reg.list()])
+        nodes = [n.to_dict() for n in node_reg.list()]
+        
+        # Mark online status based on active discovery
+        discovered_names = {d["name"]: d for d in state.discovered_devices}
+        for n in nodes:
+            if n["name"] in discovered_names:
+                n["online"] = discovered_names[n["name"]].get("online", True)
+                # Auto-update IP if it changed
+                if n["type"] == "wifi" and n["address"] != discovered_names[n["name"]]["ip"]:
+                     # Optional: could update the registry here, but let's just use it in state.active_ip
+                     pass
+            else:
+                # Basic offline assumption unless it's the active one and responded recently
+                n["online"] = (n["name"] == state.active_node and (time.time() - state.last_update) < 10)
+
+        # Include "discovered but not registered" nodes too
+        registered_ids = {n["name"] for n in nodes}
+        discovered_only = [
+            {
+                "id": f"new_{d['name']}", 
+                "name": d["name"], 
+                "type": d.get("type", "wifi"), 
+                "address": d["ip"], 
+                "online": True,
+                "discovered": True
+            } 
+            for d in state.discovered_devices 
+            if d["name"] not in registered_ids
+        ]
+
+        return JSONResponse({"nodes": nodes + discovered_only})
 
     @app.post("/api/nodes")
     async def _nodes_add(body: dict) -> JSONResponse:

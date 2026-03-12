@@ -208,9 +208,29 @@
     }
   }
 
-  async function attachNode(nodeId) {
+  async function attachNode(nodeId, isDiscovered = false, address = '') {
+    if (isDiscovered) {
+      const name = nodeId.replace('new_', '');
+      if (!confirm(`Found new node "${name}" at ${address}. Add to registry?`)) return;
+      
+      const addResp = await fetch('/api/nodes', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ name: name, type: 'wifi', address: address })
+      });
+      const addData = await addResp.json();
+      if (addData.id) {
+        nodeId = addData.id;
+        await rescanNodes();
+      } else {
+        appendLog(`[ERROR] Failed to register node: ${addData.error}`);
+        return;
+      }
+    }
+
     activeNodeId = nodeId;
     document.querySelectorAll('.node-item').forEach(el => el.classList.remove('active'));
+    // Use data-id attribute matching because ID might have changed after registration
     const target = document.querySelector(`[data-id="${nodeId}"]`);
     if(target) target.classList.add('active');
 
@@ -304,10 +324,10 @@
        const div = document.createElement('div');
        div.className = `node-item ${activeNodeId === n.id ? 'active' : ''}`;
        div.setAttribute('data-id', n.id);
-       div.onclick = () => attachNode(n.id);
+       div.onclick = () => attachNode(n.id, n.discovered, n.address);
        div.innerHTML = `
          <div class="node-info">
-           <span class="node-name">${n.name}</span>
+           <span class="node-name">${n.name} ${n.discovered ? '<span class="status-tag status-pending" style="font-size:10px; padding:2px 4px; margin-left:5px">NEW</span>' : ''}</span>
            <span class="node-meta">${n.address || 'MESH'}</span>
          </div>
          <div class="node-status ${n.online ? 'online' : ''}"></div>
