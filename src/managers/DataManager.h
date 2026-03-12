@@ -163,6 +163,10 @@ public:
   uint8_t getMyShortId();
   void resolveAllNodeIps();
 
+  // Hibernate (State persistence across deep-sleep/reboots)
+  bool SaveHibernateData();
+  bool LoadHibernateData();
+
 private:
   DataManager();
 };

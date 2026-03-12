@@ -88,6 +88,7 @@ private:
   bool _startAsyncTx(const uint8_t *data, size_t len);
   void _onTxComplete();
   void _enterRx();
+  void _enterCad(); // Start a CAD check
 
   // ── Packet counters ─────────────────────────────────────────────────────
   uint32_t _txCount = 0;
@@ -113,6 +114,12 @@ private:
   uint8_t encBuf[ENCRYPTED_PACKET_SIZE];
   MessagePacket txPacket;
   MessagePacket rxPacket;
+
+  // ── CAD (Wake-on-Radio) State ──────────────────────────────────────────
+  bool _cadActive = false;
+  unsigned long _lastCadMs = 0;
+  bool _cadDetected = false;
+  bool _isUsingLongPreamble = false;
 
   uint32_t getMsgHash(MessagePacket *p);
   uint16_t calculateChecksum(MessagePacket *p);

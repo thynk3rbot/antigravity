@@ -76,8 +76,7 @@ uint8_t DataManager::getMyShortId() {
 }
 
 void DataManager::Init() {
-  Serial.println("INIT: DataManager Starting...");
-  Serial.flush();
+  LOG_PRINTLN("INIT: DataManager Starting...");
   InitFilesystem();
 
   Preferences p;
@@ -85,18 +84,16 @@ void DataManager::Init() {
 
   bootCount = p.getInt("bootCount", 0) + 1;
   p.putInt("bootCount", bootCount);
-  Serial.printf("BOOT: #%d\n", bootCount);
-  Serial.flush();
+  LOG_PRINTF("BOOT: #%d\n", bootCount);
 
   // Initialize WiFi defaults if empty (first boot)
   if (p.getString("wifi_ssid", "").length() == 0) {
-    Serial.println("INIT: No WiFi credentials found - using defaults...");
+    LOG_PRINTLN("INIT: No WiFi credentials found - using defaults...");
     p.putString("wifi_ssid", "0.0.0.0");
     p.putString("wifi_pass", "");
   }
 
-  Serial.println("INIT: Loading Settings...");
-  Serial.flush();
+  LOG_PRINTLN("INIT: Loading Settings...");
   p.end();
 
   // SAFETY: Force-disable traceLogging during boot to prevent Flash-write hangs
@@ -104,10 +101,10 @@ void DataManager::Init() {
   traceLogging = false;
 
   LoadSettings();
+  LoadHibernateData();
 
-  Serial.printf("BOOT: Heap Free: %u bytes\n", ESP.getFreeHeap());
-  Serial.println("INIT: DataManager OK");
-  Serial.flush();
+  LOG_PRINTF("BOOT: Heap Free: %u bytes\n", ESP.getFreeHeap());
+  LOG_PRINTLN("INIT: DataManager OK");
 }
 
 bool DataManager::InitFilesystem() {
@@ -884,4 +881,63 @@ void DataManager::ResetProbeState() {
   SetProbeState(PROBE_BACKOFF_MIN_MS, 0);
   lastProbeResult = "";
   lastProbeAtMs = 0;
+}
+
+// ── Hibernate (State persistence across deep-sleep/reboots) ──
+#define HIBERNATE_VERSION 0x01
+#define HIBERNATE_FILE "/hibernate.bin"
+
+bool DataManager::SaveHibernateData() {
+  File f = LittleFS.open(HIBERNATE_FILE, "w");
+  if (!f) {
+    LOG_PRINTLN("HIBERNATE: Failed to open file for writing");
+    return false;
+  }
+
+  uint8_t version = HIBERNATE_VERSION;
+  f.write(version);
+  f.write((uint8_t *)&numNodes, sizeof(numNodes));
+  f.write((uint8_t *)remoteNodes, sizeof(remoteNodes));
+  f.write((uint8_t *)&logIndex, sizeof(logIndex));
+  f.write((uint8_t *)msgLog, sizeof(msgLog));
+  f.write((uint8_t *)&numPeripherals, sizeof(numPeripherals));
+  f.write((uint8_t *)peripherals, sizeof(peripherals));
+
+  f.close();
+  LOG_PRINTF("HIBERNATE: Saved %d nodes, %d logs\n", numNodes, logIndex);
+  return true;
+}
+
+bool DataManager::LoadHibernateData() {
+  if (!LittleFS.exists(HIBERNATE_FILE)) {
+    return false;
+  }
+  File f = LittleFS.open(HIBERNATE_FILE, "r");
+  if (!f)
+    return false;
+
+  uint8_t version;
+  if (f.read() != HIBERNATE_VERSION) {
+    LOG_PRINTLN("HIBERNATE: Version mismatch, skipping");
+    f.close();
+    return false;
+  }
+
+  f.read((uint8_t *)&numNodes, sizeof(numNodes));
+  f.read((uint8_t *)remoteNodes, sizeof(remoteNodes));
+  f.read((uint8_t *)&logIndex, sizeof(logIndex));
+  f.read((uint8_t *)msgLog, sizeof(msgLog));
+  f.read((uint8_t *)&numPeripherals, sizeof(numPeripherals));
+  f.read((uint8_t *)peripherals, sizeof(peripherals));
+
+  f.close();
+
+  // Mark all nodes as offline on boot until seen again (millis() reset)
+  for (int i = 0; i < numNodes; i++) {
+    remoteNodes[i].online = false;
+    remoteNodes[i].lastSeen = 0;
+  }
+
+  LOG_PRINTF("HIBERNATE: Restored %d nodes, %d logs\n", numNodes, logIndex);
+  return true;
 }

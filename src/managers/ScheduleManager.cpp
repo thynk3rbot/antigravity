@@ -218,8 +218,8 @@ void ScheduleManager::serialTask() {
   static bool flowPaused = false;
 
   while (Serial.available()) {
-    // XON/XOFF Flow Control: Alert sender if our internal line buffer is near capacity
-    if (!flowPaused && serialBuffer.length() > 450) {
+    // XON/XOFF Flow Control: Lower threshold for earlier warning
+    if (!flowPaused && serialBuffer.length() > 256) {
       Serial.write(0x13); // XOFF
       flowPaused = true;
     }
@@ -230,13 +230,14 @@ void ScheduleManager::serialTask() {
       line.trim();
       serialBuffer = "";
       
-      if (flowPaused) {
+      // Hysteresis: only XON when buffer is well under control
+      if (flowPaused && serialBuffer.length() < 64) {
         Serial.write(0x11); // XON
         flowPaused = false;
       }
 
       if (line.length() > 0) {
-        Serial.println("RX-SERIAL: " + line);
+        LOG_PRINTLN("RX-SERIAL: " + line); // Use non-blocking print
         if (inst.isStreaming) {
           inst.processStreamLine(line, CommInterface::COMM_SERIAL);
         } else {
@@ -522,6 +523,8 @@ void ScheduleManager::sleepSequenceCallback() {
           (uint64_t)(instance_ptr->_sleepHours * 3600.0f * 1000000.0f);
       esp_sleep_enable_timer_wakeup(sleepUs);
       instance_ptr->sleepSequenceActive = false;
+      
+      data.SaveHibernateData(); // Persist mesh state before sleep
       esp_deep_sleep_start();
     }
     break;

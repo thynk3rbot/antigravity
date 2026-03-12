@@ -22,6 +22,7 @@
 #include "managers/ProductManager.h"
 #include "managers/ScheduleManager.h"
 #include "managers/WiFiManager.h"
+#include "utils/DebugMacros.h"
 
 #ifndef UNIT_TEST
 // ============================================================================
@@ -31,16 +32,16 @@ void setup() {
   // 1. Serial
   Serial.begin(115200);
   delay(2000);
-  Serial.println("\n\n>>> LORALINK DEBUG BOOT START <<<");
-  Serial.println("\n\n########################################");
-  Serial.println("#  LORALINK-ANY2ANY " FIRMWARE_VERSION "             #");
-  Serial.println("#  Unified Wireless Gateway            #");
-  Serial.println("########################################");
-  Serial.println("BOOT: Serial Started.");
+  LOG_PRINTLN("\n\n>>> LORALINK DEBUG BOOT START <<<");
+  LOG_PRINTLN("\n\n########################################");
+  LOG_PRINTLN("#  LORALINK-ANY2ANY " FIRMWARE_VERSION "             #");
+  LOG_PRINTLN("#  Unified Wireless Gateway            #");
+  LOG_PRINTLN("########################################");
+  LOG_PRINTLN("BOOT: Serial Started.");
 
   // 2. PRG button factory reset window
   pinMode(PIN_BUTTON_PRG, INPUT_PULLUP);
-  Serial.println("BOOT: Hold PRG for 3s to factory reset...");
+  LOG_PRINTLN("BOOT: Hold PRG for 3s to factory reset...");
   unsigned long windowStart = millis();
   unsigned long pressStart = 0;
   bool pressing = false;
@@ -61,7 +62,7 @@ void setup() {
     delay(10);
   }
   if (resetTriggered) {
-    Serial.println("BOOT: Factory Reset triggered!");
+    LOG_PRINTLN("BOOT: Factory Reset triggered!");
     DataManager::getInstance().FactoryReset();
     delay(1000);
     ESP.restart();
@@ -76,7 +77,7 @@ void setup() {
   delay(500);
 
   // 4. CPU clock optimization
-  Serial.printf("SYS: CPU Clock = %dMHz\n", getCpuFrequencyMhz());
+  LOG_PRINTF("SYS: CPU Clock = %dMHz\n", getCpuFrequencyMhz());
 
   // 5. Heltec init
   Heltec.begin(true, false, true, false, 0);
@@ -84,20 +85,17 @@ void setup() {
     Heltec.display->setContrast(255);
     Heltec.display->setBrightness(255);
   }
-  Serial.println("\n\n>>> LORALINK DEBUG BOOT START <<<");
-  Serial.flush();
+  LOG_PRINTLN("\n\n>>> LORALINK DEBUG BOOT START <<<");
 
   // 6. Data Manager
-  Serial.println("BOOT: DataManager...");
-  Serial.flush();
+  LOG_PRINTLN("BOOT: DataManager...");
   DataManager &data = DataManager::getInstance();
   data.Init();
 
   // 6.1 Performance Manager
   PerformanceManager::getInstance().init();
 
-  Serial.println("ID: " + data.myId + " [VAL:" + data.getMacSuffix() + "]");
-  Serial.flush();
+  LOG_PRINTLN("ID: " + data.myId + " [VAL:" + data.getMacSuffix() + "]");
 
   // 6.6. Product Manager - restore active product pin modes
   Serial.println("BOOT: ProductManager...");

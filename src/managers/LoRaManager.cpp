@@ -3,6 +3,7 @@
 #include "BinaryManager.h"
 #include "MQTTManager.h"
 #include "PerformanceManager.h"
+#include "PowerManager.h"
 #include "ScheduleManager.h"
 #include <Arduino.h>
 #include <ArduinoJson.h>
@@ -46,11 +47,9 @@ LoRaManager::LoRaManager() {
 
 void LoRaManager::Init() {
   LOG_PRINTLN("LoRa: Init Start");
-  Serial.flush();
 
   SPI.begin(9, 11, 10, PIN_LORA_CS);
   LOG_PRINTLN("LoRa: SPI Started");
-  Serial.flush();
 
   Module *mod =
       new Module(PIN_LORA_CS, PIN_LORA_DIO1, PIN_LORA_RST, PIN_LORA_BUSY);
@@ -63,19 +62,18 @@ void LoRaManager::Init() {
     LOG_PRINTLN("LoRa: Using Default AES-GCM key");
     memcpy(currentKey, DEFAULT_AES_KEY, 16);
   }
-  Serial.flush();
 
   int state = radio->begin(LORA_FREQ, LORA_BW, LORA_SF, LORA_CR, LORA_SYNC,
-                           LORA_PWR, 8);
+                           LORA_PWR, LORA_PREAMBLE_SHORT);
   if (state == RADIOLIB_ERR_NONE) {
     loraActive = true;
+    _isUsingLongPreamble = false;
     _enterRx();
     LOG_PRINTLN("LoRa: Initialized OK");
   } else {
     LOG_PRINT("LoRa: Init Failed, code ");
     LOG_PRINTLN(state);
   }
-  Serial.flush();
 }
 
 void LoRaManager::sleepRadio() {
@@ -107,6 +105,17 @@ bool LoRaManager::_startAsyncTx(const uint8_t *data, size_t len) {
   _radioState = RadioState::RADIO_TX;
   _txStartMs = millis();
   radio->setPacketSentAction(_setTxFlag);
+
+  // ── Wake-on-Radio Preamble Logic ──────────────────────────────────────────
+  // If we are mains powered (Master/Gateway), we use long preambles to reach
+  // sleeping nodes. Slaves use short preambles to save energy.
+  bool useLong = PowerManager::isPowered();
+  if (useLong != _isUsingLongPreamble) {
+    radio->setPreambleLength(useLong ? LORA_PREAMBLE_LONG : LORA_PREAMBLE_SHORT);
+    _isUsingLongPreamble = useLong;
+    LOG_PRINTF("LORA: TX Preamble -> %d\n", useLong ? LORA_PREAMBLE_LONG : LORA_PREAMBLE_SHORT);
+  }
+
   int state = radio->startTransmit(const_cast<uint8_t *>(data), len);
   if (state != RADIOLIB_ERR_NONE) {
     LOG_PRINTF("LORA: startTransmit failed (%d)\n", state);
@@ -124,9 +133,25 @@ void LoRaManager::_onTxComplete() {
 
 void LoRaManager::_enterRx() {
   receivedFlag = false;
-  radio->setPacketReceivedAction(setFlag);
-  radio->startReceive();
-  _radioState = RadioState::RADIO_RX;
+  _cadDetected = false;
+
+  // ── CAD Duty Cycle Logic ──────────────────────────────────────────────────
+  // If in low-power mode, enter CAD instead of continuous RX
+  if (LORA_CAD_ON && !PowerManager::isPowered()) {
+    _enterCad();
+  } else {
+    radio->setPacketReceivedAction(setFlag);
+    radio->startReceive();
+    _radioState = RadioState::RADIO_RX;
+  }
+}
+
+void LoRaManager::_enterCad() {
+  _cadActive = true;
+  _lastCadMs = millis();
+  _radioState = RadioState::RADIO_IDLE; // CAD is a transient state
+  radio->setDio1Action(setFlag);        // Correct name for CAD callback
+  radio->startChannelScan();           // SX126x: start CAD
 }
 
 void LoRaManager::SetKey(const uint8_t *newKey) {
@@ -318,6 +343,25 @@ void LoRaManager::HandleRx() {
   if (!loraActive || !receivedFlag)
     return;
   receivedFlag = false;
+
+  // ── Handle CAD completion (if active) ─────────────────────────────────────
+  if (_cadActive) {
+    _cadActive = false;
+    int cadState = radio->getChannelScanResult(); // Correct name
+    if (cadState == RADIOLIB_LORA_DETECTED) {
+      LOG_PRINTLN("LORA: CAD -> PREAMBLE DETECTED");
+      radio->setPacketReceivedAction(setFlag);
+      radio->startReceive();
+      _radioState = RadioState::RADIO_RX;
+      return; // Exit to wait for packet or timeout
+    } else {
+      // No preamble, go back to sleep/IDLE
+      _radioState = RadioState::RADIO_IDLE;
+      radio->sleep();
+      return;
+    }
+  }
+
   _rxCount++;
   LOG_PRINTLN("LORA: *** RX EVENT ***");
 
@@ -404,7 +448,7 @@ void LoRaManager::ProcessPacket(uint8_t *rxEncBuf, int size) {
       LOG_PRINTF("TEL: %s (hops=%d, sid=0x%02X)\n", sender.c_str(), hops, sid);
 
       if (data.streamToSerial) {
-        Serial.printf("DATA,%s,%.2f,%d,%d\n", sender.c_str(), bat, lastRssi,
+        LOG_PRINTF("DATA,%s,%.2f,%d,%d\n", sender.c_str(), bat, lastRssi,
                       hops);
       }
       MQTTManager::getInstance().publishTelemetry(sender, bat, lastRssi, hops);
@@ -447,7 +491,7 @@ void LoRaManager::ProcessPacket(uint8_t *rxEncBuf, int size) {
   data.LogMessage(sender, radio->getRSSI(), text);
 
   if (data.streamToSerial) {
-    Serial.printf("MSG,%s,%d,%s\n", sender.c_str(), radio->getRSSI(),
+    LOG_PRINTF("MSG,%s,%d,%s\n", sender.c_str(), radio->getRSSI(),
                   text.c_str());
   }
   MQTTManager::getInstance().publishMessage(sender, radio->getRSSI(), text);
@@ -674,6 +718,13 @@ void LoRaManager::periodicTick() {
     return;
 
   unsigned long now = millis();
+
+  // ── CAD Duty Cycle Trigger ────────────────────────────────────────────────
+  if (LORA_CAD_ON && !PowerManager::isPowered() && _radioState == RadioState::RADIO_IDLE) {
+    if (now - _lastCadMs >= LORA_CAD_INTERVAL_MS) {
+      _enterCad();
+    }
+  }
 
   // Beacon Mode: Fire an RTEST pulse every 60 seconds
   if (beaconActive && (now - lastBeaconMs > 60000 || lastBeaconMs == 0)) {

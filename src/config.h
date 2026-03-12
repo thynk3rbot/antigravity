@@ -23,6 +23,12 @@
 #define LORA_SYNC 0x12 // Private Network
 #define LORA_PWR 14    // dBm - Standard Power (Battery Connected)
 
+// ── LoRa CAD (Wake-on-Radio) ────────────────────────────────────────────────
+#define LORA_CAD_ON true               // global capability toggle
+#define LORA_CAD_INTERVAL_MS 1000      // duty cycle check interval
+#define LORA_PREAMBLE_SHORT 8          // standard preamble
+#define LORA_PREAMBLE_LONG 512         // extended preamble for wake-up
+
 // ============================================================================
 //   ESP-NOW Settings
 // ============================================================================

@@ -158,12 +158,20 @@ class NodeRegistry:
                 pass
 
     def _save(self) -> None:
+        """Atomic save to prevent data loss or 0-byte file corruption."""
         try:
-            NODES_FILE.write_text(
+            temp_file = NODES_FILE.with_suffix(".tmp")
+            temp_file.write_text(
                 json.dumps([n.to_dict() for n in self._nodes], indent=2)
             )
+            # Atomic swap
+            if temp_file.exists():
+                if NODES_FILE.exists():
+                    os.replace(str(temp_file), str(NODES_FILE))
+                else:
+                    temp_file.rename(NODES_FILE)
         except Exception as e:
-            print(f"[nodes] Save failed: {e}")
+            print(f"[nodes] Atomic save failed: {e}")
 
     def list(self) -> list[NodeConfig]:
         return list(self._nodes)
