@@ -89,8 +89,7 @@ void DataManager::Init() {
   Serial.flush();
 
   // Initialize WiFi defaults if empty (first boot)
-  String savedSsid = p.getString("wifi_ssid", "0.0.0.0");
-  if (savedSsid.length() == 0) {
+  if (p.getString("wifi_ssid", "").length() == 0) {
     Serial.println("INIT: No WiFi credentials found - using defaults...");
     p.putString("wifi_ssid", "0.0.0.0");
     p.putString("wifi_pass", "");
@@ -224,12 +223,23 @@ void DataManager::SaveSettings() {
 }
 
 void DataManager::SetWifi(const String &ssid, const String &pass) {
+  uint32_t start = millis();
   wifiSsid = ssid;
   wifiPass = pass;
   Preferences p;
   p.begin("loralink", false);
   p.putString("wifi_ssid", ssid);
   p.putString("wifi_pass", pass);
+  
+  // LOCKSTEP: Verify write & Measure performance
+  String v = p.getString("wifi_ssid", "");
+  uint32_t duration = millis() - start;
+  
+  if (v == ssid) {
+    LOG_PRINTF("NVS: WiFi Save OK (%s) in %ums\n", ssid.c_str(), duration);
+  } else {
+    LOG_PRINTF("NVS: WiFi Save FAILED! Readback mismatch. [%ums]\n", duration);
+  }
   p.end();
 }
 
