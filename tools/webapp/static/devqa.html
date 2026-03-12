@@ -233,9 +233,24 @@
     </div>
 
     <div class="cmd-section" data-debug-id="DQ-CMD-REGRESSION">
-      <div class="cmd-label">Regression Suite</div>
-      <button class="btn primary" id="dq-regression-btn" data-debug-id="DQ-CMD-REG-RUN" onclick="runRegression()">Run Nightly Suite</button>
-      <div id="dq-reg-results" style="margin-top:8px; font:10px var(--mono); color:var(--dim)"></div>
+      <div class="cmd-label">Regression & Endurance</div>
+      <div style="display: flex; gap: 4px; margin-bottom: 8px;">
+        <button class="btn primary sm" id="dq-regression-btn" onclick="runRegression()">Run Suite</button>
+        <button class="btn sm" id="dq-overdrive-btn" onclick="triggerOverdrive()">Start Overdrive</button>
+      </div>
+      
+      <div id="dq-overdrive-config" style="font-size: 11px; color: var(--dim); margin-bottom: 8px; border-top: 1px solid var(--border); padding-top: 8px;">
+        <label>Loops: <input type="number" id="dq-over-cycles" value="50" style="width: 35px; background: none; border: 1px solid var(--border); color: #fff;"></label>
+        <label style="margin-left:5px">Delay: <input type="number" id="dq-over-delay" value="300" style="width: 40px; background: none; border: 1px solid var(--border); color: #fff;">s</label>
+      </div>
+
+      <div id="dq-reg-results" style="margin-top:4px; font:10px var(--mono); color:var(--dim)"></div>
+      
+      <div class="cmd-label" style="margin-top:12px">Historical Reports</div>
+      <ul id="dq-reports-list" style="max-height: 120px; overflow-y: auto; font: 11px var(--mono); list-style: none; padding: 0;">
+        <li style="color:var(--dim)">Loading reports...</li>
+      </ul>
+      <button class="btn sm" onclick="loadReports()" style="margin-top: 4px; width: 100%;">↻ Refresh Reports</button>
     </div>
 
   </section>
@@ -297,6 +312,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   await loadDevices();
   await loadTransportStatus();
   loadDevicePalette();   // silent — only replaces palette if device exposes it
+  loadReports();         // Load historical nightly reports
   document.getElementById('dq-cmd-input').focus();
 });
 
@@ -749,6 +765,74 @@ function setBadge(id, state, text) {
 
 function safeJson(v) {
   try { return JSON.stringify(v); } catch { return String(v); }
+}
+
+async function triggerOverdrive() {
+  const btn = document.getElementById('dq-overdrive-btn');
+  const cycles = parseInt(document.getElementById('dq-over-cycles').value) || 50;
+  const delay = parseInt(document.getElementById('dq-over-delay').value) || 300;
+  
+  btn.disabled = true;
+  btn.textContent = 'Starting...';
+  logSys(`Triggering Overdrive: ${cycles} loops, ${delay}s delay...`);
+
+  try {
+    const r = await fetch('/api/test/overdrive', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cycles, delay }),
+    });
+    if (!r.ok) throw new Error('Overdrive trigger failed');
+    logSys('Overdrive started in background. Monitor via logs.');
+  } catch (err) {
+    logErr('Failed to start overdrive: ' + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Start Overdrive';
+  }
+}
+
+async function loadReports() {
+  const list = document.getElementById('dq-reports-list');
+  try {
+    const r = await fetch('/api/test/reports');
+    if (!r.ok) return;
+    const d = await r.json();
+    
+    while (list.firstChild) list.removeChild(list.firstChild);
+    
+    if (!d.reports || d.reports.length === 0) {
+      const li = document.createElement('li');
+      li.style.color = 'var(--dim)';
+      li.textContent = 'No reports found.';
+      list.appendChild(li);
+      return;
+    }
+    
+    d.reports.forEach(repo => {
+      const li = document.createElement('li');
+      li.style.padding = '4px 0';
+      li.style.borderBottom = '1px solid var(--border)';
+      li.style.display = 'flex';
+      li.style.justifyContent = 'space-between';
+      
+      const name = document.createElement('span');
+      name.textContent = repo.name.replace('Report_overdrive_', '').replace('.html', '');
+      name.style.cursor = 'pointer';
+      name.style.color = 'var(--accent)';
+      name.onclick = () => window.open('/api/test/reports/' + repo.name, '_blank');
+      
+      const date = document.createElement('span');
+      date.style.fontSize = '9px';
+      date.style.color = 'var(--dim)';
+      date.textContent = new Date(repo.mtime * 1000).toLocaleDateString();
+      
+      li.append(name, date);
+      list.appendChild(li);
+    });
+  } catch (err) {
+    console.error('Failed to load reports', err);
+  }
 }
 </script>
 </body>

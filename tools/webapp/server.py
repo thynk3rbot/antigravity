@@ -1168,6 +1168,69 @@ def build_app(
             "transport": state.transport
         })
 
+    # ── Test Overdrive / Nightly Protocol ─────────────────────────────────
+
+    @app.post("/api/test/overdrive")
+    async def _test_overdrive(body: dict) -> JSONResponse:
+        """Trigger the nightly overdrive protocol in the background."""
+        import subprocess
+        cycles = body.get("cycles", 50)
+        delay = body.get("delay", 300)
+        
+        # We target the local server's own API
+        target_ip = "127.0.0.1:8000"
+        
+        script_path = Path(__file__).parent.parent / "testing" / "overdrive.py"
+        
+        # Start processes detached so they survive server tick or restart
+        cmd = [sys.executable, str(script_path), 
+               "--cycles", str(cycles), 
+               "--delay", str(delay), 
+               "--ip", target_ip]
+        
+        subprocess.Popen(
+            cmd, 
+            cwd=str(Path(__file__).parent.parent.parent),
+            creationflags=0x00000008 if os.name == "nt" else 0, # DETACHED_PROCESS for Windows
+            stdout=None, stderr=None
+        )
+        
+        return JSONResponse({
+            "ok": True, 
+            "msg": f"Endurance overdrive started in background ({cycles} cycles)."
+        })
+
+    @app.get("/api/test/reports")
+    async def _list_reports() -> JSONResponse:
+        """Return a list of all historical HTML reports found on disk."""
+        import glob
+        reports_dir = Path(__file__).parent.parent / "testing" / "reports"
+        if not reports_dir.exists():
+            return JSONResponse({"ok": True, "reports": []})
+            
+        html_files = glob.glob(str(reports_dir / "Report_*.html"))
+        reports = []
+        for f in html_files:
+            reports.append({
+                "name": os.path.basename(f),
+                "mtime": os.path.getmtime(f),
+                "size": os.path.getsize(f)
+            })
+        
+        # Sort newest first
+        reports.sort(key=lambda x: x["mtime"], reverse=True)
+        return JSONResponse({"ok": True, "reports": reports})
+
+    @app.get("/api/test/reports/{filename}")
+    async def _get_report(filename: str) -> HTMLResponse:
+        """Serve a specific HTML report from the historical drive."""
+        report_path = Path(__file__).parent.parent / "testing" / "reports" / filename
+        if not report_path.exists() or ".." in filename:
+            raise HTTPException(status_code=404, detail="Report not found")
+        
+        content = report_path.read_text(encoding="utf-8")
+        return HTMLResponse(content)
+
     # ── AI command recommendation ─────────────────────────────────────────
 
     @app.post("/api/recommend")
@@ -1356,15 +1419,15 @@ def build_app(
             # Reset round-robin counter on strategy change
             if _transport:
                 _transport._round_counter = 0
-            print(f"[settings] Transport strategy → {strategy}")
+            print(f"[settings] Transport strategy -> {strategy}")
 
         # BLE prefix update (takes effect on next /api/rescan)
         if "ble_prefix_a" in body:
             persisted["ble_prefix_a"] = body["ble_prefix_a"].strip()
-            print(f"[settings] BLE prefix A → {persisted['ble_prefix_a']}")
+            print(f"[settings] BLE prefix A -> {persisted['ble_prefix_a']}")
         if "ble_prefix_b" in body:
             persisted["ble_prefix_b"] = body["ble_prefix_b"].strip()
-            print(f"[settings] BLE prefix B → {persisted['ble_prefix_b']}")
+            print(f"[settings] BLE prefix B -> {persisted['ble_prefix_b']}")
 
         try:
             SETTINGS_FILE.write_text(json.dumps(persisted, indent=2))
