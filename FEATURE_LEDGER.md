@@ -61,6 +61,7 @@ firmware from project origin, maintained from a build perspective.
 - Wake-on-Radio (CAD): Pulse-based low power radio RX.
 - Branded Subdomain Routing: DNS migration for permanent cloud hooks.
 - Cloudflare Access SSO: Secure authentication for external cockpit management.
+- Local AI Workstation: Fully sandboxed Ollama/Docker integration enabling the `ASK` command for edge intelligence context routing.
 
 ---
 

@@ -2,7 +2,9 @@
 #include "../utils/DebugMacros.h"
 #include "DataManager.h"
 #include "heltec.h"
+#ifdef SUPPORT_WIFI
 #include <WiFi.h>
+#endif
 
 DisplayManager::DisplayManager() {
   currentPage = 0;
@@ -16,10 +18,14 @@ void DisplayManager::Init() {
   Serial.println("Display: VEXT Powering ON...");
   Serial.flush();
 
-  pinMode(PIN_VEXT_CTRL, OUTPUT);
-  digitalWrite(PIN_VEXT_CTRL, LOW);
-  pinMode(PIN_BAT_CTRL, OUTPUT);
-  digitalWrite(PIN_BAT_CTRL, LOW);
+  if (PIN_VEXT_CTRL != -1) {
+    pinMode(PIN_VEXT_CTRL, OUTPUT);
+    digitalWrite(PIN_VEXT_CTRL, LOW); // LOW = ON for most Heltec displays
+  }
+  if (PIN_BAT_CTRL != -1) {
+    pinMode(PIN_BAT_CTRL, OUTPUT);
+    digitalWrite(PIN_BAT_CTRL, LOW);
+  }
   delay(100);
 
   displayActive = true;
@@ -42,28 +48,25 @@ void DisplayManager::ShowSplash() {
   Heltec.display->clear();
   Heltec.display->setColor(WHITE);
 
-  for (int i = 0; i < 3; i++) {
-    Heltec.display->drawCircle(64, 32, 20 + i * 15);
-  }
-  Heltec.display->drawLine(0, 32, 128, 32);
-  Heltec.display->drawLine(64, 0, 64, 64);
+  // Industrial HUD Outline
+  Heltec.display->drawRect(0, 0, 128, 64);
+  Heltec.display->drawLine(0, 15, 128, 15);
+  Heltec.display->drawLine(0, 48, 128, 48);
 
-  Heltec.display->setColor(BLACK);
-  Heltec.display->fillRect(34, 15, 60, 35);
-  Heltec.display->setColor(WHITE);
-
-  Heltec.display->setFont(ArialMT_Plain_24);
+  Heltec.display->setFont(ArialMT_Plain_16);
   Heltec.display->setTextAlignment(TEXT_ALIGN_CENTER);
-  Heltec.display->drawString(64, 15, "SPW");
+  Heltec.display->drawString(64, 18, "LoRaLink");
 
   Heltec.display->setFont(ArialMT_Plain_10);
-  Heltec.display->drawString(64, 40, "Any2Any");
+  Heltec.display->drawString(64, 34, "Any2Any Suite");
 
   Heltec.display->setTextAlignment(TEXT_ALIGN_LEFT);
-  Heltec.display->drawString(2, 52, "B:" + String(data.bootCount));
+  Heltec.display->drawString(5, 2, "SYSTEM BOOT");
+  Heltec.display->drawString(5, 50, "B:" + String(data.bootCount));
 
   Heltec.display->setTextAlignment(TEXT_ALIGN_RIGHT);
-  Heltec.display->drawString(126, 52, "R:" + data.getResetReason());
+  Heltec.display->drawString(123, 2, FIRMWARE_VERSION);
+  Heltec.display->drawString(123, 50, "R:" + data.getResetReason());
 
   Heltec.display->display();
 }
@@ -127,29 +130,39 @@ void DisplayManager::DrawUi() {
 }
 
 void DisplayManager::drawHome(DataManager &data) {
-  Heltec.display->drawLine(0, 12, 128, 12);
-
-  // Status Line (10pt)
+  // Unified Header (Dark Workspace Style)
+  Heltec.display->fillRect(0, 0, 128, 13);
+  Heltec.display->setColor(BLACK);
   Heltec.display->setFont(ArialMT_Plain_10);
   Heltec.display->setTextAlignment(TEXT_ALIGN_LEFT);
-  Heltec.display->drawString(0, 0, "LORA READY");
+  Heltec.display->drawString(2, 1, "LORALINK");
 
   Heltec.display->setTextAlignment(TEXT_ALIGN_RIGHT);
   String icons = "";
+#ifdef SUPPORT_WIFI
   if (WiFi.status() == WL_CONNECTED)
-    icons += "Wi ";
-  if (data.repeaterEnabled)
-    icons += "Rp ";
+    icons += "WiFi ";
+#endif
   if (data.espNowEnabled)
     icons += "EN ";
-  if (data.encryptionActive)
-    icons += "Enc ";
-  Heltec.display->drawString(128, 0, icons);
-
-  // Device Name (Large 16pt)
+  Heltec.display->drawString(126, 1, icons);
+  
+  Heltec.display->setColor(WHITE);
+  
+  // Center Dashboard
   Heltec.display->setFont(ArialMT_Plain_16);
   Heltec.display->setTextAlignment(TEXT_ALIGN_CENTER);
-  Heltec.display->drawString(64, 30, data.myId);
+  Heltec.display->drawString(64, 25, data.myId);
+
+  // Bottom Gauges (Tiny Gauging)
+  Heltec.display->setFont(ArialMT_Plain_10);
+  Heltec.display->setTextAlignment(TEXT_ALIGN_LEFT);
+  Heltec.display->drawString(0, 48, "BAT:" + String(batteryVolts, 1) + "V");
+  
+  Heltec.display->setTextAlignment(TEXT_ALIGN_RIGHT);
+#ifdef SUPPORT_WIFI
+  Heltec.display->drawString(128, 48, "RSSI:" + String(WiFi.RSSI()) + "dBm");
+#endif
 }
 
 void DisplayManager::drawNetwork(DataManager &data) {
@@ -158,6 +171,7 @@ void DisplayManager::drawNetwork(DataManager &data) {
   Heltec.display->drawString(0, 0, "NETWORK");
   Heltec.display->drawLine(0, 12, 128, 12);
 
+#ifdef SUPPORT_WIFI
   if (WiFi.status() == WL_CONNECTED) {
     Heltec.display->setFont(ArialMT_Plain_16);
     Heltec.display->setTextAlignment(TEXT_ALIGN_CENTER);
@@ -172,6 +186,9 @@ void DisplayManager::drawNetwork(DataManager &data) {
     } else {
       Heltec.display->drawString(64, 45, String(WiFi.RSSI()) + " dBm");
     }
+#else
+  if (false) {
+#endif
     Heltec.display->setTextAlignment(TEXT_ALIGN_RIGHT);
     Heltec.display->drawString(128, 0, "[" + data.getMacSuffix() + "]");
   } else {
@@ -195,31 +212,21 @@ void DisplayManager::drawNetwork(DataManager &data) {
 void DisplayManager::drawStatus(DataManager &data) {
   Heltec.display->setFont(ArialMT_Plain_10);
   Heltec.display->setTextAlignment(TEXT_ALIGN_LEFT);
-  Heltec.display->drawString(0, 0, "STATUS");
+  Heltec.display->drawString(0, 0, "SYSTEM STATUS");
   Heltec.display->drawLine(0, 12, 128, 12);
 
   unsigned long s = millis() / 1000;
   String uptime = String(s / 3600) + "h " + String((s % 3600) / 60) + "m";
 
-  Heltec.display->setFont(ArialMT_Plain_16);
-  Heltec.display->setTextAlignment(TEXT_ALIGN_CENTER);
-  Heltec.display->drawString(64, 14, "Bat: " + String(batteryVolts, 2) + "V");
-
-  Heltec.display->setFont(ArialMT_Plain_10);
-  Heltec.display->setTextAlignment(TEXT_ALIGN_LEFT);
-  Heltec.display->drawString(0, 32, "Up: " + uptime);
-  Heltec.display->drawString(
-      0, 42, "N:" + String(data.numNodes) + " FW:" + FIRMWARE_VERSION);
-
-  String gps = "L:0.00 N:0.00";
-  if (data.numNodes > 0) {
-    gps = "L:" + String(data.remoteNodes[0].lat, 2) +
-          " N:" + String(data.remoteNodes[0].lon, 2);
-  }
-  Heltec.display->drawString(0, 52, gps);
-
+  // Tiny Gauging Layout
+  Heltec.display->drawString(0, 16, "BATTERY: " + String(batteryVolts, 2) + "V");
+  Heltec.display->drawString(0, 26, "UPTIME:  " + uptime);
+  Heltec.display->drawString(0, 36, "NODES:   " + String(data.numNodes));
+  Heltec.display->drawString(0, 46, "CORE:    " + String(ESP.getFreeHeap() / 1024) + "KB");
+  
   Heltec.display->setTextAlignment(TEXT_ALIGN_RIGHT);
-  Heltec.display->drawString(128, 0, "[" + data.getMacSuffix() + "]");
+  Heltec.display->drawString(128, 52, FIRMWARE_VERSION);
+  Heltec.display->setTextAlignment(TEXT_ALIGN_LEFT);
 }
 
 void DisplayManager::drawLog(DataManager &data) {

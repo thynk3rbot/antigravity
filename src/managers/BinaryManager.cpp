@@ -3,6 +3,7 @@
 #include "CommandManager.h"
 #include "DataManager.h"
 #include "LoRaManager.h"
+#include "MQTTManager.h"
 
 bool BinaryManager::handleBinary(const uint8_t *data, size_t len,
                                  CommInterface source) {
@@ -73,6 +74,35 @@ bool BinaryManager::handleBinary(const uint8_t *data, size_t len,
   case BinaryCmd::BC_STATUS:
     CommandManager::getInstance().handleCommand("STATUS", source);
     break;
+  
+  case BinaryCmd::BC_HEARTBEAT: {
+    // [TOKEN] [TARGET] [SENDER_SID] [CMD] [UPTIME_4] [BAT_2] [RSSI_1] [HOPS_1] [RESET_1] [FLAGS_1] [CHECKSUM]
+    if (len >= 13) {
+      uint32_t uptime;
+      memcpy(&uptime, &data[4], 4);
+      uint16_t batMv;
+      memcpy(&batMv, &data[8], 2);
+      int8_t rssi = (int8_t)data[10];
+      uint8_t hops = data[11];
+      uint8_t resetCode = data[12];
+      
+      float bat = batMv / 1000.0f;
+      String senderId = dm.getNameByShortId(senderShortId);
+      
+      dm.UpdateNode(senderId.c_str(), uptime, bat, resetCode, 0, 0, rssi, hops, senderShortId);
+      
+      // Binary heartbeats are crucial for autodiscovery. 
+      // Output a machine-readable hex tag for the webapp.
+      LOG_PRINTF("HB_BIN:%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X\n", 
+                 data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7], 
+                 data[8], data[9], data[10], data[11], data[12], data[13], data[14]);
+
+      LOG_PRINTF("BIN: HB from %s (SID:0x%02X) Bat:%.2fV RSSI:%d Hops:%d\n", 
+                 senderId.c_str(), senderShortId, bat, rssi, hops);
+      
+      MQTTManager::getInstance().publishTelemetry(senderId, bat, rssi, hops);
+    }
+  } break;
 
   case BinaryCmd::BC_ACK:
     // ACK handled in LoRaManager::clearPendingAck

@@ -114,7 +114,9 @@ void ScheduleManager::init() {
   tDisplay.disable();
   showStartupText("System Booting...");
 
+#ifdef SUPPORT_SENSORS
   tEnvironmental.enableDelayed(5000);
+#endif
   t110V.enableDelayed();
   t12V.enableDelayed();
   tSerial.enable();
@@ -127,24 +129,26 @@ void ScheduleManager::init() {
     tBLE.enable();
   }
   tLoRa.enableDelayed(2000);
+#ifdef SUPPORT_WIFI
   if (DataManager::getInstance().wifiEnabled) {
     tWiFi.enableDelayed(3000);
   }
+#endif
   // Random jitter to desynchronize heartbeats across nodes
   unsigned long hbJitter = 8000 + random(0, 17000);
   tHeartbeat.enableDelayed(hbJitter);
   LOG_PRINTF("SCHED: Heartbeat start jitter: %lu ms\n", hbJitter);
 
   // ESP-NOW task
+#ifdef SUPPORT_ESPNOW
   if (DataManager::getInstance().espNowEnabled) {
     tESPNow.enable();
   }
+#endif
 
-  // Peripheral Serial task (Serial1 on G47/G48)
-  // WARNING: GPIO 47/48 are strapping/flash pins on some S3 variants.
-  // Temporarily DISABLED to ensure boot stability.
-  // Serial1.begin(115200, SERIAL_8N1, PIN_GPS_RX, PIN_GPS_TX);
-  // tPeripheralSerial.enable();
+  // Peripheral Serial task (GPS)
+  Serial1.begin(115200, SERIAL_8N1, PIN_GPS_RX, PIN_GPS_TX);
+  tPeripheralSerial.enable();
 
   // Battery protection monitor
   tBatteryMonitor.enableDelayed(10000);

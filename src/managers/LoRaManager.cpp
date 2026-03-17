@@ -48,12 +48,24 @@ LoRaManager::LoRaManager() {
 void LoRaManager::Init() {
   LOG_PRINTLN("LoRa: Init Start");
 
+#ifdef ARDUINO_LORA_HELTEC_V2
+  SPI.begin(SCK, MISO, MOSI, PIN_LORA_CS);
+#else
   SPI.begin(9, 11, 10, PIN_LORA_CS);
+#endif
   LOG_PRINTLN("LoRa: SPI Started");
 
+  // RadioLib uses NC for unused pins
+  int busyPin = (PIN_LORA_BUSY == -1) ? RADIOLIB_NC : PIN_LORA_BUSY;
+
   Module *mod =
-      new Module(PIN_LORA_CS, PIN_LORA_DIO1, PIN_LORA_RST, PIN_LORA_BUSY);
+      new Module(PIN_LORA_CS, PIN_LORA_DIO1, PIN_LORA_RST, busyPin);
+
+#ifdef ARDUINO_LORA_HELTEC_V2
+  radio = new SX1276(mod);
+#else
   radio = new SX1262(mod);
+#endif
 
   DataManager &data = DataManager::getInstance();
   if (data.GetCryptoKey(currentKey)) {
@@ -63,8 +75,16 @@ void LoRaManager::Init() {
     memcpy(currentKey, DEFAULT_AES_KEY, 16);
   }
 
+#ifdef ARDUINO_LORA_HELTEC_V2
+  // SX127x: Freq, BW, SF, CR, Sync, Pwr, Preamble, Gain
   int state = radio->begin(LORA_FREQ, LORA_BW, LORA_SF, LORA_CR, LORA_SYNC,
-                           LORA_PWR, LORA_PREAMBLE_SHORT);
+                           LORA_PWR, LORA_PREAMBLE_SHORT, 0);
+#else
+  // SX126x: Freq, BW, SF, CR, Sync, Pwr, Preamble, Tcxo, LDO
+  int state = radio->begin(LORA_FREQ, LORA_BW, LORA_SF, LORA_CR, LORA_SYNC,
+                           LORA_PWR, LORA_PREAMBLE_SHORT, 1.6f, false);
+#endif
+
   if (state == RADIOLIB_ERR_NONE) {
     loraActive = true;
     _isUsingLongPreamble = false;
@@ -104,17 +124,11 @@ bool LoRaManager::_startAsyncTx(const uint8_t *data, size_t len) {
   _transmittedFlag = false;
   _radioState = RadioState::RADIO_TX;
   _txStartMs = millis();
+#ifdef ARDUINO_LORA_HELTEC_V2
+  radio->setDio0Action(_setTxFlag, RISING);
+#else
   radio->setPacketSentAction(_setTxFlag);
-
-  // ── Wake-on-Radio Preamble Logic ──────────────────────────────────────────
-  // If we are mains powered (Master/Gateway), we use long preambles to reach
-  // sleeping nodes. Slaves use short preambles to save energy.
-  bool useLong = PowerManager::isPowered();
-  if (useLong != _isUsingLongPreamble) {
-    radio->setPreambleLength(useLong ? LORA_PREAMBLE_LONG : LORA_PREAMBLE_SHORT);
-    _isUsingLongPreamble = useLong;
-    LOG_PRINTF("LORA: TX Preamble -> %d\n", useLong ? LORA_PREAMBLE_LONG : LORA_PREAMBLE_SHORT);
-  }
+#endif
 
   int state = radio->startTransmit(const_cast<uint8_t *>(data), len);
   if (state != RADIOLIB_ERR_NONE) {
@@ -139,8 +153,11 @@ void LoRaManager::_enterRx() {
   // If in low-power mode, enter CAD instead of continuous RX
   if (LORA_CAD_ON && !PowerManager::isPowered()) {
     _enterCad();
-  } else {
+#ifdef ARDUINO_LORA_HELTEC_V2
+    radio->setDio0Action(setFlag, RISING);
+#else
     radio->setPacketReceivedAction(setFlag);
+#endif
     radio->startReceive();
     _radioState = RadioState::RADIO_RX;
   }
@@ -150,8 +167,13 @@ void LoRaManager::_enterCad() {
   _cadActive = true;
   _lastCadMs = millis();
   _radioState = RadioState::RADIO_IDLE; // CAD is a transient state
+#ifdef ARDUINO_LORA_HELTEC_V2
+  radio->setDio1Action(setFlag, RISING);
+  radio->scanChannel();                // SX127x: start CAD (blocking/semi-blocking in some versions)
+#else
   radio->setDio1Action(setFlag);        // Correct name for CAD callback
   radio->startChannelScan();           // SX126x: start CAD
+#endif
 }
 
 void LoRaManager::SetKey(const uint8_t *newKey) {
@@ -347,7 +369,12 @@ void LoRaManager::HandleRx() {
   // ── Handle CAD completion (if active) ─────────────────────────────────────
   if (_cadActive) {
     _cadActive = false;
-    int cadState = radio->getChannelScanResult(); // Correct name
+#ifdef ARDUINO_LORA_HELTEC_V2
+    // SX127x returns RADIOLIB_LORA_DETECTED or RADIOLIB_CAD_OK
+    int cadState = radio->getChannelScanResult();
+#else
+    int cadState = radio->getChannelScanResult();
+#endif
     if (cadState == RADIOLIB_LORA_DETECTED) {
       LOG_PRINTLN("LORA: CAD -> PREAMBLE DETECTED");
       radio->setPacketReceivedAction(setFlag);
@@ -578,15 +605,6 @@ void LoRaManager::SendHeartbeat() {
     return;
 
   DataManager &data = DataManager::getInstance();
-
-  memset(&txPacket, 0, sizeof(txPacket));
-  strncpy(txPacket.sender, data.myId.c_str(), sizeof(txPacket.sender) - 1);
-
-  JsonDocument doc;
-  doc["t"] = "T";
-  doc["u"] = millis() / 1000;
-  doc["h"] = 0; // hop count: originated here
-
   PerformanceManager &perf = PerformanceManager::getInstance();
 
   float batVal = (analogRead(PIN_BAT_ADC) / 4095.0f) * 3.3f * BAT_VOLT_MULTI;
@@ -600,37 +618,91 @@ void LoRaManager::SendHeartbeat() {
   if (!batChanged && !rstChanged && !forceTX) {
     _hbSkipCount++;
     LOG_PRINTF(
-        "LORA: HB suppressed (skip %d/%d, raw=%u, bat=%.2f, multi=%.2f)\n",
-        _hbSkipCount, HB_FORCE_INTERVAL, analogRead(PIN_BAT_ADC), batVal,
-        (float)BAT_VOLT_MULTI);
+        "LORA: HB suppressed (skip %d/%d, bat=%.2fV)\n",
+        _hbSkipCount, HB_FORCE_INTERVAL, batVal);
     return;
   }
 
-  // State changed or forced — update references and transmit
+  // State changed or forced — update references
   _lastHBBat = batVal;
   _lastHBRst = rstReason;
   _hbSkipCount = 0;
 
-  doc["b"] = round(batVal * 100.0) / 100.0;
-  doc["r"] = 0;
-  doc["l_avg"] = perf.getLoopAvgMs();
-  doc["l_max"] = perf.getLoopMaxMs();
-  doc["toa"] = perf.getTimeOnAir();
-  doc["rst"] = perf.getResetReason();
-  if (perf.isConfiguratorAttached()) {
-    doc["cfg"] = 1;
+  static uint8_t hbBinaryCounter = 0;
+  hbBinaryCounter++;
+
+  // Alternate: 1 JSON discovery every 5 heartbeats (approx 25-30 mins)
+  // Ensures Master nodes get the string ID mapping, while others save ToA.
+  bool useBinary = (hbBinaryCounter % 5 != 0);
+
+  if (useBinary) {
+    uint8_t hbArgs[12];
+    uint32_t uptime = millis() / 1000;
+    uint16_t batMv = (uint16_t)(batVal * 1000);
+    int8_t rssi = (int8_t)lastRssi;
+    uint8_t hops = 0;
+    uint8_t resetCode = 0; // TODO: Map reset strings to codes
+    uint8_t loopAvg = (uint8_t)min(255UL, perf.getLoopAvgMs());
+    uint8_t flags = perf.isConfiguratorAttached() ? 0x01 : 0x00;
+
+    memcpy(&hbArgs[0], &uptime, 4);
+    memcpy(&hbArgs[4], &batMv, 2);
+    hbArgs[6] = (uint8_t)rssi;
+    hbArgs[7] = hops;
+    hbArgs[8] = resetCode;
+    hbArgs[9] = loopAvg;
+    hbArgs[10] = flags;
+
+    uint8_t binBuf[32];
+    size_t frameLen = BinaryManager::getInstance().createBinaryFrame(
+        0xFF, BinaryCmd::BC_HEARTBEAT, hbArgs, 11, binBuf);
+
+    uint8_t encBin[128];
+    size_t txLen = frameLen + 28;
+    encryptData(binBuf, frameLen, encBin, currentKey);
+    _startAsyncTx(encBin, txLen);
+    
+    unsigned long toa = radio->getTimeOnAir(txLen) / 1000;
+    perf.addTimeOnAir(toa);
+    perf.addBytesSaved(92 - txLen); // Compared to legacy 92-byte fixed
+    LOG_PRINTF("LORA: Binary HB TX (%u bytes, %lums ToA)\n", (unsigned int)txLen, toa);
+
+  } else {
+    memset(&txPacket, 0, sizeof(txPacket));
+    strncpy(txPacket.sender, data.myId.c_str(), sizeof(txPacket.sender) - 1);
+
+    JsonDocument doc;
+    doc["t"] = "T";
+    doc["u"] = millis() / 1000;
+    doc["h"] = 0;
+    doc["b"] = round(batVal * 100.0) / 100.0;
+    doc["r"] = 0;
+    doc["l_avg"] = perf.getLoopAvgMs();
+    doc["l_max"] = perf.getLoopMaxMs();
+    doc["toa"] = perf.getTimeOnAir();
+    doc["rst"] = perf.getResetReason();
+    if (perf.isConfiguratorAttached()) {
+      doc["cfg"] = 1;
+    }
+
+    String json;
+    serializeJson(doc, json);
+    strncpy(txPacket.text, json.c_str(), sizeof(txPacket.text) - 1);
+
+    txPacket.ttl = MAX_TTL;
+    txPacket.checksum = calculateChecksum(&txPacket);
+
+    size_t textLen = strlen(txPacket.text);
+    size_t payloadSize = 16 + textLen + 1 + 2;
+    uint8_t varEncBuf[128];
+    size_t txLen = payloadSize + 28;
+    encryptData((const uint8_t *)&txPacket, payloadSize, varEncBuf, currentKey);
+    _startAsyncTx(varEncBuf, txLen);
+
+    unsigned long toa = radio->getTimeOnAir(txLen) / 1000;
+    perf.addTimeOnAir(toa);
+    LOG_PRINTLN("LORA: JSON HB TX (Discovery) -> " + json);
   }
-
-  String json;
-  serializeJson(doc, json);
-  strncpy(txPacket.text, json.c_str(), sizeof(txPacket.text) - 1);
-
-  txPacket.ttl = MAX_TTL;
-  txPacket.checksum = calculateChecksum(&txPacket);
-  encryptPacket(&txPacket, encBuf, currentKey);
-
-  _startAsyncTx(encBuf, ENCRYPTED_PACKET_SIZE);
-  LOG_PRINTLN("LORA: Heartbeat TX queued -> " + json);
 }
 void LoRaManager::QueueReliableCommand(const String &targetId,
                                        const String &commandText) {
@@ -785,4 +857,33 @@ void LoRaManager::_selfHealRadio() {
   // 3. Reset silence tracker to give it another window
   _lastRxSuccessMs = millis();
   LOG_PRINTLN("LoRa: Self-Heal Complete");
+}
+
+void LoRaManager::performSpectrumScan(float start, float end, float step) {
+  LOG_PRINTF("LORA: Spectrum Scan START %.1f - %.1f (step %.2f)\n", start, end, step);
+  
+  // Disable normal RX during scan
+  receivedFlag = false;
+  
+  for (float f = start; f <= end; f += step) {
+    int state = radio->setFrequency(f);
+    if (state != RADIOLIB_ERR_NONE) continue;
+    
+    delay(30); // Allow PLL lock and RSSI integrate
+    float rssi = radio->getRSSI();
+    
+    // Output for Webapp: SPEC,Freq,RSSI
+    LOG_PRINTF("SPEC,%.2f,%.1f\n", f, rssi);
+    
+    // Yield to keep task scheduler and WDT happy
+    yield();
+  }
+  
+  // Restore operational frequency and RX mode
+  radio->setFrequency(LORA_FREQ);
+#ifdef ARDUINO_LORA_HELTEC_V2
+  // SX127x requires explicit re-init of RX
+#endif
+  _enterRx();
+  LOG_PRINTLN("LORA: Spectrum Scan DONE");
 }

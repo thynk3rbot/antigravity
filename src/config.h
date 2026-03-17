@@ -7,7 +7,7 @@
 // ============================================================================
 //   FIRMWARE & FEATURE FLAGS
 // ============================================================================
-#define FIRMWARE_VERSION "v0.1.0"
+#define FIRMWARE_VERSION "v0.2.0"
 #define FIRMWARE_NAME "LoRaLink Any2Any"
 #define HARDWARE_ID "Heltec ESP32 LoRa V3"
 #define CONFIG_SCHEMA "1.0"
@@ -37,8 +37,64 @@
 #define ESPNOW_QUEUE_SIZE 8
 
 // ============================================================================
-//   GPIO PIN MAPPING (Heltec WiFi LoRa 32 V3)
+//   GPIO PIN MAPPING
 // ============================================================================
+
+#ifdef ARDUINO_LORA_HELTEC_V2
+// ── Heltec WiFi LoRa 32 V2 (ESP32) ──────────────────────────────────────────
+#define PIN_LED_BUILTIN 25
+#define PIN_BUTTON_PRG 0
+#define PIN_BAT_ADC 34
+#define PIN_VEXT_CTRL 21 // External Power (HIGH = OFF for V2)
+#define PIN_LORA_CS 18
+#define PIN_LORA_DIO1 26
+#define PIN_LORA_RST 14
+#define PIN_LORA_BUSY -1 // No busy pin on V2
+#define PIN_OLED_SDA 4
+#define PIN_OLED_SCL 15
+#define PIN_OLED_RST 16
+#define PIN_BAT_CTRL -1
+#define BAT_VOLT_MULTI 3.20f // Standard divider on V2
+#define PIN_GPS_RX 12
+#define PIN_GPS_TX 13
+#define PIN_RELAY_110V 17
+#define PIN_RELAY_12V_1 22
+#define PIN_RELAY_12V_2 23
+#define PIN_RELAY_12V_3 27
+#define PIN_SENSOR_DHT 2
+#define PIN_MCP_INT 13
+#elif defined(ARDUINO_LORA_HELTEC_V4)
+// ── Heltec WiFi LoRa 32 V4 (ESP32-S3) ───────────────────────────────────────
+#define PIN_LED_BUILTIN 35
+#define PIN_BUTTON_PRG 0
+#define PIN_BAT_ADC 1
+#define PIN_VEXT_CTRL 36
+#define PIN_LORA_CS 8
+#define PIN_LORA_DIO1 14
+#define PIN_LORA_RST 12
+#define PIN_LORA_BUSY 13
+#define PIN_OLED_SDA 17
+#define PIN_OLED_SCL 18
+#define PIN_OLED_RST 21
+#define PIN_BAT_CTRL 37
+#define BAT_VOLT_MULTI 6.600f
+
+// GNSS (GPS) pins for V4
+#define PIN_GPS_RX 38
+#define PIN_GPS_TX 39
+#define PIN_GPS_PPS 41
+#define PIN_GPS_RST 42
+#define PIN_GPS_WAKE 40
+
+// Relay & Sensor Pins (Shared carrier board layout)
+#define PIN_RELAY_110V 5
+#define PIN_RELAY_12V_1 46
+#define PIN_RELAY_12V_2 6
+#define PIN_RELAY_12V_3 7
+#define PIN_SENSOR_DHT 15
+#define PIN_MCP_INT 45 // V4 header J3 pin 6 is GPIO45 (V3 was 38)
+#else
+// ── Heltec WiFi LoRa 32 V3 (ESP32-S3) ───────────────────────────────────────
 #define PIN_LED_BUILTIN 35 // Orange LED
 #define PIN_BUTTON_PRG 0   // PRG Button
 #define PIN_BAT_ADC 1      // Battery ADC
@@ -64,17 +120,15 @@
 #define PIN_RELAY_12V_2 6
 #define PIN_RELAY_12V_3 7
 #define PIN_SENSOR_DHT 15
+#define PIN_MCP_INT 38 // INTA → GPIO 38
+#endif
 
 // ── MCP23017 I2C GPIO Expander ─────────────────────────────────────────────
-// Up to 8 MCP23017 chips share the OLED I2C bus (SDA=17, SCL=18).
-// Extended pin numbering: pin = MCP_PIN_BASE + chip*MCP_CHIP_PINS + local_pin
-//   "MCP:0:4"  → chip 0 (0x20), pin 4  → extended pin 104
-//   "MCP:1:12" → chip 1 (0x21), pin 12 → extended pin 128
+// Up to 8 MCP23017 chips share the OLED I2C bus.
 #define MCP_PIN_BASE 100        // Native pins 0–99; MCP pins 100–227
 #define MCP_CHIP_PINS 16        // 16 GPIO per chip (GPA0–GPB7)
 #define MCP_MAX_CHIPS 8         // 8 addresses: 0x20–0x27
 #define MCP_CHIP_ADDR_BASE 0x20 // I2C base address (A0=A1=A2=GND)
-#define PIN_MCP_INT 38 // INTA → GPIO 38 (safe: not shared on Heltec V3)
 
 // ============================================================================
 //   COMMUNICATION INTERFACE ENUM
@@ -152,7 +206,8 @@ enum class BinaryCmd : uint8_t {
   BC_PING = 0x06,
   BC_STATUS = 0x07,
   BC_ACK = 0x08,       // ACK for binary command [AckToken]
-  BC_CONFIG_SEG = 0x09 // [SegIndex] [TotalSegs] [Data...]
+  BC_CONFIG_SEG = 0x09, // [SegIndex] [TotalSegs] [Data...]
+  BC_HEARTBEAT = 0x0A  // Packaged telemetry: [Uptime_4][Bat_2][RSSI_1][Hops_1][Reset_1][Flags_1]
 };
 
 // ============================================================================

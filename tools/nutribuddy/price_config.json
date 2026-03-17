@@ -1,9 +1,0 @@
-{
-  "source_types": [
-    "bulk_retail",
-    "lab_supplier",
-    "agri"
-  ],
-  "auto_refresh_on_startup": false,
-  "delay_seconds": 1.5
-}

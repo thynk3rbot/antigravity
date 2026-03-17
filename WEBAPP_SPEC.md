@@ -22,6 +22,7 @@ The system operates on a "Star-Mesh" hybrid architecture.
 | **PC → Gateway** | WiFi / Serial | JSON over HTTP/WebSockets |
 | **Gateway → Node** | LoRa | Binary `MessagePacket` (64-byte) |
 | **Node → Node** | LoRa / ESP-NOW | Binary `MessagePacket` (Mesh/Relay) |
+| **Mesh → Local AI**| Serial | `AI_QUERY:` piped via the `ASK` command |
 
 ---
 

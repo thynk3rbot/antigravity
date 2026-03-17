@@ -1,9 +1,37 @@
 [
   {
-    "id": "ee13c769-6da1-47bc-835a-9dd8f12cdae6",
-    "name": "Peer 1",
-    "type": "serial",
-    "address": "COM7",
+    "id": "60b5aab4-0170-4568-989e-b84e6f0ad188",
+    "name": "Peer1",
+    "type": "wifi",
+    "address": "172.16.0.27",
+    "active": false
+  },
+  {
+    "id": "290d1db2-19d0-4510-8c40-4654df48ada3",
+    "name": "Peer2",
+    "type": "wifi",
+    "address": "172.16.0.26",
+    "active": false
+  },
+  {
+    "id": "56c35099-2c1e-4bed-86e5-5ea936e1e62d",
+    "name": "PEER3V4",
+    "type": "wifi",
+    "address": "172.16.0.28",
+    "active": false
+  },
+  {
+    "id": "15190217-6b71-4c6b-9fbb-1b2d9669ec29",
+    "name": "PEER4V4",
+    "type": "wifi",
+    "address": "172.16.0.29",
+    "active": false
+  },
+  {
+    "id": "66df0fdb-bfed-49a3-bd12-8ed84a226e44",
+    "name": "PEER5V2",
+    "type": "ble",
+    "address": "PEER5V2",
     "active": true
   }
 ]

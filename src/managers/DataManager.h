@@ -57,6 +57,14 @@ public:
   bool bleEnabled;
   bool traceLogging;
   char transportMode; // 'J'=JSON, 'C'=CSV, 'K'=KV, 'B'=BIN (message format)
+  
+  // GPS Local State
+  double gpsLat;
+  double gpsLon;
+  float gpsAlt;
+  uint8_t gpsSats;
+  bool gpsFixed;
+  uint32_t gpsLastFixAge;
 
   // ── Transport Link State
   // ──────────────────────────────────────────────────── preferredLink:

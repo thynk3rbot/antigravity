@@ -17,6 +17,7 @@ LoRaLink-AnyToAny is a modular firmware framework that enables **any wireless in
 | **BLE** | ~30m | Medium | Phone/tablet control |
 | **WiFi** | LAN | High | Web dashboard, OTA, API |
 | **Serial** | Wired | High | Debug, local terminal |
+| **Local AI** | Host | Very High | Autonomous tasking, offline reasoning |
 
 ## Architecture
 
@@ -72,6 +73,7 @@ To deploy to multiple devices on the network simultaneously:
 | `SETSCHED <ms>` | Set 110V toggle interval |
 | `GETSCHED` | Get dynamic schedule JSON |
 | `WIPECONFIG` | Factory reset all settings |
+| `ASK <prompt>` | Forward prompt to the PC's Local AI |
 | `<target> <cmd>` | Send command to specific node |
 | `ALL <cmd>` | Broadcast command to all nodes |
 

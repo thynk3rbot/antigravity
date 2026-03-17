@@ -680,6 +680,7 @@ body.debug-on .dbg-id{display:inline-block!important}
     <tr><td><code>READ</code></td><td><code>&lt;pin/name&gt;</code></td><td>Reads digital state of a pin.</td></tr>
     <tr><td><code>GETSCHED</code></td><td><i>(none)</i></td><td>Dumps saved JSON schedule.</td></tr>
     <tr><td><code>SETSCHED</code></td><td><code>&lt;json&gt;</code></td><td>Uploads a new JSON schedule.</td></tr>
+    <tr><td><code>ASK</code></td><td><code>&lt;prompt&gt;</code></td><td>Forwards an AI Prompt to the designated PC Local Model.</td></tr>
     <tr><td><code>HELP</code></td><td><i>(none)</i></td><td>Prints a short list of commands on Serial.</td></tr>
   </table>
   </div>
@@ -825,6 +826,10 @@ void WiFiManager::serveApiStatus() {
     json += "\"vext\":" + String(pm.isVextEnabled() ? "true" : "false") + ",";
   }
   json += "\"sys_reset\":\"" + perf.getResetReason() + "\",";
+  json += "\"lat\":" + String(data.gpsLat, 6) + ",";
+  json += "\"lon\":" + String(data.gpsLon, 6) + ",";
+  json += "\"gps_fix\":" + String(data.gpsFixed ? "true" : "false") + ",";
+  json += "\"gps_sats\":" + String(data.gpsSats) + ",";
 
   // Standard pins array for labeled diagnostics - FILTERED to "Usable" only
   json += "\"pins\":[";

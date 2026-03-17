@@ -1,15 +1,1 @@
-[
-  {
-    "name": "MASTER",
-    "type": "TOGGLE",
-    "pin": "7",
-    "interval": 30,
-    "duration": 5,
-    "value": 0,
-    "enabled": true,
-    "state": 0,
-    "nextRun": 5,
-    "updatedBy": "WiFi",
-    "lastUpdated": "0h 50m"
-  }
-]
+[]

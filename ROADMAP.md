@@ -86,4 +86,25 @@ Focus: Growing the user base and establishing the brand.
 
 ---
 
-### Last Updated: 2026-03-08
+## 🏗️ Track 5: Unified Architecture (Industrial-Strength)
+
+Focus: LORALINK-UNIFIED "Architectural Anchors" for protocol-agnostic, peer-sovereign operations.
+
+- [ ] **Transport-Agnostic Envelope (LL-CORE-01)**: Implement HMAC-SHA256 signature verification at the gateway/router level before logic execution.
+- [ ] **The Fallback Ladder (LL-CORE-02)**: Intelligent radio stack pruning (Hardwire > WiFi > LoRa) to conserve power once a secure link is established.
+- [ ] **Semantic URI Addressing (LL-CORE-03)**: Transition to hardware-agnostic C2 via `ll://[node_id]/[subsystem]/[target]`.
+- [ ] **Ranch-Ready Lexicon (LL-C2-01)**: Standardize all human-readable serial/MQTT/LoRa commands for parity in manual overrides.
+
+---
+
+## 🧠 Track 6: Sovereign Intelligence & Swarms
+
+Focus: Local AI Gateway integration and collective fleet behavior (Swarms).
+
+- [ ] **Local AI Gateway (LL-AI-01)**: Deploy local inference bridge (Ollama/LocalAI) for offline telemetry analysis.
+- [ ] **Swarm Orchestration (LL-AI-02)**: Implement "Master/Member" election and consensus-based command execution via PC Daemon.
+- [ ] **Remote Device Programming**: Enable Serial-to-LoRa tunneling for remote OTA and specific device "lock-on" diagnostics.
+
+---
+
+### Last Updated: 2026-03-17

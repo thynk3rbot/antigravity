@@ -6,9 +6,8 @@ This guide walks through testing the LoRaLink configuration management system us
 
 ## Prerequisites
 
-- **Hardware**: One or more Heltec WiFi LoRa 32 V3 devices running firmware v0.1.0+
-- **Tools**: PC control webapp (`python tools/webapp/server.py --ip 172.16.0.27`)
-- **Fleet Sync**: Use `tools/deploy_dual.ps1` for multi-device version parity.
+- **Hardware**: One or more Heltec WiFi LoRa 32 V3 devices running firmware v1.4.1+
+- **Tools**: PC control webapp (`python tools/webapp/server.py --ip 172.16.0.26`)
 - **Network**: Devices accessible via HTTP (WiFi or BLE gateway)
 - **Time**: 30-45 minutes per test cycle
 

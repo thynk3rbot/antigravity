@@ -22,6 +22,7 @@
 #include "managers/ProductManager.h"
 #include "managers/ScheduleManager.h"
 #include "managers/WiFiManager.h"
+#include "managers/GPSManager.h"
 #include "utils/DebugMacros.h"
 
 #ifndef UNIT_TEST
@@ -69,22 +70,41 @@ void setup() {
   }
 
   // 3. Power rail initialization (PREPARE only)
-  pinMode(PIN_VEXT_CTRL, OUTPUT);
-  digitalWrite(PIN_VEXT_CTRL,
-               HIGH); // Start with Display/LoRa OFF to save current
-  pinMode(PIN_BAT_CTRL, OUTPUT);
-  digitalWrite(PIN_BAT_CTRL, LOW); // Power ON battery divider
+  LOG_PRINTF("BOOT: VEXT PIN = %d, BAT PIN = %d\n", PIN_VEXT_CTRL, PIN_BAT_CTRL);
+  if (PIN_VEXT_CTRL != -1) {
+    LOG_PRINTLN("BOOT: Setting VEXT pinMode...");
+    pinMode(PIN_VEXT_CTRL, OUTPUT);
+    LOG_PRINTLN("BOOT: Setting VEXT Level...");
+    digitalWrite(PIN_VEXT_CTRL, HIGH); // Start with Display/LoRa OFF (HIGH = OFF on V2 and V3 default)
+  }
+  if (PIN_BAT_CTRL != -1) {
+    LOG_PRINTLN("BOOT: Setting BAT pinMode...");
+    pinMode(PIN_BAT_CTRL, OUTPUT);
+    LOG_PRINTLN("BOOT: Setting BAT Level...");
+    digitalWrite(PIN_BAT_CTRL, LOW); // Power ON battery divider
+  }
+  LOG_PRINTLN("BOOT: Delaying 500ms...");
   delay(500);
 
   // 4. CPU clock optimization
   LOG_PRINTF("SYS: CPU Clock = %dMHz\n", getCpuFrequencyMhz());
 
-  // 5. Heltec init
+#ifdef ARDUINO_LORA_HELTEC_V2
+  // 5. Heltec init (V2) - handles Vext, Display, and Serial.
+  // Display=true, LoRa=false (we handle via RadioLib), Serial=true, PABOOST=true, Freq=0
+  Heltec.begin(true, false, true, true, 0);
+  if (Heltec.display) {
+    Heltec.display->setContrast(255);
+    Heltec.display->setBrightness(255);
+  }
+#else
+  // 5. Heltec init (V3)
   Heltec.begin(true, false, true, false, 0);
   if (Heltec.display) {
     Heltec.display->setContrast(255);
     Heltec.display->setBrightness(255);
   }
+#endif
   LOG_PRINTLN("\n\n>>> LORALINK DEBUG BOOT START <<<");
 
   // 6. Data Manager
@@ -109,7 +129,9 @@ void setup() {
 
   // --- SAFE POWER STAGGER ---
   Serial.println("SYS: Powering ON Peripherals (VExt)...");
-  digitalWrite(PIN_VEXT_CTRL, LOW); // Power ON Display/LoRa
+  if (PIN_VEXT_CTRL != -1) {
+    digitalWrite(PIN_VEXT_CTRL, LOW); // Power ON Display/LoRa (LOW = ON)
+  }
   delay(1000);
 
   // 8. LoRa Manager
@@ -127,25 +149,37 @@ void setup() {
   Serial.println("BOOT: BLEManager...");
   BLEManager::getInstance().init();
 
+#ifdef SUPPORT_WIFI
   // 10. WiFi Manager
   Serial.println("BOOT: WiFiManager...");
   WiFiManager::getInstance().init();
 
-  // 11. ESP-NOW Manager
-  Serial.println("BOOT: ESPNowManager...");
-  ESPNowManager::getInstance().init();
-
   // 11.5 MQTT Manager
   Serial.println("BOOT: MQTTManager...");
   MQTTManager::getInstance().Init();
+#endif
 
-  // 12. Display Manager (Step 1: Re-enabled)
+#ifdef SUPPORT_ESPNOW
+  // 11. ESP-NOW Manager
+  Serial.println("BOOT: ESPNowManager...");
+  ESPNowManager::getInstance().init();
+#endif
+
+#ifdef SUPPORT_DISPLAY
+  // 12. Display Manager
   Serial.println("BOOT: DisplayManager...");
   DisplayManager::getInstance().Init();
+#endif
 
   // 13. Schedule Manager
   Serial.println("BOOT: ScheduleManager...");
   ScheduleManager::getInstance().init();
+
+  // 14. GPS Manager
+#ifdef SUPPORT_GPS
+  Serial.println("BOOT: GPSManager...");
+  GPSManager::getInstance().init();
+#endif
 
   Serial.println("SYS: Master Unit Boot (OLED+BLE Active)");
   Serial.println("########################################\n");
@@ -158,7 +192,13 @@ void loop() {
   PerformanceManager::getInstance().loopTickStart();
 
   ScheduleManager::getInstance().execute();
+#ifdef SUPPORT_WIFI
   MQTTManager::getInstance().loop();
+#endif
+
+#ifdef SUPPORT_GPS
+  GPSManager::getInstance().loop();
+#endif
 
   static unsigned long lastTic = 0;
   if (millis() - lastTic > 5000) {

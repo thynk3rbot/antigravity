@@ -27,12 +27,16 @@ void PowerManager::Init() {
 #endif
 
   // Heltec V3 External Power Control
-  pinMode(PIN_VEXT_CTRL, OUTPUT);
-  enableVext(); // Start with peripherals ON
+  if (PIN_VEXT_CTRL != -1) {
+    pinMode(PIN_VEXT_CTRL, OUTPUT);
+    enableVext(); // Start with peripherals ON
+  }
 
   // Heltec V3 Battery Divider Control
-  pinMode(PIN_BAT_CTRL, OUTPUT);
-  digitalWrite(PIN_BAT_CTRL, LOW);
+  if (PIN_BAT_CTRL != -1) {
+    pinMode(PIN_BAT_CTRL, OUTPUT);
+    digitalWrite(PIN_BAT_CTRL, LOW);
+  }
 
   Update();
 }
@@ -65,7 +69,10 @@ void PowerManager::evaluateMode() {
   // Policy engine disabled until main functionality verified.
   // We keep the logic commented but force NORMAL.
   _currentMode = PowerMode::NORMAL;
-  digitalWrite(PIN_VEXT_CTRL, LOW); // Force VEXT ON
+  if (PIN_VEXT_CTRL != -1) {
+    // V3: LOW=ON, V2: LOW=ON (mostly)
+    digitalWrite(PIN_VEXT_CTRL, LOW); 
+  }
 }
 
 // ── Side-effect policy engine (DEACTIVATED) ──────────────────────────────────
@@ -127,16 +134,18 @@ void PowerManager::setManualMode(PowerMode mode, bool manual) {
 
 // ── VEXT Peripheral Gating ──────────────────────────────────────────────────
 void PowerManager::enableVext() {
-  if (!_vextEnabled) {
-    digitalWrite(PIN_VEXT_CTRL, LOW); // LOW = ON on Heltec V3
+  if (!_vextEnabled && PIN_VEXT_CTRL != -1) {
+    digitalWrite(PIN_VEXT_CTRL, LOW); // LOW = ON on most Heltec
     _vextEnabled = true;
     LOG_PRINTLN("POWER: VEXT rail ON");
+  } else if (PIN_VEXT_CTRL == -1) {
+    _vextEnabled = true; // Pretend it's on if no control
   }
 }
 
 void PowerManager::disableVext() {
-  if (_vextEnabled) {
-    digitalWrite(PIN_VEXT_CTRL, HIGH); // HIGH = OFF on Heltec V3
+  if (_vextEnabled && PIN_VEXT_CTRL != -1) {
+    digitalWrite(PIN_VEXT_CTRL, HIGH); // HIGH = OFF on most Heltec
     _vextEnabled = false;
     LOG_PRINTLN("POWER: VEXT rail OFF");
   }

@@ -45,6 +45,7 @@ public:
   void ProcessPacket(uint8_t *rxEncBuf, int size);
   void SetKey(const uint8_t *newKey);
   void DumpDiagnostics();
+  void performSpectrumScan(float start = 902.0, float end = 928.0, float step = 0.2);
   void clearPendingAck(const String &targetId, bool isBinary = false,
                        uint8_t cmd = 0);
   void QueueReliableCommand(const String &targetId, const String &commandText);
@@ -77,7 +78,11 @@ public:
 
 private:
   LoRaManager();
+#ifdef ARDUINO_LORA_HELTEC_V2
+  SX1276 *radio;
+#else
   SX1262 *radio;
+#endif
 
   // ── Async TX state machine ──────────────────────────────────────────────
   RadioState _radioState = RadioState::RADIO_IDLE;

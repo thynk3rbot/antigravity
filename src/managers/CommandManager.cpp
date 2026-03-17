@@ -647,6 +647,20 @@ void CommandManager::initRegistry() {
     }
   });
 
+  registerCommand("SCAN", [](const String &args, CommInterface source) {
+    float start = 902.0, end = 928.0, step = 0.2;
+    int parsed = sscanf(args.c_str(), "%f %f %f", &start, &end, &step);
+    
+    // Safety: limit scan range to avoid illegal frequencies or endless loops
+    if (start < 150.0 || end > 960.0 || step < 0.01) {
+       LoRaManager::getInstance().lastMsgReceived = "ERR: Invalid scan range";
+       return;
+    }
+    
+    LoRaManager::getInstance().performSpectrumScan(start, end, step);
+    CommandManager::getInstance().sendResponse("SYS: Spectrum Scan complete", source);
+  });
+
   registerCommand("PMISER", [](const String &args, CommInterface source) {
     PowerManager &pm = PowerManager::getInstance();
     if (args.equalsIgnoreCase("NORMAL")) {
@@ -760,6 +774,21 @@ void CommandManager::initRegistry() {
   registerCommand("INJECT", [this](const String &args, CommInterface source) {
     LOG_PRINTLN("DBG: Injecting LoRa Packet: " + args);
     handleCommand(args, CommInterface::COMM_LORA);
+  });
+
+  registerCommand("ASK", [](const String &args, CommInterface source) {
+    DataManager &data = DataManager::getInstance();
+    LoRaManager &lora = LoRaManager::getInstance();
+    String payload = "AI_QUERY:" + args;
+    
+    // Route the query to the PC Daemon / Agent sandbox via Serial streamer
+    if (data.streamToSerial) {
+      Serial.println(payload);
+    }
+    
+    // Acknowledge receipt
+    CommandManager::getInstance().sendResponse("SYS: Forwarded to Local AI", source);
+    lora.lastMsgReceived = "SYS: AI Prompt Sent";
   });
 
   registerCommand("GPIO", [this](const String &args, CommInterface source) {
