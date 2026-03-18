@@ -6,7 +6,16 @@
 
 ## Overview
 
-LoRaLink-AnyToAny is a modular firmware framework that enables **any wireless interface to communicate with any other**. Send a command via Bluetooth, and it routes to LoRa. Receive an ESP-NOW message, and it triggers a relay. Configure everything via a sleek web dashboard — all driven by a priority-based task scheduler.
+LoRaLink-AnyToAny is a modular firmware framework that enables **any wireless interface to communicate with any other**. Send a command via Bluetooth, and it routes to LoRa. Receive an ESP-NOW message, and it triggers a relay. Configure everything via a sleek web dashboard.
+
+## Project Structure
+
+This repository contains both the stable and development versions of the LoRaLink firmware, along with supporting tools:
+
+- **[firmware/v1/](file:///c:/Users/spw1/Documents/Code/Antigravity/firmware/v1/)** — Stable Any-to-Any Framework (v1.6.0). Supports V2/V3 hardware, TaskScheduler, and GPS.
+- **[firmware/v2/](file:///c:/Users/spw1/Documents/Code/Antigravity/firmware/v2/)** — Next-Gen FreeRTOS-based Firmware (v2.0.0). Focuses on HAL abstraction and V4 board support.
+- **[tools/](file:///c:/Users/spw1/Documents/Code/Antigravity/tools/)** — Management tools, WebApp dashboard, and local RAG router.
+- **[01_planning/](file:///c:/Users/spw1/Documents/Code/Antigravity/01_planning/)** — Architecture specs and design documents.
 
 ## Supported Interfaces
 

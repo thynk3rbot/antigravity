@@ -128,7 +128,14 @@
 // ADC Pins (Telemetry: Temperature, Voltage Monitoring)
 // ============================================================================
 
-#define ADC_VBATT     35        // Battery voltage (analog input with divider)
+#ifdef RADIO_SX1262
+  // Heltec V3/V4 (ESP32-S3): Battery sense on GPIO 1
+  #define ADC_VBATT     1
+#else
+  // Heltec V2 (ESP32): Battery sense on GPIO 35
+  #define ADC_VBATT     35
+#endif
+
 #define ADC_VBATT_DIV 6.6f      // Voltage divider ratio (Heltec standard)
 #define ADC_TEMP      36        // ESP32 internal temperature sensor
 
@@ -137,7 +144,14 @@
 // ============================================================================
 
 #define GPIO_PRG_BTN  0         // PRG button for factory reset (active-LOW)
-#define GPIO_VEXT     36        // VEXT control (active-LOW, powers display/LoRa)
+
+#ifdef RADIO_SX1262
+  // Heltec V3/V4 (ESP32-S3): VEXT control on GPIO 21
+  #define GPIO_VEXT     21
+#else
+  // Heltec V2 (ESP32): VEXT control on GPIO 36
+  #define GPIO_VEXT     36
+#endif
 
 // ============================================================================
 // UART Serial Port (Debug, CLI)
