@@ -139,6 +139,32 @@
 #define ADC_VBATT_DIV 6.6f      // Voltage divider ratio (Heltec standard)
 #define ADC_TEMP      36        // ESP32 internal temperature sensor
 
+// Battery voltage monitoring (Power Management)
+// ADC pin configuration varies by board variant
+#ifdef ARDUINO_HELTEC_WIFI_LORA_32
+  // Heltec V2 (ESP32): Battery voltage on GPIO 34 (ADC1_CH6)
+  #define BAT_ADC_PIN 34
+  #define BAT_ADC_UNIT 1         // ADC1
+  #define BAT_ADC_CHANNEL ADC1_CHANNEL_6
+#elif defined(ARDUINO_HELTEC_WIFI_LORA_32_V3)
+  // Heltec V3 (ESP32-S3): Battery voltage on GPIO 34 (ADC1_CH8)
+  #define BAT_ADC_PIN 34
+  #define BAT_ADC_UNIT 1         // ADC1
+  #define BAT_ADC_CHANNEL ADC1_CHANNEL_8
+#elif defined(ARDUINO_HELTEC_WIFI_LORA_32_V4)
+  // Heltec V4 (ESP32-S3R2): Battery voltage on GPIO 14 (ADC2_CH3)
+  #define BAT_ADC_PIN 14
+  #define BAT_ADC_UNIT 2         // ADC2
+  #define BAT_ADC_CHANNEL ADC2_CHANNEL_3
+#endif
+
+#define BAT_ADC_VOLTAGE_DIVIDER 2.0f    // External divider: Vbat/2 = ADC input
+#define VEXT_PIN 21                      // External power rail control (all boards)
+
+// Battery voltage thresholds (in volts, actual cell voltage)
+#define BAT_VOLTAGE_NORMAL_MIN 3.2f      // Minimum voltage for NORMAL mode
+#define BAT_VOLTAGE_CONSERVE_MIN 2.8f    // Minimum voltage for CONSERVE mode (below = CRITICAL)
+
 // ============================================================================
 // System GPIO (Control, Status)
 // ============================================================================

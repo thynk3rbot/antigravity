@@ -26,6 +26,7 @@
 #include "../lib/App/control_packet.h"
 #include "../lib/App/mesh_coordinator.h"
 #include "../lib/App/nvs_manager.h"
+#include "../lib/App/power_manager.h"
 
 // Bench Mode (optional, compile-time selectable)
 #ifdef BENCH_MODE
@@ -109,13 +110,23 @@ void radioTask(void* param) {
 void controlTask(void* param) {
   static uint32_t lastTelemetrySend = 0;
   static const uint32_t SEND_TELEMETRY_INTERVAL_MS = 10000;  // Every 10 seconds
+  static uint32_t lastPowerUpdate = 0;
+  static const uint32_t POWER_UPDATE_INTERVAL_MS = 30000;  // Every 30 seconds
 
   while (1) {
     uint32_t now = millis();
 
+    // =====================================================================
+    // Update Power Manager (battery monitoring)
+    // =====================================================================
+    if (now - lastPowerUpdate >= POWER_UPDATE_INTERVAL_MS) {
+      PowerManager::update();
+      lastPowerUpdate = now;
+    }
+
     // Collect telemetry
     uint16_t tempC_x10 = 2500;          // Placeholder: 25.0°C
-    uint16_t voltageV_x100 = 3300;      // Placeholder: 3.30V
+    uint16_t voltageV_x100 = static_cast<uint16_t>(PowerManager::getBatteryVoltage() * 100.0f);
     uint8_t relayState = relayHAL.getState();
     uint8_t rssi = static_cast<uint8_t>(loraTransport.getSignalStrength());
 
@@ -261,9 +272,26 @@ void setup() {
   NVSManager::printInfo();  // Debug output
 
   // ========================================================================
-  // Step 2: Initialize HAL (GPIO, SPI, etc.)
+  // Step 2: Initialize Power Manager (Battery Voltage Monitoring)
   // ========================================================================
-  Serial.println("[2/7] Initializing HAL...");
+  Serial.println("[2/7] Initializing power manager...");
+
+  if (!PowerManager::init()) {
+    Serial.println("WARNING: Power manager init failed");
+    // Continue anyway, but battery monitoring will not work
+  }
+
+  PowerManager::onModeChange([](PowerMode mode) {
+    const char* modeNames[] = {"NORMAL", "CONSERVE", "CRITICAL"};
+    Serial.printf("[PowerMgr] Mode change: %s\n", modeNames[static_cast<uint8_t>(mode)]);
+  });
+
+  Serial.println("  ✓ Power manager initialized");
+
+  // ========================================================================
+  // Step 3: Initialize HAL (GPIO, SPI, etc.)
+  // ========================================================================
+  Serial.println("[3/7] Initializing HAL...");
 
   if (!radioHAL.init()) {
     Serial.println("ERROR: Radio HAL init failed!");
@@ -274,9 +302,9 @@ void setup() {
   Serial.println("  ✓ HAL initialized");
 
   // ========================================================================
-  // Step 3: Initialize Transport Layer
+  // Step 4: Initialize Transport Layer
   // ========================================================================
-  Serial.println("[3/7] Initializing transports...");
+  Serial.println("[4/7] Initializing transports...");
 
   if (!loraTransport.init()) {
     Serial.println("ERROR: LoRa transport init failed!");
@@ -288,9 +316,9 @@ void setup() {
   Serial.println("  ✓ Transport initialized");
 
   // ========================================================================
-  // Step 4: Initialize Application Layer
+  // Step 5: Initialize Application Layer
   // ========================================================================
-  Serial.println("[4/7] Initializing application...");
+  Serial.println("[5/7] Initializing application...");
 
   #ifdef ROLE_HUB
     g_ourNodeID = 0;
@@ -308,10 +336,10 @@ void setup() {
   delay(BOOT_SAFE_DELAY_STAGGER_MS);
 
   // ========================================================================
-  // Step 4.5 (Optional): Run Bench Mode Diagnostics
+  // Step 5.5 (Optional): Run Bench Mode Diagnostics
   // ========================================================================
   #ifdef BENCH_MODE
-    Serial.println("[4.5/7] Running bench mode diagnostics...");
+    Serial.println("[5.5/7] Running bench mode diagnostics...");
     bool benchPassed = BenchTest::runAll();
     if (!benchPassed) {
       Serial.println("\n⚠️  WARNING: Some bench tests failed!");
@@ -319,7 +347,7 @@ void setup() {
       delay(2000);
     }
     // Reinitialize hardware after bench tests (they may stress hardware)
-    Serial.println("[4.5/7] Re-initializing hardware after bench mode...");
+    Serial.println("[5.5/7] Re-initializing hardware after bench mode...");
     radioHAL.init();
     relayHAL.init();
     loraTransport.init();
@@ -327,9 +355,9 @@ void setup() {
   #endif
 
   // ========================================================================
-  // Step 5: Create FreeRTOS Tasks
+  // Step 6: Create FreeRTOS Tasks
   // ========================================================================
-  Serial.println("[5/7] Creating FreeRTOS tasks...");
+  Serial.println("[6/7] Creating FreeRTOS tasks...");
 
   xTaskCreatePinnedToCore(
     radioTask,                           // Task function
@@ -354,11 +382,15 @@ void setup() {
   Serial.println("  ✓ Tasks created");
 
   // ========================================================================
-  // Step 6: Boot Complete
+  // Step 7: Boot Complete
   // ========================================================================
-  Serial.println("[6/7] Boot complete!");
+  Serial.println("[7/7] Boot complete!");
   Serial.printf("  Uptime: %lu ms\n", millis() - g_bootTimestamp);
-  Serial.println("\n[7/7] Entering main loop (FreeRTOS)...");
+
+  // Print power manager status
+  PowerManager::printStatus();
+
+  Serial.println("[8/8] Entering main loop (FreeRTOS)...");
   Serial.println("===========================\n");
 }
 
