@@ -25,6 +25,7 @@
 // Application Layer
 #include "../lib/App/control_packet.h"
 #include "../lib/App/mesh_coordinator.h"
+#include "../lib/App/nvs_manager.h"
 
 // Bench Mode (optional, compile-time selectable)
 #ifdef BENCH_MODE
@@ -248,9 +249,21 @@ void setup() {
   g_bootTimestamp = millis();
 
   // ========================================================================
-  // Step 1: Initialize HAL (GPIO, SPI, etc.)
+  // Step 1: Initialize NVS (Persistent Storage)
   // ========================================================================
-  Serial.println("\n[1/6] Initializing HAL...");
+  Serial.println("\n[1/7] Initializing NVS persistence layer...");
+
+  if (!NVSManager::init()) {
+    Serial.println("WARNING: NVS init failed - using defaults");
+    // Continue anyway, but config won't persist across reboots
+  }
+
+  NVSManager::printInfo();  // Debug output
+
+  // ========================================================================
+  // Step 2: Initialize HAL (GPIO, SPI, etc.)
+  // ========================================================================
+  Serial.println("[2/7] Initializing HAL...");
 
   if (!radioHAL.init()) {
     Serial.println("ERROR: Radio HAL init failed!");
@@ -261,9 +274,9 @@ void setup() {
   Serial.println("  ✓ HAL initialized");
 
   // ========================================================================
-  // Step 2: Initialize Transport Layer
+  // Step 3: Initialize Transport Layer
   // ========================================================================
-  Serial.println("[2/6] Initializing transports...");
+  Serial.println("[3/7] Initializing transports...");
 
   if (!loraTransport.init()) {
     Serial.println("ERROR: LoRa transport init failed!");
@@ -275,9 +288,9 @@ void setup() {
   Serial.println("  ✓ Transport initialized");
 
   // ========================================================================
-  // Step 3: Initialize Application Layer
+  // Step 4: Initialize Application Layer
   // ========================================================================
-  Serial.println("[3/6] Initializing application...");
+  Serial.println("[4/7] Initializing application...");
 
   #ifdef ROLE_HUB
     g_ourNodeID = 0;
@@ -295,10 +308,10 @@ void setup() {
   delay(BOOT_SAFE_DELAY_STAGGER_MS);
 
   // ========================================================================
-  // Step 3.5 (Optional): Run Bench Mode Diagnostics
+  // Step 4.5 (Optional): Run Bench Mode Diagnostics
   // ========================================================================
   #ifdef BENCH_MODE
-    Serial.println("[3.5/6] Running bench mode diagnostics...");
+    Serial.println("[4.5/7] Running bench mode diagnostics...");
     bool benchPassed = BenchTest::runAll();
     if (!benchPassed) {
       Serial.println("\n⚠️  WARNING: Some bench tests failed!");
@@ -306,7 +319,7 @@ void setup() {
       delay(2000);
     }
     // Reinitialize hardware after bench tests (they may stress hardware)
-    Serial.println("[3.5/6] Re-initializing hardware after bench mode...");
+    Serial.println("[4.5/7] Re-initializing hardware after bench mode...");
     radioHAL.init();
     relayHAL.init();
     loraTransport.init();
@@ -314,9 +327,9 @@ void setup() {
   #endif
 
   // ========================================================================
-  // Step 4: Create FreeRTOS Tasks
+  // Step 5: Create FreeRTOS Tasks
   // ========================================================================
-  Serial.println("[4/6] Creating FreeRTOS tasks...");
+  Serial.println("[5/7] Creating FreeRTOS tasks...");
 
   xTaskCreatePinnedToCore(
     radioTask,                           // Task function
@@ -341,11 +354,11 @@ void setup() {
   Serial.println("  ✓ Tasks created");
 
   // ========================================================================
-  // Step 5: Boot Complete
+  // Step 6: Boot Complete
   // ========================================================================
-  Serial.println("[5/6] Boot complete!");
+  Serial.println("[6/7] Boot complete!");
   Serial.printf("  Uptime: %lu ms\n", millis() - g_bootTimestamp);
-  Serial.println("\n[6/6] Entering main loop (FreeRTOS)...");
+  Serial.println("\n[7/7] Entering main loop (FreeRTOS)...");
   Serial.println("===========================\n");
 }
 
