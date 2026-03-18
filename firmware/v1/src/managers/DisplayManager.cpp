@@ -1,4 +1,5 @@
 #include "DisplayManager.h"
+#include "PowerManager.h"
 #include "../utils/DebugMacros.h"
 #include "DataManager.h"
 #include "heltec.h"
@@ -34,11 +35,20 @@ void DisplayManager::Init() {
   Serial.flush();
 
   if (Heltec.display) {
-    Heltec.display->setContrast(200);
-    Heltec.display->setBrightness(200);
+    Heltec.display->setContrast(255);
+    Heltec.display->setBrightness(255);
   }
+#if defined(ARDUINO_LORA_HELTEC_V2)
+  // Pulse VEXT for V2 display stability
+  if (VEXT != -1) {
+      pinMode(VEXT, OUTPUT);
+      digitalWrite(VEXT, LOW); delay(50);
+      digitalWrite(VEXT, HIGH); delay(50);
+      digitalWrite(VEXT, LOW);
+  }
+#endif
   ShowSplash();
-  delay(2000);
+  delay(1500);
 }
 
 void DisplayManager::ShowSplash() {
@@ -102,14 +112,7 @@ void DisplayManager::DrawUi() {
 
   batteryVolts = analogRead(PIN_BAT_ADC) / 4095.0 * 3.3 * BAT_VOLT_MULTI;
 
-  for (int i = 0; i < NUM_PAGES; i++) {
-    int x = 128 - (NUM_PAGES - i) * 8;
-    if (i == currentPage) {
-      Heltec.display->fillCircle(x, 61, 2);
-    } else {
-      Heltec.display->drawCircle(x, 61, 2);
-    }
-  }
+  // Removed page indicator dots to prevent UI obscurity
   Serial.flush();
 
   switch (currentPage) {
@@ -138,31 +141,28 @@ void DisplayManager::drawHome(DataManager &data) {
   Heltec.display->drawString(2, 1, "LORALINK");
 
   Heltec.display->setTextAlignment(TEXT_ALIGN_RIGHT);
-  String icons = "";
-#ifdef SUPPORT_WIFI
-  if (WiFi.status() == WL_CONNECTED)
-    icons += "WiFi ";
-#endif
-  if (data.espNowEnabled)
-    icons += "EN ";
-  Heltec.display->drawString(126, 1, icons);
+  Heltec.display->setFont(ArialMT_Plain_10);
+  Heltec.display->drawString(126, 1, FIRMWARE_VERSION);
   
   Heltec.display->setColor(WHITE);
   
-  // Center Dashboard
+  // Center Dashboard (Node ID & Mode)
   Heltec.display->setFont(ArialMT_Plain_16);
   Heltec.display->setTextAlignment(TEXT_ALIGN_CENTER);
   Heltec.display->drawString(64, 25, data.myId);
-
-  // Bottom Gauges (Tiny Gauging)
+  
   Heltec.display->setFont(ArialMT_Plain_10);
+  String modeStr = PowerManager::isPowered() ? "PWR" : "BAT";
+  if (PowerManager::getInstance().getCurrentMode() != PowerMode::NORMAL) modeStr = "CNSRV";
+  Heltec.display->drawString(64, 40, modeStr);
+
+  // Bottom Gauges
   Heltec.display->setTextAlignment(TEXT_ALIGN_LEFT);
-  Heltec.display->drawString(0, 48, "BAT:" + String(batteryVolts, 1) + "V");
+  Heltec.display->drawString(0, 52, "B:" + String(batteryVolts, 2) + "V");
   
   Heltec.display->setTextAlignment(TEXT_ALIGN_RIGHT);
-#ifdef SUPPORT_WIFI
-  Heltec.display->drawString(128, 48, "RSSI:" + String(WiFi.RSSI()) + "dBm");
-#endif
+  int nodes = data.numNodes;
+  Heltec.display->drawString(128, 52, "NODES:" + String(nodes));
 }
 
 void DisplayManager::drawNetwork(DataManager &data) {

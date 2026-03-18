@@ -297,155 +297,109 @@ body{font-family:'Segoe UI',sans-serif;background:#0f0f1a;color:#e0e0e0;height:1
 .dbg-id{display:none;font-size:10px;font-weight:700;color:#00f2ff;background:rgba(0,242,255,0.2);border:1px solid rgba(0,242,255,0.5);padding:1px 4px;border-radius:4px;font-family:monospace;line-height:1;vertical-align:middle;margin:0 4px;pointer-events:none;opacity:1.0;text-shadow:0 0-4px rgba(0,242,255,0.8);z-index:100}
 body.debug-on .dbg-id{display:inline-block!important}
 .dbg-tgl{display:flex;align-items:center;gap:6px;font-size:0.65em;color:#555;cursor:pointer;padding:2px 8px;border-radius:12px;background:#16213e;border:1px solid #2a2a4a;transition:0.2s}
-.dbg-tgl:hover{border-color:#00d4ff22}
-.dbg-tgl.active{color:#00d4ff;background:#00d4ff14;border-color:#00d4ff44}
-.dbg-tgl .dot{width:5px;height:5px;border-radius:50%;background:#444}
-.dbg-tgl.active .dot{background:#00d4ff;box-shadow:0 0 5px #00d4ff}
-
-.card .lbl{font-size:0.58em;color:#666;text-transform:uppercase;letter-spacing:0.8px}
-.card .val{font-size:1.0em;font-weight:700;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.ok{color:#00ff88}
-.warn{color:#ffaa00}
-.log{flex:1;overflow-y:auto;min-height:0;border-top:1px solid #1a1a2e}
-.m{padding:3px 10px;font-size:0.73em;border-bottom:1px solid #111118;font-family:monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.ts{color:#3a3a5a}
-.src{color:#00d4ff}
-.cmd{display:flex;gap:5px;padding:6px 8px;border-top:1px solid #2a2a4a;flex-shrink:0;background:#16213e}
-.cmd input{flex:1;background:#0f0f1a;border:1px solid #2a2a4a;border-radius:5px;padding:5px 9px;color:#e0e0e0;font-size:0.8em;outline:none}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Roboto Condensed','Segoe UI Condensed',sans-serif;background:#050508;color:#c0c0cf;font-size:10px;overflow-y:auto;line-height:1.2}
+.hdr{display:flex;justify-content:space-between;background:#0a0a0f;padding:2px 6px;border-bottom:1px solid #1a1a2e;align-items:center}
+.hdr h1{font-size:11px;color:#00d4ff;margin:0;font-weight:700;display:flex;align-items:center;gap:4px;text-transform:uppercase;letter-spacing:0.5px}
+.nav{display:flex;gap:4px}
+.nav a{color:#666;text-decoration:none;font-size:8px;padding:1px 5px;background:#111;border-radius:2px;border:1px solid #222;text-transform:uppercase;font-weight:700}
+.nav a:hover{color:#00d4ff;border-color:#00d4ff;background:#00d4ff11}
+#pwr-warn{display:none;background:rgba(255,0,0,0.8);color:#fff;text-align:center;font-weight:900;padding:2px;font-size:9px;letter-spacing:1px;border-bottom:1px solid #f00}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(95px,1fr));gap:3px;padding:3px}
+.card{background:rgba(20,20,35,0.6);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);border:1px solid #1a1a2e;border-left:2px solid #333;padding:4px;border-radius:2px;position:relative;box-shadow:0 2px 4px rgba(0,0,0,0.3)}
+.card.ok-border{border-left-color:#0f8} .card.warn-border{border-left-color:#fa0} .card.err-border{border-left-color:#f44}
+.lbl{font-size:7.5px;color:#5c5c7a;text-transform:uppercase;letter-spacing:0.8px;font-weight:700}
+.val{font-size:14px;font-weight:800;margin-top:0px;color:#fff;text-shadow:0 0 10px rgba(255,255,255,0.1)}
+.ok{color:#0f8;text-shadow:0 0 5px rgba(0,255,136,0.3)} .wt{color:#fa0} .er{color:#f44}
+.badge{padding:1px 5px;border-radius:2px;font-size:8px;font-weight:800;cursor:pointer;border:1px solid transparent;text-transform:uppercase}
+.on{background:rgba(0,212,255,0.1);color:#00d4ff;border-color:rgba(0,212,255,0.3);text-shadow:0 0 5px rgba(0,212,255,0.5)}
+.off{background:rgba(255,255,255,0.05);color:#444;border-color:#222}
+.sect-hdr{padding:2px 4px;font-size:8px;color:#00d4ff;background:rgba(0,212,255,0.05);border-bottom:1px solid rgba(0,212,255,0.2);text-transform:uppercase;margin-top:1px;font-weight:700;letter-spacing:1px}
+.log{max-height:48px;overflow-y:auto;background:#050508;padding:2px;font-family:'Cascadia Code','Consolas',monospace;font-size:8px;border:1px solid #1a1a2e}
+.m{padding:0 0 1px 0;border-bottom:1px solid #0a0a1f;color:#8a8a9a;line-height:1}
+.ts{color:#333} .src{color:#068}
+.cmd{display:flex;padding:2px;gap:2px;background:#0a0a0f;border-top:1px solid #1a1a2e}
+.cmd input{flex:1;background:#000;color:#00d4ff;border:1px solid #222;padding:2px 5px;font-size:9px;font-family:monospace;outline:none}
 .cmd input:focus{border-color:#00d4ff}
-.cmd button{background:#00d4ff;border:none;border-radius:5px;padding:5px 14px;color:#0f0f1a;font-weight:700;font-size:0.8em;cursor:pointer}
+.cmd button{background:#00d4ff;color:#000;border:none;padding:2px 8px;font-weight:900;cursor:pointer;font-size:9px;text-transform:uppercase}
 .cmd button:hover{background:#00b8d4}
 </style></head><body>
 <div class='hdr'>
-  <h1>&#x1F4E1; <span id='did'>—</span><span id='fwv'></span></h1><span class='dbg-id'>DASH-HDR</span>
-  <div id='dbg-btn' class='dbg-tgl' onclick='tD()'><div class='dot'></div>DEBUG</div>
-
+  <h1><span style='color:#0f8'>●</span> <span id='did'>—</span> <span id='fwv' style='font-size:8px;color:#555'></span></h1>
   <div class='nav'>
-    <a href='/'>&#x1F4E1; Dash</a>
-    <a href='/config'>&#x2699; Config</a>
-    <a href='/scheduling'>&#x23F1; Sched</a>
-    <a href='/hardware'>&#x1F527; HW</a>
-    <a href='/integration'>&#x1F50C;</a>
+    <a href='/config'>⚙ Config</a>
+    <a href='/scheduling'>📅 Sched</a>
+    <a href='/hardware'>🔧 HW</a>
+    <a href='/integration'>🔌 Plugin</a>
   </div>
 </div>
-<div class='ifc' id='ifc'></div>
+<div id='pwr-warn'>⚠ LOW POWER MODE ACTIVE ⚠</div>
+<div class='ifc' id='ifc' style='display:flex;gap:3px;padding:2px;background:#000'></div>
 <div class='grid' id='cards'></div>
-<div id='perf-sect'></div><div id='periph-sect'></div><div id='pins-sect'></div>
+<div id='gps-sect'></div>
+<div id='sched-sect'></div>
+<div id='periph-sect'></div>
+<div id='perf-sect'></div>
+<div class='sect-hdr'>Latest Status / Log</div>
 <div class='log' id='log'></div>
-<div class='cmd' style='position:relative'>
-  <span class='dbg-id'>DASH-CMD</span>
-  <input id='ci' placeholder='Command...' onkeydown="if(event.key==='Enter')send()">
-  <button onclick='send()'>Send</button>
+<div class='cmd'>
+  <input id='ci' placeholder='>_' onkeydown="if(event.key==='Enter')send()">
+  <button onclick='send()'>EXEC</button>
 </div>
 <script>
-function up(){fetch('/api/status').then(function(r){return r.json();}).then(function(d){
+function up(){
+  Promise.all([
+    fetch('/api/status').then(r=>r.json()),
+    fetch('/api/schedule').then(r=>r.json())
+  ]).then(([d, sched]) => {
 document.getElementById('did').textContent=d.id||'—';
-document.getElementById('fwv').textContent=d.version?' v'+d.version:'';
-var ifcs=[['LoRa',d.lora],['BLE',d.ble],['WiFi',d.wifi],['EN',d.espnow]];
-document.getElementById('ifc').innerHTML=ifcs.map(function(x){
-return '<span class="badge '+(x[1]?'on':'off')+'">'+x[0]+'</span>';
-}).join('');
-var b=parseFloat(d.bat)||0;
-var batStr=b<0.1?'USB':b.toFixed(2)+'V';
-var c='<div class="card"><span class="dbg-id">DASH-BATT</span><div class="lbl">Battery</div><div class="val '+(b<0.1||b>3.5?'ok':'warn')+'">'+batStr+'</div></div>';
-var pmStr = d.power_mode || 'NORMAL';
-var pmColor = (pmStr === 'NORMAL') ? '#00ff88' : (pmStr === 'CONSERVE' ? '#ffaa00' : '#ff4444');
-if (b >= 0.1 && b <= 4.1) {
-  c += '<div class="card"><span class="dbg-id">DASH-POWER</span><div class="lbl">Power-Miser</div><div class="val" style="color:'+pmColor+'">'+pmStr+'</div></div>';
-  var vel = d.solar_vel || 0;
-  var velColor = vel >= 0 ? '#00ff88' : '#ff4444';
-  var velStr = (vel >= 0 ? '+' : '') + vel.toFixed(1) + ' mV/m';
-  c += '<div class="card"><span class="dbg-id">DASH-SOLAR</span><div class="lbl">Solar Vel</div><div class="val" style="font-size:0.85em;color:'+velColor+'">'+velStr+'</div></div>';
-  var tte = d.tte_hours || 99;
-  var tteColor = tte < 2 ? '#ff4444' : (tte < 6 ? '#ffaa00' : '#00ff88');
-  var tteStr = tte >= 99 ? '∞' : tte.toFixed(1) + 'h';
-  c += '<div class="card"><span class="dbg-id">DASH-TTE</span><div class="lbl">Time to Empty</div><div class="val" style="font-size:0.85em;color:'+tteColor+'">'+tteStr+'</div></div>';
+document.getElementById('fwv').textContent=d.version?'v'+d.version:'';
+var ifcs=[['LORA',d.lora,'LORA'],['BLE',d.ble,'BLE'],['WIFI',d.wifi,'WIFI'],['EN',d.espnow,'ESPNOW']];
+document.getElementById('ifc').innerHTML=ifcs.map(x=>'<span class="badge '+(x[1]?'on':'off')+'" onclick="tgl(\''+x[2]+'\')">'+x[0]+'</span>').join('');
+var b=parseFloat(d.bat)||0; var batStr=b<0.1?'USB':b.toFixed(2)+'V';
+var pmStr=d.power_mode||'NORMAL';
+document.getElementById('pwr-warn').style.display=(pmStr==='NORMAL')?'none':'block';
+var c='<div class="card '+(b<0.1||b>3.5?'ok-border':'warn-border')+'"><div class="lbl">Battery</div><div class="val '+(b<0.1||b>3.5?'ok':'wt')+'">'+batStr+'</div></div>';
+if(b>=0.1&&b<=4.1){
+  c+='<div class="card '+(pmStr==='NORMAL'?'ok-border':'warn-border')+'"><div class="lbl">Power</div><div class="val '+(pmStr==='NORMAL'?'ok':'wt')+'">'+pmStr+'</div></div>';
+  var vel=d.solar_vel||0; c+='<div class="card '+(vel>=0?'ok-border':'err-border')+'"><div class="lbl">Solar Vel</div><div class="val '+(vel>=0?'ok':'er')+'">'+(vel>=0?'+':'')+vel.toFixed(1)+'</div></div>';
 }
-c+='<div class="card"><span class="dbg-id">DASH-RSSI</span><div class="lbl">LoRa RSSI</div><div class="val">'+(d.rssi||'—')+'</div></div>';
-c+='<div class="card"><span class="dbg-id">DASH-NODES</span><div class="lbl">Nodes</div><div class="val ok">'+(d.nodes!=null?d.nodes:'—')+'</div></div>';
+c+='<div class="card"><div class="lbl">RSSI</div><div class="val">'+(d.rssi||'—')+'</div></div>';
+c+='<div class="card ok-border"><div class="lbl">Nodes</div><div class="val ok">'+(d.nodes!=null?d.nodes:'—')+'</div></div>';
 document.getElementById('cards').innerHTML=c;
 
-// Performance Section
-var psect=document.getElementById('perf-sect');
-psect.textContent='';
+if(d.gps_fix || d.gps_sats > 0) {
+  var ghtml='<div class="sect-hdr">GPS System</div><div class="grid">';
+  ghtml+='<div class="card '+(d.gps_fix?'ok-border':'warn-border')+'"><div class="lbl">Status</div><div class="val '+(d.gps_fix?'ok':'wt')+'">'+(d.gps_fix?'FIXED':'NO FIX')+' ('+d.gps_sats+')</div></div>';
+  if(d.gps_fix) ghtml+='<div class="card span-2" style="border-left-color:#00d4ff"><div class="lbl">Coordinates</div><div class="val" style="font-size:11px;color:#00d4ff">'+d.lat.toFixed(6)+', '+d.lon.toFixed(6)+'</div></div>';
+  ghtml+='</div>';
+  document.getElementById('gps-sect').innerHTML=ghtml;
+} else { document.getElementById('gps-sect').innerHTML=''; }
+
+if(sched && sched.tasks && sched.tasks.length > 0) {
+  var shtml='<div class="sect-hdr">Upcoming Protocol</div><div class="grid">';
+  sched.tasks.forEach(t => {
+    shtml+='<div class="card" style="border-left-color:'+(t.en?'#0f8':'#222')+'"><div class="lbl" style="display:flex;justify-content:space-between"><span>'+t.n+'</span><span>'+t.t+'</span></div><div class="val" style="font-size:10px;color:'+(t.en?'#ccc':'#444')+'">P'+t.p+' &middot; '+t.i+'s intvl</div></div>';
+  });
+  shtml+='</div>';
+  document.getElementById('sched-sect').innerHTML=shtml;
+} else { document.getElementById('sched-sect').innerHTML=''; }
+
 if(d.loop_avg_ms !== undefined) {
-  var toaS=(d.lora_toa_ms/1000).toFixed(1);
-  var perfHtml = '<div style="padding:4px 10px;background:#1a1a2e;border-top:1px solid #2a2a4a;font-size:0.65em;color:#00d4ff;text-transform:uppercase;letter-spacing:1px;font-weight:700">Performance & Diagnostics</div><span class="dbg-id">DASH-PERF-MON</span>';
-  perfHtml += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:6px;padding:8px">';
-  perfHtml += '<div class="card"><div class="lbl">Loop Avg/Max</div><div class="val" style="font-size:0.8em">' + d.loop_avg_ms + ' / ' + d.loop_max_ms + ' ms</div></div>';
-  perfHtml += '<div class="card"><div class="lbl">Total ToA</div><div class="val" style="font-size:0.8em">' + toaS + 's</div></div>';
-  perfHtml += '<div class="card"><div class="lbl">Range Boost</div><div class="val ok" style="font-size:0.8em">+' + (d.bytes_saved || 0) + ' Bytes</div></div>';
-  perfHtml += '<div class="card" style="grid-column: 1 / -1;"><div class="lbl">Last Reset</div><div class="val" style="font-size:0.75em;color:#ffaa00;white-space:normal;overflow:visible">' + (d.sys_reset || d.reset || 'UNKNOWN') + '</div></div>';
-  perfHtml += '</div>';
-  psect.insertAdjacentHTML('afterbegin', perfHtml);
+  var perf='<div class="sect-hdr">Core Performance</div><div class="grid">';
+  perf+='<div class="card"><div class="lbl">Loop ms</div><div class="val">'+d.loop_avg_ms+'/'+d.loop_max_ms+'</div></div>';
+  perf+='<div class="card"><div class="lbl">ToA</div><div class="val">'+(d.lora_toa_ms/1000).toFixed(1)+'s</div></div>';
+  perf+='<div class="card warn-border"><div class="lbl">Reset</div><div class="val" style="font-size:10px;color:#fa0">'+(d.sys_reset||'UNK')+'</div></div></div>';
+  document.getElementById('perf-sect').innerHTML=perf;
 }
-
-// Peripherals Section
-document.getElementById('periph-sect').textContent='';
-if(d.peripherals && d.peripherals.length > 0) {
-  var phtml = '<div style="padding:4px 10px;background:#1a1a2e;border-top:1px solid #2a2a4a;font-size:0.65em;color:#00d4ff;text-transform:uppercase;letter-spacing:1px;font-weight:700">Peripherals</div><span class="dbg-id">DASH-PERIPH-LIST</span>';
-  phtml += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:6px;padding:8px">';
-  d.peripherals.forEach(function(p){
-    var dataStr = '';
-    if(p.data) {
-      for(var k in p.data) {
-        dataStr += '<div style="display:flex;justify-content:space-between"><span>'+k+'</span><span style="color:#00ff88">'+p.data[k]+'</span></div>';
-      }
-    }
-    phtml += '<div class="card" style="border-left:3px solid #00d4ff">';
-    phtml += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">';
-    phtml += '<div class="lbl" style="font-size:0.65em">'+p.id+' ('+p.hw+')</div>';
-    phtml += '<div style="font-size:0.5em;color:#666">v'+p.fw+'</div>';
-    phtml += '</div>';
-    phtml += '<div style="font-size:0.8em">'+dataStr+'</div>';
-    phtml += '<div style="font-size:0.5em;color:#444;margin-top:4px;text-align:right">seen '+p.lastSeen+'s ago</div>';
-    phtml += '</div>';
-  });
-  phtml += '</div>';
-  document.getElementById('periph-sect').insertAdjacentHTML('afterbegin', phtml);
-} else { document.getElementById('periph-sect').textContent=''; }
-
-var l='';d.log.slice().reverse().forEach(function(m){
-if(m)l+='<div class="m"><span class="ts">['+m.ts+'s]</span> <span class="src">'+m.src+'</span>: '+m.msg+'</div>';
-});
-document.getElementById('log').innerHTML=l;
-
-// Compact Pin Monitor
-document.getElementById('pins-sect').textContent='';
-if(d.pins && d.pins.length > 0) {
-  var phtml = '<div style="padding:10px;display:grid;grid-template-columns:1fr 1fr;gap:5px;position:relative;"><span class="dbg-id">DASH-PIN-MONITOR</span>';
-  d.pins.forEach(function(p){
-    var isRelay = p.n.indexOf('RL') === 0 || p.n === 'LED';
-    phtml += '<div class="card" style="padding:5px 8px;border-color:'+(p.v?'#00ff8844':'#2a2a4a')+'">';
-    phtml += '<div class="lbl" style="font-size:0.5em">'+p.n+'</div>';
-    phtml += '<div style="display:flex;justify-content:space-between;align-items:center">';
-    phtml += '<span style="font-size:0.8em;color:'+(p.v?'#00ff88':'#666')+'">'+(p.v?'HIGH':'LOW')+'</span>';
-    if(isRelay) phtml += '<button onclick="tgl(\''+p.n+'\','+p.v+')" style="padding:2px 8px;font-size:0.6em;background:#2a2a4a;color:#fff;border:1px solid #444;border-radius:3px">Toggle</button>';
-    phtml += '</div></div>';
-  });
-  phtml += '</div>';
-  document.getElementById('pins-sect').insertAdjacentHTML('afterbegin', phtml);
-} else { document.getElementById('pins-sect').textContent=''; }
-});}
-setInterval(up,3000);up();
-function tD(f){
-  var b=document.body,btn=document.getElementById('dbg-btn');
-  var on=f!==undefined?f:!b.classList.contains('debug-on');
-  b.classList.toggle('debug-on',on);
-  if(btn)btn.classList.toggle('active',on);
-  localStorage.setItem('dMode',on?'1':'0');
+var l='';d.log.slice().reverse().forEach(m=>{
+  if(m)l+='<div class="m"><span class="ts">'+m.ts+'s</span> <span class="src">['+m.src+']</span> '+m.msg+'</div>';
+}); document.getElementById('log').innerHTML=l;
+  }).catch(e=>console.error(e));
 }
-if(localStorage.getItem('dMode')==='1')tD(true);
-function send(){var v=document.getElementById('ci').value;if(!v)return;
-
-fetch('/api/cmd',{method:'POST',body:new URLSearchParams({'cmd':v})});
-document.getElementById('ci').value='';}
-function tgl(n,v){
-  if(confirm('Toggle '+n+'?')) {
-    fetch('/api/cmd',{method:'POST',body:new URLSearchParams({'cmd':'GPIO '+n+' '+(v?0:1)})});
-    setTimeout(up, 500);
-  }
-}
+setInterval(up,2000);up();
+function tgl(m){fetch('/api/cmd',{method:'POST',body:new URLSearchParams({cmd:'SUPPORT_'+m+' '+(event.target.classList.contains('on')?'0':'1')})});setTimeout(up,500);}
+function send(){fetch('/api/cmd',{method:'POST',body:new URLSearchParams({cmd:document.getElementById('ci').value})});document.getElementById('ci').value='';}
 </script></body></html>)rawhtml";
   server.send(200, "text/html", html);
 }
@@ -1276,10 +1230,8 @@ void WiFiManager::serveScheduling() {
 <body>
     <header>
         <div class="version">Infrastructure Grid Status</div>
-        <h1 id="devName"><span class="dbg-id">SCH-DEVICE-HDR</span>)rawliteral" +
-                data.myId + R"rawliteral(</h1>
-        <div class="version">FIRMWARE )rawliteral" +
-                String(FIRMWARE_VERSION) + R"rawliteral(</div>
+        <h1 id="devName">)rawliteral" + data.myId + R"rawliteral(</h1>
+        <div class="version">FIRMWARE )rawliteral" + String(FIRMWARE_VERSION) + R"rawliteral(</div>
     </header>
 
     <div class="container">

@@ -7,7 +7,7 @@
 // ============================================================================
 //   FIRMWARE & FEATURE FLAGS
 // ============================================================================
-#define FIRMWARE_VERSION "v0.2.6"
+#define FIRMWARE_VERSION "v0.2.7"
 #define FIRMWARE_NAME "LoRaLink Any2Any"
 #define HARDWARE_ID "Heltec ESP32 LoRa V3"
 #define CONFIG_SCHEMA "1.0"
@@ -63,8 +63,8 @@
 #define PIN_RELAY_12V_3 27
 #define PIN_SENSOR_DHT 2
 #define PIN_MCP_INT 13
-#elif defined(ARDUINO_LORA_HELTEC_V4)
-// ── Heltec WiFi LoRa 32 V4 (ESP32-S3) ───────────────────────────────────────
+#else
+// ── Heltec WiFi LoRa 32 V3 & V4 (ESP32-S3 Universal) ──────────────────────
 #define PIN_LED_BUILTIN 35
 #define PIN_BUTTON_PRG 0
 #define PIN_BAT_ADC 1
@@ -79,9 +79,17 @@
 #define PIN_BAT_CTRL 37
 #define BAT_VOLT_MULTI 6.600f
 
-// GNSS (GPS) pins for V4
-#define PIN_GPS_RX 38
-#define PIN_GPS_TX 39
+// GNSS Pins
+#define PIN_GPS_RX 38  // V4: 38, V3: 47
+#define PIN_GPS_TX 39  // V4: 39, V3: 48
+#define PIN_MCP_INT 45 // V4: 45, V3: 38
+
+// Legacy/Dynamic Resolution Defaults
+#define PIN_DEFAULT_GPS_RX PIN_GPS_RX
+#define PIN_DEFAULT_GPS_TX PIN_GPS_TX
+#define PIN_DEFAULT_MCP_INT PIN_MCP_INT
+
+// V4 Specific GNSS
 #define PIN_GPS_PPS 41
 #define PIN_GPS_RST 42
 #define PIN_GPS_WAKE 40
@@ -92,35 +100,6 @@
 #define PIN_RELAY_12V_2 6
 #define PIN_RELAY_12V_3 7
 #define PIN_SENSOR_DHT 15
-#define PIN_MCP_INT 45 // V4 header J3 pin 6 is GPIO45 (V3 was 38)
-#else
-// ── Heltec WiFi LoRa 32 V3 (ESP32-S3) ───────────────────────────────────────
-#define PIN_LED_BUILTIN 35 // Orange LED
-#define PIN_BUTTON_PRG 0   // PRG Button
-#define PIN_BAT_ADC 1      // Battery ADC
-#define PIN_VEXT_CTRL 36   // External Power (LOW = ON for Heltec V3)
-#define PIN_LORA_CS 8      // LoRa Chip Select
-#define PIN_LORA_DIO1 14   // LoRa IRQ
-#define PIN_LORA_RST 12    // LoRa Reset
-#define PIN_LORA_BUSY 13   // LoRa Busy
-#define PIN_OLED_SDA 17
-#define PIN_OLED_SCL 18
-#define PIN_OLED_RST 21
-#define PIN_BAT_CTRL 37 // Battery Divider Control (LOW = ON)
-#define BAT_VOLT_MULTI                                                         \
-  6.600f // Heltec V3 (High-Resistor Variant): (560k + 100k) / 100k = 6.6
-
-// GPS Placeholder Pins
-#define PIN_GPS_RX 47
-#define PIN_GPS_TX 48
-
-// Relay & Sensor Pins
-#define PIN_RELAY_110V 5
-#define PIN_RELAY_12V_1 46
-#define PIN_RELAY_12V_2 6
-#define PIN_RELAY_12V_3 7
-#define PIN_SENSOR_DHT 15
-#define PIN_MCP_INT 38 // INTA → GPIO 38
 #endif
 
 // ── MCP23017 I2C GPIO Expander ─────────────────────────────────────────────
