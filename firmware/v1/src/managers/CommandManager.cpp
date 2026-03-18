@@ -492,6 +492,12 @@ void CommandManager::initRegistry() {
         data.SetMqtt(data.mqttEnabled, data.mqttServer, data.mqttPort,
                      data.mqttUser, value);
         lora.lastMsgReceived = "CONFIG: mqtt_pwd -> ********";
+      } else if (key == "AI_PROVIDER") {
+        data.SetAIConfig(value, data.aiModel);
+        lora.lastMsgReceived = "CONFIG: ai_provider -> " + value;
+      } else if (key == "AI_MODEL") {
+        data.SetAIConfig(data.aiProvider, value);
+        lora.lastMsgReceived = "CONFIG: ai_model -> " + value;
       } else {
         lora.lastMsgReceived = "ERR: Unknown config key: " + key;
         return;
@@ -531,6 +537,10 @@ void CommandManager::initRegistry() {
         lora.lastMsgReceived = "CONFIG: mqtt_srv = " + data.mqttServer;
       } else if (key == "MQTT_PRT") {
         lora.lastMsgReceived = "CONFIG: mqtt_prt = " + String(data.mqttPort);
+      } else if (key == "AI_PROVIDER") {
+        lora.lastMsgReceived = "CONFIG: ai_provider = " + data.aiProvider;
+      } else if (key == "AI_MODEL") {
+        lora.lastMsgReceived = "CONFIG: ai_model = " + data.aiModel;
       } else {
         lora.lastMsgReceived = "ERR: Unknown config key: " + key;
       }

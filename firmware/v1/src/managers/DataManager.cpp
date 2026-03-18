@@ -201,6 +201,8 @@ void DataManager::LoadSettings() {
   if (mqttPass.length() > 64)
     mqttPass = mqttPass.substring(0, 64);
   transportMode = p.getString("tp_mode", "J").charAt(0);
+  aiProvider = p.getString("ai_provider", "ollama");
+  aiModel = p.getString("ai_model", "qwen2.5-coder:14b");
 
   // Transport link preference
   preferredLink = (LinkPreference)p.getUChar(
@@ -300,6 +302,17 @@ void DataManager::SetMqtt(bool enabled, const String &server, int port,
   p.putString("mqtt_usr", user);
   p.putString("mqtt_pwd", pass);
   p.end();
+}
+
+void DataManager::SetAIConfig(const String &provider, const String &model) {
+  this->aiProvider = provider;
+  this->aiModel = model;
+  Preferences p;
+  p.begin("loralink", false);
+  p.putString("ai_provider", provider);
+  p.putString("ai_model", model);
+  p.end();
+  LOG_PRINTF("AI: Provider set to %s (%s)\n", provider.c_str(), model.c_str());
 }
 
 void DataManager::SetESPNowEnabled(bool enabled) {
@@ -665,6 +678,8 @@ bool DataManager::ImportConfig(const String &json) {
     SetBleEnabled(s["ble_en"].as<bool>());
   if (s.containsKey("crypto_key"))
     SetCryptoKey(s["crypto_key"].as<String>());
+  if (s.containsKey("ai_provider"))
+    SetAIConfig(s["ai_provider"].as<String>(), s["ai_model"] | "");
 
   if (doc.containsKey("pins")) {
     JsonObject pins = doc["pins"];
@@ -705,6 +720,8 @@ String DataManager::ExportConfig() {
   s["wifi_en"] = wifiEnabled;
   s["ble_en"] = bleEnabled;
   s["crypto_key"] = cryptoKey;
+  s["ai_provider"] = aiProvider;
+  s["ai_model"] = aiModel;
 
   JsonObject pins = doc.createNestedObject("pins");
   for (int i = 0; i < 48; i++) {

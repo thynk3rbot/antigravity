@@ -25,9 +25,9 @@
 // ============================================================================
 
 #include <unity.h>
-#include "../../lib/App/mesh_coordinator.cpp"  // NOLINT
-#include "../mocks/mock_transport.h"
-#include "../../lib/Transport/message_router.h"
+#include "../lib/App/mesh_coordinator.cpp"  // NOLINT
+#include "mocks/mock_transport.h"
+#include "../lib/Transport/message_router.h"
 
 // ============================================================================
 // setUp / tearDown

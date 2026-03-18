@@ -21,6 +21,17 @@ OLLAMA_API = "http://localhost:11434/api/generate"
 DEFAULT_MODEL = "qwen2.5-coder:14b"
 MAX_RESPONSE_LEN = 200 # Prevent LoRa payload overflow
 
+def get_config_from_device(ser, key):
+    """Query the device for a config value via Serial."""
+    ser.write(f"CONFIG GET {key}\n".encode('utf-8'))
+    start_time = time.time()
+    while time.time() - start_time < 2: # 2 second timeout
+        if ser.in_waiting > 0:
+            line = ser.readline().decode('utf-8', errors='ignore').strip()
+            if f"CONFIG: {key.lower()} =" in line.lower():
+                return line.split('=')[-1].strip()
+    return None
+
 def query_local_ai(prompt, model):
     print(f"\n[AI] Prompt received: '{prompt}'")
     print(f"[AI] Generating response via {model}...")
@@ -72,7 +83,21 @@ def start_daemon(port, baud, model):
     ser.write(b"STREAM ON\n")
     time.sleep(0.5)
 
-    print("[*] Daemon listening for 'AI_QUERY:' payloads...\n")
+    # Attempt to sync configuration from device
+    print("[*] Syncing AI config from device...")
+    dev_provider = get_config_from_device(ser, "AI_PROVIDER")
+    dev_model = get_config_from_device(ser, "AI_MODEL")
+    
+    if dev_provider:
+        print(f"[+] Device Provider: {dev_provider}")
+    if dev_model and dev_model != "unknown":
+        print(f"[+] Device Model (Overriding): {dev_model}")
+        model = dev_model
+    
+    if dev_provider and dev_provider.lower() != "ollama":
+        print(f"[!] Warning: Device is set to provider '{dev_provider}', but this daemon only supports Ollama.")
+
+    print(f"[*] Daemon listening for 'AI_QUERY:' payloads via {model}...\n")
     
     while True:
         try:

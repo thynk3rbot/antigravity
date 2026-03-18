@@ -20,7 +20,7 @@
 
 // Pull in .cpp directly so we get the implementation without a build system
 // dependency on the Arduino framework.
-#include "../../lib/App/mesh_coordinator.cpp"  // NOLINT
+#include "../lib/App/mesh_coordinator.cpp"  // NOLINT
 
 // ============================================================================
 // Helper: Reset Mesh Coordinator Singleton (defined after mesh_coordinator.cpp)

@@ -12,6 +12,8 @@ var CONFIG_SETTINGS = [
   { key: 'MQTT_EN',   label: 'MQTT Enabled',  type: 'bool',    fw: 'mqtt_en' },
   { key: 'MQTT_SRV',  label: 'MQTT Server',   type: 'text',    fw: 'mqtt_srv' },
   { key: 'MQTT_PRT',  label: 'MQTT Port',     type: 'number',  fw: 'mqtt_prt', min: 1, max: 65535 },
+  { key: 'AI_PROVIDER', label: 'AI Provider', type: 'text',   fw: 'ai_provider', hint: 'e.g. openrouter, ollama' },
+  { key: 'AI_MODEL',    label: 'AI Model',    type: 'text',   fw: 'ai_model',    hint: 'e.g. anthropic/claude-3-5-sonnet' },
 ];
 
 var _pendingConfig  = {};

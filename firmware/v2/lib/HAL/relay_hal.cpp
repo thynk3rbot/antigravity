@@ -31,11 +31,17 @@ RelayHAL& RelayHAL::getInstance() {
 
 void RelayHAL::init() {
   // Set all relay pins as OUTPUT
+  // Note: On V3/V4 (SX1262), GPIO 12/13 are tied to LORA_RESET/LORA_BUSY.
+  // board_config.h sets RELAY_CHx = 255 (sentinel) to prevent GPIO conflicts.
+  // The check 'if (pin < 255)' skips these reserved pins.
+  uint8_t skipped = 0;
   for (int i = 0; i < MAX_RELAY_CHANNELS; i++) {
     uint8_t pin = _relayPins[i];
     if (pin < 255) {
       pinMode(pin, OUTPUT);
       digitalWrite(pin, LOW);  // Start all OFF (active-LOW)
+    } else {
+      skipped++;
     }
   }
 
@@ -43,7 +49,8 @@ void RelayHAL::init() {
   _enabled = 0xFF;  // All enabled
   _stateChangeCount = 0;
 
-  Serial.printf("[RelayHAL] Initialized %d relay channels\n", MAX_RELAY_CHANNELS);
+  Serial.printf("[RelayHAL] Initialized %d relay channels (%d skipped - reserved pins)\n",
+                MAX_RELAY_CHANNELS, skipped);
 }
 
 // ============================================================================
@@ -158,6 +165,7 @@ const char* RelayHAL::getDiagnostics() const {
 void RelayHAL::_applyState(uint8_t newState) {
   for (int i = 0; i < MAX_RELAY_CHANNELS; i++) {
     uint8_t pin = _relayPins[i];
+    // Skip pins with sentinel value 255 (reserved pins on V3/V4 SX1262 boards)
     if (pin < 255) {
       bool shouldBeOn = (newState & (1 << i)) != 0;
       // Relays are typically active-LOW, but this depends on hardware

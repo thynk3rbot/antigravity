@@ -1,5 +1,7 @@
 #include "PowerManager.h"
 #include "../utils/DebugMacros.h"
+#include "BLEManager.h"
+#include "CommandManager.h"
 #include "DataManager.h"
 #include "DisplayManager.h"
 #include "WiFiManager.h"
@@ -64,20 +66,56 @@ void PowerManager::Update() {
   }
 }
 
-// ── Core Tier Intelligence (STABILITY LOCK) ─────────────────────────────────
+// ── Core Tier Intelligence ────────────────────────────────────────────────────
 void PowerManager::evaluateMode() {
-  // Policy engine disabled until main functionality verified.
-  // We keep the logic commented but force NORMAL.
-  _currentMode = PowerMode::NORMAL;
+  if (_manualOverride)
+    return;
+
+  PowerMode nextMode = PowerMode::NORMAL;
+  float v = _lastVoltage;
+  float tte = getTimeToEmptyHours();
+
+  // If running on battery (not USB/Mains)
+  if (!isPowered()) {
+    float threshCrit = (_currentMode == PowerMode::CRITICAL) ? (POWER_MISER_VOLT_CRITICAL + POWER_MISER_HYSTERESIS) : POWER_MISER_VOLT_CRITICAL;
+    float threshCons = (_currentMode == PowerMode::CONSERVE || _currentMode == PowerMode::CRITICAL) ? (POWER_MISER_VOLT_CONSERVE + POWER_MISER_HYSTERESIS) : POWER_MISER_VOLT_CONSERVE;
+
+    if (v < threshCrit || (tte > 0.0f && tte < 2.0f)) {
+      nextMode = PowerMode::CRITICAL;
+    } else if (v < threshCons || (tte > 0.0f && tte < 6.0f)) {
+      nextMode = PowerMode::CONSERVE;
+    }
+  }
+
+  // Ensure VEXT stays on if we want peripherals
   if (PIN_VEXT_CTRL != -1) {
-    // V3: LOW=ON, V2: LOW=ON (mostly)
     digitalWrite(PIN_VEXT_CTRL, LOW); 
+  }
+
+  if (nextMode != _currentMode) {
+    _previousMode = _currentMode;
+    _currentMode = nextMode;
+    applyModePolicy(nextMode);
   }
 }
 
-// ── Side-effect policy engine (DEACTIVATED) ──────────────────────────────────
+// ── Side-effect policy engine ────────────────────────────────────────────────
 void PowerManager::applyModePolicy(PowerMode newMode) {
-  // No-op for stability
+  String msg = "POWER: System stepped to " + getModeString() + " mode (" + String(_lastVoltage, 2) + "V)";
+  LOG_PRINTLN(msg);
+
+  // 1. Publish Event on ALL active network surfaces (MQTT, Wi-Fi WebUI stream, and LoRa mesh)
+  DataManager::getInstance().LogMessage("POWER", 0, msg);
+  CommandManager::getInstance().handleCommand("ALL MSG " + msg, CommInterface::COMM_INTERNAL);
+
+  // 2. Throttle baseband duty cycles rather than completely killing interfaces (Preserves Discovery)
+  if (newMode == PowerMode::CRITICAL) {
+    BLEManager::getInstance().boostAdvertising(false); // Relax to minimum advertising
+  } else if (newMode == PowerMode::CONSERVE) {
+    BLEManager::getInstance().boostAdvertising(false);
+  } else {
+    BLEManager::getInstance().boostAdvertising(true);  // Proactive discovery speeds
+  }
 }
 
 PowerMode PowerManager::getCurrentMode() { return _currentMode; }
@@ -96,15 +134,22 @@ uint32_t PowerManager::getTargetInterval() {
 }
 
 bool PowerManager::isOledAllowed() {
-  return (_currentMode != PowerMode::CRITICAL);
+  return (_currentMode != PowerMode::CRITICAL); // OLED goes dark to save power
 }
 
 bool PowerManager::isWifiAllowed() {
-  return (_currentMode != PowerMode::CRITICAL);
+  DataManager &data = DataManager::getInstance();
+  // If we've successfully negotiated a BLE-only firm link, we can safely sleep Wi-Fi processing
+  // BUT the user explicitly requested "discovery works at all times".
+  // Returning false here physically turns off the Wi-Fi transceiver entirely. 
+  // We return true to keep mDNS and Association discovery alive, trading absolute max power for mesh resilience.
+  return true; 
 }
 
 bool PowerManager::isBleAllowed() {
-  return (_currentMode != PowerMode::CRITICAL);
+  // Similar to Wi-Fi, returning false here calls esp_bt_controller_disable.
+  // We must return true to allow GATT advertising to continue for discovery.
+  return true; 
 }
 
 String PowerManager::getModeString() {

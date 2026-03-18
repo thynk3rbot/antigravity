@@ -41,6 +41,8 @@ public:
   String gateway;
   String subnet;
   String cryptoKey;
+  String aiProvider; // "openrouter", "local", "ollama"
+  String aiModel;    // "claude-3-5-sonnet", "mistral", "llama3"
 
   // Integrations
   bool streamToSerial;
@@ -113,6 +115,7 @@ public:
   bool GetCryptoKey(uint8_t *keyBuf);
   void SetMqtt(bool enabled, const String &server, int port, const String &user,
                const String &pass);
+  void SetAIConfig(const String &provider, const String &model);
 
   // Persistence
   void SetESPNowEnabled(bool enabled);
