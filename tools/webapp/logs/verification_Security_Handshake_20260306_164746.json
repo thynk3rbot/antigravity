@@ -1,0 +1,62 @@
+{
+  "timestamp": "2026-03-06T16:47:46.414067",
+  "date": "2026-03-06",
+  "time": "16:47:46",
+  "version": "v1.5.0-2026.03.03.23",
+  "suite": "Security Handshake",
+  "device_a": "d5270fb4-4cae-4218-ae3b-d2e6b73530d6",
+  "device_b": "9a44303f-b889-40d8-8feb-4e3f601520f6",
+  "total_steps": 8,
+  "errors": 8,
+  "passed": false,
+  "details": [
+    {
+      "device": "A",
+      "type": "TX",
+      "data": "SEC:KEY_REQ",
+      "pass": false
+    },
+    {
+      "device": "B",
+      "type": "RX",
+      "data": "SEC:KEY_REQ",
+      "pass": false
+    },
+    {
+      "device": "B",
+      "type": "TX",
+      "data": "SEC:CHALLENGE:",
+      "pass": false
+    },
+    {
+      "device": "A",
+      "type": "RX",
+      "data": "SEC:CHALLENGE:",
+      "pass": false
+    },
+    {
+      "device": "A",
+      "type": "TX",
+      "data": "SEC:RESPONSE:",
+      "pass": false
+    },
+    {
+      "device": "B",
+      "type": "RX",
+      "data": "SEC:RESPONSE:",
+      "pass": false
+    },
+    {
+      "device": "B",
+      "type": "TX",
+      "data": "SEC:VERIFIED",
+      "pass": false
+    },
+    {
+      "device": "A",
+      "type": "RX",
+      "data": "SEC:VERIFIED",
+      "pass": false
+    }
+  ]
+}

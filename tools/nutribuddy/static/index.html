@@ -1,0 +1,2148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NutriCalc — Hydroponic Nutrient Planner</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0a0b10;
+    --surface: #141620;
+    --surface2: rgba(30,35,45,0.4);
+    --border: rgba(255,255,255,0.08);
+    --accent: #00f2ff;
+    --accent2: #7000ff;
+    --warn: #ffaa00;
+    --danger: #ff4d4d;
+    --text: #e0e6ed;
+    --muted: #90a0b0;
+    --radius: 12px;
+    --glass: rgba(20,25,35,0.85);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; font-size: 14px; min-height: 100vh; }
+
+  header { 
+    background: var(--glass); 
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--border); 
+    padding: 12px 24px; 
+    display: flex; 
+    align-items: center; 
+    justify-content: space-between;
+    position: sticky; top: 0; z-index: 1000; 
+  }
+  
+  .suit-header-nav {
+    display: flex;
+    gap: 16px;
+    padding: 0 20px;
+    height: 32px;
+    align-items: center;
+    border-left: 1px solid var(--border);
+    margin-left: 20px;
+  }
+
+  .suit-link {
+    color: var(--muted);
+    text-decoration: none;
+    font-size: 10px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    transition: 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .suit-link:hover, .suit-link.active {
+    color: var(--accent);
+  }
+
+  nav { display: flex; gap: 4px; padding: 10px 20px; background: var(--surface); border-bottom: 1px solid var(--border); overflow-x: auto; }
+  nav button { background: none; border: 1px solid var(--border); color: var(--muted); padding: 6px 14px; border-radius: var(--radius); cursor: pointer; font-size: 13px; white-space: nowrap; transition: all 0.2s; }
+  nav button.active { background: var(--accent2); color: #fff; border-color: var(--accent2); }
+  nav button:hover:not(.active) { border-color: var(--accent2); color: var(--accent2); }
+
+  main { padding: 16px 20px; max-width: 1400px; margin: 0 auto; }
+  .page { display: none; }
+  .page.active { display: block; }
+
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 900px) { .grid2 { grid-template-columns: 1fr; } }
+
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
+  .card-title { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin-bottom: 12px; }
+
+  label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 4px; }
+  input, select, textarea { width: 100%; background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 7px 10px; border-radius: 6px; font-size: 13px; outline: none; }
+  input:focus, select:focus { border-color: var(--accent2); }
+  input[type=range] { padding: 0; cursor: pointer; accent-color: var(--accent); }
+  .field { margin-bottom: 12px; }
+
+  .btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: var(--radius); border: none; cursor: pointer; font-size: 13px; font-weight: 600; transition: all 0.2s; }
+  .btn-primary { background: var(--accent); color: #0f1117; }
+  .btn-primary:hover { filter: brightness(1.1); }
+  .btn-secondary { background: var(--surface2); border: 1px solid var(--border); color: var(--text); }
+  .btn-secondary:hover { border-color: var(--accent2); }
+  .btn-danger { background: transparent; border: 1px solid var(--danger); color: var(--danger); }
+  .btn-sm { padding: 4px 10px; font-size: 12px; }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* 3-state button — LoRaLink pattern */
+  .state-label { font-size: 11px; margin-left: 4px; opacity: 0.7; }
+  .state-pending { background: var(--warn) !important; color: #0f1117 !important; }
+  .state-ok      { background: var(--accent) !important; color: #0f1117 !important; }
+  .state-mismatch { background: var(--danger) !important; color: #fff !important; }
+
+  .chem-list { max-height: 420px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
+  .chem-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; background: var(--surface2); border-radius: 6px; border: 1px solid transparent; cursor: pointer; transition: all 0.15s; }
+  .chem-item:hover { border-color: var(--accent2); }
+  .chem-item.selected { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--surface2)); }
+  .chem-item input[type=checkbox] { width: auto; accent-color: var(--accent); flex-shrink: 0; }
+  .chem-meta { font-size: 11px; color: var(--muted); }
+  .chem-badge { font-size: 10px; padding: 2px 6px; border-radius: 3px; background: var(--surface); border: 1px solid var(--border); }
+
+  .slider-group { display: flex; flex-direction: column; gap: 8px; }
+  .slider-row { display: grid; grid-template-columns: 90px 1fr 64px; align-items: center; gap: 8px; }
+  .slider-row label { margin: 0; font-size: 12px; }
+  .slider-val { text-align: right; font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .slider-section { margin-bottom: 12px; }
+  .slider-section-title { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); border-bottom: 1px solid var(--border); padding-bottom: 4px; margin-bottom: 8px; }
+  .elem-note { font-size: 11px; line-height: 1.4; border-radius: 4px; padding: 5px 8px; margin-top: -2px; margin-bottom: 4px; }
+  .elem-note-warn { background: rgba(245,158,11,0.12); color: #d97706; border-left: 3px solid #f59e0b; }
+  .elem-note-info { background: rgba(59,130,246,0.10); color: #3b82f6; border-left: 3px solid #3b82f6; }
+
+  .presets { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+  .preset-chip { padding: 4px 10px; border-radius: 20px; border: 1px solid var(--border); font-size: 12px; cursor: pointer; background: var(--surface2); color: var(--muted); transition: all 0.15s; }
+  .preset-chip:hover, .preset-chip.active { background: var(--accent2); color: #fff; border-color: var(--accent2); }
+
+  .results-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .results-table th { text-align: left; font-size: 11px; text-transform: uppercase; color: var(--muted); padding: 6px 8px; border-bottom: 1px solid var(--border); }
+  .results-table td { padding: 7px 8px; border-bottom: 1px solid #2e314720; }
+  .results-table tr:last-child td { border-bottom: none; }
+
+  .dev-bars { display: flex; flex-direction: column; gap: 5px; }
+  .dev-row { display: grid; grid-template-columns: 90px 1fr 60px 60px; align-items: center; gap: 8px; font-size: 12px; }
+  .bar-track { background: var(--surface2); border-radius: 3px; height: 8px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 3px; transition: width 0.4s, background 0.4s; }
+  .bar-fill.good { background: var(--accent); }
+  .bar-fill.warn  { background: var(--warn); }
+  .bar-fill.bad   { background: var(--danger); }
+  .dev-pct { font-variant-numeric: tabular-nums; text-align: right; }
+  .dev-pct.good { color: var(--accent); }
+  .dev-pct.warn  { color: var(--warn); }
+  .dev-pct.bad   { color: var(--danger); }
+
+  .ec-gauge-wrap { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .ec-value { font-size: 36px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .ec-bar-track { width: 100%; height: 12px; background: linear-gradient(to right, #4ade80, #fbbf24, #f87171); border-radius: 6px; position: relative; margin-top: 8px; }
+  .ec-marker { position: absolute; top: -3px; width: 4px; height: 18px; background: white; border-radius: 2px; transform: translateX(-50%); transition: left 0.5s; }
+
+  .log-console { background: #080a10; border: 1px solid var(--border); border-radius: 6px; padding: 8px; height: 160px; overflow-y: auto; font-family: 'Consolas', monospace; font-size: 11px; }
+  .log-entry { padding: 2px 0; border-bottom: 1px solid #1a1d2720; }
+  .log-entry.tx  { color: var(--accent2); }
+  .log-entry.rx  { color: var(--accent); }
+  .log-entry.err { color: var(--danger); }
+  .log-entry.info { color: var(--muted); }
+
+  .stat-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+  .stat-badge { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 8px 14px; text-align: center; min-width: 90px; }
+  .stat-badge .val { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .stat-badge .lbl { font-size: 10px; color: var(--muted); text-transform: uppercase; }
+
+  .formula-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+  .formula-card { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; }
+  .formula-card:hover { border-color: var(--accent2); }
+
+  .ab-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .ab-part { border-radius: 8px; padding: 12px; }
+  .ab-partA { background: color-mix(in srgb, var(--accent2) 8%, var(--surface2)); border: 1px solid #60a5fa44; }
+  .ab-partB { background: color-mix(in srgb, #a78bfa 8%, var(--surface2)); border: 1px solid #a78bfa44; }
+  .ab-part-title { font-weight: 700; font-size: 13px; margin-bottom: 8px; }
+  .ab-partA .ab-part-title { color: var(--accent2); }
+  .ab-partB .ab-part-title { color: #a78bfa; }
+  .ab-item { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid #2e314730; font-size: 12px; }
+
+  .pump-row { display: grid; grid-template-columns: 1fr 70px; align-items: center; gap: 8px; padding: 5px 0; border-bottom: 1px solid #2e314730; font-size: 12px; }
+  .dose-channel { display: grid; grid-template-columns: 1fr 80px 60px 100px; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid #2e314730; font-size: 13px; }
+
+  .unit-toggle { display: flex; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+  .unit-toggle button { background: none; border: none; color: var(--muted); padding: 4px 10px; font-size: 12px; cursor: pointer; transition: all 0.15s; }
+  .unit-toggle button.active { background: var(--accent2); color: #fff; }
+
+  .ratio-panel { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; }
+  .ratio-card { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; }
+  .ratio-card .ratio-val { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .ratio-card .ratio-lbl { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .ratio-card .ratio-range { font-size: 10px; margin-top: 4px; }
+  .ratio-ok   { color: var(--accent); }
+  .ratio-warn { color: var(--warn); }
+  .ratio-bad  { color: var(--danger); }
+
+  #toast { position: fixed; bottom: 24px; right: 24px; z-index: 999; display: flex; flex-direction: column; gap: 8px; }
+  .toast-msg { background: var(--surface2); border: 1px solid var(--border); padding: 10px 16px; border-radius: 8px; font-size: 13px; animation: slideIn 0.2s ease; max-width: 300px; }
+  .toast-msg.ok   { border-color: var(--accent); }
+  .toast-msg.err  { border-color: var(--danger); }
+  .toast-msg.warn { border-color: var(--warn); }
+  @keyframes slideIn { from { transform: translateX(20px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+  .flex { display: flex; } .gap8 { gap: 8px; } .flex-end { justify-content: flex-end; }
+  .mt8 { margin-top: 8px; } .mt16 { margin-top: 16px; } .mb8 { margin-bottom: 8px; }
+  .w100 { width: 100%; }
+  .text-muted { color: var(--muted); font-size: 12px; }
+  .text-accent { color: var(--accent); }
+  .bold { font-weight: 700; }
+  hr { border: none; border-top: 1px solid var(--border); margin: 12px 0; }
+
+  /* ── Production Page ─────────────────────────────────────────────────────── */
+  .mixing-step { display: flex; gap: 12px; margin-bottom: 12px; padding: 10px; background: var(--surface); border-radius: 6px; border-left: 3px solid var(--accent); }
+  .step-num { font-size: 18px; font-weight: 800; color: var(--accent); min-width: 24px; text-align: center; }
+  .step-content h4 { font-size: 13px; font-weight: 600; margin: 0 0 4px; color: var(--text); }
+  .step-content p { font-size: 12px; color: var(--muted); margin: 0; line-height: 1.4; }
+  .step-items { font-size: 12px; margin: 6px 0 0; padding-left: 16px; }
+  .step-items li { margin: 3px 0; line-height: 1.3; }
+  .step-compound { display: flex; justify-content: space-between; font-size: 12px; padding: 4px 0; border-bottom: 1px solid var(--border); }
+  .step-compound:last-child { border-bottom: none; }
+
+  .bom-table { width: 100%; border-collapse: collapse; font-size: 12px; margin: 12px 0; }
+  .bom-table th { text-align: left; padding: 8px; background: var(--surface); border-bottom: 2px solid var(--border); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); font-weight: 600; }
+  .bom-table td { padding: 8px; border-bottom: 1px solid var(--border); }
+  .bom-table tr:last-child td { border-bottom: none; }
+  .bom-cost { text-align: right; font-variant-numeric: tabular-nums; }
+  .bom-qty { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+  .compat-alert { border-radius: 6px; padding: 8px 12px; margin-bottom: 8px; font-size: 12px; line-height: 1.5; border-left: 3px solid; }
+  .compat-alert.ok { background: rgba(52,211,153,0.1); border-color: var(--accent); color: var(--text); }
+  .compat-alert.warn { background: rgba(245,158,11,0.1); border-color: var(--warn); color: #d97706; }
+  .compat-alert.danger { background: rgba(248,113,113,0.1); border-color: var(--danger); color: #ef4444; }
+
+  .checklist-header { font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+  .checklist-progress { font-variant-numeric: tabular-nums; color: var(--accent); font-weight: 700; }
+
+  .checklist-group { margin-bottom: 14px; }
+  .checklist-group-title { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin-bottom: 8px; padding-bottom: 4px; border-bottom: 1px solid var(--border); }
+
+  .mixing-checklist { display: flex; flex-direction: column; gap: 6px; }
+  .checklist-item { display: flex; align-items: flex-start; font-size: 12px; gap: 10px; padding: 10px 12px; border-radius: 4px; background: var(--surface); border-left: 3px solid transparent; transition: all 0.2s; cursor: pointer; }
+  .checklist-item:hover { border-left-color: var(--accent2); background: color-mix(in srgb, var(--accent2) 5%, var(--surface)); }
+  .checklist-item input[type="checkbox"] { cursor: pointer; margin-top: 2px; flex-shrink: 0; accent-color: var(--accent); }
+  .checklist-item.checked { border-left-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--surface)); }
+  .checklist-item-number { font-weight: 600; color: var(--muted); min-width: 20px; }
+  .checklist-item-text { flex: 1; line-height: 1.4; }
+
+  /* ── Modal Dialog Styles ─────────────────────────────────────────────────── */
+  .modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 1000; align-items: center; justify-content: center; }
+  .modal-overlay.show { display: flex; }
+  .modal-dialog { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; max-width: 500px; width: 90%; box-shadow: 0 10px 40px rgba(0,0,0,0.5); }
+  .modal-header { font-size: 16px; font-weight: 600; margin-bottom: 16px; color: var(--text); }
+  .modal-body { display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px; }
+  .modal-footer { display: flex; gap: 8px; justify-content: flex-end; }
+  .modal-preview { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 10px; font-size: 12px; }
+  .modal-preview strong { color: var(--accent); }
+  .form-error { color: var(--danger); font-size: 11px; margin-top: -8px; }
+
+  /* ── Help Icon & Tooltip Styles ──────────────────────────────────────────── */
+  .help-icon { display: inline-flex; width: 16px; height: 16px; border-radius: 50%; background: var(--accent2); color: white; align-items: center; justify-content: center; font-size: 10px; font-weight: bold; cursor: help; margin-left: 4px; position: relative; }
+  .help-icon:hover { filter: brightness(1.2); }
+  .help-tooltip { display: none; position: absolute; bottom: calc(100% + 8px); left: -120px; width: 240px; background: var(--surface2); border: 1px solid var(--accent2); border-radius: var(--radius); padding: 10px; font-size: 11px; line-height: 1.5; color: var(--text); z-index: 500; box-shadow: 0 4px 12px rgba(0,0,0,0.4); }
+  .help-icon:hover .help-tooltip { display: block; }
+  .help-tooltip strong { color: var(--accent2); }
+  .help-tooltip p { margin: 0; }
+  .help-tooltip p + p { margin-top: 6px; }
+
+  /* ── Print Styles ────────────────────────────────────────────────────────── */
+  @media print {
+    header, nav, #page-builder, #page-profile, #page-library, #page-dosing, #page-formulas,
+    button, .btn, .card-title button, #toast, .flask-icon { display: none !important; }
+    #page-production { display: block !important; }
+    body { background: white; color: black; font-size: 10pt; }
+    .page { margin: 0; padding: 0; }
+    .card { border: 1px solid #333; page-break-inside: avoid; margin-bottom: 20pt; }
+    .card-title { font-size: 14pt; font-weight: bold; margin-bottom: 8pt; }
+    .bom-table { font-size: 10pt; }
+    .bom-table th { border-color: #000; background: transparent; }
+    .mixing-step { border-color: #000; background: transparent; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo-container">
+    <div class="logo-icon" style="background: linear-gradient(135deg, var(--accent), var(--accent2)); border-radius: 10px; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 20px rgba(0, 242, 255, 0.3);">
+      <i class="fas fa-vial" style="color: #000; font-size: 1.2rem;"></i>
+    </div>
+    <div style="margin-left: 12px;">
+      <h1 style="font-size: 1.3rem; margin: 0; letter-spacing: -0.5px; color: var(--text);">NutriCalc <span style="font-size: 0.75rem; background: rgba(255,255,255,0.1); padding: 2px 8px; border-radius: 4px; color: var(--muted);">v1.2.0</span></h1>
+      <span class="sub" style="font-size: 0.7rem; color: var(--muted); text-transform: uppercase; font-weight: 700; letter-spacing: 1px; display: block; margin-top: 2px;">Hydroponic Nutrient Planner</span>
+    </div>
+  </div>
+
+  <nav class="suit-header-nav">
+      <a href="http://localhost:8000" class="suit-link"><i class="fas fa-microchip"></i> LoRaLink</a>
+      <a href="/" class="suit-link active"><i class="fas fa-vial"></i> NutriCalc</a>
+      <a href="http://localhost:8200" class="suit-link"><i class="fas fa-route"></i> Rag-Router</a>
+      <a href="http://localhost:8010" class="suit-link"><i class="fas fa-globe"></i> Viai.club</a>
+  </nav>
+  <div style="margin-left:auto;display:flex;align-items:center;gap:14px;">
+    <div class="unit-toggle">
+      <button id="unit-metric" class="active" title="Metric units (g, L)">Metric</button>
+      <button id="unit-imperial" title="Imperial units (oz, gal)">Imperial</button>
+    </div>
+    <button class="btn btn-secondary btn-sm" onclick="window.open('../docs/index.html', '_blank')" title="Open documentation" style="margin-right:12px;">📖 Docs</button>
+    <span id="mqtt-label" style="font-size:11px;color:var(--muted)">MQTT: —</span>
+    <div class="mqtt-dot" id="mqtt-dot"></div>
+  </div>
+</header>
+
+<nav>
+  <button class="active" data-page="builder">&#9879;&#65039; Formula Builder</button>
+  <button data-page="profile">&#128202; Nutrient Profile</button>
+  <button data-page="library">&#129514; Chemical Library</button>
+  <button data-page="dosing">&#128225; Dosing Output</button>
+  <button data-page="formulas">&#128190; Saved Formulas</button>
+  <button data-page="production">&#128196; Production</button>
+</nav>
+
+<main>
+
+<!-- FORMULA BUILDER -->
+<div id="page-builder" class="page active">
+  <div style="display:grid;grid-template-columns:260px 1fr 340px;gap:16px;align-items:start;">
+
+    <!-- Chemical picker -->
+    <div>
+      <div class="card">
+        <div class="card-title">Available Chemicals</div>
+        <input type="text" id="chem-search" placeholder="Search compounds…" style="margin-bottom:10px;">
+        <div class="chem-list" id="chem-list"></div>
+        <div class="mt8 text-muted" id="chem-count">0 selected</div>
+      </div>
+    </div>
+
+    <!-- Target sliders -->
+    <div>
+      <div class="card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+          <div class="card-title" style="margin:0">Target Profile</div>
+          <div class="field" style="margin:0;width:130px;">
+            <label id="volume-label">Volume (L)</label>
+            <input type="number" id="volume-L" value="100" min="0.1" max="100000" step="any">
+          </div>
+        </div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:8px;">Quick Presets <span class="help-icon">?<div class="help-tooltip"><strong>Nutrient Presets</strong><p>Pre-configured formulas based on scientific research (Bugbee, Hoagland, etc.).</p><p>Click to load, then adjust sliders and click Solve.</p></div></span></div>
+        <div class="presets" id="preset-chips"></div>
+        <div class="slider-section">
+          <div class="slider-section-title">Macronutrients (ppm)</div>
+          <div class="slider-group" id="sliders-macro"></div>
+        </div>
+        <div class="slider-section">
+          <div class="slider-section-title">Micronutrients (ppm)</div>
+          <div class="slider-group" id="sliders-micro"></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px;">
+          <div class="field" style="margin:0;"><label>EC Target (mS/cm) <span class="help-icon">?<div class="help-tooltip"><strong>Electrical Conductivity</strong><p>Measures dissolved nutrient salts. Typical range: 1.2–2.5 mS/cm.</p><p>Lettuce: 1.2–1.8 | Tomato: 1.8–2.2</p></div></span></label><input type="number" id="ec-target" value="2.0" min="0" max="6" step="0.1"></div>
+          <div class="field" style="margin:0;"><label>pH Target</label><input type="number" id="ph-target" value="6.0" min="4" max="8" step="0.1"></div>
+        </div>
+        <div class="flex gap8 mt16">
+          <button class="btn btn-primary w100" id="solve-btn">&#9889; Solve Formula</button>
+          <button class="btn btn-secondary" id="clear-btn">Clear</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Results -->
+    <div style="display:flex;flex-direction:column;gap:12px;">
+      <div class="card">
+        <div class="card-title">Result Summary</div>
+        <div class="stat-row">
+          <div class="stat-badge"><div class="val" id="stat-ec">—</div><div class="lbl">EC mS/cm</div></div>
+          <div class="stat-badge"><div class="val" id="stat-cost">—</div><div class="lbl">Cost/batch</div></div>
+          <div class="stat-badge"><div class="val" id="stat-rms">—</div><div class="lbl">RMS Error</div></div>
+        </div>
+        <table class="results-table">
+          <thead><tr><th>Compound</th><th id="th-per-L">g/L</th><th id="th-per-batch">g/batch</th></tr></thead>
+          <tbody id="results-body"></tbody>
+        </table>
+        <div class="flex gap8 mt8">
+          <button class="btn btn-secondary btn-sm" id="goto-dosing-btn">&#128225; Send to Pumps</button>
+          <button class="btn btn-secondary btn-sm" id="save-btn">&#128190; Save</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">A/B Stock Split <span class="help-icon">?<div class="help-tooltip"><strong>Why A/B?</strong><p>Ca²⁺ + SO₄²⁻ → CaSO₄ precipitation. By separating Part A (Ca) from Part B (SO₄, PO₄), high concentrations stay stable.</p><p>Never mix dry A + B together.</p></div></span></div>
+        <div id="ab-split"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Solve Log</div>
+        <div class="log-console" id="solve-log"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- NUTRIENT PROFILE -->
+<div id="page-profile" class="page">
+  <div class="grid2">
+    <div class="card">
+      <div class="card-title">Radar — Target vs Achieved</div>
+      <canvas id="radar-chart" height="280"></canvas>
+    </div>
+    <div class="card">
+      <div class="card-title">EC Gauge</div>
+      <div class="ec-gauge-wrap" style="padding:20px 0;">
+        <div class="ec-value" id="ec-display">—</div>
+        <div class="text-muted">Estimated EC (mS/cm)</div>
+        <div class="ec-bar-track"><div class="ec-marker" id="ec-marker" style="left:0%"></div></div>
+        <div style="display:flex;justify-content:space-between;width:100%;font-size:11px;color:var(--muted);margin-top:2px;">
+          <span>0</span><span>1</span><span>2</span><span>3</span><span>4+</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;width:100%;margin-top:12px;">
+          <span class="text-muted">pH Target:</span>
+          <span id="ph-display" class="bold">—</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="card mt16">
+    <div class="card-title">Element Deviation from Target <span class="help-icon">?<div class="help-tooltip"><strong>Element Deviation %</strong><p>Shows how close each element is to the target ppm:</p><p>• <span style="color:#4ade80;">Green (±10%)</span> = ideal<br>• <span style="color:#fbbf24;">Yellow (±20%)</span> = acceptable<br>• <span style="color:#f87171;">Red (>±20%)</span> = re-solve with different compounds</p></div></span></div>
+    <div class="dev-bars" id="dev-bars"><span class="text-muted">Solve a formula first.</span></div>
+  </div>
+  <div class="card mt16">
+    <div class="card-title">Achieved vs Target ppm</div>
+    <canvas id="bar-chart" height="180"></canvas>
+  </div>
+  <div class="card mt16">
+    <div class="card-title">Nutrient Ratio Analysis <span class="help-icon">?<div class="help-tooltip"><strong>Nutrient Ratios</strong><p>Compares your formula to scientific reference frames (Bugbee, Hoagland).</p><p>Ratios represent the relative balance of macro/micronutrients. Green = matches reference, red = deviates. Slight deviations are OK for crop-specific optimization.</p></div></span> <span style="font-size:10px;color:var(--muted);font-weight:normal;text-transform:none;letter-spacing:0;">&nbsp;— Bugbee / Hoagland guidelines</span></div>
+    <div class="ratio-panel" id="ratio-panel"><span class="text-muted">Solve a formula first.</span></div>
+    <div id="ratio-notes" style="margin-top:10px;font-size:12px;color:var(--muted);line-height:1.6;"></div>
+  </div>
+</div>
+
+<!-- CHEMICAL LIBRARY -->
+<div id="page-library" class="page">
+  <div style="display:flex;gap:10px;margin-bottom:14px;align-items:center;flex-wrap:wrap;">
+    <h2 style="font-size:16px;">Chemical Compound Library <span class="help-icon">?<div class="help-tooltip"><strong>Price & Cost Tracking</strong><p>Prices are fetched from supplier APIs or manual entry. Update prices regularly for accurate cost estimates.</p><p>Cost tracking helps compare formulas by final production cost, not just nutrient accuracy.</p></div></span></h2>
+    <button class="btn btn-secondary btn-sm" id="refresh-prices-btn" style="margin-left:auto;">&#128269; Refresh Prices</button>
+    <button class="btn btn-secondary btn-sm" id="price-config-btn">&#9881; Price Sources</button>
+    <button class="btn btn-secondary btn-sm" id="show-add-btn">+ Add Custom</button>
+  </div>
+
+  <!-- Price scrape status bar -->
+  <div id="scrape-status-bar" class="card mb8" style="display:none;padding:10px 16px;">
+    <div style="display:flex;align-items:center;gap:10px;">
+      <span id="scrape-status-text" class="text-muted" style="font-size:13px;">Scraping prices…</span>
+      <div id="scrape-progress-bar" style="flex:1;background:var(--surface2);border-radius:3px;height:6px;">
+        <div id="scrape-progress-fill" style="height:100%;background:var(--accent2);border-radius:3px;width:0%;transition:width 0.3s;"></div>
+      </div>
+      <span id="scrape-progress-count" class="text-muted" style="font-size:12px;white-space:nowrap;"></span>
+    </div>
+  </div>
+
+  <!-- Price config panel -->
+  <div id="price-config-panel" class="card mb8" style="display:none;">
+    <div class="card-title">Price Scrape Configuration</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div>
+        <div class="field">
+          <label>Sources to search (select all that apply)</label>
+          <div style="display:flex;flex-direction:column;gap:6px;margin-top:6px;">
+            <label style="display:flex;align-items:center;gap:8px;color:var(--text);">
+              <input type="checkbox" id="src-bulk" value="bulk_retail" checked style="width:auto;"> Bulk retail &amp; hydro suppliers</label>
+            <label style="display:flex;align-items:center;gap:8px;color:var(--text);">
+              <input type="checkbox" id="src-amazon" value="amazon" style="width:auto;"> Amazon (search snippet — link only)</label>
+            <label style="display:flex;align-items:center;gap:8px;color:var(--text);">
+              <input type="checkbox" id="src-lab" value="lab_supplier" checked style="width:auto;"> Lab / bulk reagent suppliers</label>
+            <label style="display:flex;align-items:center;gap:8px;color:var(--text);">
+              <input type="checkbox" id="src-agri" value="agri" style="width:auto;"> Agricultural fertilizer suppliers</label>
+          </div>
+        </div>
+        <div class="field">
+          <label>Delay between searches (seconds)</label>
+          <input type="number" id="scrape-delay" value="1.5" min="0.5" max="10" step="0.5" style="width:100px;">
+        </div>
+      </div>
+      <div>
+        <div class="field">
+          <label style="display:flex;align-items:center;gap:8px;color:var(--text);">
+            <input type="checkbox" id="src-auto-startup" style="width:auto;"> Auto-refresh prices on server startup</label>
+          <p class="text-muted" style="margin-top:6px;">When enabled, a background scrape runs each time the server starts. Adds 2-5 minutes to startup.</p>
+        </div>
+      </div>
+    </div>
+    <div class="flex gap8 mt8">
+      <button class="btn btn-primary btn-sm" id="save-price-config-btn">Save Config</button>
+      <button class="btn btn-secondary btn-sm" id="close-price-config-btn">Close</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <table class="results-table">
+      <thead><tr><th>Name</th><th>Formula</th><th>Key Elements</th><th>Purity</th><th>Your Price ($/kg)</th><th>Ref. Price</th><th>In Stock</th><th>Notes</th><th></th></tr></thead>
+      <tbody id="library-body"></tbody>
+    </table>
+  </div>
+  <div id="add-compound-panel" class="card mt16" style="display:none;">
+    <div class="card-title">Add Custom Compound</div>
+    <div class="grid2">
+      <div>
+        <div class="field"><label>Name</label><input id="cc-name" placeholder="e.g. Yara Calcinit"></div>
+        <div class="field"><label>Formula (optional)</label><input id="cc-formula" placeholder="e.g. Ca(NO3)2·4H2O"></div>
+        <div class="field"><label>Purity %</label><input id="cc-purity" type="number" value="99" min="1" max="100"></div>
+        <div class="field"><label>Cost per kg ($)</label><input id="cc-cost" type="number" value="0" min="0" step="0.01"></div>
+        <div class="field"><label>Notes</label><textarea id="cc-notes" rows="2"></textarea></div>
+      </div>
+      <div>
+        <div class="card-title">% from product label</div>
+        <div id="cc-elements" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;"></div>
+      </div>
+    </div>
+    <div class="flex gap8 mt8">
+      <button class="btn btn-primary" id="submit-custom-btn">Save Compound</button>
+      <button class="btn btn-secondary" id="cancel-custom-btn">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- DOSING OUTPUT -->
+<div id="page-dosing" class="page">
+  <div class="grid2">
+    <div class="card">
+      <div class="card-title">MQTT Configuration <span class="help-icon">?<div class="help-tooltip"><strong>Dosing & MQTT</strong><p>MQTT is a publish-subscribe messaging protocol. Connect to your broker to send dosing commands to remote pump controllers.</p><p>Configure the broker address, port, and topic prefix, then use "Publish" to send the current formula to all mapped pumps.</p></div></span></div>
+      <div class="field"><label>Broker Host</label><input id="mqtt-host" value="localhost"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <div class="field"><label>Port</label><input id="mqtt-port" type="number" value="1883"></div>
+        <div class="field"><label>Topic Prefix</label><input id="mqtt-prefix" value="nutribuddy"></div>
+      </div>
+      <div class="field"><label>Username (optional)</label><input id="mqtt-user"></div>
+      <div class="field"><label>Password (optional)</label><input type="password" id="mqtt-pass"></div>
+      <div class="flex gap8 mt8">
+        <button class="btn btn-primary" id="mqtt-connect-btn">Connect</button>
+        <span id="mqtt-status-text" class="text-muted" style="align-self:center;">Not connected</span>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Pump Channel Map</div>
+      <p class="text-muted mb8">Map compound names to physical pump numbers</p>
+      <div id="pump-map-rows"></div>
+      <button class="btn btn-secondary btn-sm mt8" id="add-pump-btn">+ Add Mapping</button>
+    </div>
+  </div>
+  <div class="card mt16">
+    <div class="card-title">Dosing Channels — Current Formula</div>
+    <p class="text-muted" id="dosing-empty">Solve a formula first, then return here to publish.</p>
+    <div id="dosing-channels"></div>
+    <div class="flex gap8 mt16" id="publish-controls" style="display:none;">
+      <button class="btn btn-primary" id="publish-btn">&#128225; Publish to All Pumps <span class="state-label" id="publish-state"></span></button>
+      <button class="btn btn-secondary btn-sm" id="export-json-btn">Export JSON</button>
+      <button class="btn btn-secondary btn-sm" id="export-csv-btn">Export CSV</button>
+    </div>
+  </div>
+  <div class="card mt16">
+    <div class="card-title">Publish Log</div>
+    <div class="log-console" id="publish-log"></div>
+  </div>
+</div>
+
+<!-- SAVED FORMULAS -->
+<div id="page-formulas" class="page">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+    <h2 style="font-size:16px;">Saved Formulas</h2>
+    <button class="btn btn-secondary btn-sm" id="refresh-formulas-btn">&#8635; Refresh</button>
+  </div>
+  <div class="formula-cards" id="formula-cards"></div>
+</div>
+
+<!-- PRODUCTION: MIXING GUIDE + BOM + COMPATIBILITY -->
+<div id="page-production" class="page">
+  <div class="grid2">
+    <div class="card">
+      <div class="card-title">MIXING GUIDE <span class="help-icon">?<div class="help-tooltip"><strong>5-Step Process</strong><p>Prepare containers → Part A (Ca) → Part B (SO₄, PO₄, etc.) → Store → Final reservoir dilution.</p><p>Follow each step carefully to avoid precipitation.</p></div></span></div>
+      <p class="text-muted mb8" id="mixing-empty">Solve a formula first to generate step-by-step mixing instructions.</p>
+      <div id="mixing-steps"></div>
+    </div>
+    <div>
+      <div class="card mb16">
+        <div class="card-title">VERIFICATION CHECKLIST</div>
+        <div class="checklist-header">
+          Progress: <span class="checklist-progress"><span id="checklist-complete">0</span>/5</span>
+        </div>
+        <div class="mixing-checklist" id="mixing-checklist"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">⚠ CHEMICAL ALERTS <span class="help-icon">?<div class="help-tooltip"><strong>Compatibility Warnings</strong><p>Alerts check for precipitation risk (Ca²⁺ + SO₄²⁻), solubility limits, pH issues, and nutrient toxicity.</p><p>A/B split automatically prevents precipitation.</p></div></span></div>
+        <div id="compat-panel"><p class="text-muted">Select compounds to check compatibility.</p></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card mt16">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <div class="card-title" style="margin:0;">BILL OF MATERIALS — SUPPLIER ORDER <span class="help-icon">?<div class="help-tooltip"><strong>Stock Concentration</strong><p>All volumes assume a 100× concentrate. The final mixing step dilutes 1 part concentrate with 99 parts water.</p><p>For 50× or 200× concentrates, multiply/divide all volumes proportionally. Higher concentration = smaller volumes but less precision. Lower concentration = larger volumes but easier to measure accurately.</p></div></span></div>
+      <div class="flex gap8" style="align-items:center;">
+        <div style="display:flex;gap:8px;align-items:center;">
+          <label style="font-size:12px;white-space:nowrap;margin:0;">Batches/month:</label>
+          <input type="number" id="bom-batches" value="1" min="1" max="1000" step="1" style="width:60px;font-size:12px;padding:4px;">
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="printProduction()">&#128438; Print / PDF</button>
+        <button class="btn btn-secondary btn-sm" onclick="exportBOMCSV()">📊 Export CSV</button>
+      </div>
+    </div>
+    <p class="elem-note elem-note-info" id="bom-note" style="display:none;">
+      <strong>Stock Concentration:</strong> All volumes assume <strong>100× concentrate</strong> (final solution diluted 1:100).
+      For 50× or 200× concentrates, multiply/divide all volumes proportionally.
+    </p>
+    <p class="text-muted" id="bom-empty">Solve a formula first.</p>
+    <table class="bom-table" id="bom-table" style="display:none;"></table>
+    <div class="text-muted mt8" id="bom-footer" style="font-size:11px;"></div>
+  </div>
+</div>
+
+</main>
+
+<div id="toast"></div>
+
+<!-- Save Formula Modal Dialog -->
+<div id="save-formula-modal" class="modal-overlay">
+  <div class="modal-dialog">
+    <div class="modal-header">Save Formula</div>
+    <div class="modal-body">
+      <div>
+        <label for="save-name-input">Formula Name *</label>
+        <input type="text" id="save-name-input" placeholder="My Formula" maxlength="50">
+        <div class="form-error" id="save-name-error"></div>
+      </div>
+      <div>
+        <label for="save-notes-input">Notes (optional)</label>
+        <textarea id="save-notes-input" placeholder="Add notes about this formula..." maxlength="200" style="resize:vertical; height:60px;"></textarea>
+      </div>
+      <div class="modal-preview">
+        <strong>Preview:</strong><br>
+        <span id="save-preview-text">Waiting for formula data...</span>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" id="save-cancel-btn">Cancel</button>
+      <button class="btn btn-primary" id="save-confirm-btn">Save Formula</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Security helper: escape user-controlled text before DOM insertion ──────────
+function esc(str) {
+  const d = document.createElement('div');
+  d.textContent = String(str ?? '');
+  return d.innerHTML;
+}
+
+// ── Constants ──────────────────────────────────────────────────────────────────
+const MACRO = ['N_NO3','N_NH4','P','K','Ca','Mg','S'];
+const MICRO = ['Fe','Mn','Zn','Cu','B','Mo','Ni'];
+const MACRO_RANGE = { N_NO3:[0,300,1], N_NH4:[0,80,1], P:[0,120,1], K:[0,400,1], Ca:[0,300,1], Mg:[0,100,1], S:[0,200,1] };
+const MICRO_RANGE = { Fe:[0,6,0.1], Mn:[0,2,0.05], Zn:[0,1,0.01], Cu:[0,0.2,0.005], B:[0,1,0.01], Mo:[0,0.1,0.005], Ni:[0,0.5,0.005] };
+
+// ── Element alert notes (shown beneath relevant sliders) ────────────────────
+const ELEM_NOTES = {
+  Ni: { level: 'warn', text: '⚠ Ni (17th essential element, IUPAC 1987) activates urease. In tap or well water it is typically present as trace contamination — deliberate dosing is only needed with RO/ultra-pure water. Target: 0.05 ppm.' },
+};
+
+// ── Unit system ────────────────────────────────────────────────────────────────
+let unitSystem = localStorage.getItem('nutribuddy-units') || 'metric';
+
+const UNIT = {
+  metric:   { vol: 'L',   wt: 'g',  vol_factor: 1,       wt_factor: 1 },
+  imperial: { vol: 'gal', wt: 'oz', vol_factor: 3.78541, wt_factor: 28.3495 }
+};
+function getU()       { return UNIT[unitSystem]; }
+function volToDisplay(L)  { return unitSystem === 'metric' ? L  : L  / UNIT.imperial.vol_factor; }
+function volFromDisplay(v){ return unitSystem === 'metric' ? v  : v  * UNIT.imperial.vol_factor; }
+function wtToDisplay(g)   { return unitSystem === 'metric' ? g  : g  / UNIT.imperial.wt_factor; }
+
+function applyUnitToggle(system) {
+  const prevVolL = volFromDisplay(parseFloat(document.getElementById('volume-L').value) || 100);
+  unitSystem = system;
+  localStorage.setItem('nutribuddy-units', system);
+  const u = getU();
+  document.getElementById('unit-metric').classList.toggle('active', system === 'metric');
+  document.getElementById('unit-imperial').classList.toggle('active', system === 'imperial');
+  // Update volume input
+  document.getElementById('volume-label').textContent = `Volume (${u.vol})`;
+  document.getElementById('volume-L').value = volToDisplay(prevVolL).toFixed(2);
+  // Update results table headers
+  document.getElementById('th-per-L').textContent   = `${u.wt}/${u.vol}`;
+  document.getElementById('th-per-batch').textContent = `${u.wt}/batch`;
+  // Re-render if results exist
+  if (lastResult) { renderResults(lastResult); }
+}
+
+// ── State ──────────────────────────────────────────────────────────────────────
+let chemicals = null;
+let selectedChems = new Set();
+let lastResult = null;
+let scrapedPrices = {};   // {compound_id: best_price_dict}
+let radarChart = null;
+let barChart = null;
+let mqttConnected = false;
+let pumpMapRows = [];
+let ws = null;
+
+// ── Init ───────────────────────────────────────────────────────────────────────
+(async function init() {
+  await fetchChemicals();
+  buildSliders();
+  renderChemList();
+  renderPresetChips();
+  await loadScrapedPrices();
+  buildLibraryTable();
+  buildCCForm();
+  await loadMqttConfig();
+  await loadPriceConfig();
+  await loadFormulas();
+  connectWS();
+  bindEvents();
+  log('NutriCalc ready.', 'info');
+})();
+
+// ── Event bindings (no inline handlers) ───────────────────────────────────────
+function bindEvents() {
+  document.getElementById('unit-metric').addEventListener('click',   () => applyUnitToggle('metric'));
+  document.getElementById('unit-imperial').addEventListener('click', () => applyUnitToggle('imperial'));
+  // Apply persisted unit system on init
+  applyUnitToggle(unitSystem);
+  document.getElementById('chem-search').addEventListener('input', renderChemList);
+  document.getElementById('solve-btn').addEventListener('click', runSolve);
+  document.getElementById('clear-btn').addEventListener('click', clearTargets);
+  document.getElementById('save-btn').addEventListener('click', promptSaveFormula);
+  // Modal dialog event listeners
+  document.getElementById('save-cancel-btn').addEventListener('click', closeSaveFormulaModal);
+  document.getElementById('save-confirm-btn').addEventListener('click', confirmSaveFormula);
+  document.getElementById('save-name-input').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') confirmSaveFormula();
+  });
+  // Close modal on overlay click
+  document.getElementById('save-formula-modal').addEventListener('click', (e) => {
+    if (e.target.id === 'save-formula-modal') closeSaveFormulaModal();
+  });
+  document.getElementById('goto-dosing-btn').addEventListener('click', () => navTo('dosing'));
+  document.getElementById('show-add-btn').addEventListener('click', () => {
+    document.getElementById('add-compound-panel').style.display = 'block';
+  });
+  document.getElementById('cancel-custom-btn').addEventListener('click', () => {
+    document.getElementById('add-compound-panel').style.display = 'none';
+  });
+  document.getElementById('submit-custom-btn').addEventListener('click', submitCustomCompound);
+  document.getElementById('mqtt-connect-btn').addEventListener('click', saveMqttConfig);
+  document.getElementById('add-pump-btn').addEventListener('click', () => { pumpMapRows.push({label:'',pump:pumpMapRows.length+1}); renderPumpMap(); });
+  document.getElementById('publish-btn').addEventListener('click', publishFormula);
+  document.getElementById('export-json-btn').addEventListener('click', exportJSON);
+  document.getElementById('export-csv-btn').addEventListener('click', exportCSV);
+  document.getElementById('refresh-formulas-btn').addEventListener('click', loadFormulas);
+  document.getElementById('refresh-prices-btn').addEventListener('click', triggerScrapeAll);
+  document.getElementById('price-config-btn').addEventListener('click', () => {
+    const p = document.getElementById('price-config-panel');
+    p.style.display = p.style.display === 'none' ? 'block' : 'none';
+  });
+  document.getElementById('close-price-config-btn').addEventListener('click', () => {
+    document.getElementById('price-config-panel').style.display = 'none';
+  });
+  document.getElementById('save-price-config-btn').addEventListener('click', savePriceConfig);
+  document.querySelectorAll('nav button[data-page]').forEach(btn => {
+    btn.addEventListener('click', () => navTo(btn.dataset.page));
+  });
+}
+
+// ── Navigation ─────────────────────────────────────────────────────────────────
+function navTo(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById(`page-${name}`).classList.add('active');
+  document.querySelector(`nav button[data-page="${name}"]`).classList.add('active');
+  if (name === 'profile' && lastResult) renderProfile(lastResult);
+  if (name === 'formulas') loadFormulas();
+  if (name === 'dosing') renderDosingChannels();
+}
+
+// ── WebSocket ──────────────────────────────────────────────────────────────────
+function connectWS() {
+  ws = new WebSocket(`ws://${location.host}/ws`);
+  ws.addEventListener('message', e => {
+    const msg = JSON.parse(e.data);
+    if (msg.type === 'solve_complete') log(`Solve complete: EC ${msg.ec} mS/cm, cost $${msg.cost}`, 'rx');
+    else if (msg.type === 'mqtt_ack') { log(`MQTT ACK [${msg.topic}]: ${msg.payload}`, 'rx'); setPublishState('ok'); }
+    else if (msg.type === 'mqtt_publish') logPublish(`Published ${msg.channels} channels at ${msg.timestamp}`, 'rx');
+    else if (msg.type === 'scrape_started') setScrapeStatus(true, `Scraping ${msg.total} compounds…`, 0, msg.total);
+    else if (msg.type === 'scrape_progress') setScrapeStatus(true, `Scraping: ${msg.compound}`, msg.done, msg.total);
+    else if (msg.type === 'scrape_complete') {
+      setScrapeStatus(false);
+      toast(`Price scrape complete — ${msg.total} compounds checked.`, 'ok');
+      loadScrapedPrices().then(() => buildLibraryTable());
+    }
+  });
+  ws.addEventListener('close', () => setTimeout(connectWS, 3000));
+  setInterval(() => { if (ws.readyState === 1) ws.send(JSON.stringify({type:'ping'})); }, 15000);
+}
+
+// ── Chemicals ──────────────────────────────────────────────────────────────────
+async function fetchChemicals() {
+  const r = await fetch('/api/chemicals');
+  chemicals = await r.json();
+}
+
+function renderChemList() {
+  if (!chemicals) return;
+  const search = document.getElementById('chem-search').value.toLowerCase();
+  const list = document.getElementById('chem-list');
+  // Clear using safe DOM method
+  while (list.firstChild) list.removeChild(list.firstChild);
+
+  const visible = chemicals.compounds.filter(c =>
+    c.name.toLowerCase().includes(search) || c.formula.toLowerCase().includes(search)
+  );
+
+  visible.forEach(c => {
+    const item = document.createElement('div');
+    item.className = 'chem-item' + (selectedChems.has(c.id) ? ' selected' : '');
+
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = selectedChems.has(c.id);
+    cb.addEventListener('change', e => { e.stopPropagation(); toggleChem(c.id); });
+
+    const info = document.createElement('div');
+    info.style.cssText = 'flex:1;min-width:0;';
+
+    const nameEl = document.createElement('div');
+    nameEl.style.cssText = 'font-weight:600;font-size:13px;';
+    nameEl.textContent = c.name;
+
+    const metaEl = document.createElement('div');
+    metaEl.className = 'chem-meta';
+    const keyElems = Object.keys(c.elements).filter(e => c.elements[e] > 0).slice(0,3).join(', ');
+    metaEl.textContent = `${c.formula} · ${keyElems}`;
+
+    if (c.elements.Ca > 0) {
+      const badge = document.createElement('span');
+      badge.className = 'chem-badge';
+      badge.style.cssText = 'margin-left:4px;border-color:#60a5fa44;color:var(--accent2);';
+      badge.textContent = 'Part A';
+      metaEl.appendChild(badge);
+    } else if (c.elements.P > 0 || c.elements.S > 0) {
+      const badge = document.createElement('span');
+      badge.className = 'chem-badge';
+      badge.style.cssText = 'margin-left:4px;border-color:#a78bfa44;color:#a78bfa;';
+      badge.textContent = 'Part B';
+      metaEl.appendChild(badge);
+    }
+
+    info.appendChild(nameEl);
+    info.appendChild(metaEl);
+
+    const costEl = document.createElement('div');
+    costEl.style.cssText = `font-size:12px;margin-left:auto;white-space:nowrap;color:${c.cost_per_kg > 0 ? 'var(--warn)' : 'var(--muted)'};`;
+    costEl.textContent = c.cost_per_kg > 0 ? `$${c.cost_per_kg.toFixed(2)}/kg` : '—';
+
+    item.appendChild(cb);
+    item.appendChild(info);
+    item.appendChild(costEl);
+    item.addEventListener('click', () => toggleChem(c.id));
+    list.appendChild(item);
+  });
+
+  document.getElementById('chem-count').textContent = `${selectedChems.size} selected`;
+}
+
+function toggleChem(id) {
+  if (selectedChems.has(id)) selectedChems.delete(id);
+  else selectedChems.add(id);
+  renderChemList();
+}
+
+// ── Sliders ────────────────────────────────────────────────────────────────────
+function buildSliders() {
+  buildSliderGroup('sliders-macro', MACRO, MACRO_RANGE);
+  buildSliderGroup('sliders-micro', MICRO, MICRO_RANGE);
+}
+
+function buildSliderGroup(containerId, elems, ranges) {
+  const container = document.getElementById(containerId);
+  while (container.firstChild) container.removeChild(container.firstChild);
+  elems.forEach(elem => {
+    const [min, max, step] = ranges[elem];
+    const label = chemicals?.element_labels?.[elem] || elem;
+    const row = document.createElement('div');
+    row.className = 'slider-row';
+
+    const lbl = document.createElement('label');
+    lbl.textContent = label;
+
+    const sl = document.createElement('input');
+    sl.type = 'range'; sl.id = `sl-${elem}`;
+    sl.min = min; sl.max = max; sl.step = step; sl.value = 0;
+
+    const val = document.createElement('span');
+    val.className = 'slider-val'; val.id = `sv-${elem}`; val.textContent = '0';
+
+    sl.addEventListener('input', () => { val.textContent = sl.value; });
+
+    row.appendChild(lbl); row.appendChild(sl); row.appendChild(val);
+    container.appendChild(row);
+
+    // Alert note for elements that have special considerations
+    if (ELEM_NOTES[elem]) {
+      const note = document.createElement('div');
+      note.className = `elem-note elem-note-${ELEM_NOTES[elem].level}`;
+      note.textContent = ELEM_NOTES[elem].text;
+      container.appendChild(note);
+    }
+  });
+}
+
+function getTargets() {
+  const t = {};
+  [...MACRO, ...MICRO].forEach(e => {
+    t[e] = parseFloat(document.getElementById(`sl-${e}`)?.value) || 0;
+  });
+  return t;
+}
+
+function setTargets(profile) {
+  [...MACRO, ...MICRO].forEach(e => {
+    const sl = document.getElementById(`sl-${e}`);
+    const sv = document.getElementById(`sv-${e}`);
+    if (sl) { sl.value = profile[e] || 0; sv.textContent = profile[e] || 0; }
+  });
+}
+
+function clearTargets() {
+  [...MACRO, ...MICRO].forEach(e => {
+    const sl = document.getElementById(`sl-${e}`);
+    const sv = document.getElementById(`sv-${e}`);
+    if (sl) { sl.value = 0; sv.textContent = '0'; }
+  });
+}
+
+// ── Presets ────────────────────────────────────────────────────────────────────
+function renderPresetChips() {
+  if (!chemicals) return;
+  const container = document.getElementById('preset-chips');
+  while (container.firstChild) container.removeChild(container.firstChild);
+  Object.entries(chemicals.presets).forEach(([key, preset]) => {
+    const chip = document.createElement('div');
+    chip.className = 'preset-chip';
+    chip.textContent = preset.label;
+    if (preset.notes) chip.title = preset.notes;
+    chip.addEventListener('click', () => {
+      document.querySelectorAll('.preset-chip').forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+      setTargets(preset.elements);
+      if (preset.ec_target) document.getElementById('ec-target').value = preset.ec_target;
+      if (preset.ph_target) document.getElementById('ph-target').value = preset.ph_target;
+      log(`Preset loaded: ${preset.label}`, 'tx');
+    });
+    container.appendChild(chip);
+  });
+}
+
+// ── Solver ─────────────────────────────────────────────────────────────────────
+async function runSolve() {
+  if (selectedChems.size === 0) { toast('Select at least one chemical first.', 'warn'); return; }
+  const targets = getTargets();
+  const volume_L = volFromDisplay(parseFloat(document.getElementById('volume-L').value) || (unitSystem === 'metric' ? 100 : 26.4));
+  log(`Solving: ${selectedChems.size} compounds, ${volume_L.toFixed(1)}L`, 'tx');
+
+  const btn = document.getElementById('solve-btn');
+  btn.disabled = true; btn.textContent = 'Solving…';
+  try {
+    const r = await fetch('/api/solve', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ targets, compound_ids: [...selectedChems], volume_L })
+    });
+    const data = await r.json();
+    if (!data.success) { log(`Error: ${data.error}`, 'err'); toast(data.error, 'err'); return; }
+    data.warnings?.forEach(w => log(`Warning: ${w}`, 'err'));
+    lastResult = data;
+    renderResults(data);
+    toast(`Solved! EC ≈ ${data.ec_estimated} mS/cm`, 'ok');
+  } catch(e) {
+    log(`Fetch error: ${e.message}`, 'err');
+    toast('Solver request failed.', 'err');
+  } finally {
+    btn.disabled = false; btn.textContent = '⚡ Solve Formula';
+  }
+}
+
+function renderResults(data) {
+  document.getElementById('stat-ec').textContent = data.ec_estimated.toFixed(2);
+  const costEl = document.getElementById('stat-cost');
+  if (data.cost_complete === false) {
+    costEl.textContent = '$' + data.cost_per_batch.toFixed(2);
+    costEl.title = 'Partial — some compounds have no price set. Visit Chemical Library to add prices.';
+    costEl.style.color = 'var(--warn)';
+  } else {
+    costEl.textContent = data.cost_per_batch > 0 ? '$' + data.cost_per_batch.toFixed(2) : '—';
+    costEl.title = '';
+    costEl.style.color = '';
+  }
+  document.getElementById('stat-rms').textContent = data.residual_rms.toFixed(2);
+
+  const tbody = document.getElementById('results-body');
+  while (tbody.firstChild) tbody.removeChild(tbody.firstChild);
+
+  const u = getU();
+  Object.entries(data.named_weights).forEach(([name, w]) => {
+    if (w.g_per_batch < 0.01) return;
+    const perL    = wtToDisplay(w.g_per_L);
+    const perBatch = wtToDisplay(w.g_per_batch);
+    const tr = document.createElement('tr');
+    const tdName = document.createElement('td'); tdName.textContent = name;
+    const tdL = document.createElement('td'); tdL.style.fontWeight = '700';
+    tdL.textContent = perL < 0.1 ? perL.toFixed(4) : perL.toFixed(3);
+    const tdB = document.createElement('td');
+    tdB.textContent = perBatch < 1 ? perBatch.toFixed(2) : perBatch.toFixed(1);
+    tr.appendChild(tdName); tr.appendChild(tdL); tr.appendChild(tdB);
+    tbody.appendChild(tr);
+  });
+
+  renderABSplit(data.ab_split);
+  if (document.getElementById('page-profile').classList.contains('active')) renderProfile(data);
+  if (document.getElementById('page-production').classList.contains('active')) renderProduction(data);
+}
+
+// ── Profile ────────────────────────────────────────────────────────────────────
+function renderProfile(data) {
+  const ecTarget = parseFloat(document.getElementById('ec-target').value) || 2.0;
+  const phTarget = parseFloat(document.getElementById('ph-target').value) || 6.0;
+
+  document.getElementById('ec-display').textContent = data.ec_estimated.toFixed(2);
+  document.getElementById('ph-display').textContent = phTarget.toFixed(1);
+  const ecPct = Math.min(data.ec_estimated / 4.0, 1.0) * 100;
+  document.getElementById('ec-marker').style.left = ecPct + '%';
+
+  renderDevBars(data);
+  renderRatios(data);
+
+  // Radar
+  const radarElems = ['N_NO3','P','K','Ca','Mg','S','Fe','B'];
+  const labels = radarElems.map(e => chemicals?.element_labels?.[e] || e);
+  const tVals = radarElems.map(e => data.target_ppm[e] || 0);
+  const aVals = radarElems.map(e => data.achieved_ppm[e] || 0);
+  const maxV  = radarElems.map((_,i) => Math.max(tVals[i], aVals[i], 1));
+  const tNorm = tVals.map((v,i) => (v/maxV[i])*100);
+  const aNorm = aVals.map((v,i) => (v/maxV[i])*100);
+
+  if (radarChart) radarChart.destroy();
+  radarChart = new Chart(document.getElementById('radar-chart'), {
+    type: 'radar',
+    data: { labels, datasets: [
+      { label: 'Target',   data: tNorm, borderColor: '#60a5fa', backgroundColor: '#60a5fa22', pointBackgroundColor: '#60a5fa' },
+      { label: 'Achieved', data: aNorm, borderColor: '#4ade80', backgroundColor: '#4ade8022', pointBackgroundColor: '#4ade80' }
+    ]},
+    options: { responsive: true,
+      scales: { r: { ticks: {display:false}, grid:{color:'#2e3147'}, pointLabels:{color:'#e2e8f0'} } },
+      plugins: { legend: { labels: {color:'#e2e8f0'} } }
+    }
+  });
+
+  // Bar
+  const barElems = MACRO;
+  const bLabels = barElems.map(e => chemicals?.element_labels?.[e] || e);
+  if (barChart) barChart.destroy();
+  barChart = new Chart(document.getElementById('bar-chart'), {
+    type: 'bar',
+    data: { labels: bLabels, datasets: [
+      { label: 'Target ppm',   data: barElems.map(e => data.target_ppm[e] || 0),   backgroundColor: '#60a5fa66', borderColor:'#60a5fa', borderWidth:1 },
+      { label: 'Achieved ppm', data: barElems.map(e => data.achieved_ppm[e] || 0), backgroundColor: '#4ade8088', borderColor:'#4ade80', borderWidth:1 }
+    ]},
+    options: { responsive: true,
+      plugins: { legend: { labels: {color:'#e2e8f0'} } },
+      scales: { x:{ticks:{color:'#94a3b8'}}, y:{ticks:{color:'#94a3b8'},grid:{color:'#2e3147'}} }
+    }
+  });
+}
+
+function renderDevBars(data) {
+  const container = document.getElementById('dev-bars');
+  while (container.firstChild) container.removeChild(container.firstChild);
+  [...MACRO, ...MICRO].forEach(e => {
+    const target = data.target_ppm[e] || 0;
+    if (target === 0) return;
+    const achieved = data.achieved_ppm[e] || 0;
+    const dev = data.deviation_pct[e] || 0;
+    const absDev = Math.abs(dev);
+    const cls = absDev <= 5 ? 'good' : absDev <= 15 ? 'warn' : 'bad';
+    const barW = Math.min(absDev / 30 * 100, 100);
+    const label = chemicals?.element_labels?.[e] || e;
+
+    const row = document.createElement('div');
+    row.className = 'dev-row';
+
+    const nameEl = document.createElement('span');
+    nameEl.style.color = 'var(--muted)';
+    nameEl.textContent = label;
+
+    const track = document.createElement('div');
+    track.className = 'bar-track';
+    const fill = document.createElement('div');
+    fill.className = `bar-fill ${cls}`;
+    fill.style.width = barW + '%';
+    track.appendChild(fill);
+
+    const ppmEl = document.createElement('span');
+    ppmEl.className = 'text-muted';
+    ppmEl.style.fontSize = '11px';
+    ppmEl.textContent = `${achieved.toFixed(1)} ppm`;
+
+    const devEl = document.createElement('span');
+    devEl.className = `dev-pct ${cls}`;
+    devEl.textContent = `${dev >= 0 ? '+' : ''}${dev.toFixed(1)}%`;
+
+    row.appendChild(nameEl); row.appendChild(track); row.appendChild(ppmEl); row.appendChild(devEl);
+    container.appendChild(row);
+  });
+}
+
+// ── Nutrient Ratio Analyzer (Bugbee / Hoagland guidelines) ────────────────────
+function renderRatios(data) {
+  const p = data.achieved_ppm;
+  const panel = document.getElementById('ratio-panel');
+  const notesEl = document.getElementById('ratio-notes');
+  while (panel.firstChild) panel.removeChild(panel.firstChild);
+
+  const totalN = (p.N_NO3 || 0) + (p.N_NH4 || 0);
+  const notes = [];
+
+  function ratioCard(label, num, den, val, idealLow, idealHigh, unit = ':1', numLabel = '', denLabel = '') {
+    const card = document.createElement('div');
+    card.className = 'ratio-card';
+    const cls = (val >= idealLow && val <= idealHigh) ? 'ratio-ok' : (val >= idealLow * 0.6 && val <= idealHigh * 1.5) ? 'ratio-warn' : 'ratio-bad';
+    const valEl = document.createElement('div'); valEl.className = `ratio-val ${cls}`; valEl.textContent = isFinite(val) ? val.toFixed(1) : '∞';
+    const lblEl = document.createElement('div'); lblEl.className = 'ratio-lbl'; lblEl.textContent = label;
+    const rng = document.createElement('div'); rng.className = `ratio-range ${cls}`;
+    rng.textContent = `Ideal ${idealLow}–${idealHigh}${unit}`;
+    card.appendChild(valEl); card.appendChild(lblEl); card.appendChild(rng);
+    return { card, cls };
+  }
+
+  // 1. NO3 : NH4 ratio — higher is better; pure-nitrate (ratio = ∞) is ideal per Bugbee
+  const no3nh4 = (p.N_NH4 || 0) > 0.1 ? (p.N_NO3 || 0) / (p.N_NH4) : 999;
+  const nh4Pct = totalN > 0 ? ((p.N_NH4 || 0) / totalN) * 100 : 0;
+  const no3nh4Display = no3nh4 > 99 ? '99+' : no3nh4.toFixed(1);
+  { const card = document.createElement('div'); card.className = 'ratio-card';
+    const cls = no3nh4 >= 4 ? 'ratio-ok' : no3nh4 >= 2 ? 'ratio-warn' : 'ratio-bad';
+    const valEl = document.createElement('div'); valEl.className = `ratio-val ${cls}`; valEl.textContent = no3nh4Display;
+    const lblEl = document.createElement('div'); lblEl.className = 'ratio-lbl'; lblEl.textContent = 'NO₃-N : NH₄-N';
+    const rng = document.createElement('div'); rng.className = `ratio-range ${cls}`; rng.textContent = 'Ideal ≥ 4:1 (all-NO₃ = best)';
+    card.appendChild(valEl); card.appendChild(lblEl); card.appendChild(rng);
+    panel.appendChild(card);
+    if (cls !== 'ratio-ok')
+      notes.push(`⚠ NH₄-N is ${nh4Pct.toFixed(0)}% of total N (NO₃:NH₄ = ${no3nh4Display}). Bugbee recommends <10% NH₄ at temperatures above 18°C — excess ammonium causes root toxicity.`);
+  }
+
+  // 2. Ca : Mg ratio
+  const caMg = (p.Mg || 0) > 0 ? (p.Ca || 0) / (p.Mg || 0.001) : 0;
+  { const { card, cls } = ratioCard('Ca : Mg', 'Ca', 'Mg', caMg, 2.5, 5.0, ':1');
+    panel.appendChild(card);
+    if (cls === 'ratio-bad') notes.push(`⚠ Ca:Mg ratio is ${caMg.toFixed(1)}. Ideal is 2.5–5:1. High Mg competes with Ca uptake; low Mg causes interveinal chlorosis.`);
+  }
+
+  // 3. K : Ca ratio
+  const kCa = (p.Ca || 0) > 0 ? (p.K || 0) / (p.Ca || 0.001) : 0;
+  { const { card, cls } = ratioCard('K : Ca', 'K', 'Ca', kCa, 0.8, 2.5, ':1');
+    panel.appendChild(card);
+    if (cls === 'ratio-warn' || cls === 'ratio-bad')
+      notes.push(`${cls === 'ratio-bad' ? '✗' : '⚠'} K:Ca ratio is ${kCa.toFixed(1)}. For fruiting crops target 1.5–2.5; for leafy greens 0.8–1.5. High K inhibits Ca uptake (blossom-end rot risk).`);
+  }
+
+  // 4. N : K ratio
+  const nk = (p.K || 0) > 0 ? totalN / (p.K || 0.001) : 0;
+  { const { card, cls } = ratioCard('N : K', 'N', 'K', nk, 0.5, 1.5, ':1');
+    panel.appendChild(card);
+    if (cls === 'ratio-warn') notes.push(`⚠ N:K ratio is ${nk.toFixed(2)}. Vegetative: target ~1:1; fruiting/bloom: target 0.5–0.8 (higher K drives fruit fill).`);
+  }
+
+  // 5. NH4 fraction % (as a simple indicator card)
+  { const card = document.createElement('div'); card.className = 'ratio-card';
+    const cls = nh4Pct <= 10 ? 'ratio-ok' : nh4Pct <= 20 ? 'ratio-warn' : 'ratio-bad';
+    const valEl = document.createElement('div'); valEl.className = `ratio-val ${cls}`; valEl.textContent = nh4Pct.toFixed(0) + '%';
+    const lblEl = document.createElement('div'); lblEl.className = 'ratio-lbl'; lblEl.textContent = 'NH₄ fraction of N';
+    const rng = document.createElement('div'); rng.className = `ratio-range ${cls}`; rng.textContent = 'Ideal < 10% (Bugbee)';
+    card.appendChild(valEl); card.appendChild(lblEl); card.appendChild(rng);
+    panel.appendChild(card);
+  }
+
+  // 6. Total N vs target
+  { const card = document.createElement('div'); card.className = 'ratio-card';
+    const cls = totalN >= 80 && totalN <= 300 ? 'ratio-ok' : totalN < 40 ? 'ratio-bad' : 'ratio-warn';
+    const valEl = document.createElement('div'); valEl.className = `ratio-val ${cls}`; valEl.textContent = totalN.toFixed(0);
+    const lblEl = document.createElement('div'); lblEl.className = 'ratio-lbl'; lblEl.textContent = 'Total N (ppm)';
+    const rng = document.createElement('div'); rng.className = `ratio-range ${cls}`; rng.textContent = 'Typical 100–250 ppm';
+    card.appendChild(valEl); card.appendChild(lblEl); card.appendChild(rng);
+    panel.appendChild(card);
+  }
+
+  // Render notes
+  while (notesEl.firstChild) notesEl.removeChild(notesEl.firstChild);
+  if (notes.length) {
+    notes.forEach(n => {
+      const p = document.createElement('p'); p.style.margin = '2px 0'; p.textContent = n;
+      notesEl.appendChild(p);
+    });
+  } else {
+    const ok = document.createElement('p'); ok.textContent = '✓ All key ratios within recommended ranges.';
+    ok.style.color = 'var(--accent)'; notesEl.appendChild(ok);
+  }
+}
+
+// ── A/B Split ──────────────────────────────────────────────────────────────────
+function renderABSplit(ab) {
+  const el = document.getElementById('ab-split');
+  while (el.firstChild) el.removeChild(el.firstChild);
+  if (!ab || (!ab.A.length && !ab.B.length)) {
+    const s = document.createElement('span'); s.className = 'text-muted'; s.textContent = 'No compounds selected.';
+    el.appendChild(s); return;
+  }
+  const grid = document.createElement('div'); grid.className = 'ab-grid';
+  ['A','B'].forEach(part => {
+    const div = document.createElement('div');
+    div.className = `ab-part ab-part${part}`;
+    const title = document.createElement('div');
+    title.className = 'ab-part-title';
+    title.textContent = `Part ${part}`;
+    div.appendChild(title);
+    (ab[part] || []).forEach(item => {
+      const row = document.createElement('div');
+      row.className = 'ab-item';
+      const n = document.createElement('span'); n.textContent = item.name;
+      const dispAmt = wtToDisplay(item.grams);
+      const g = document.createElement('span'); g.style.fontWeight = '700';
+      g.textContent = `${dispAmt < 1 ? dispAmt.toFixed(2) : dispAmt.toFixed(1)}${getU().wt}`;
+      row.appendChild(n); row.appendChild(g); div.appendChild(row);
+    });
+    if (!(ab[part] || []).length) {
+      const empty = document.createElement('span'); empty.className = 'text-muted'; empty.style.fontSize = '11px'; empty.textContent = 'empty';
+      div.appendChild(empty);
+    }
+    grid.appendChild(div);
+  });
+  el.appendChild(grid);
+}
+
+// ── Library ────────────────────────────────────────────────────────────────────
+function buildLibraryTable() {
+  if (!chemicals) return;
+  const tbody = document.getElementById('library-body');
+  while (tbody.firstChild) tbody.removeChild(tbody.firstChild);
+  chemicals.compounds.forEach(c => {
+    const keyElems = Object.entries(c.elements).filter(([,v])=>v>0).map(([k,v])=>`${k}: ${v.toFixed(1)}%`).join(', ');
+    const tr = document.createElement('tr');
+
+    const cells = [
+      { text: c.name, bold: true },
+      { text: c.formula, muted: true },
+      { text: keyElems, small: true },
+      { text: `${c.purity}%` }
+    ];
+    cells.forEach(({text, bold, muted, small}) => {
+      const td = document.createElement('td');
+      if (bold) td.style.fontWeight = '700';
+      if (muted) td.style.color = 'var(--muted)';
+      if (small) td.style.fontSize = '11px';
+      td.textContent = text;
+      tr.appendChild(td);
+    });
+
+    // Editable price — with validation and save feedback
+    const tdCost = document.createElement('td');
+    const costWrap = document.createElement('div');
+    costWrap.style.cssText = 'display:flex;align-items:center;gap:4px;';
+    const costInput = document.createElement('input');
+    costInput.type = 'number';
+    costInput.value = c.cost_per_kg > 0 ? c.cost_per_kg.toFixed(2) : '';
+    costInput.min = '0'; costInput.max = '10000'; costInput.step = '0.01';
+    costInput.placeholder = '—';
+    costInput.style.cssText = 'width:80px;' + (c.cost_per_kg <= 0 ? 'color:var(--muted);' : '');
+    const saveOk = document.createElement('span');
+    saveOk.style.cssText = 'font-size:11px;color:var(--accent);opacity:0;transition:opacity 0.4s;';
+    saveOk.textContent = '✓';
+    function applyPriceSave(rawVal) {
+      const val = rawVal.trim();
+      if (val === '' || val === '0') {
+        costInput.value = ''; costInput.style.borderColor = ''; costInput.style.color = 'var(--muted)';
+        c.cost_per_kg = 0;
+        updateCompound(c.id, 'cost_per_kg', 0).then(ok => { if (ok) { renderChemList(); } });
+        return;
+      }
+      const v = parseFloat(val);
+      if (isNaN(v) || v < 0) {
+        costInput.style.borderColor = 'var(--danger)';
+        toast('Price must be a positive number.', 'err');
+        costInput.value = c.cost_per_kg > 0 ? c.cost_per_kg.toFixed(2) : '';
+        return;
+      }
+      if (v > 10000) {
+        costInput.style.borderColor = 'var(--warn)';
+        toast('Price exceeds $10,000/kg — saved, but please verify.', 'warn');
+      } else {
+        costInput.style.borderColor = '';
+      }
+      costInput.style.color = '';
+      c.cost_per_kg = v;
+      updateCompound(c.id, 'cost_per_kg', v).then(ok => {
+        if (ok) {
+          saveOk.style.opacity = '1';
+          setTimeout(() => saveOk.style.opacity = '0', 1800);
+          renderChemList();
+        } else {
+          costInput.style.borderColor = 'var(--danger)';
+          costInput.value = '';
+        }
+      });
+    }
+    costInput.addEventListener('blur', () => applyPriceSave(costInput.value));
+    costInput.addEventListener('keydown', e => { if (e.key === 'Enter') costInput.blur(); });
+    costWrap.appendChild(costInput); costWrap.appendChild(saveOk);
+    tdCost.appendChild(costWrap); tr.appendChild(tdCost);
+
+    // Reference price (scraped) — merged source + price into one column
+    const tdRef = document.createElement('td');
+    const best = scrapedPrices[c.id] || scrapedPrices[String(c.id)];
+    if (best && best.price_per_kg > 0) {
+      const refWrap = document.createElement('div');
+      const priceSpan = document.createElement('span');
+      priceSpan.style.cssText = 'font-weight:600;color:var(--accent);font-size:12px;';
+      priceSpan.textContent = `$${best.price_per_kg.toFixed(2)}/kg`;
+      const useBtn = document.createElement('button');
+      useBtn.className = 'btn btn-secondary btn-sm';
+      useBtn.style.cssText = 'padding:2px 6px;font-size:10px;margin-left:5px;';
+      useBtn.textContent = '↑ Use';
+      useBtn.title = `From ${best.source_name || 'web'} on ${best.date_scraped?.slice(0,10) || '?'}`;
+      useBtn.addEventListener('click', () => {
+        costInput.value = best.price_per_kg.toFixed(2);
+        costInput.style.color = '';
+        c.cost_per_kg = best.price_per_kg;
+        updateCompound(c.id, 'cost_per_kg', best.price_per_kg).then(ok => {
+          if (ok) { saveOk.style.opacity='1'; setTimeout(()=>saveOk.style.opacity='0',1800); renderChemList(); }
+        });
+        toast(`Price set to $${best.price_per_kg.toFixed(2)}/kg`, 'ok');
+      });
+      refWrap.appendChild(priceSpan); refWrap.appendChild(useBtn);
+      if (best.source_url) {
+        const srcLink = document.createElement('a');
+        srcLink.href = best.source_url; srcLink.target = '_blank'; srcLink.rel = 'noopener noreferrer';
+        srcLink.textContent = best.source_name || 'source';
+        srcLink.style.cssText = 'display:block;font-size:10px;color:var(--muted);margin-top:2px;';
+        refWrap.appendChild(srcLink);
+      }
+      tdRef.appendChild(refWrap);
+    } else {
+      tdRef.textContent = '—'; tdRef.style.cssText = 'font-size:11px;color:var(--muted);';
+    }
+    tr.appendChild(tdRef);
+
+    // Availability toggle
+    const tdAvail = document.createElement('td');
+    const avCheck = document.createElement('input');
+    avCheck.type = 'checkbox'; avCheck.checked = c.available; avCheck.style.width = 'auto';
+    avCheck.addEventListener('change', () => updateCompound(c.id, 'available', avCheck.checked));
+    tdAvail.appendChild(avCheck); tr.appendChild(tdAvail);
+
+    // Notes
+    const tdNotes = document.createElement('td');
+    tdNotes.style.cssText = 'font-size:11px;color:var(--muted);max-width:160px;';
+    tdNotes.textContent = c.notes || '';
+    tr.appendChild(tdNotes);
+
+    // Add to builder + scrape single compound
+    const tdBtn = document.createElement('td');
+    const wrap = document.createElement('div'); wrap.className = 'flex gap8';
+    const addBtn = document.createElement('button');
+    addBtn.className = 'btn btn-secondary btn-sm'; addBtn.textContent = '+ Builder';
+    addBtn.addEventListener('click', () => { toggleChem(c.id); toast('Added to builder', 'ok'); });
+    const scrapeBtn = document.createElement('button');
+    scrapeBtn.className = 'btn btn-secondary btn-sm'; scrapeBtn.textContent = '\uD83D\uDD0D';
+    scrapeBtn.title = 'Scrape price for this compound only';
+    scrapeBtn.addEventListener('click', async () => {
+      scrapeBtn.disabled = true; scrapeBtn.textContent = '\u23F3';
+      const r = await fetch('/api/prices/refresh', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({compound_ids: [c.id]})});
+      const d = await r.json();
+      toast(d.message, 'ok');
+      scrapeBtn.disabled = false; scrapeBtn.textContent = '🔍';
+    });
+    wrap.appendChild(addBtn); wrap.appendChild(scrapeBtn);
+    tdBtn.appendChild(wrap); tr.appendChild(tdBtn);
+
+    tbody.appendChild(tr);
+  });
+}
+
+async function updateCompound(id, field, value) {
+  try {
+    const r = await fetch(`/api/chemicals/${id}`, {
+      method: 'PATCH', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ [field]: value })
+    });
+    if (!r.ok) {
+      const d = await r.json().catch(() => ({}));
+      toast(d.detail || `Save failed (${r.status}).`, 'err');
+      return false;
+    }
+    return true;
+  } catch (e) {
+    toast('Network error — could not save.', 'err');
+    return false;
+  }
+}
+
+function buildCCForm() {
+  const container = document.getElementById('cc-elements');
+  while (container.firstChild) container.removeChild(container.firstChild);
+  [...MACRO, ...MICRO].forEach(e => {
+    const label = chemicals?.element_labels?.[e] || e;
+    const div = document.createElement('div'); div.className = 'field';
+    const lbl = document.createElement('label'); lbl.textContent = `${label} %`;
+    const inp = document.createElement('input');
+    inp.type = 'number'; inp.id = `cc-${e}`; inp.min = 0; inp.max = 100; inp.step = '0.01'; inp.value = 0;
+    div.appendChild(lbl); div.appendChild(inp);
+    container.appendChild(div);
+  });
+}
+
+async function submitCustomCompound() {
+  const elements = {};
+  [...MACRO, ...MICRO].forEach(e => {
+    const v = parseFloat(document.getElementById(`cc-${e}`)?.value) || 0;
+    if (v > 0) elements[e] = v;
+  });
+  const name = document.getElementById('cc-name').value.trim();
+  if (!name) { toast('Name is required.', 'warn'); return; }
+  const body = {
+    name,
+    formula: document.getElementById('cc-formula').value.trim(),
+    purity: parseFloat(document.getElementById('cc-purity').value) || 99,
+    cost_per_kg: parseFloat(document.getElementById('cc-cost').value) || 0,
+    notes: document.getElementById('cc-notes').value.trim(),
+    elements
+  };
+  const r = await fetch('/api/chemicals', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+  const d = await r.json();
+  if (d.success) {
+    toast('Compound added!', 'ok');
+    await fetchChemicals();
+    buildLibraryTable();
+    renderChemList();
+    document.getElementById('add-compound-panel').style.display = 'none';
+  }
+}
+
+// ── MQTT ───────────────────────────────────────────────────────────────────────
+async function loadMqttConfig() {
+  const r = await fetch('/api/mqtt/config');
+  const d = await r.json();
+  document.getElementById('mqtt-host').value = d.config?.host || 'localhost';
+  document.getElementById('mqtt-port').value = d.config?.port || 1883;
+  document.getElementById('mqtt-prefix').value = d.config?.topic_prefix || 'nutribuddy';
+  document.getElementById('mqtt-user').value = d.config?.username || '';
+  setMqttStatus(d.connected);
+  if (d.config?.pump_map) {
+    pumpMapRows = Object.entries(d.config.pump_map).map(([label, pump]) => ({label, pump}));
+    renderPumpMap();
+  }
+}
+
+async function saveMqttConfig() {
+  const pump_map = {};
+  pumpMapRows.forEach(r => { if (r.label) pump_map[r.label] = parseInt(r.pump) || 0; });
+  const body = {
+    host: document.getElementById('mqtt-host').value.trim(),
+    port: parseInt(document.getElementById('mqtt-port').value) || 1883,
+    topic_prefix: document.getElementById('mqtt-prefix').value.trim() || 'nutribuddy',
+    username: document.getElementById('mqtt-user').value.trim(),
+    password: document.getElementById('mqtt-pass').value,
+    pump_map
+  };
+  const r = await fetch('/api/mqtt/config', {method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+  const d = await r.json();
+  logPublish(`MQTT config saved: ${body.host}:${body.port}`, 'tx');
+  toast(d.message, 'ok');
+  setTimeout(async () => {
+    const s = await fetch('/api/mqtt/status');
+    const sd = await s.json();
+    setMqttStatus(sd.connected);
+  }, 1500);
+}
+
+function setMqttStatus(connected) {
+  mqttConnected = connected;
+  document.getElementById('mqtt-dot').className = 'mqtt-dot' + (connected ? ' connected' : '');
+  document.getElementById('mqtt-label').textContent = connected ? 'MQTT: Online' : 'MQTT: Offline';
+  document.getElementById('mqtt-status-text').textContent = connected ? '✓ Connected' : '✗ Disconnected';
+}
+
+function renderPumpMap() {
+  const container = document.getElementById('pump-map-rows');
+  while (container.firstChild) container.removeChild(container.firstChild);
+  pumpMapRows.forEach((row, i) => {
+    const div = document.createElement('div'); div.className = 'pump-row';
+    const labelInp = document.createElement('input');
+    labelInp.placeholder = 'Compound name (e.g. Calcium Nitrate)';
+    labelInp.value = row.label;
+    labelInp.addEventListener('input', () => { pumpMapRows[i].label = labelInp.value; });
+    const pumpInp = document.createElement('input');
+    pumpInp.type = 'number'; pumpInp.placeholder = 'Pump #'; pumpInp.value = row.pump; pumpInp.min = 1; pumpInp.style.width = '60px';
+    pumpInp.addEventListener('input', () => { pumpMapRows[i].pump = parseInt(pumpInp.value) || 0; });
+    div.appendChild(labelInp); div.appendChild(pumpInp);
+    container.appendChild(div);
+  });
+}
+
+function renderDosingChannels() {
+  const empty = document.getElementById('dosing-empty');
+  const chDiv = document.getElementById('dosing-channels');
+  const controls = document.getElementById('publish-controls');
+  while (chDiv.firstChild) chDiv.removeChild(chDiv.firstChild);
+  if (!lastResult) { empty.style.display = 'block'; controls.style.display = 'none'; return; }
+  empty.style.display = 'none'; controls.style.display = 'flex';
+  const pump_map = Object.fromEntries(pumpMapRows.map(r => [r.label, r.pump]));
+  Object.entries(lastResult.named_weights).forEach(([name, w]) => {
+    if (w.g_per_batch < 0.01) return;
+    const pump = pump_map[name] || '—';
+    const cost = getCompoundCost(name);
+    const row = document.createElement('div'); row.className = 'dose-channel';
+    const n = document.createElement('span'); n.style.fontWeight = '700'; n.textContent = name;
+    const dispAmt = wtToDisplay(w.g_per_batch);
+    const g = document.createElement('span'); g.textContent = `${dispAmt < 1 ? dispAmt.toFixed(2) : dispAmt.toFixed(1)} ${getU().wt}`;
+    const p = document.createElement('span'); p.className = 'text-muted'; p.textContent = `Pump ${pump}`;
+    const c = document.createElement('span'); c.className = 'text-muted'; c.style.fontSize = '11px';
+    c.textContent = cost > 0 ? `$${(w.g_per_batch/1000*cost).toFixed(3)}` : '—';
+    row.appendChild(n); row.appendChild(g); row.appendChild(p); row.appendChild(c);
+    chDiv.appendChild(row);
+  });
+}
+
+function getCompoundCost(name) {
+  return chemicals?.compounds?.find(c => c.name === name)?.cost_per_kg || 0;
+}
+
+// 3-state publish button (LoRaLink pattern)
+function setPublishState(state) {
+  const btn = document.getElementById('publish-btn');
+  const lbl = document.getElementById('publish-state');
+  btn.className = 'btn btn-primary';
+  if (state === 'pending') { btn.classList.add('state-pending'); lbl.textContent = '⏱ Pending…'; }
+  else if (state === 'ok')  { btn.classList.add('state-ok');      lbl.textContent = '✓ Confirmed'; }
+  else if (state === 'mismatch') { btn.classList.add('state-mismatch'); lbl.textContent = '! Mismatch'; }
+  else { lbl.textContent = ''; }
+  if (state === 'ok' || state === 'mismatch') setTimeout(() => setPublishState(''), 5000);
+  // Timeout guard — if no ACK in 10s, flag mismatch
+  if (state === 'pending') {
+    setTimeout(() => {
+      if (btn.classList.contains('state-pending')) {
+        setPublishState('mismatch');
+        logPublish('No ACK received within 10s — check pump connection.', 'err');
+        toast('Pump ACK timeout — verify MQTT connection.', 'warn');
+      }
+    }, 10000);
+  }
+}
+
+async function publishFormula() {
+  if (!mqttConnected) { toast('MQTT not connected. Configure broker first.', 'warn'); return; }
+  if (!lastResult) { toast('Solve a formula first.', 'warn'); return; }
+  setPublishState('pending');
+  const pump_map = Object.fromEntries(pumpMapRows.map(r => [r.label, r.pump]));
+  const channels = Object.entries(lastResult.named_weights)
+    .filter(([,w]) => w.g_per_batch >= 0.01)
+    .map(([name, w]) => ({ pump: pump_map[name] || 0, label: name, grams: w.g_per_batch, ml: null }));
+  const body = {
+    formula_name: 'NutriCalc Formula',
+    volume_L: lastResult.volume_L,
+    channels,
+    ec_target: parseFloat(document.getElementById('ec-target').value) || 0,
+    ph_target: parseFloat(document.getElementById('ph-target').value) || 0
+  };
+  logPublish(`Publishing ${channels.length} channels to MQTT…`, 'tx');
+  try {
+    const r = await fetch('/api/mqtt/publish', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+    const d = await r.json();
+    logPublish(d.message, 'rx');
+    if (!d.success) { setPublishState('mismatch'); toast(d.message, 'err'); }
+  } catch(e) { setPublishState('mismatch'); logPublish(e.message, 'err'); }
+}
+
+function exportJSON() {
+  if (!lastResult) return;
+  const blob = new Blob([JSON.stringify(lastResult, null, 2)], {type:'application/json'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = 'nutribuddy_formula.json'; a.click();
+}
+
+function exportCSV() {
+  if (!lastResult) return;
+  let csv = 'Compound,g per L,g per batch,Cost ($)\n';
+  Object.entries(lastResult.named_weights).forEach(([name, w]) => {
+    if (w.g_per_batch >= 0.01) {
+      const cost = (w.g_per_batch / 1000 * getCompoundCost(name)).toFixed(4);
+      csv += `"${name}",${w.g_per_L.toFixed(4)},${w.g_per_batch.toFixed(2)},${cost}\n`;
+    }
+  });
+  const blob = new Blob([csv], {type:'text/csv'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = 'nutribuddy_formula.csv'; a.click();
+}
+
+// ── Saved Formulas ─────────────────────────────────────────────────────────────
+async function loadFormulas() {
+  const r = await fetch('/api/formulas');
+  const d = await r.json();
+  const container = document.getElementById('formula-cards');
+  while (container.firstChild) container.removeChild(container.firstChild);
+  if (!d.formulas?.length) {
+    const s = document.createElement('span'); s.className = 'text-muted';
+    s.textContent = 'No saved formulas yet. Solve a formula and click Save.';
+    container.appendChild(s); return;
+  }
+  d.formulas.forEach(f => {
+    const card = document.createElement('div'); card.className = 'formula-card';
+
+    const nameEl = document.createElement('div'); nameEl.style.cssText = 'font-weight:700;margin-bottom:4px;'; nameEl.textContent = f.name;
+    const metaEl = document.createElement('div'); metaEl.className = 'text-muted'; metaEl.style.marginBottom = '10px';
+    metaEl.textContent = `${f.notes || 'No notes'} · ${f.modified.slice(0,10)}`;
+
+    const actions = document.createElement('div'); actions.className = 'flex gap8';
+    const loadBtn = document.createElement('button'); loadBtn.className = 'btn btn-secondary btn-sm'; loadBtn.textContent = 'Load';
+    loadBtn.addEventListener('click', () => loadFormula(f.id));
+    const delBtn = document.createElement('button'); delBtn.className = 'btn btn-danger btn-sm'; delBtn.textContent = 'Delete';
+    delBtn.addEventListener('click', () => deleteFormula(f.id));
+    actions.appendChild(loadBtn); actions.appendChild(delBtn);
+
+    card.appendChild(nameEl); card.appendChild(metaEl); card.appendChild(actions);
+    container.appendChild(card);
+  });
+}
+
+async function loadFormula(id) {
+  const r = await fetch(`/api/formulas/${id}`);
+  const d = await r.json();
+  const f = d.formula.data;
+  lastResult = f.solve_result;
+  setTargets(f.targets);
+  selectedChems = new Set(f.compound_ids);
+  document.getElementById('volume-L').value = f.volume_L;
+  renderChemList();
+  renderResults(f.solve_result);
+  navTo('builder');
+  toast(`Loaded: ${d.formula.name}`, 'ok');
+}
+
+async function deleteFormula(id) {
+  if (!confirm('Delete this formula?')) return;
+  await fetch(`/api/formulas/${id}`, {method:'DELETE'});
+  loadFormulas();
+  toast('Formula deleted.', 'ok');
+}
+
+// Modal-based formula save
+function showSaveFormulaModal() {
+  if (!lastResult) { toast('Solve a formula first.', 'warn'); return; }
+
+  // Clear previous errors and values
+  document.getElementById('save-name-input').value = '';
+  document.getElementById('save-notes-input').value = '';
+  document.getElementById('save-name-error').textContent = '';
+  document.getElementById('save-name-input').focus();
+
+  // Update preview
+  updateSavePreview();
+
+  // Show modal
+  document.getElementById('save-formula-modal').classList.add('show');
+}
+
+function closeSaveFormulaModal() {
+  document.getElementById('save-formula-modal').classList.remove('show');
+}
+
+function updateSavePreview() {
+  if (!lastResult) return;
+  const chem_count = selectedChems.size;
+  const ec = (lastResult.ec || 0).toFixed(2);
+  const cost = (lastResult.cost || 0).toFixed(2);
+  const text = `${chem_count} chemicals • EC ${ec} mS/cm • Cost $${cost}/batch`;
+  document.getElementById('save-preview-text').textContent = text;
+}
+
+async function confirmSaveFormula() {
+  const name = document.getElementById('save-name-input').value.trim();
+  const notes = document.getElementById('save-notes-input').value.trim();
+
+  // Validation
+  if (!name) {
+    document.getElementById('save-name-error').textContent = 'Name is required (1-50 chars)';
+    return;
+  }
+  if (name.length > 50) {
+    document.getElementById('save-name-error').textContent = 'Name must be 50 characters or less';
+    return;
+  }
+
+  const body = {
+    name, notes,
+    solve_result: lastResult,
+    targets: getTargets(),
+    compound_ids: [...selectedChems],
+    volume_L: parseFloat(document.getElementById('volume-L').value) || 100
+  };
+
+  try {
+    const r = await fetch('/api/formulas', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+    const d = await r.json();
+    if (d.success) {
+      toast(`Saved: ${name}`, 'ok');
+      closeSaveFormulaModal();
+    } else {
+      toast(d.message || 'Save failed', 'err');
+    }
+  } catch(e) {
+    toast('Error saving formula: ' + e.message, 'err');
+  }
+}
+
+// Proxy function for backward compatibility
+function promptSaveFormula() {
+  showSaveFormulaModal();
+}
+
+// ── Price Scraping ─────────────────────────────────────────────────────────────
+async function loadScrapedPrices() {
+  try {
+    const r = await fetch('/api/prices');
+    const d = await r.json();
+    if (d.success) scrapedPrices = d.prices || {};
+  } catch { scrapedPrices = {}; }
+}
+
+async function loadPriceConfig() {
+  try {
+    const r = await fetch('/api/prices/config');
+    const d = await r.json();
+    if (!d.success) return;
+    const cfg = d.config;
+    document.getElementById('src-bulk').checked   = cfg.source_types?.includes('bulk_retail') ?? true;
+    document.getElementById('src-amazon').checked = cfg.source_types?.includes('amazon') ?? false;
+    document.getElementById('src-lab').checked    = cfg.source_types?.includes('lab_supplier') ?? true;
+    document.getElementById('src-agri').checked   = cfg.source_types?.includes('agri') ?? false;
+    document.getElementById('scrape-delay').value = cfg.delay_seconds ?? 1.5;
+    document.getElementById('src-auto-startup').checked = cfg.auto_refresh_on_startup ?? false;
+  } catch { /* server may not have price config yet */ }
+}
+
+async function savePriceConfig() {
+  const sources = [];
+  if (document.getElementById('src-bulk').checked)   sources.push('bulk_retail');
+  if (document.getElementById('src-amazon').checked) sources.push('amazon');
+  if (document.getElementById('src-lab').checked)    sources.push('lab_supplier');
+  if (document.getElementById('src-agri').checked)   sources.push('agri');
+  const body = {
+    source_types: sources,
+    auto_refresh_on_startup: document.getElementById('src-auto-startup').checked,
+    delay_seconds: parseFloat(document.getElementById('scrape-delay').value) || 1.5
+  };
+  const r = await fetch('/api/prices/config', {method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+  const d = await r.json();
+  toast(d.message, d.success ? 'ok' : 'err');
+  document.getElementById('price-config-panel').style.display = 'none';
+}
+
+async function triggerScrapeAll() {
+  const btn = document.getElementById('refresh-prices-btn');
+  btn.disabled = true; btn.textContent = '⏳ Scraping…';
+  setScrapeStatus(true, 'Starting price scrape…', 0, 0);
+  try {
+    const r = await fetch('/api/prices/refresh', {method:'POST', headers:{'Content-Type':'application/json'}, body: '{}'});
+    const d = await r.json();
+    toast(d.message, d.success ? 'ok' : 'warn');
+    if (!d.success) { setScrapeStatus(false); btn.disabled = false; btn.textContent = '🔍 Refresh Prices'; }
+    // Progress updates arrive via WebSocket — re-enable button on scrape_complete
+    else {
+      setTimeout(() => { btn.disabled = false; btn.textContent = '🔍 Refresh Prices'; }, 2000);
+    }
+  } catch(e) {
+    toast('Scrape request failed.', 'err');
+    setScrapeStatus(false);
+    btn.disabled = false; btn.textContent = '🔍 Refresh Prices';
+  }
+}
+
+function setScrapeStatus(running, text = '', done = 0, total = 0) {
+  const bar = document.getElementById('scrape-status-bar');
+  if (!running) { bar.style.display = 'none'; return; }
+  bar.style.display = 'block';
+  document.getElementById('scrape-status-text').textContent = text;
+  const pct = total > 0 ? (done / total * 100) : 0;
+  document.getElementById('scrape-progress-fill').style.width = pct + '%';
+  document.getElementById('scrape-progress-count').textContent = total > 0 ? `${done}/${total}` : '';
+}
+
+// ── Log console (LoRaLink pattern) ─────────────────────────────────────────────
+function _appendLog(containerId, msg, type) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  const now = new Date().toLocaleTimeString();
+  const div = document.createElement('div');
+  div.className = `log-entry ${type}`;
+  const prefix = type === 'tx' ? '→' : type === 'rx' ? '←' : type === 'err' ? '✗' : '·';
+  div.textContent = `[${now}] ${prefix} ${msg}`;
+  el.appendChild(div);
+  el.scrollTop = el.scrollHeight;
+  if (el.children.length > 200) el.removeChild(el.firstChild);
+}
+
+function log(msg, type = 'info') { _appendLog('solve-log', msg, type); }
+function logPublish(msg, type = 'info') { _appendLog('publish-log', msg, type); }
+
+// ── Toast ──────────────────────────────────────────────────────────────────────
+function toast(msg, type = 'ok') {
+  const container = document.getElementById('toast');
+  const div = document.createElement('div');
+  div.className = `toast-msg ${type}`;
+  div.textContent = msg;
+  container.appendChild(div);
+  setTimeout(() => div.remove(), 4000);
+}
+
+// ── Production Page: Mixing Guide + BOM ─────────────────────────────────────
+function renderProduction(data) {
+  renderMixingGuide(data);
+  renderMixingChecklist();
+  renderBOM(data);
+  checkCompatibility();
+}
+
+function renderMixingGuide(data) {
+  const container = document.getElementById('mixing-steps');
+  const empty = document.getElementById('mixing-empty');
+  if (!data) {
+    empty.style.display = 'block';
+    container.innerHTML = '';
+    return;
+  }
+  empty.style.display = 'none';
+
+  // Calculate stock volume (assume 100x concentrate)
+  const stockConc = 100;
+  const batchVolL = data.volume_L;
+  const stockVolL = batchVolL / stockConc;
+
+  // Separate Part A and Part B compounds
+  const partA = [];
+  const partB = [];
+  if (data.ab_split) {
+    data.ab_split.A.forEach(c => partA.push({...c, type:'A'}));
+    data.ab_split.B.forEach(c => partB.push({...c, type:'B'}));
+  }
+
+  container.innerHTML = '';
+
+  // Step 1: Prepare volumes
+  const step1 = document.createElement('div');
+  step1.className = 'mixing-step';
+  step1.innerHTML = `
+    <div class="step-num">1</div>
+    <div class="step-content">
+      <h4>Prepare Stock Solution Containers</h4>
+      <p><strong>Part A:</strong> ${stockVolL.toFixed(2)} L of deionized water in a clean bottle</p>
+      <p><strong>Part B:</strong> ${stockVolL.toFixed(2)} L of deionized water in a clean bottle</p>
+      <p style="margin-top:4px;color:var(--warn);">Label clearly. Keep separate — never mix A and B dry.</p>
+    </div>
+  `;
+  container.appendChild(step1);
+
+  // Step 2: Part A
+  if (partA.length > 0) {
+    const step2 = document.createElement('div');
+    step2.className = 'mixing-step';
+    let compoundsList = '';
+    partA.forEach((c, i) => {
+      compoundsList += `<div class="step-compound"><span>${i+1}. ${c.name}</span><span>${c.grams.toFixed(2)}g</span></div>`;
+    });
+    step2.innerHTML = `
+      <div class="step-num">2</div>
+      <div class="step-content">
+        <h4>Part A Preparation</h4>
+        <p>Add to Part A water while stirring continuously (use a stir rod or pump):</p>
+        <div class="step-items">${compoundsList}</div>
+        <p style="margin-top:6px;font-size:11px;color:var(--muted);">Note: Calcium Nitrate may take 2-3 min to fully dissolve. If any compound is >5g, dissolve separately first in warm water before adding.</p>
+      </div>
+    `;
+    container.appendChild(step2);
+  }
+
+  // Step 3: Part B
+  if (partB.length > 0) {
+    const step3 = document.createElement('div');
+    step3.className = 'mixing-step';
+    let compoundsList = '';
+    partB.forEach((c, i) => {
+      compoundsList += `<div class="step-compound"><span>${i+1}. ${c.name}</span><span>${c.grams.toFixed(2)}g</span></div>`;
+    });
+    step3.innerHTML = `
+      <div class="step-num">3</div>
+      <div class="step-content">
+        <h4>Part B Preparation</h4>
+        <p>Add to Part B water while stirring:</p>
+        <div class="step-items">${compoundsList}</div>
+        <p style="margin-top:6px;font-size:11px;color:var(--muted);">Allow 5-10 minutes for full dissolution. Part B may be cloudy initially — this is normal for high-concentration solutions.</p>
+      </div>
+    `;
+    container.appendChild(step3);
+  }
+
+  // Step 4: Storage
+  const step4 = document.createElement('div');
+  step4.className = 'mixing-step';
+  step4.innerHTML = `
+    <div class="step-num">4</div>
+    <div class="step-content">
+      <h4>Storage & Labeling</h4>
+      <p><strong>Part A Stock (${stockVolL.toFixed(2)} L):</strong> Store in cool place. Stable 6-12 months (check for precipitation).</p>
+      <p><strong>Part B Stock (${stockVolL.toFixed(2)} L):</strong> Store in cool place. Stable 6-12 months.</p>
+      <p>Label with: <em>NutriCalc [Formula Name] | Mixed [Date] | ${stockConc}× Stock</em></p>
+    </div>
+  `;
+  container.appendChild(step4);
+
+  // Step 5: Dosing to reservoir
+  const step5 = document.createElement('div');
+  step5.className = 'mixing-step';
+  step5.innerHTML = `
+    <div class="step-num">5</div>
+    <div class="step-content">
+      <h4>Reservoir Preparation (${batchVolL} L solution)</h4>
+      <p>For a ${batchVolL} L reservoir:</p>
+      <ol class="step-items">
+        <li>Fill reservoir with ${(batchVolL * 0.8).toFixed(1)} L clean water</li>
+        <li>Add <strong>${(batchVolL / stockConc).toFixed(2)} mL</strong> of Part A stock, mix 1 minute</li>
+        <li>Add <strong>${(batchVolL / stockConc).toFixed(2)} mL</strong> of Part B stock, mix 2 minutes</li>
+        <li>Top up to ${batchVolL} L total, mix well</li>
+        <li>Measure EC: should read <strong>${data.ec_estimated.toFixed(2)} mS/cm</strong> (±0.2)</li>
+        <li>Adjust pH to <strong>6.0</strong> using pH Up or pH Down</li>
+      </ol>
+    </div>
+  `;
+  container.appendChild(step5);
+}
+
+function renderMixingChecklist() {
+  const container = document.getElementById('mixing-checklist');
+
+  const checklistGroups = [
+    {
+      title: 'Pre-Mixing Tests',
+      items: [
+        'EC within ±0.2 mS/cm of target',
+        'pH adjusted to 6.0–6.5'
+      ]
+    },
+    {
+      title: 'Post-Mixing Tests',
+      items: [
+        'No visible precipitate or cloudiness in dilute solution',
+        'Let solution circulate 30 min before adding plants',
+        'Parts A & B stored separately in cool location'
+      ]
+    }
+  ];
+
+  let itemNum = 1;
+  let html = '';
+
+  checklistGroups.forEach(group => {
+    html += `<div class="checklist-group">
+      <div class="checklist-group-title">${group.title}</div>`;
+
+    group.items.forEach(item => {
+      html += `<label class="checklist-item" data-item="${itemNum}">
+        <input type="checkbox" class="checklist-checkbox" data-item="${itemNum}">
+        <div class="checklist-item-number">${itemNum}.</div>
+        <div class="checklist-item-text">${item}</div>
+      </label>`;
+      itemNum++;
+    });
+
+    html += '</div>';
+  });
+
+  container.innerHTML = html;
+
+  // Add event listeners for progress tracking
+  container.querySelectorAll('.checklist-checkbox').forEach(checkbox => {
+    checkbox.addEventListener('change', updateChecklistProgress);
+  });
+}
+
+function updateChecklistProgress() {
+  const checkboxes = document.querySelectorAll('.checklist-checkbox');
+  const completed = Array.from(checkboxes).filter(cb => cb.checked).length;
+  const total = checkboxes.length;
+
+  // Update progress counter
+  document.getElementById('checklist-complete').textContent = completed;
+
+  // Update visual feedback (checked class)
+  document.querySelectorAll('.checklist-item').forEach(item => {
+    const checkbox = item.querySelector('input[type="checkbox"]');
+    if (checkbox.checked) {
+      item.classList.add('checked');
+    } else {
+      item.classList.remove('checked');
+    }
+  });
+}
+
+function renderBOM(data) {
+  const bomTable = document.getElementById('bom-table');
+  const bomEmpty = document.getElementById('bom-empty');
+  const bomFooter = document.getElementById('bom-footer');
+
+  if (!data || !data.named_weights) {
+    bomTable.style.display = 'none';
+    bomEmpty.style.display = 'block';
+    return;
+  }
+
+  bomEmpty.style.display = 'none';
+  document.getElementById('bom-note').style.display = 'block';
+  bomTable.style.display = 'table';
+
+  const batches = parseFloat(document.getElementById('bom-batches').value) || 1;
+  const stockConc = 100;
+
+  // Build table
+  let html = `
+    <thead><tr>
+      <th>Compound</th>
+      <th>CAS #</th>
+      <th>Formula</th>
+      <th>Purity</th>
+      <th class="bom-qty">kg/batch</th>
+      <th class="bom-qty">kg/${batches}mo</th>
+      <th class="bom-cost">Est. Cost</th>
+    </tr></thead><tbody>
+  `;
+
+  let totalCost = 0;
+  Object.entries(data.named_weights || {}).forEach(([compoundName, w]) => {
+    if (w.g_per_batch < 0.01) return; // Skip tiny amounts
+    const chem = chemicals?.compounds?.find(c => c.name === compoundName);
+    if (!chem) return;
+
+    const kgBatch = w.g_per_batch / 1000;
+    const kgMonth = kgBatch * batches;
+    const cost = kgBatch * (chem.cost_per_kg || 0);
+    totalCost += cost;
+
+    html += `
+      <tr>
+        <td>${chem.name}</td>
+        <td style="font-size:11px;font-family:monospace;">${chem.cas || '—'}</td>
+        <td style="font-size:11px;">${chem.formula || ''}</td>
+        <td>${chem.purity || 99}%</td>
+        <td class="bom-qty">${kgBatch.toFixed(3)}</td>
+        <td class="bom-qty">${kgMonth.toFixed(3)}</td>
+        <td class="bom-cost">$${cost.toFixed(2)}</td>
+      </tr>
+    `;
+  });
+
+  html += `</tbody>`;
+  bomTable.innerHTML = html;
+
+  bomFooter.textContent = `Total per batch: $${totalCost.toFixed(2)} | Monthly (${batches} batches): $${(totalCost * batches).toFixed(2)} | Stock concentration: ${stockConc}×`;
+}
+
+function exportBOMCSV() {
+  if (!lastResult) return;
+  const batches = parseFloat(document.getElementById('bom-batches').value) || 1;
+  let csv = 'Compound,CAS,Formula,Purity,kg/batch,kg/month,USD\n';
+  Object.entries(lastResult.named_weights || {}).forEach(([compoundName, w]) => {
+    if (w.g_per_batch < 0.01) return;
+    const chem = chemicals?.compounds?.find(c => c.name === compoundName);
+    if (!chem) return;
+    const kgBatch = w.g_per_batch / 1000;
+    const kgMonth = kgBatch * batches;
+    const cost = kgBatch * (chem.cost_per_kg || 0);
+    csv += `"${chem.name}","${chem.cas}","${chem.formula}","${chem.purity}%",${kgBatch.toFixed(3)},${kgMonth.toFixed(3)},${cost.toFixed(2)}\n`;
+  });
+  const blob = new Blob([csv], {type:'text/csv'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'nutribuddy_bom.csv';
+  a.click();
+}
+
+function printProduction() {
+  window.print();
+}
+
+function checkCompatibility() {
+  const alerts = [];
+  const used = [...selectedChems].map(id => chemicals?.compounds?.find(c => c.id == id)).filter(c => c);
+
+  // Check for Ca + SO4
+  const hasCa = used.some(c => (c.elements.Ca || 0) > 0);
+  const hasSO4 = used.some(c => (c.elements.S || 0) > 0);
+  const hasP = used.some(c => (c.elements.P || 0) > 0);
+  const hasFeSulfate = used.some(c => c.id === 14);
+
+  if (hasCa && hasSO4) {
+    alerts.push({ level: 'warn', text: 'Ca²⁺ and SO₄²⁻ in formula — auto-separated to A/B. Never mix dry.' });
+  }
+  if (hasCa && hasP) {
+    alerts.push({ level: 'warn', text: 'Ca²⁺ and PO₄³⁻ in formula — auto-separated to A/B. Never mix dry.' });
+  }
+  if (hasFeSulfate) {
+    alerts.push({ level: 'danger', text: '⚠ Iron Sulfate (unchelated) — oxidizes above pH 5.5. Use fresh mixes only.' });
+  }
+
+  // NH4 check
+  if (lastResult) {
+    const totalN = (lastResult.target_ppm.N_NO3 || 0) + (lastResult.target_ppm.N_NH4 || 0);
+    const nh4Pct = totalN > 0 ? ((lastResult.target_ppm.N_NH4 || 0) / totalN * 100) : 0;
+    if (nh4Pct > 10) {
+      alerts.push({ level: 'warn', text: `NH₄ is ${nh4Pct.toFixed(1)}% of total N — avoid >25°C with high NH₄.` });
+    }
+  }
+
+  // Boric acid solubility check
+  if (used.some(c => c.id === 18) && lastResult) {
+    const boricWt = lastResult.weights_g_per_L[18];
+    if (boricWt && boricWt > 4.7) {
+      alerts.push({ level: 'warn', text: `Boric Acid ${boricWt.toFixed(1)} g/L exceeds solubility (4.7). Dissolve in hot water first.` });
+    }
+  }
+
+  if (alerts.length === 0) {
+    alerts.push({ level: 'ok', text: '✓ No compatibility issues detected.' });
+  }
+
+  const panel = document.getElementById('compat-panel');
+  panel.innerHTML = alerts.map(a => `<div class="compat-alert ${a.level}">${a.text}</div>`).join('');
+}
+
+// Update page switching to render Production when needed
+const origNavTo = window.navTo;
+window.navTo = function(pageName) {
+  origNavTo(pageName);
+  if (pageName === 'production' && lastResult) {
+    renderProduction(lastResult);
+  }
+};
+</script>
+</body>
+</html>

@@ -1,0 +1,38 @@
+{
+  "timestamp": "2026-03-04T14:43:22.173809",
+  "date": "2026-03-04",
+  "time": "14:43:22",
+  "version": "v1.5.0-2026.03.03.23",
+  "suite": "Basic Ping-Pong",
+  "device_a": "597631da-a4b7-43ce-95bd-2d806f6ecff9",
+  "device_b": "597631da-a4b7-43ce-95bd-2d806f6ecff9",
+  "total_steps": 4,
+  "errors": 4,
+  "passed": false,
+  "details": [
+    {
+      "device": "A",
+      "type": "TX",
+      "data": "PING",
+      "pass": false
+    },
+    {
+      "device": "B",
+      "type": "RX",
+      "data": "PING",
+      "pass": false
+    },
+    {
+      "device": "B",
+      "type": "TX",
+      "data": "PONG",
+      "pass": false
+    },
+    {
+      "device": "A",
+      "type": "RX",
+      "data": "PONG",
+      "pass": false
+    }
+  ]
+}

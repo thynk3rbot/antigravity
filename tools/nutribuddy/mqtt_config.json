@@ -1,0 +1,9 @@
+{
+  "host": "localhost",
+  "port": 1883,
+  "topic_prefix": "nutricalc",
+  "client_id": "nutribuddy-server",
+  "username": "thynk3r",
+  "password": "",
+  "pump_map": {}
+}

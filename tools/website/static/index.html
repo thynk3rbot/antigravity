@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>LoRaLink — Any-to-Any Mesh Firmware</title>
+  <link rel="stylesheet" href="/static/css/site.css">
+</head>
+<body>
+
+<header style="background:var(--glass); border-bottom:1px solid var(--border); padding:0 2rem; height:var(--header-h); display:flex; align-items:center; position:sticky; top:0; z-index:100; backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px);">
+  <a class="logo" href="/" style="display:flex; align-items:center; gap:.6rem; text-decoration:none;">
+    <img src="/static/media/logo.png" alt="LoRaLink" style="height:40px; filter:drop-shadow(0 0 8px rgba(0,212,255,0.65));">
+    <span style="font-size:1rem; font-weight:700; color:var(--text-bright); letter-spacing:.04em; text-transform:uppercase;">LoRaLink</span>
+  </a>
+
+  <nav class="suit-header-nav" style="display:flex; gap:16px; padding:0 20px; height:32px; align-items:center; border-left:1px solid var(--border); margin-left:20px;">
+      <a href="http://localhost:8000" style="color:var(--text-dim); text-decoration:none; font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:1px; display:flex; align-items:center; gap:5px; transition:0.2s;"><i class="fas fa-microchip"></i> LoRaLink</a>
+      <a href="http://localhost:8100" style="color:var(--text-dim); text-decoration:none; font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:1px; display:flex; align-items:center; gap:5px; transition:0.2s;"><i class="fas fa-vial"></i> NutriCalc</a>
+      <a href="http://localhost:8200" style="color:var(--text-dim); text-decoration:none; font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:1px; display:flex; align-items:center; gap:5px; transition:0.2s;"><i class="fas fa-route"></i> Rag-Router</a>
+  </nav>
+
+  <div style="margin-left:auto; display:flex; gap:1.5rem; align-items:center;">
+    <a href="/features" style="color:var(--text-dim); text-decoration:none; font-size:0.9rem;">Features</a>
+    <a href="http://localhost:8000" class="btn btn-sm">Launch App</a>
+  </div>
+</header>
+
+<div class="hero">
+  <h1>Unified Mesh Firmware<br>for <span>ESP32-S3</span> Devices</h1>
+  <p>
+    LoRaLink connects your LoRa, ESP-NOW, BLE, and MQTT devices into a single
+    any-to-any command network — no cloud dependency required.
+  </p>
+  <div class="hero-actions">
+    <a href="/features" class="btn">Explore Features</a>
+    <a href="/contact" class="btn-ghost">Request a Demo</a>
+  </div>
+</div>
+
+<section>
+  <div class="section-title">
+    <h2>Why LoRaLink?</h2>
+    <p>Purpose-built for industrial and remote deployments where reliability matters.</p>
+  </div>
+  <div class="home-cards">
+    <div class="card">
+      <div class="card-icon">📡</div>
+      <h3>Long-Range LoRa Mesh</h3>
+      <p>
+        SX1262 915 MHz radio with AES encryption gives you kilometre-scale coverage
+        without infrastructure. Nodes self-discover and relay commands across the mesh.
+      </p>
+    </div>
+    <div class="card">
+      <div class="card-icon">⚡</div>
+      <h3>Priority-Based Routing</h3>
+      <p>
+        A central CommandManager routes messages from any interface to any other — LoRa,
+        ESP-NOW, BLE, MQTT — with configurable priorities and schedule-driven automation.
+      </p>
+    </div>
+    <div class="card">
+      <div class="card-icon">🔄</div>
+      <h3>OTA Updates</h3>
+      <p>
+        Push firmware over Wi-Fi to every node in the field. Build once, flash everywhere
+        via mDNS — no hardcoded IPs, no serial cables.
+      </p>
+    </div>
+  </div>
+</section>
+
+<section style="background:var(--bg-card);border-top:1px solid var(--border);border-bottom:1px solid var(--border);">
+  <div class="section-title">
+    <h2>Supported Interfaces</h2>
+    <p>Every node speaks all five protocols simultaneously.</p>
+  </div>
+  <div class="feature-grid">
+    <div class="card"><strong class="accent">LoRa</strong><p class="mt1">SX1262 915 MHz • AES-128 • RSSI/SNR telemetry</p></div>
+    <div class="card"><strong class="accent">ESP-NOW</strong><p class="mt1">MAC-addressed peers • 10-peer registry • NVS persistence</p></div>
+    <div class="card"><strong class="accent">BLE</strong><p class="mt1">Nordic UART Service • GW-XXXX naming • GATT terminal</p></div>
+    <div class="card"><strong class="accent">MQTT</strong><p class="mt1">External commands • Telemetry publish • PubSubClient</p></div>
+    <div class="card"><strong class="accent">Wi-Fi HTTP</strong><p class="mt1">Web dashboard • REST API • OTA delivery</p></div>
+  </div>
+</section>
+
+<section>
+  <div class="section-title">
+    <h2>Ready to deploy?</h2>
+    <p>Get in touch and we'll help you build your mesh network.</p>
+  </div>
+  <div style="text-align:center;">
+    <a href="/contact" class="btn">Contact Us</a>
+  </div>
+</section>
+
+<footer>
+  <p>&copy; 2026 LoRaLink. All rights reserved. &nbsp;|&nbsp; <a href="/docs">Documentation</a> &nbsp;|&nbsp; <a href="/contact">Contact</a></p>
+</footer>
+
+</body>
+</html>

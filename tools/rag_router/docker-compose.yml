@@ -1,0 +1,131 @@
+# RAG Router + Dify Stack (Simplified Working Config)
+# docker compose up -d
+
+services:
+
+  # ---- RAG Router (custom microservice) ----
+  rag-router:
+    build: .
+    ports:
+      - "8200:8200"
+    env_file: .env
+    environment:
+      - DIFY_BASE_URL=http://dify-api:5001/v1
+      - MQTT_BROKER=emqx
+    depends_on:
+      - dify-api
+      - emqx
+    restart: unless-stopped
+
+  # ---- MQTT Broker ----
+  emqx:
+    image: emqx/emqx:5.5
+    ports:
+      - "1883:1883"
+      - "18083:18083"
+    environment:
+      EMQX_NAME: loralink-broker
+      EMQX_LOADED_PLUGINS: "emqx_dashboard"
+    volumes:
+      - emqx_data:/opt/emqx/data
+    restart: unless-stopped
+
+  # ---- Dify Core API ----
+  dify-api:
+    image: langgenius/dify-api:latest
+    ports:
+      - "5001:5001"
+    environment:
+      MODE: api
+      SECRET_KEY: sk-rag-router-dev-key-2024
+      DB_USERNAME: postgres
+      DB_PASSWORD: difypass
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_DATABASE: dify
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      VECTOR_STORE: weaviate
+      WEAVIATE_ENDPOINT: http://weaviate:8080
+      STORAGE_TYPE: local
+      STORAGE_LOCAL_PATH: /app/storage
+    volumes:
+      - ./app_storage:/app/storage
+    depends_on:
+      - db
+      - redis
+      - weaviate
+    restart: unless-stopped
+
+  # ---- Dify Worker (async tasks) ----
+  dify-worker:
+    image: langgenius/dify-api:latest
+    environment:
+      MODE: worker
+      SECRET_KEY: sk-rag-router-dev-key-2024
+      DB_USERNAME: postgres
+      DB_PASSWORD: difypass
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_DATABASE: dify
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      VECTOR_STORE: weaviate
+      WEAVIATE_ENDPOINT: http://weaviate:8080
+      STORAGE_TYPE: local
+      STORAGE_LOCAL_PATH: /app/storage
+    volumes:
+      - ./app_storage:/app/storage
+    depends_on:
+      - db
+      - redis
+      - weaviate
+    restart: unless-stopped
+
+  # ---- Dify Web UI ----
+  dify-web:
+    image: langgenius/dify-web:latest
+    ports:
+      - "80:3000"
+    environment:
+      CONSOLE_API_URL: http://dify-api:5001
+      APP_API_URL: http://dify-api:5001
+    depends_on:
+      - dify-api
+    restart: unless-stopped
+
+  # ---- Dify Dependencies ----
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: difypass
+      POSTGRES_DB: dify
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
+  weaviate:
+    image: semitechnologies/weaviate:1.24.1
+    ports:
+      - "8080:8080"
+    environment:
+      AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: "true"
+      PERSISTENCE_DATA_PATH: /var/lib/weaviate
+      QUERY_DEFAULTS_LIMIT: 25
+      DEFAULT_VECTORIZER_MODULE: none
+    volumes:
+      - weaviate_data:/var/lib/weaviate
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  redis_data:
+  weaviate_data:
+  emqx_data:

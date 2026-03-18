@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RAG Router Test Form</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Monaco', 'Courier New', monospace;
+      background: #1a1a1a;
+      color: #e0e0e0;
+      padding: 20px;
+      line-height: 1.6;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+    .panel {
+      background: #2a2a2a;
+      border: 1px solid #404040;
+      border-radius: 8px;
+      padding: 20px;
+    }
+    h1 {
+      grid-column: 1 / -1;
+      margin-bottom: 20px;
+      font-size: 24px;
+      color: #4fc3f7;
+    }
+    h2 {
+      font-size: 16px;
+      margin-bottom: 12px;
+      color: #4fc3f7;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    label {
+      display: block;
+      margin: 12px 0 4px;
+      font-size: 12px;
+      text-transform: uppercase;
+      color: #888;
+      font-weight: bold;
+    }
+    textarea, input, select {
+      width: 100%;
+      padding: 10px;
+      margin-bottom: 12px;
+      background: #1a1a1a;
+      border: 1px solid #404040;
+      border-radius: 4px;
+      color: #e0e0e0;
+      font-family: inherit;
+      font-size: 12px;
+    }
+    textarea {
+      min-height: 200px;
+      resize: vertical;
+      font-family: 'Monaco', monospace;
+    }
+    textarea:focus, input:focus, select:focus {
+      outline: none;
+      border-color: #4fc3f7;
+      background: #0a0a0a;
+    }
+    button {
+      width: 100%;
+      padding: 10px;
+      background: #4fc3f7;
+      color: #000;
+      border: none;
+      border-radius: 4px;
+      font-weight: bold;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 12px;
+      text-transform: uppercase;
+    }
+    button:hover {
+      background: #80deea;
+    }
+    button:disabled {
+      background: #666;
+      cursor: not-allowed;
+      opacity: 0.5;
+    }
+    .result {
+      background: #0a0a0a;
+      border-left: 3px solid #4fc3f7;
+      padding: 12px;
+      margin: 12px 0;
+      border-radius: 4px;
+      font-size: 12px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+    .result.error {
+      border-left-color: #ff6b6b;
+      color: #ff6b6b;
+    }
+    .result.success {
+      border-left-color: #4caf50;
+      color: #4caf50;
+    }
+    .meta {
+      font-size: 11px;
+      color: #888;
+      margin-bottom: 8px;
+      border-bottom: 1px solid #404040;
+      padding-bottom: 8px;
+    }
+    .quick-presets {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+    .quick-presets button {
+      flex: 1;
+      min-width: 100px;
+      padding: 6px;
+      font-size: 11px;
+      background: #404040;
+      color: #e0e0e0;
+    }
+    .quick-presets button:hover {
+      background: #505050;
+    }
+    .status {
+      font-size: 11px;
+      padding: 4px 8px;
+      border-radius: 3px;
+      margin-bottom: 12px;
+      text-align: center;
+    }
+    .status.connecting {
+      background: #f59e0b;
+      color: #000;
+    }
+    .status.ready {
+      background: #4caf50;
+      color: #fff;
+    }
+    .status.error {
+      background: #ff6b6b;
+      color: #fff;
+    }
+  </style>
+</head>
+<body>
+
+<h1>🚀 RAG Router Test Form</h1>
+
+<div class="container">
+  <div class="panel">
+    <h2>Input</h2>
+
+    <div id="status" class="status connecting">Connecting...</div>
+
+    <label>Domain (auto-detect if blank)</label>
+    <select id="domain">
+      <option value="">AUTO-DETECT</option>
+      <option value="NUTRIENT">NUTRIENT</option>
+      <option value="BOTANICAL">BOTANICAL</option>
+      <option value="HARDWARE">HARDWARE</option>
+    </select>
+
+    <label>Data (JSON)</label>
+    <textarea id="data" placeholder='{"sensor_id": "PH-01", "ph": 6.1, "ec": 1.8, "temp": 22.5}'></textarea>
+
+    <label>Query (optional)</label>
+    <input id="query" type="text" placeholder="What should I analyze?">
+
+    <button onclick="submitQuery()">Submit to RAG</button>
+
+    <h2 style="margin-top: 20px;">Quick Presets</h2>
+    <div class="quick-presets">
+      <button onclick="loadPreset('nutrient')">pH+EC</button>
+      <button onclick="loadPreset('botanical')">DHT22</button>
+      <button onclick="loadPreset('hardware')">Relay</button>
+      <button onclick="loadPreset('incomplete')">pH Only</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Response</h2>
+    <div id="results"></div>
+  </div>
+</div>
+
+<script>
+  const PRESETS = {
+    nutrient: {
+      domain: 'NUTRIENT',
+      data: { id: 'PH-01', hwType: 'ph-ec-sensor', ph: 6.1, ec: 1.8, temp: 22.5 },
+      query: 'Analyze these nutrient readings'
+    },
+    botanical: {
+      domain: 'BOTANICAL',
+      data: { id: 'DHT-01', hwType: 'dht22', temp: 28.5, humidity: 72.3 },
+      query: 'What does this environment tell you?'
+    },
+    hardware: {
+      domain: 'HARDWARE',
+      data: { id: 'RELAY-01', hwType: 'relay', state: 1, cycles: 1420 },
+      query: 'Analyze this relay status'
+    },
+    incomplete: {
+      domain: '',
+      data: { id: 'PH-02', hwType: 'ph-sensor', ph: 6.0 },
+      query: 'What can you tell me?'
+    }
+  };
+
+  // Check API health on load
+  window.addEventListener('load', () => {
+    checkHealth();
+  });
+
+  async function checkHealth() {
+    try {
+      const resp = await fetch('http://localhost:8200/api/nodes');
+      if (resp.ok) {
+        document.getElementById('status').className = 'status ready';
+        document.getElementById('status').textContent = '✅ Connected to RAG Router';
+      }
+    } catch (e) {
+      document.getElementById('status').className = 'status error';
+      document.getElementById('status').textContent = '❌ RAG Router not responding';
+    }
+  }
+
+  function loadPreset(key) {
+    const preset = PRESETS[key];
+    document.getElementById('domain').value = preset.domain;
+    document.getElementById('data').value = JSON.stringify(preset.data, null, 2);
+    document.getElementById('query').value = preset.query;
+  }
+
+  function clearResults() {
+    document.getElementById('results').textContent = '';
+  }
+
+  function addResult(text, className = '') {
+    const resultsDiv = document.getElementById('results');
+    const div = document.createElement('div');
+    div.className = 'result ' + className;
+    div.textContent = text;
+    resultsDiv.appendChild(div);
+  }
+
+  function addMeta(text) {
+    const resultsDiv = document.getElementById('results');
+    const div = document.createElement('div');
+    div.className = 'meta';
+    div.textContent = text;
+    resultsDiv.appendChild(div);
+  }
+
+  async function submitQuery() {
+    const domain = document.getElementById('domain').value;
+    const rawData = document.getElementById('data').value;
+    const query = document.getElementById('query').value;
+
+    clearResults();
+
+    // Parse JSON
+    let data;
+    try {
+      data = JSON.parse(rawData);
+    } catch (e) {
+      addResult('Invalid JSON: ' + e.message, 'error');
+      return;
+    }
+
+    // Prepare payload
+    const payload = {
+      domain: domain || undefined,
+      query: query || undefined,
+      ...data
+    };
+
+    addResult('Querying RAG Router...');
+
+    try {
+      const resp = await fetch('http://localhost:8200/api/ingest-and-query', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      const result = await resp.json();
+
+      clearResults();
+
+      if (!resp.ok) {
+        addResult('HTTP ' + resp.status + '\n' + JSON.stringify(result, null, 2), 'error');
+        return;
+      }
+
+      // Format response
+      const timestamp = new Date().toLocaleTimeString();
+      const nodeId = result.node_id || '?';
+      const resultDomain = result.domain || '?';
+      addMeta('Node: ' + nodeId + ' | Domain: ' + resultDomain + ' | ' + timestamp);
+
+      if (result.guard_rejected) {
+        addResult(result.answer || 'Guard rejected this query', 'error');
+      } else if (result.error) {
+        addResult(result.error, 'error');
+      } else {
+        addResult(result.answer || 'No response', 'success');
+        if (result.sources && result.sources.length > 0) {
+          const sourceNames = result.sources
+            .map(s => s.document_name || s.title || 'unknown')
+            .join(', ');
+          const srcDiv = document.createElement('div');
+          srcDiv.style.fontSize = '10px';
+          srcDiv.style.color = '#888';
+          srcDiv.style.marginTop = '8px';
+          srcDiv.textContent = 'Sources: ' + sourceNames;
+          document.getElementById('results').appendChild(srcDiv);
+        }
+      }
+    } catch (e) {
+      clearResults();
+      addResult('Request failed: ' + e.message, 'error');
+    }
+  }
+
+  // Allow Enter to submit in query field
+  document.getElementById('query').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') submitQuery();
+  });
+</script>
+
+</body>
+</html>

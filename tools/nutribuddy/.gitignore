@@ -1,0 +1,106 @@
+# NutriCalc - Git Ignore Rules
+
+# Python runtime
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environment
+.venv
+
+# IDE & Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+.editorconfig
+*.sublime-project
+*.sublime-workspace
+
+# Local development
+local_config.py
+.env
+.env.local
+.env.*.local
+debug.log
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Cache & temporary
+*.cache
+.cache/
+tmp/
+temp/
+*.log
+
+# OS-specific
+Thumbs.db
+.AppleDouble
+.LSOverride
+
+# Backup files
+*.bak
+*.backup
+*~
+*.swp
+*.swo
+
+# Distribution
+build/
+dist/
+*.whl
+*.egg-info/
+
+# Node modules (if any local dependencies)
+node_modules/
+package-lock.json
+yarn.lock
+
+# Build artifacts
+*.o
+*.so
+*.a
+*.dll
+*.dylib
+
+# Credentials (NEVER commit these)
+secrets.json
+credentials.json
+api_keys.txt
+.aws/
+.credentials
+
+# Test artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# Keep these even in .gitignore exceptions
+!.gitkeep
+!.gitattributes
