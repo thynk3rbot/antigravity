@@ -8,6 +8,14 @@
 
 LoRaLink-AnyToAny is a modular firmware framework that enables **any wireless interface to communicate with any other**. Send a command via Bluetooth, and it routes to LoRa. Receive an ESP-NOW message, and it triggers a relay. Configure everything via a sleek web dashboard.
 
+## Project Status
+
+- [x] **v2 Firmware Migration** — Established FreeRTOS foundation and HAL for Heltec V3/V4.
+- [x] **Hardware Pin Audit** — Corrected VEXT/ADC pins for battery telemetry on V3 boards.
+- [x] **Local AI Integration** — Added Generic LLM provider to RAG Router for Ollama/LM Studio support.
+- [x] **Industrial SCADA** — Validated quadruple relay control with safety interlocks.
+- [ ] **LMX Messenger PoC** — (In Progress) Encrypted text mesh protocol.
+
 ## Project Structure
 
 This repository contains both the stable and development versions of the LoRaLink firmware, along with supporting tools:
