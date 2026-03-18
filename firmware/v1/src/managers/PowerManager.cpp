@@ -29,16 +29,15 @@ void PowerManager::Init() {
 #endif
 
   // Heltec V3 External Power Control
-  if (PIN_VEXT_CTRL != -1) {
-    pinMode(PIN_VEXT_CTRL, OUTPUT);
-    enableVext(); // Start with peripherals ON
-  }
+#if defined(PIN_VEXT_CTRL) && PIN_VEXT_CTRL != -1
+  pinMode(PIN_VEXT_CTRL, OUTPUT);
+  enableVext(); 
+#endif
 
-  // Heltec V3 Battery Divider Control
-  if (PIN_BAT_CTRL != -1) {
-    pinMode(PIN_BAT_CTRL, OUTPUT);
-    digitalWrite(PIN_BAT_CTRL, LOW);
-  }
+#if defined(PIN_BAT_CTRL) && PIN_BAT_CTRL != -1
+  pinMode(PIN_BAT_CTRL, OUTPUT);
+  digitalWrite(PIN_BAT_CTRL, LOW);
+#endif
 
   Update();
 }

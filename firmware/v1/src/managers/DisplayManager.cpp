@@ -97,6 +97,14 @@ bool DisplayManager::IsDisplayActive() { return displayActive; }
 
 void DisplayManager::NextPage() {
   currentPage = (currentPage + 1) % NUM_PAGES;
+  
+#ifndef ARDUINO_LORA_HELTEC_V4
+  // Auto-skip GPS page (3) on V3/V2 unless external GPS is truly detected
+  if (currentPage == 3 && !DataManager::getInstance().gpsFixed && DataManager::getInstance().gpsSats == 0) {
+    currentPage = (currentPage + 1) % NUM_PAGES;
+  }
+#endif
+
   LOG_PRINTF("DISP: NextPage() -> Page %d\n", currentPage);
   SetDisplayActive(true);
 }
@@ -126,6 +134,14 @@ void DisplayManager::DrawUi() {
     drawStatus(data);
     break;
   case 3:
+#ifdef ARDUINO_LORA_HELTEC_V4
+    drawGPS(data);
+#else
+    // On V3/V2, if we accidentally land here, show Log instead
+    drawLog(data);
+#endif
+    break;
+  case 4:
     drawLog(data);
     break;
   }
@@ -227,6 +243,32 @@ void DisplayManager::drawStatus(DataManager &data) {
   Heltec.display->setTextAlignment(TEXT_ALIGN_RIGHT);
   Heltec.display->drawString(128, 52, FIRMWARE_VERSION);
   Heltec.display->setTextAlignment(TEXT_ALIGN_LEFT);
+}
+
+void DisplayManager::drawGPS(DataManager &data) {
+  Heltec.display->setFont(ArialMT_Plain_10);
+  Heltec.display->setTextAlignment(TEXT_ALIGN_LEFT);
+  Heltec.display->drawString(0, 0, "GNSS / GPS");
+  Heltec.display->drawLine(0, 12, 128, 12);
+
+  if (data.gpsFixed || data.gpsSats > 0) {
+    Heltec.display->drawString(0, 15, "LAT: " + String(data.gpsLat, 6));
+    Heltec.display->drawString(0, 25, "LON: " + String(data.gpsLon, 6));
+    Heltec.display->drawString(0, 35, "ALT: " + String(data.gpsAlt, 1) + "m");
+    Heltec.display->drawString(0, 45, "SATS: " + String(data.gpsSats));
+    
+    Heltec.display->setTextAlignment(TEXT_ALIGN_RIGHT);
+    Heltec.display->drawString(128, 15, data.gpsFixed ? "FIX" : "NO-FIX");
+  } else {
+    Heltec.display->setFont(ArialMT_Plain_16);
+    Heltec.display->setTextAlignment(TEXT_ALIGN_CENTER);
+    Heltec.display->drawString(64, 25, "SEARCHING...");
+    Heltec.display->setFont(ArialMT_Plain_10);
+    Heltec.display->drawString(64, 45, "Check Antenna");
+  }
+
+  Heltec.display->setTextAlignment(TEXT_ALIGN_RIGHT);
+  Heltec.display->drawString(128, 0, "[" + data.getMacSuffix() + "]");
 }
 
 void DisplayManager::drawLog(DataManager &data) {

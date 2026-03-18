@@ -148,18 +148,21 @@ void ESPNowManager::init() {
     if (data.espNowPeers[i].active) {
       esp_now_peer_info_t peerInfo = {};
       memcpy(peerInfo.peer_addr, data.espNowPeers[i].mac, 6);
-      peerInfo.channel = 0; // Use system channel
+      peerInfo.channel = 0; 
       peerInfo.ifidx = WIFI_IF_STA;
       peerInfo.encrypt = false;
-
-      if (esp_now_add_peer(&peerInfo) == ESP_OK) {
-        LOG_PRINTF("ESPNOW: Peer %s added (%02X:%02X:%02X:%02X:%02X:%02X)\n",
-                   data.espNowPeers[i].name, data.espNowPeers[i].mac[0],
-                   data.espNowPeers[i].mac[1], data.espNowPeers[i].mac[2],
-                   data.espNowPeers[i].mac[3], data.espNowPeers[i].mac[4],
-                   data.espNowPeers[i].mac[5]);
-      }
+      esp_now_add_peer(&peerInfo);
     }
+  }
+
+  // Register Global Broadcast Peer (ALL NODES)
+  esp_now_peer_info_t bcPeer = {};
+  memset(bcPeer.peer_addr, 0xFF, 6);
+  bcPeer.channel = 0;
+  bcPeer.ifidx = WIFI_IF_STA;
+  bcPeer.encrypt = false;
+  if (esp_now_add_peer(&bcPeer) == ESP_OK) {
+      LOG_PRINTLN("ESPNOW: Broadcast Peer @ FF:FF:FF:FF:FF:FF Ready");
   }
 
   espNowActive = true;
@@ -220,18 +223,13 @@ void ESPNowManager::sendToAll(const String &message) {
     return;
 
   DataManager &data = DataManager::getInstance();
-  int queued = 0;
-  for (int i = 0; i < data.numEspNowPeers; i++) {
-    if (data.espNowPeers[i].active) {
-      if (_enqueueTx(data.espNowPeers[i].mac, message))
-        queued++;
-    }
+  
+  // High-Efficiency Broadcast: One payload to FF:FF:FF:FF:FF:FF
+  uint8_t bcMac[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+  if (_enqueueTx(bcMac, message)) {
+      data.LogMessage("ESPNOW_BC", 0, "TO_ALL: " + message);
   }
-  // Log once per broadcast, not once per peer
-  if (queued > 0) {
-    DataManager::getInstance().LogMessage(
-        "ESPNOW_TX", 0, "BC(" + String(queued) + "): " + message);
-  }
+  
   lastSentMessage = message;
 }
 

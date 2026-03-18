@@ -11,6 +11,7 @@
 #include <Arduino.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
+#include <esp_heap_caps.h>
 
 // HAL Layer
 #include "../lib/HAL/board_config.h"
@@ -27,6 +28,7 @@
 #include "../lib/App/mesh_coordinator.h"
 #include "../lib/App/nvs_manager.h"
 #include "../lib/App/power_manager.h"
+#include "../lib/App/oled_manager.h"
 
 // Bench Mode (optional, compile-time selectable)
 #ifdef BENCH_MODE
@@ -112,6 +114,8 @@ void controlTask(void* param) {
   static const uint32_t SEND_TELEMETRY_INTERVAL_MS = 10000;  // Every 10 seconds
   static uint32_t lastPowerUpdate = 0;
   static const uint32_t POWER_UPDATE_INTERVAL_MS = 30000;  // Every 30 seconds
+  static uint32_t lastOLEDUpdate = 0;
+  static const uint32_t OLED_UPDATE_INTERVAL_MS = 500;    // Every 500ms
 
   while (1) {
     uint32_t now = millis();
@@ -128,7 +132,25 @@ void controlTask(void* param) {
     uint16_t tempC_x10 = 2500;          // Placeholder: 25.0°C
     uint16_t voltageV_x100 = static_cast<uint16_t>(PowerManager::getBatteryVoltage() * 100.0f);
     uint8_t relayState = relayHAL.getState();
-    uint8_t rssi = static_cast<uint8_t>(loraTransport.getSignalStrength());
+    int8_t rssi = loraTransport.getSignalStrength();
+
+    // =====================================================================
+    // Update OLED Display Cache & Refresh
+    // =====================================================================
+    if (now - lastOLEDUpdate >= OLED_UPDATE_INTERVAL_MS) {
+      // Update cached values for OLED display
+      OLEDManager::setBatteryVoltage(PowerManager::getBatteryVoltage(), "NORMAL");  // TODO: use actual mode
+      OLEDManager::setLoRaSignal(rssi, 0);  // TODO: add SNR from LoRa
+      OLEDManager::setRelayStatus(relayState > 0);
+      OLEDManager::setTemperature(tempC_x10 / 10.0f);
+      OLEDManager::setPeerCount(meshCoordinator.getNeighborCount());
+      OLEDManager::setUptime(now - g_bootTimestamp);
+      OLEDManager::setFreeHeap(esp_get_free_heap_size());
+
+      // Refresh display
+      OLEDManager::update();
+      lastOLEDUpdate = now;
+    }
 
     // Periodically send telemetry
     if (now - lastTelemetrySend >= SEND_TELEMETRY_INTERVAL_MS) {
@@ -138,7 +160,7 @@ void controlTask(void* param) {
         tempC_x10,
         voltageV_x100,
         relayState,
-        rssi
+        static_cast<uint8_t>(rssi)
       );
 
       int bytesSent = messageRouter.broadcastPacket(
@@ -284,14 +306,30 @@ void setup() {
   PowerManager::onModeChange([](PowerMode mode) {
     const char* modeNames[] = {"NORMAL", "CONSERVE", "CRITICAL"};
     Serial.printf("[PowerMgr] Mode change: %s\n", modeNames[static_cast<uint8_t>(mode)]);
+    // Update OLED display when power mode changes
+    OLEDManager::update();
   });
 
   Serial.println("  ✓ Power manager initialized");
 
   // ========================================================================
+  // Step 2.5: Initialize OLED Display
+  // ========================================================================
+  Serial.println("[2.5/7] Initializing OLED display...");
+
+  if (!OLEDManager::init()) {
+    Serial.println("WARNING: OLED init failed (non-fatal)");
+    // Continue anyway, device will work without display
+  } else {
+    Serial.println("  ✓ OLED display initialized");
+  }
+
+  delay(BOOT_SAFE_DELAY_STAGGER_MS);
+
+  // ========================================================================
   // Step 3: Initialize HAL (GPIO, SPI, etc.)
   // ========================================================================
-  Serial.println("[3/7] Initializing HAL...");
+  Serial.println("[3/8] Initializing HAL...");
 
   if (!radioHAL.init()) {
     Serial.println("ERROR: Radio HAL init failed!");
@@ -304,7 +342,7 @@ void setup() {
   // ========================================================================
   // Step 4: Initialize Transport Layer
   // ========================================================================
-  Serial.println("[4/7] Initializing transports...");
+  Serial.println("[4/8] Initializing transports...");
 
   if (!loraTransport.init()) {
     Serial.println("ERROR: LoRa transport init failed!");
@@ -318,7 +356,7 @@ void setup() {
   // ========================================================================
   // Step 5: Initialize Application Layer
   // ========================================================================
-  Serial.println("[5/7] Initializing application...");
+  Serial.println("[5/8] Initializing application...");
 
   #ifdef ROLE_HUB
     g_ourNodeID = 0;
@@ -332,14 +370,11 @@ void setup() {
   meshCoordinator.setOwnNodeID(g_ourNodeID);
   Serial.println("  ✓ Mesh coordinator initialized");
 
-  // Safe stagger delay (prevent brownout during boot)
-  delay(BOOT_SAFE_DELAY_STAGGER_MS);
-
   // ========================================================================
-  // Step 5.5 (Optional): Run Bench Mode Diagnostics
+  // Step 6 (Optional): Run Bench Mode Diagnostics
   // ========================================================================
   #ifdef BENCH_MODE
-    Serial.println("[5.5/7] Running bench mode diagnostics...");
+    Serial.println("[6/8] Running bench mode diagnostics...");
     bool benchPassed = BenchTest::runAll();
     if (!benchPassed) {
       Serial.println("\n⚠️  WARNING: Some bench tests failed!");
@@ -347,7 +382,7 @@ void setup() {
       delay(2000);
     }
     // Reinitialize hardware after bench tests (they may stress hardware)
-    Serial.println("[5.5/7] Re-initializing hardware after bench mode...");
+    Serial.println("[6/8] Re-initializing hardware after bench mode...");
     radioHAL.init();
     relayHAL.init();
     loraTransport.init();
@@ -355,9 +390,9 @@ void setup() {
   #endif
 
   // ========================================================================
-  // Step 6: Create FreeRTOS Tasks
+  // Step 7: Create FreeRTOS Tasks
   // ========================================================================
-  Serial.println("[6/7] Creating FreeRTOS tasks...");
+  Serial.println("[7/8] Creating FreeRTOS tasks...");
 
   xTaskCreatePinnedToCore(
     radioTask,                           // Task function
@@ -382,15 +417,16 @@ void setup() {
   Serial.println("  ✓ Tasks created");
 
   // ========================================================================
-  // Step 7: Boot Complete
+  // Step 8: Boot Complete
   // ========================================================================
-  Serial.println("[7/7] Boot complete!");
+  Serial.println("[8/8] Boot complete!");
   Serial.printf("  Uptime: %lu ms\n", millis() - g_bootTimestamp);
 
-  // Print power manager status
+  // Print diagnostics
   PowerManager::printStatus();
+  OLEDManager::printStatus();
 
-  Serial.println("[8/8] Entering main loop (FreeRTOS)...");
+  Serial.println("[9/9] Entering main loop (FreeRTOS)...");
   Serial.println("===========================\n");
 }
 

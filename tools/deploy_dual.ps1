@@ -1,26 +1,24 @@
-# LoRaLink Dual Deployment Script
-Write-Host "--- Starting LoRaLink Dual Deployment ---" -ForegroundColor Cyan
+# LoRaLink Fleet Deployment Script
+Write-Host "--- Starting LoRaLink Fleet Deployment ---" -ForegroundColor Cyan
 
 $pio = "$env:USERPROFILE\.platformio\penv\Scripts\pio.exe"
-$master_ip = "172.16.0.27"
-$slave_ip = "172.16.0.26"
 
-Write-Host "Deplopying to Master ($master_ip)..." -ForegroundColor Yellow
-& $pio run --environment ota_master --target upload
+# 1. Flash V3 units (IPs 26, 27)
+Write-Host "Deploying V3 to Master (172.16.0.27)..." -ForegroundColor Yellow
+& $pio run -d firmware/v1 --environment ota_master --target upload
 
-if ($LASTEXITCODE -eq 0) {
-    Write-Host "Master deployment SUCCESS." -ForegroundColor Green
-} else {
-    Write-Host "Master deployment FAILED." -ForegroundColor Red
-}
+Write-Host "Deploying V3 to Slave (172.16.0.26)..." -ForegroundColor Yellow
+& $pio run -d firmware/v1 --environment ota_slave --target upload
 
-Write-Host "Deploying to Slave ($slave_ip)..." -ForegroundColor Yellow
-& $pio run --environment ota_slave --target upload
+# 2. Flash V4c units (IPs 28, 29)
+Write-Host "Deploying V4 to Slave (172.16.0.28)..." -ForegroundColor Yellow
+& $pio run -d firmware/v1 --environment v4_ota_28 --target upload
 
-if ($LASTEXITCODE -eq 0) {
-    Write-Host "Slave deployment SUCCESS." -ForegroundColor Green
-} else {
-    Write-Host "Slave deployment FAILED." -ForegroundColor Red
-}
+Write-Host "Deploying V4 to Slave (172.16.0.29)..." -ForegroundColor Yellow
+& $pio run -d firmware/v1 --environment v4_ota_29 --target upload
+
+# 3. Flash V2 unit (USB) for Node 30
+Write-Host "Deploying V2/Webserver to Node 30 (via USB auto-detect)..." -ForegroundColor Yellow
+& $pio run -d firmware/v1 --environment heltec_wifi_lora_32_V2 --target upload
 
 Write-Host "--- Deployment Cycle Complete ---" -ForegroundColor Cyan

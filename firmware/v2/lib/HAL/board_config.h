@@ -84,12 +84,22 @@
 // I2C Display (SSD1306 OLED, shared across V2/V3/V4)
 // ============================================================================
 
-#define I2C_SDA       4
-#define I2C_SCL       15
-#define I2C_FREQ_HZ   400000
-#define OLED_ADDRESS  0x3C
-#define OLED_WIDTH    128
-#define OLED_HEIGHT   64
+#define I2C_SDA                 4
+#define I2C_SCL                 15
+#define I2C_FREQ_HZ             400000
+#define OLED_ADDRESS            0x3C
+#define OLED_WIDTH              128
+#define OLED_HEIGHT             64
+#define OLED_RESET_PIN          -1       // No reset pin
+
+// ============================================================================
+// Button Control (GPIO 0 - BOOT button, low-active with pull-high)
+// ============================================================================
+
+#define BUTTON_PIN              GPIO_NUM_0
+#define BUTTON_DEBOUNCE_MS      50       // Debounce threshold (milliseconds)
+#define BUTTON_LONG_PRESS_MS    2000     // Long press duration (milliseconds)
+#define OLED_AUTO_ROTATE_MS     5000     // Auto-rotate pages every 5 seconds
 
 // ============================================================================
 // Relay GPIO Pins (Generic, supports up to 8 channels via bitmask)

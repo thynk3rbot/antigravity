@@ -470,9 +470,12 @@ void LoRaManager::ProcessPacket(uint8_t *rxEncBuf, int size) {
       uint8_t rst = doc["r"] | 0;
       uint8_t hops = doc["h"] | 0;
       uint8_t sid = doc["sid"] | 0xFF;
-      data.UpdateNode(rxPacket.sender, uptime, bat, rst, 0.0f, 0.0f, lastRssi,
+      float lat = doc["lat"] | 0.0f;
+      float lon = doc["lon"] | 0.0f;
+      
+      data.UpdateNode(rxPacket.sender, uptime, bat, rst, lat, lon, lastRssi,
                       hops, sid);
-      LOG_PRINTF("TEL: %s (hops=%d, sid=0x%02X)\n", sender.c_str(), hops, sid);
+      LOG_PRINTF("TEL: %s (hops=%d, sid=0x%02X, gps=%.4f/%.4f)\n", sender.c_str(), hops, sid, lat, lon);
 
       if (data.streamToSerial) {
         LOG_PRINTF("DATA,%s,%.2f,%d,%d\n", sender.c_str(), bat, lastRssi,
@@ -683,6 +686,10 @@ void LoRaManager::SendHeartbeat() {
     doc["rst"] = perf.getResetReason();
     if (perf.isConfiguratorAttached()) {
       doc["cfg"] = 1;
+    }
+    if (data.gpsFixed) {
+      doc["lat"] = round(data.gpsLat * 10000.0) / 10000.0;
+      doc["lon"] = round(data.gpsLon * 10000.0) / 10000.0;
     }
 
     String json;

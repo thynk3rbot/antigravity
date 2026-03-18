@@ -15,7 +15,7 @@ public:
   void Init();
   void loop();
   void publishTelemetry(const String &nodeId, float battery, int rssi,
-                        int hops);
+                        int hops, float lat = 0.0f, float lon = 0.0f);
   void publishMessage(const String &nodeId, int rssi, const String &text);
   void publishTrace(const String &nodeId, const String &msg);
   void publish(const String &topic, const String &payload);

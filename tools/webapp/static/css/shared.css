@@ -1,11 +1,11 @@
 :root {
     /* ── Palette ────────────────────────────────────────────────────────── */
     --bg-main: #0f0f1a;
-    --bg-card: #1a1a2e;
-    --bg-hdr: #16213e;
-    --border: #2a2a4a;
+    --bg-card: #141426;
+    --bg-hdr: #12122b;
+    --border: #222240;
     --accent: #00d4ff;
-    --accent-hover: #00b8d4;
+    --accent-hover: #00c3eb;
     --accent-dim: #0099b3;
 
     /* ── States ─────────────────────────────────────────────────────────── */
@@ -17,17 +17,22 @@
     --text-dim: #888;
 
     /* ── Glassmorphism / Effects ────────────────────────────────────────── */
-    --glass: rgba(26, 26, 46, 0.95);
+    --glass: rgba(20, 20, 38, 0.95);
     --shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 }
 
 * { margin:0; padding:0; box-sizing:border-box; }
 
 body {
-    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
     background: var(--bg-main);
     color: var(--text);
-    line-height: 1.5;
+    line-height: 1.3;
+    font-size: 13px;
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
 }
 
 /* ── Typography ─────────────────────────────────────────────────────────── */
@@ -57,14 +62,16 @@ body {
 .ml-1 { margin-left: 4px; }
 .ml-2 { margin-left: 10px; }
 .mr-1 { margin-right: 4px; }
-.p-2 { padding: 8px; }
-.p-3 { padding: 12px; }
-.p-4 { padding: 20px; }
-.py-2 { padding: 10px 0; }
+.p-2 { padding: 6px; }
+.p-3 { padding: 8px; }
+.p-4 { padding: 12px; }
+.py-1 { padding: 4px 0; }
+.py-2 { padding: 6px 0; }
+.px-2 { padding: 0 8px; }
 .mt-1 { margin-top: 4px; }
-.mt-2 { margin-top: 10px; }
-.mt-3 { margin-top: 15px; }
-.mb-1 { margin-bottom: 5px; }
+.mt-2 { margin-top: 8px; }
+.mt-3 { margin-top: 12px; }
+.mb-1 { margin-bottom: 4px; }
 
 .w-full { width: 100%; }
 .overflow-y-auto { overflow-y: auto; }
@@ -91,17 +98,29 @@ body {
     letter-spacing: 0.5px;
     border: 1px solid transparent;
 }
+.badge {
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border: 1px solid transparent;
+}
 .badge.on   { background: rgba(0, 255, 136, 0.1); color: var(--ok); border-color: rgba(0, 255, 136, 0.3); }
 .badge.off  { background: rgba(255, 68, 68, 0.1); color: var(--err); border-color: rgba(255, 68, 68, 0.3); }
 
 .card {
     background: var(--bg-card);
     border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 12px;
-    transition: transform 0.2s, border-color 0.2s;
+    border-radius: 8px;
+    padding: 8px;
+    transition: transform 0.1s, border-color 0.1s;
 }
 .card:hover { border-color: var(--accent); }
+.card .lbl { font-size: 9px; color: var(--text-dim); text-transform: uppercase; font-weight: 700; margin-bottom: 2px; }
+.card .val { font-size: 13px; font-weight: 800; color: #fff; }
+.card .val.sm { font-size: 11px; }
 
 .panel {
     background: var(--bg-card);
@@ -117,28 +136,28 @@ body {
 .panel-h-md { min-height: 240px; }
 
 .panel-title {
-    font-size: 0.7em;
+    font-size: 9px;
     color: var(--accent);
     text-transform: uppercase;
-    letter-spacing: 1.5px;
-    padding: 10px 14px;
-    background: rgba(0, 212, 255, 0.05);
+    letter-spacing: 1.2px;
+    padding: 6px 10px;
+    background: rgba(0, 212, 255, 0.04);
     border-bottom: 1px solid var(--border);
     font-weight: 800;
 }
 
 .card-title-sm {
-  font-size: 0.65em;
+  font-size: 9px;
   color: var(--text-dim);
   text-transform: uppercase;
-  letter-spacing: 1px;
-  padding: 6px 14px 4px;
+  letter-spacing: 0.8px;
+  padding: 4px 10px;
   font-weight: 700;
 }
 .card-title-accent {
     font-weight: 700;
     color: var(--accent);
-    margin-bottom: 5px;
+    margin-bottom: 3px;
 }
 
 .panel-title-flex {
@@ -175,27 +194,27 @@ body {
     background: var(--accent);
     color: #000;
     border: none;
-    border-radius: 8px;
-    padding: 8px 18px;
-    font-size: 0.85em;
+    border-radius: 6px;
+    padding: 5px 12px;
+    font-size: 11px;
     font-weight: 700;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: all 0.1s;
     outline: none;
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: 4px;
 }
 .btn.secondary { background: var(--bg-hdr); color: var(--text); border: 1px solid var(--border); }
 .btn.danger { background: var(--err); color: #fff; }
-.btn.sm { padding: 4px 12px; font-size: 0.75em; border-radius: 6px; }
+.btn.sm { padding: 3px 8px; font-size: 10px; border-radius: 4px; }
 .btn-icon {
     background: var(--bg-hdr);
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: 4px;
     color: var(--text-dim);
-    width: 32px;
-    height: 32px;
+    width: 28px;
+    height: 28px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -205,7 +224,7 @@ body {
 .btn:hover { background: var(--accent-hover); }
 .btn-icon:hover { color: var(--accent); border-color: var(--accent); }
 .btn-apply-success {
-    margin-left: 4px;
+    margin-left: 3px;
     background: rgba(0, 136, 68, 0.13);
     border-color: rgba(0, 136, 68, 0.26);
     color: var(--ok);
@@ -215,9 +234,9 @@ body {
     background: var(--bg-main);
     border: 1px solid var(--border);
     color: var(--text);
-    border-radius: 6px;
-    padding: 7px 10px;
-    font-size: 0.9em;
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-size: 11px;
     outline: none;
     transition: 0.2s;
 }

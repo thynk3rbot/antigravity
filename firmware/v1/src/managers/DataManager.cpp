@@ -31,6 +31,10 @@ void DataManager::resolveAllNodeIps() {
   }
 }
 
+uint8_t DataManager::getPinGpsRx() const { return (hardwareVariant == 4) ? PIN_DEFAULT_GPS_RX : 47; }
+uint8_t DataManager::getPinGpsTx() const { return (hardwareVariant == 4) ? PIN_DEFAULT_GPS_TX : 48; }
+uint8_t DataManager::getPinMcpInt() const { return (hardwareVariant == 4) ? PIN_DEFAULT_MCP_INT : 38; }
+
 DataManager::DataManager() {
   numNodes = 0;
   logIndex = 0;
@@ -185,8 +189,12 @@ void DataManager::LoadSettings() {
   espNowChannel = p.getUChar("espnow_ch", ESPNOW_CHANNEL);
 
   LOG_PRINTLN("INIT: Loading Radio Profiles...");
+  LOG_PRINTLN("INIT: Loading Radio Profiles...");
   wifiEnabled = p.getBool("wifi_en", true);
   bleEnabled = p.getBool("ble_en", true);
+  gpsEnabled = p.getBool("gps_en", true);
+  displayEnabled = p.getBool("disp_en", true);
+  hardwareVariant = p.getUChar("hw_ver", 4); // Default to V4 (4) if missing
 
   LOG_PRINTLN("INIT: Loading Integrations...");
   mqttEnabled = p.getBool("mqtt_en", false);

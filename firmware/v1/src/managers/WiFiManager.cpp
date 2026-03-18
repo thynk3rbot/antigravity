@@ -172,6 +172,12 @@ void WiFiManager::startServer() {
     serveScheduling();
   });
 
+  // Hardware page
+  server.on("/hardware", HTTP_GET, [this]() {
+    lastApiHit = millis();
+    serveHardware();
+  });
+
   // API
   server.on("/api/status", HTTP_GET, [this]() {
     lastApiHit = millis();
@@ -280,54 +286,39 @@ void WiFiManager::serveHome() {
 <meta name='viewport' content='width=device-width,initial-scale=1'>
 <title>LoRaLink )rawhtml" FIRMWARE_VERSION R"rawhtml(</title>
 <style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'Segoe UI',sans-serif;background:#0f0f1a;color:#e0e0e0;height:100vh;display:flex;flex-direction:column;overflow:hidden}
-.hdr{background:linear-gradient(135deg,#1a1a2e,#16213e);padding:8px 12px;border-bottom:1px solid #2a2a4a;display:flex;align-items:center;gap:8px;flex-shrink:0}
-.hdr h1{font-size:0.95em;color:#00d4ff;font-weight:700;white-space:nowrap}
-.hdr h1 span{font-size:0.72em;color:#555;font-weight:400;margin-left:3px}
-.nav{margin-left:auto;display:flex;gap:4px}
-.nav a{color:#555;text-decoration:none;font-size:0.78em;padding:3px 7px;border:1px solid #2a2a4a;border-radius:4px}
-.nav a:hover{color:#00d4ff;border-color:#00d4ff}
-.ifc{display:flex;gap:4px;padding:4px 10px;background:#16213e;border-bottom:1px solid #2a2a4a;flex-shrink:0}
-.badge{padding:2px 7px;border-radius:8px;font-size:0.63em;font-weight:700;letter-spacing:0.4px;text-transform:uppercase}
-.badge.on{background:#00ff8814;color:#00ff88;border:1px solid #00ff8844}
-.badge.off{background:#ff444414;color:#ff4444;border:1px solid #ff444444}
-.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;padding:7px;flex-shrink:0}
-.card{background:#1a1a2e;border-radius:6px;padding:6px 8px;border:1px solid #2a2a4a;position:relative}
-.dbg-id{display:none;font-size:10px;font-weight:700;color:#00f2ff;background:rgba(0,242,255,0.2);border:1px solid rgba(0,242,255,0.5);padding:1px 4px;border-radius:4px;font-family:monospace;line-height:1;vertical-align:middle;margin:0 4px;pointer-events:none;opacity:1.0;text-shadow:0 0-4px rgba(0,242,255,0.8);z-index:100}
-body.debug-on .dbg-id{display:inline-block!important}
-.dbg-tgl{display:flex;align-items:center;gap:6px;font-size:0.65em;color:#555;cursor:pointer;padding:2px 8px;border-radius:12px;background:#16213e;border:1px solid #2a2a4a;transition:0.2s}
-*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Roboto Condensed','Segoe UI Condensed',sans-serif;background:#050508;color:#c0c0cf;font-size:10px;overflow-y:auto;line-height:1.2}
-.hdr{display:flex;justify-content:space-between;background:#0a0a0f;padding:2px 6px;border-bottom:1px solid #1a1a2e;align-items:center}
-.hdr h1{font-size:11px;color:#00d4ff;margin:0;font-weight:700;display:flex;align-items:center;gap:4px;text-transform:uppercase;letter-spacing:0.5px}
+body{font-family:'Roboto Condensed','Segoe UI Condensed',sans-serif;background:#050508;color:#c0c0cf;font-size:10px;overflow-y:auto;line-height:1.2;display:flex;justify-content:center}
+.wrap{width:100%;max-width:1200px;display:flex;flex-direction:column;min-height:100vh;background:#050508;border-left:1px solid #1a1a2e;border-right:1px solid #1a1a2e}
+.hdr{display:flex;justify-content:space-between;background:#0a0a0f;padding:4px 8px;border-bottom:1px solid #1a1a2e;align-items:center}
+.hdr h1{font-size:12px;color:#00d4ff;margin:0;font-weight:700;display:flex;align-items:center;gap:4px;text-transform:uppercase;letter-spacing:0.5px}
 .nav{display:flex;gap:4px}
-.nav a{color:#666;text-decoration:none;font-size:8px;padding:1px 5px;background:#111;border-radius:2px;border:1px solid #222;text-transform:uppercase;font-weight:700}
+.nav a{color:#666;text-decoration:none;font-size:9px;padding:2px 6px;background:#111;border-radius:2px;border:1px solid #222;text-transform:uppercase;font-weight:700}
 .nav a:hover{color:#00d4ff;border-color:#00d4ff;background:#00d4ff11}
 #pwr-warn{display:none;background:rgba(255,0,0,0.8);color:#fff;text-align:center;font-weight:900;padding:2px;font-size:9px;letter-spacing:1px;border-bottom:1px solid #f00}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(95px,1fr));gap:3px;padding:3px}
-.card{background:rgba(20,20,35,0.6);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);border:1px solid #1a1a2e;border-left:2px solid #333;padding:4px;border-radius:2px;position:relative;box-shadow:0 2px 4px rgba(0,0,0,0.3)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:6px;padding:6px}
+.card{background:rgba(20,20,35,0.6);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);border:1px solid #1a1a2e;border-left:2px solid #333;padding:8px;border-radius:4px;position:relative;box-shadow:0 2px 4px rgba(0,0,0,0.3)}
 .card.ok-border{border-left-color:#0f8} .card.warn-border{border-left-color:#fa0} .card.err-border{border-left-color:#f44}
-.lbl{font-size:7.5px;color:#5c5c7a;text-transform:uppercase;letter-spacing:0.8px;font-weight:700}
-.val{font-size:14px;font-weight:800;margin-top:0px;color:#fff;text-shadow:0 0 10px rgba(255,255,255,0.1)}
+.lbl{font-size:8px;color:#5c5c7a;text-transform:uppercase;letter-spacing:0.8px;font-weight:700}
+.val{font-size:16px;font-weight:800;margin-top:2px;color:#fff;text-shadow:0 0 10px rgba(255,255,255,0.1)}
 .ok{color:#0f8;text-shadow:0 0 5px rgba(0,255,136,0.3)} .wt{color:#fa0} .er{color:#f44}
-.badge{padding:1px 5px;border-radius:2px;font-size:8px;font-weight:800;cursor:pointer;border:1px solid transparent;text-transform:uppercase}
+.badge{padding:2px 8px;border-radius:3px;font-size:9px;font-weight:800;cursor:pointer;border:1px solid transparent;text-transform:uppercase}
 .on{background:rgba(0,212,255,0.1);color:#00d4ff;border-color:rgba(0,212,255,0.3);text-shadow:0 0 5px rgba(0,212,255,0.5)}
 .off{background:rgba(255,255,255,0.05);color:#444;border-color:#222}
-.sect-hdr{padding:2px 4px;font-size:8px;color:#00d4ff;background:rgba(0,212,255,0.05);border-bottom:1px solid rgba(0,212,255,0.2);text-transform:uppercase;margin-top:1px;font-weight:700;letter-spacing:1px}
-.log{max-height:48px;overflow-y:auto;background:#050508;padding:2px;font-family:'Cascadia Code','Consolas',monospace;font-size:8px;border:1px solid #1a1a2e}
-.m{padding:0 0 1px 0;border-bottom:1px solid #0a0a1f;color:#8a8a9a;line-height:1}
+.sect-hdr{padding:4px 8px;font-size:9px;color:#00d4ff;background:rgba(0,212,255,0.05);border-bottom:1px solid rgba(0,212,255,0.2);text-transform:uppercase;margin-top:4px;font-weight:700;letter-spacing:1px}
+.log{flex:1;min-height:80px;overflow-y:auto;background:#050508;padding:6px;font-family:'Cascadia Code','Consolas',monospace;font-size:9px;border-top:1px solid #1a1a2e}
+.m{padding:1px 0;border-bottom:1px solid #0a0a1f;color:#8a8a9a}
 .ts{color:#333} .src{color:#068}
-.cmd{display:flex;padding:2px;gap:2px;background:#0a0a0f;border-top:1px solid #1a1a2e}
-.cmd input{flex:1;background:#000;color:#00d4ff;border:1px solid #222;padding:2px 5px;font-size:9px;font-family:monospace;outline:none}
+.cmd{display:flex;padding:6px;gap:6px;background:#0a0a0f;border-top:1px solid #1a1a2e}
+.cmd input{flex:1;background:#000;color:#00d4ff;border:1px solid #222;padding:4px 8px;font-size:10px;font-family:monospace;outline:none}
 .cmd input:focus{border-color:#00d4ff}
-.cmd button{background:#00d4ff;color:#000;border:none;padding:2px 8px;font-weight:900;cursor:pointer;font-size:9px;text-transform:uppercase}
+.cmd button{background:#00d4ff;color:#000;border:none;padding:4px 12px;font-weight:900;cursor:pointer;font-size:10px;text-transform:uppercase}
 .cmd button:hover{background:#00b8d4}
 </style></head><body>
+<div class='wrap'>
 <div class='hdr'>
   <h1><span style='color:#0f8'>●</span> <span id='did'>—</span> <span id='fwv' style='font-size:8px;color:#555'></span></h1>
   <div class='nav'>
     <a href='/config'>⚙ Config</a>
+    <a href='/map'>🗺 Map</a>
     <a href='/scheduling'>📅 Sched</a>
     <a href='/hardware'>🔧 HW</a>
     <a href='/integration'>🔌 Plugin</a>
@@ -345,6 +336,7 @@ body{font-family:'Roboto Condensed','Segoe UI Condensed',sans-serif;background:#
 <div class='cmd'>
   <input id='ci' placeholder='>_' onkeydown="if(event.key==='Enter')send()">
   <button onclick='send()'>EXEC</button>
+</div>
 </div>
 <script>
 function up(){
@@ -1043,7 +1035,7 @@ body{font-family:'Segoe UI',sans-serif;background:#0f0f1a;color:#e0e0e0;min-heig
 .btn:hover{background:#00b8d4}
 .msg{background:#00ff8822;color:#00ff88;border:1px solid #00ff8844;border-radius:8px;padding:10px 16px;margin:16px;text-align:center;display:none}
 </style></head><body>
-<div class='hdr'><h1>&#x1F50C; Integrations</h1><div><a href='/'>&#x1F4E1; Dashboard</a> <a href='/scheduling'>&#x1F4C5; Schedule</a> <a href='/config'>&#x2699; Config</a></div></div>
+<div class='hdr'><h1>🔌 Integrations</h1><div><a href='/'>📻 Dashboard</a> <a href='/map'>🗺 Map</a> <a href='/scheduling'>📅 Schedule</a> <a href='/config'>⚙ Config</a></div></div>
 )rawhtml";
 
   if (server.hasArg("saved")) {
@@ -1238,8 +1230,9 @@ void WiFiManager::serveScheduling() {
         <div class="nav-chips">
             <span class="dbg-id">SCH-NAV</span>
             <a href="/" class="chip">Dashboard</a>
-            <a href="/config" class="chip">Hardware</a>
+            <a href="/map" class="chip">Map</a>
             <a href="/scheduling" class="chip active">Scheduling</a>
+            <a href="/config" class="chip">Hardware</a>
             <a href="/integration" class="chip">Integrations</a>
         </div>
 

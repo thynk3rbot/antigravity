@@ -5,7 +5,7 @@
 #include "DataManager.h"
 #include "heltec.h"
 
-#define NUM_PAGES 4
+#define NUM_PAGES 5
 
 class DisplayManager {
 public:
@@ -31,6 +31,7 @@ private:
   void drawHome(DataManager &data);
   void drawNetwork(DataManager &data);
   void drawStatus(DataManager &data);
+  void drawGPS(DataManager &data);
   void drawLog(DataManager &data);
 
   float batteryVolts;

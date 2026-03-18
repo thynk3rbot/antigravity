@@ -25,13 +25,13 @@
     "name": "PEER4V4",
     "type": "wifi",
     "address": "172.16.0.29",
-    "active": false
+    "active": true
   },
   {
     "id": "66df0fdb-bfed-49a3-bd12-8ed84a226e44",
     "name": "PEER5V2",
     "type": "ble",
     "address": "PEER5V2",
-    "active": true
+    "active": false
   }
 ]

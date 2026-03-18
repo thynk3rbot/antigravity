@@ -96,34 +96,65 @@
         letter-spacing: 1px;
         text-align: center;
       }
-      .modal {
-        display: none;
-        position: fixed;
-        z-index: 1000;
-        left: 0;
-        top: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(0,0,0,0.8);
-        backdrop-filter: blur(4px);
-      }
-      .modal-content {
-        background: var(--bg-card);
-        margin: 15% auto;
-        padding: 1.5rem;
-        border: 1px solid var(--dim);
-        border-radius: 8px;
-        width: 320px;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-      }
+      .modal { display: none; position: fixed; z-index: 10000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); backdrop-filter: blur(5px); align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity 0.2s; }
+      .modal.open { display: flex; opacity: 1; pointer-events: auto; }
+      .modal-content { background: #1a1a2e; border: 1px solid #2a2a4a; padding: 20px; border-radius: 12px; width: 400px; box-shadow: 0 20px 50px rgba(0,0,0,0.8); }
       .modal-content.sm { width: 320px; }
       .flex-row-sb { display: flex; justify-content: space-between; align-items: center; }
-      .switch { position: relative; display: inline-block; width: 40px; height: 20px; }
+      .switch { position: relative; display: inline-block; width: 32px; height: 16px; }
       .switch input { opacity: 0; width: 0; height: 0; }
       .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #333; transition: .4s; border-radius: 34px; }
-      .slider:before { position: absolute; content: ""; height: 14px; width: 14px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }
+      .slider:before { position: absolute; content: ""; height: 12px; width: 12px; left: 2px; bottom: 2px; background-color: white; transition: .4s; border-radius: 50%; }
       input:checked + .slider { background-color: var(--accent); }
-      input:checked + .slider:before { transform: translateX(20px); }
+      input:checked + .slider:before { transform: translateX(16px); }
+
+      .main-dashboard-grid {
+        display: grid;
+        grid-template-columns: 280px 1fr 340px;
+        gap: 10px;
+        padding: 10px;
+        flex: 1;
+        min-height: 0;
+      }
+
+      .card-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+      }
+
+      .compact-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+      .compact-table th { text-align: left; padding: 4px 8px; color: #666; font-size: 9px; text-transform: uppercase; border-bottom: 1px solid var(--border); }
+      .compact-table td { padding: 4px 8px; border-bottom: 1px solid rgba(255,255,255,0.03); }
+
+      .console-log {
+        flex: 1;
+        overflow-y: auto;
+        padding: 8px;
+        background: #0a0a0f;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 11px;
+        line-height: 1.4;
+      }
+
+      .gpio-bitmap {
+        display: grid;
+        grid-template-columns: repeat(12, 1fr);
+        gap: 3px;
+      }
+
+      .gpio-bit {
+        aspect-ratio: 1;
+        background: #222;
+        border-radius: 2px;
+      }
+
+      @media (max-width: 1200px) {
+        .main-dashboard-grid {
+          grid-template-columns: 1fr;
+          overflow-y: auto;
+        }
+      }
       .multi-apply-panel {
         display: none;
         background: #16213e;
@@ -337,44 +368,15 @@
     </style>
   </head>
   <body>
-    <!-- ── Header ────────────────────────────────────────────────────────────── -->
     <div class="hdr">
       <h1>
-        📡 LoRaLink PC Control
+        📡 LoRaLink Cockpit
         <span id="fwv" class="text-dim text-xs"></span>
       </h1>
       <div class="hdr-right">
         <div class="tport">
-          <span class="tp unk" id="tp-ble-a" title="Peer A BLE">A ●</span>
-          <span class="tp unk" id="tp-ble-b" title="Peer B BLE">B ●</span>
-          <span class="tp unk" id="tp-http" title="HTTP transport">HTTP ●</span>
-          <select
-            id="xport-sel"
-            title="Transport strategy"
-            onchange="setTransport(this.value)"
-          >
-            <option value="http_first">HTTP-first</option>
-            <option value="ble_only">BLE only</option>
-            <option value="readwrite_split">R/W split</option>
-            <option value="immediate_fallback">Immediate fallback</option>
-            <option value="roundrobin">Round-robin</option>
-          </select>
-          <select
-            id="tp-mode-sel"
-            title="Transport Mnemonic (J=JSON, C=CSV, K=KV, B=BIN)"
-            onchange="setTransportMode(this.value)"
-            class="ml-1"
-          >
-            <option value="J">J (JSON)</option>
-            <option value="C">C (CSV)</option>
-            <option value="K">K (KV)</option>
-            <option value="B">B (BIN)</option>
-          </select>
-          <button
-            id="rescan-btn" title="Re-scan for BLE devices" onclick="rescan()" class="btn-icon"
-          >
-            ⟳
-          </button>
+          <button class="btn sm secondary" onclick="openTransportModal()" title="Transport Configuration">⚙ Transport</button>
+          <span class="tp unk" id="tp-http" title="Active Connection Status">●</span>
         </div>
         <span class="text-muted text-sm" id="dev-id">—</span>
       </div>
@@ -382,14 +384,10 @@
 
     <!-- ── Top nav ───────────────────────────────────────────────────────────── -->
     <nav class="page-nav">
-      <a class="nav-link active" onclick="showPage('dashboard')"
-        >📊 Dashboard</a
-      >
-      <a class="nav-link" onclick="showPage('field')">🌐 Field Monitor</a>
-      <a class="nav-link" onclick="showPage('map')">📍 Map</a>
-      <a class="nav-link" onclick="showPage('nodes')">🔌 Nodes</a>
+      <a class="nav-link active" onclick="showPage('dashboard')">📊 Dashboard</a>
+      <a class="nav-link" onclick="showPage('swarmlink')">🚀 SwarmLink Multi</a>
       <a class="nav-link" onclick="showPage('testbench')">🧪 Test Bench</a>
-      <a class="nav-link" onclick="showPage('config')">📁 Config Files</a>
+      <a class="nav-link" onclick="showPage('map')">📍 Map</a>
       <a class="nav-link" onclick="showPage('admin')">🛡️ Admin</a>
       <div class="override-btns">
         <button class="btn-override danger" onclick="globalAllOff()" title="Turn off all GPIO outputs">⚡ All OFF</button>
@@ -398,28 +396,14 @@
       <span id="nav-node">—</span>
     </nav>
 
-    <!-- ── Page: Dashboard ───────────────────────────────────────────────────── -->
-    <div class="page active" id="pg-dashboard">
-      <!-- ── Interface badges ──────────────────────────────────────────────────── -->
-      <div class="ifc" id="ifc">
-        <span class="badge off">LoRa</span>
-        <span class="badge off">BLE</span>
-        <span class="badge off">WiFi</span>
-        <span class="badge off">ESP-NOW</span>
-        <span
-          class="text-muted text-xs ml-auto" id="last-update"
-          >connecting...</span
-        >
-      </div>
-
-      <!-- ── 2×2 grid ────────────────────────────────────────────────────────────── -->
-      <div class="main">
-        <!-- ── Top-left: Status cards ───────────────────────────────────────────── -->
-        <div>
+      <!-- ── Condensed Dashboard Grid ────────────────────────────────────────────── -->
+      <div class="main-dashboard-grid" id="pg-dashboard">
+        <!-- Column 1: Core Metrics and Device Status -->
+        <div class="flex-col">
           <div class="card-grid" id="cards">
             <div class="card">
               <div class="lbl">Device</div>
-              <div class="val" id="c-id">—</div>
+              <div class="val text-accent" id="c-id">—</div>
             </div>
             <div class="card">
               <div class="lbl">Uptime</div>
@@ -449,159 +433,90 @@
               <div class="lbl">Last Command</div>
               <div class="val sm" id="c-last-cmd" title="">—</div>
             </div>
-            <div class="card span-2">
-              <div class="lbl">Health Score</div>
-              <div class="val" id="health-score">—</div>
+            <div class="card span-2" style="padding:4px 8px">
+               <div class="lbl">Health Score</div>
+               <div class="val" id="health-score">—</div>
             </div>
           </div>
 
           <!-- GPIO bitmap strip -->
-          <div
-            class="card mt-2"
-          >
-            <div
-              class="card-title-sm"
-            >
-              Logic Map
+          <div class="panel">
+            <div class="card-title-sm flex-between">
+              <span>Logic Map</span>
+              <span class="text-[8px] text-dim">GPIO BITMAP</span>
             </div>
-            <div class="gpio-bitmap" id="gpio-bitmap"></div>
+            <div class="gpio-bitmap" id="gpio-bitmap" style="padding:6px 10px"></div>
+          </div>
+          
+          <!-- GPIO / Relay panel -->
+          <div class="panel" style="flex:1">
+            <div class="panel-title">GPIO / Relay Control</div>
+            <div class="gpio-grid" id="gpio-grid"></div>
           </div>
         </div>
 
-        <!-- ── Top-right: Mesh node table ───────────────────────────────────────── -->
-        <div class="panel panel-h-sm">
-          <div class="panel-title">Mesh Nodes</div>
-          <div class="flex-1 overflow-y-auto">
-            <table>
+        <!-- Column 2: Mesh Nodes Table -->
+        <div class="panel">
+          <div class="panel-title flex-between">
+            <span>Mesh Nodes</span>
+            <span id="nav-node" class="text-accent text-[9px]"></span>
+          </div>
+          <div class="flex-1 overflow-y-auto" style="min-height:0">
+            <table class="compact-table">
               <thead>
                 <tr>
                   <th>ID</th>
-                  <th>Battery</th>
+                  <th>Bat</th>
                   <th>RSSI</th>
                   <th>Hops</th>
                   <th>Seen</th>
                 </tr>
               </thead>
               <tbody id="mesh-tbody">
-                <tr>
-                  <td
-                    colspan="5"
-                    class="text-muted text-center p-4"
-                  >
-                    No nodes discovered
-                  </td>
-                </tr>
+                <tr><td colspan="5" class="text-muted text-center p-4">No nodes discovered</td></tr>
               </tbody>
             </table>
           </div>
         </div>
 
-        <!-- ── Bottom-left: Command console ─────────────────────────────────────── -->
-        <div class="panel panel-h-md">
-          <div class="panel-title">Command Console</div>
-          <div class="console-log" id="console-log"></div>
-          <div class="cmd-bar">
-            <input
-              id="cmd-input"
-              placeholder="Command (e.g. STATUS, LED ON, GPIO 6 1)…"
-              autocomplete="off"
-              spellcheck="false"
-              onkeydown="handleKey(event)"
-            />
-            <button class="btn" onclick="sendCmd()">Send</button>
-          </div>
-        </div>
-
-        <!-- ── Bottom-right: GPIO control + Schedule manager ───────────────────── -->
+        <!-- Column 3: Command Console + Schedule -->
         <div class="flex-col">
-          <!-- GPIO / Relay panel -->
-          <div class="panel">
-            <div class="panel-title">GPIO / Relay Control</div>
-            <div class="gpio-grid" id="gpio-grid">
-              <!-- Populated by buildGpioPanel() -->
+          <div class="panel" style="flex:1.5; min-height: 200px;">
+            <div class="panel-title">Command Console</div>
+            <div class="console-log" id="console-log"></div>
+            <div class="cmd-bar" style="padding:4px">
+              <input id="cmd-input" placeholder="CMD…" autocomplete="off" spellcheck="false" onkeydown="handleKey(event)" class="input-styled flex-1" style="height:24px"/>
+              <button class="btn sm" onclick="sendCmd()">Send</button>
             </div>
           </div>
 
           <!-- Schedule manager -->
-          <div class="panel flex-1 min-h-200">
-            <div
-              class="panel-title flex-between"
-            >
-              <span>Schedule Manager</span>
+          <div class="panel" style="flex:1; min-height: 180px;">
+            <div class="panel-title flex-between">
+              <span>Schedule</span>
               <div class="flex-row-sm">
-                <button class="btn sm secondary" onclick="saveSched()">
-                  Save
-                </button>
-                <button class="btn sm danger" onclick="clearSched()">
-                  Clear All
-                </button>
+                <button class="btn sm secondary" onclick="saveSched()">Save</button>
+                <button class="btn sm danger" onclick="clearSched()">Wipe</button>
               </div>
             </div>
-            <div class="sched-body">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Name</th>
-                    <th>Type</th>
-                    <th>Pin</th>
-                    <th>Interval</th>
-                    <th>En</th>
-                    <th></th>
-                  </tr>
-                </thead>
+            <div class="flex-1 overflow-y-auto">
+              <table class="compact-table">
                 <tbody id="sched-tbody">
-                  <tr>
-                    <td
-                      colspan="6"
-                      class="text-muted text-center p-3"
-                    >
-                      No tasks
-                    </td>
-                  </tr>
+                  <tr><td class="text-muted text-center p-3">No tasks</td></tr>
                 </tbody>
               </table>
             </div>
-            <div class="sched-add">
-              <div class="sched-form">
-                <input id="s-name" placeholder="Task name" maxlength="14" />
-                <select id="s-type" title="Task Type">
-                  <option value="TOGGLE">TOGGLE</option>
-                  <option value="PULSE">PULSE</option>
-                </select>
-                <select id="s-pin" title="GPIO Pin">
-                  <option value="LED">LED (35)</option>
-                  <option value="6">RELAY2 (6)</option>
-                  <option value="7">RELAY3 (7)</option>
-                </select>
-                <input
-                  id="s-interval"
-                  type="number"
-                  placeholder="Interval (s)"
-                  min="1"
-                  value="30"
-                  oninput="checkToaWarning()"
-                />
-                <div id="toa-warn" class="toa-warn" style="display:none"></div>
-                <input
-                  id="s-duration"
-                  type="number"
-                  placeholder="Duration (s)"
-                  min="0"
-                  value="0"
-                />
-                <select id="s-enabled" title="Status">
-                  <option value="1">Enabled</option>
-                  <option value="0">Disabled</option>
-                </select>
-              </div>
-              <div class="sched-actions">
-                <button class="btn sm" onclick="addTask()">+ Add Task</button>
-              </div>
+            <div class="px-2 py-1 border-t border-dim" style="background:rgba(0,0,0,0.1)">
+               <div class="flex-row gap-1">
+                 <input id="s-name" placeholder="Name" class="input-styled" style="width:60px" />
+                 <select id="s-pin" class="input-styled flex-1" title="pin"><option value="LED">LED</option><option value="6">R2</option><option value="7">R3</option></select>
+                 <input id="s-interval" type="number" value="30" class="input-styled" style="width:35px" title="interval" />
+                 <button class="btn sm" onclick="addTask()">+</button>
+               </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
     <!-- end pg-dashboard -->
 
     <!-- ── Page: Field Monitor ────────────────────────────────────────────────── -->
@@ -686,6 +601,31 @@
     </div>
   </div>
 </div>
+
+    <!-- ── Page: SwarmLink Cockpit ────────────────────────────────────────────── -->
+    <div class="page" id="pg-swarmlink">
+      <div class="panel p-3" style="height: calc(100vh - 80px); display: flex; flex-direction: column;">
+        <div class="panel-title flex-between">
+          <div class="flex-row">
+            <span>SwarmLink Cockpit</span>
+            <div id='cockpit-status' class='badge on ml-2' style='font-size:8px'>LIVE</div>
+          </div>
+          <div class="flex-row-sm">
+            <input type="text" id="sip1" placeholder="IP 1" class="input-styled" style="width:105px; font-size:10px;" value="172.16.0.26"/>
+            <input type="text" id="sip2" placeholder="IP 2" class="input-styled" style="width:105px; font-size:10px;" value="172.16.0.27"/>
+            <input type="text" id="sip3" placeholder="IP 3" class="input-styled" style="width:105px; font-size:10px;" value="172.16.0.28"/>
+            <input type="text" id="sip4" placeholder="IP 4" class="input-styled" style="width:105px; font-size:10px;" value="172.16.0.29"/>
+            <button class="btn sm" onclick="loadSwarmFrames()">SYTHESIZE VIEW</button>
+          </div>
+        </div>
+        <div class="flex-1 mt-2" style="display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:6px;" id="swarm-frames">
+          <div style="background:#0a0a0a;border:1px solid #2a2a4a;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#444;">1</div>
+          <div style="background:#0a0a0a;border:1px solid #2a2a4a;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#444;">2</div>
+          <div style="background:#0a0a0a;border:1px solid #2a2a4a;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#444;">3</div>
+          <div style="background:#0a0a0a;border:1px solid #2a2a4a;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#444;">4</div>
+        </div>
+      </div>
+    </div>
 
     <!-- ── Page: Test Bench ───────────────────────────────────────────────────── -->
     <div class="page" id="pg-testbench">
@@ -976,6 +916,43 @@
               <button class="btn sm w-full" onclick="recenterMap()">Target Recenter</button>
               <button class="btn sm secondary w-full" onclick="openGoogleMaps()">↗ Open Google Maps</button>
             </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Transport Settings Modal ─────────────────────────────────────── -->
+    <div id="transport-modal" class="modal">
+      <div class="modal-content">
+        <div class="flex-row-sb" style="margin-bottom:1rem; display:flex; justify-content:space-between; align-items:center;">
+          <h3 class="text-accent uppercase text-sm" style="margin:0">Transport Configuration</h3>
+          <button class="btn sm secondary" onclick="closeTransportModal()">✕</button>
+        </div>
+        
+        <div class="flex-col" style="gap:1rem; display:flex; flex-direction:column;">
+          <div>
+            <label class="text-xs text-dim uppercase">Message Protocol</label>
+            <div class="flex-row mt-1" style="gap:0.5rem; display:flex;">
+              <button class="btn sm secondary flex-1" onclick="setTransportMode('J')">JSON</button>
+              <button class="btn sm secondary flex-1" onclick="setTransportMode('C')">CSV</button>
+              <button class="btn sm secondary flex-1" onclick="setTransportMode('K')">KV</button>
+              <button class="btn sm secondary flex-1" onclick="setTransportMode('B')">BIN</button>
+            </div>
+          </div>
+          
+          <div>
+            <label class="text-xs text-dim uppercase">Active Strategy</label>
+            <select id="xport-sel" class="input-styled w-full mt-1" onchange="setTransport(this.value)" style="width:100%">
+              <option value="auto">Adaptive Auto</option>
+              <option value="wifi_mqtt">WiFi + MQTT</option>
+              <option value="wifi_http">WiFi + HTTP</option>
+              <option value="ble">BLE Direct</option>
+              <option value="lora">LoRa Mesh</option>
+            </select>
+          </div>
+          
+          <div class="p-2 bg-black-20 rounded border border-dim text-xs text-dim" style="background:rgba(0,0,0,0.2); padding:8px; border:1px solid #333; border-radius:4px;">
+            Mode changes will persist in NVS and take effect on the next mesh update.
+          </div>
         </div>
       </div>
     </div>
@@ -2494,6 +2471,18 @@
 
       // ── APC / Registry / Transport Mode ─────────────────────────────────
 
+      // ── Transport Settings Modal ───────────────────────────────────────
+      
+      function openTransportModal() {
+        const modal = document.getElementById("transport-modal");
+        modal.classList.add("open");
+      }
+
+      function closeTransportModal() {
+        const modal = document.getElementById("transport-modal");
+        modal.classList.remove("open");
+      }
+
       async function setTransportMode(mode) {
         logConsole("tx", `TRANS: Setting mode to ${mode}…`);
         try {
@@ -3108,5 +3097,15 @@
       </div>
     </div>
     <script src="/static/js/admin-config.js"></script>
+    <script>
+      function loadSwarmFrames() {
+        const ips = [1,2,3,4].map(i => document.getElementById('sip'+i).value.trim());
+        const grid = document.getElementById('swarm-frames');
+        grid.innerHTML = ips.map(ip => {
+          if(!ip) return `<div style="background:#0a0a0a;border:1px solid #333;border-radius:6px;"></div>`;
+          return `<iframe src="http://${ip}/" style="width:100%;height:100%;border:1px solid #333;border-radius:6px;background:#050505;"></iframe>`;
+        }).join('');
+      }
+    </script>
   </body>
 </html>

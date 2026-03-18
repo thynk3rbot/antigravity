@@ -95,7 +95,7 @@ void MQTTManager::loop() {
 }
 
 void MQTTManager::publishTelemetry(const String &nodeId, float battery,
-                                   int rssi, int hops) {
+                                   int rssi, int hops, float lat, float lon) {
   if (!client.connected())
     return;
 
@@ -104,6 +104,10 @@ void MQTTManager::publishTelemetry(const String &nodeId, float battery,
   doc["battery"] = battery;
   doc["rssi"] = rssi;
   doc["hops"] = hops;
+  if (lat != 0.0f && lon != 0.0f) {
+    doc["lat"] = round(lat * 10000.0) / 10000.0;
+    doc["lon"] = round(lon * 10000.0) / 10000.0;
+  }
 
   String json;
   serializeJson(doc, json);

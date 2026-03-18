@@ -57,6 +57,9 @@ public:
   uint8_t espNowChannel;
   bool wifiEnabled;
   bool bleEnabled;
+  bool gpsEnabled;
+  bool displayEnabled;
+  uint8_t hardwareVariant; // 2=V2, 3=V3, 4=V4
   bool traceLogging;
   char transportMode; // 'J'=JSON, 'C'=CSV, 'K'=KV, 'B'=BIN (message format)
   
@@ -140,6 +143,11 @@ public:
   char GetTransportMode();
   void AddToRegistry(const String &id, const String &hwType);
   String GetRegistryJson();
+
+  // Dynamic Pin Maps (V3 vs V4)
+  uint8_t getPinGpsRx() const;
+  uint8_t getPinGpsTx() const;
+  uint8_t getPinMcpInt() const;
 
   // Peripheral Methods
   void RegisterPeripheral(const String &id, const String &hwType,
