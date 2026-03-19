@@ -65,21 +65,34 @@ When modifying firmware, check this table and update all listed tool files in th
 - **CommInterface:** Always use `COMM_` prefix (prevents collision with `SERIAL`).
 - **Hardware Conflict:** Pin 14 is shared by `PIN_RELAY_12V_1` and `LORA_DIO1`—never enable both.
 
-## Git Workflow — Agent Contribution Rules
+## Unified Workflow — One Branch, One Truth [CRITICAL]
 
-This project lives inside the `spw1` personal monorepo on GitHub. The **default branch for this project is `main`**.
+**All Claude sessions and all IDEs work from `main`.** This is non-negotiable.
 
-| Branch | Purpose |
-| --- | --- |
-| `main` | Stable, tested, deployed firmware — **PR target** |
-| `feature/<topic>` | Where agents and contributors work — always branch from `main` |
+### Rules
+1. **`main` is the single source of truth.** Both firmware versions, all tools, all docs live here.
+2. **Feature branches are short-lived.** Branch from `main`, do the work, PR back within the same session or next day.
+3. **Never accumulate parallel long-lived branches.** If a feature branch is >2 days old without a PR, something is wrong.
+4. **Flash from `main` only.** All PlatformIO build environments target the `main` branch.
+5. **Both `firmware/v1/` and `firmware/v2/` coexist.** v1 is active development, v2 is test bed.
+6. **OTA deploy targets:** use mDNS — `pio run -e ota_master` or `pio run -e ota_slave` (resolves via `loralink-<id>.local`, no hardcoded IPs)
+7. **Single build, multi-flash** — build once, OTA to all devices; never build separately per device.
 
-**Rules for agents:**
+### Directory Layout (canonical)
+```
+main/
+├── firmware/v1/     ← Active development firmware (flash this)
+├── firmware/v2/     ← V2 test bed
+├── tools/           ← Webapp, version scripts, fleet tools
+├── docs/            ← Plans, versioning, specs
+├── .version         ← Version state file
+└── CLAUDE.md        ← This file
+```
+
+### Git Contribution Rules
 - **Never commit directly to `main`** — always work on `feature/<topic>` branches
 - **Always PR feature branches → `main`** — use `/commit-push-pr` skill
-- **OTA deploy targets:** use mDNS — `pio run -e ota_master` or `pio run -e ota_slave` (resolves via `loralink-<id>.local`, no hardcoded IPs)
-- **Versioning is manual** — update `FIRMWARE_VERSION` in `src/config.h` only for meaningful releases, never auto-increment
-- **Single build, multi-flash** — build once, OTA to all devices; never build separately per device
+- **Default branch on GitHub is `main`** — all PRs target `main`
 
 ## DevOps Procedures & Project Rules [CRITICAL]
 
