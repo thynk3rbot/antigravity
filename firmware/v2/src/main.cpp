@@ -23,6 +23,7 @@
 #include "../lib/Transport/lora_transport.h"
 #include "../lib/Transport/wifi_transport.h"
 #include "../lib/Transport/ble_transport.h"
+#include "../lib/Transport/mqtt_transport.h"
 #include "../lib/Transport/interface.h"
 
 // Application Layer
@@ -186,6 +187,11 @@ void controlTask(void* param) {
       meshCoordinator.ageOutNeighbors();
       lastAgeOut = now;
     }
+
+    // Poll MQTT transport (handles connection, message receipt, telemetry publish)
+    #ifdef ENABLE_MQTT_TRANSPORT
+      MQTTTransport::poll();
+    #endif
 
     vTaskDelay(pdMS_TO_TICKS(500));  // 500ms control loop period
   }
@@ -390,6 +396,21 @@ void setup() {
   } else {
     Serial.printf("  ✓ BLE transport initialized (GW-%s)\n", nodeID.c_str());
   }
+
+  // Optional MQTT Transport (Hub only, requires WiFi and broker configured)
+  #ifdef ENABLE_MQTT_TRANSPORT
+    if (MQTTTransport::init()) {
+      Serial.println("  ✓ MQTT transport initialized (configuring broker...)");
+
+      // Register command callback for MQTT
+      MQTTTransport::onCommand([](const std::string& cmd) {
+        Serial.printf("[MQTT] Received command: %s\n", cmd.c_str());
+        // Forward to CommandManager in future (Task 9)
+      });
+    } else {
+      Serial.println("  ! MQTT transport init failed (non-fatal)");
+    }
+  #endif
 
   // ========================================================================
   // Step 5: Initialize Application Layer
