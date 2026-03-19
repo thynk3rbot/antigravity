@@ -146,7 +146,9 @@ void controlTask(void* param) {
     // =====================================================================
     if (now - lastOLEDUpdate >= OLED_UPDATE_INTERVAL_MS) {
       // Update cached values for OLED display
-      OLEDManager::setBatteryVoltage(PowerManager::getBatteryVoltage(), "NORMAL");  // TODO: use actual mode
+      static const char* const kModeNames[] = {"NORMAL", "CONSERVE", "CRITICAL"};
+      OLEDManager::setBatteryVoltage(PowerManager::getBatteryVoltage(),
+                                     kModeNames[static_cast<uint8_t>(PowerManager::getMode())]);
       OLEDManager::setLoRaSignal(rssi, 0);  // TODO: add SNR from LoRa
       OLEDManager::setRelayStatus(relayState > 0);
       OLEDManager::setTemperature(tempC_x10 / 10.0f);
