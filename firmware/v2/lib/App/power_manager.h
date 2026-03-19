@@ -1,137 +1,57 @@
-/**
- * @file power_manager.h
- * @brief Power Management with Battery Voltage Monitoring
- *
- * Implements 3-tier power modes based on battery voltage:
- * - NORMAL (>= 3.2V): Full operation, all transports active, bright OLED
- * - CONSERVE (2.8-3.2V): Reduced activity, WiFi disabled, dim OLED, slower heartbeat
- * - CRITICAL (< 2.8V): Minimum operation, LoRa only, OLED off, sleep mode
- *
- * Battery voltage is monitored via ADC with low-pass filtering (3-sample average).
- * Mode transitions trigger registered callbacks for dependent modules.
- * VEXT rail control for external sensor/radio power management.
- */
-
 #pragma once
-
-#include <cstdint>
+#include <Arduino.h>
 #include <functional>
 
-/**
- * @enum PowerMode
- * @brief 3-tier power management states
- */
 enum class PowerMode : uint8_t {
-    NORMAL,     ///< Full operation (>= 3.2V)
-    CONSERVE,   ///< Reduced activity (2.8-3.2V)
-    CRITICAL    ///< Minimum operation (< 2.8V)
+    NORMAL   = 0,  // Full operation, all features enabled
+    CONSERVE = 1,  // Reduced transmit power, longer sleep intervals
+    CRITICAL = 2   // Minimal operation, display off, max sleep
 };
 
-/**
- * @class PowerManager
- * @brief Singleton power management with battery voltage monitoring
- *
- * Reads battery voltage periodically, smooths with low-pass filter,
- * detects mode transitions, and triggers callbacks for dependent modules.
- */
 class PowerManager {
 public:
-    /// Callback type for power mode changes
+    // Callback type for power mode changes
     typedef std::function<void(PowerMode newMode)> PowerModeCallback;
 
-    /**
-     * @brief Initialize power manager and ADC sampling
-     * @return true if initialization successful, false otherwise
-     */
+    static void begin();
+
+    // Legacy init (alias for begin, returns true always)
     static bool init();
 
-    /**
-     * @brief Get current power mode
-     * @return Current PowerMode (NORMAL, CONSERVE, or CRITICAL)
-     */
+    // VEXT control
+    static void enableVEXT();
+    static void disableVEXT();
+
+    // Battery monitoring
+    static float getBatteryVoltage();   // Returns voltage (e.g. 3.7)
+    static uint8_t getBatteryPercent(); // Returns 0-100
+
+    // Power mode management
     static PowerMode getMode();
+    static void setMode(PowerMode mode);
+    static void autoUpdateMode();  // Call periodically - auto-sets mode based on voltage
 
-    /**
-     * @brief Get current battery voltage
-     * @return Battery voltage in volts (actual cell voltage, not ADC input)
-     */
-    static float getBatteryVoltage();
+    // Mode-dependent intervals (used by heartbeat, mesh aging, etc.)
+    static uint32_t getHeartbeatIntervalMs();  // NORMAL=30s, CONSERVE=60s, CRITICAL=120s
+    static uint32_t getSleepIntervalMs();      // NORMAL=0 (no sleep), CONSERVE=5s, CRITICAL=30s
 
-    /**
-     * @brief Get the last ADC raw reading (for diagnostics)
-     * @return Raw ADC value (0-4095 for 12-bit)
-     */
-    static uint16_t getLastRawADC();
-
-    /**
-     * @brief Register callback for power mode changes
-     * Called once per mode transition (not on every update).
-     * @param callback Function to call with new mode
-     */
-    static void onModeChange(PowerModeCallback callback);
-
-    /**
-     * @brief Update power monitoring
-     * Call periodically from main loop or FreeRTOS task (every 30-60 seconds recommended).
-     * - Reads battery voltage via ADC (10-sample average)
-     * - Applies low-pass filter (3-value history)
-     * - Detects mode transitions
-     * - Calls registered callback if mode changed
-     */
-    static void update();
-
-    /**
-     * @brief Enable/disable VEXT (external power rail)
-     * Controls power to external sensors and radio amplifier.
-     * @param enabled true to turn on VEXT, false to turn off
-     */
-    static void setVEXTEnabled(bool enabled);
-
-    /**
-     * @brief Get VEXT status
-     * @return true if VEXT is currently enabled
-     */
-    static bool isVEXTEnabled();
-
-    /**
-     * @brief Get recommended heartbeat interval for current mode
-     * @return Milliseconds between heartbeat packets
-     *   - NORMAL: 10000 ms (10 seconds)
-     *   - CONSERVE: 30000 ms (30 seconds)
-     *   - CRITICAL: 60000 ms (60 seconds)
-     */
-    static uint16_t getHeartbeatIntervalMs();
-
-    /**
-     * @brief Check if WiFi should be active in current mode
-     * @return true if WiFi is enabled, false otherwise
-     *   - NORMAL: true (enabled)
-     *   - CONSERVE: false (disabled)
-     *   - CRITICAL: false (disabled)
-     */
-    static bool isWiFiEnabled();
-
-    /**
-     * @brief Check if OLED should use bright display in current mode
-     * @return true for bright, false for dim/off
-     *   - NORMAL: true (bright)
-     *   - CONSERVE: true (bright, but reduced refresh)
-     *   - CRITICAL: false (off to save power)
-     */
-    static bool isOLEDBright();
-
-    /**
-     * @brief Print status to Serial for diagnostics
-     */
-    static void printStatus();
-
-    /**
-     * @brief Set interval for battery voltage polling (for testing)
-     * @param intervalMs New polling interval in milliseconds
-     */
-    static void setUpdateIntervalMs(uint16_t intervalMs);
+    // Legacy compatibility methods (used by main.cpp)
+    static void update();                           // Calls autoUpdateMode() + fires callback on change
+    static void onModeChange(PowerModeCallback cb); // Register callback for mode transitions
+    static void printStatus();                      // Print status to Serial
 
 private:
-    // Private constructor (singleton pattern)
-    PowerManager();
+    static PowerMode _mode;
+    static float _lastVoltage;
+    static PowerModeCallback _modeChangeCallback;
+
+    // Voltage thresholds
+    static constexpr float VOLT_NORMAL   = 3.7f;  // Above this = NORMAL
+    static constexpr float VOLT_CONSERVE = 3.4f;  // Above this = CONSERVE
+    // Below VOLT_CONSERVE = CRITICAL
+
+    // ADC conversion constants (calibrate for ESP32 ADC)
+    static constexpr float ADC_VREF     = 3.3f;
+    static constexpr float ADC_MAX      = 4095.0f;
+    static constexpr float VDIV_RATIO   = 2.0f;   // Voltage divider on battery pin
 };
