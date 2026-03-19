@@ -12,6 +12,8 @@ public:
     return instance;
   }
 
+  TinyGPSPlus gps;
+
   void init();
   void loop();
   void setRawMode(bool enabled);
@@ -26,7 +28,6 @@ public:
 
 private:
   GPSManager();
-  TinyGPSPlus gps;
   unsigned long lastPrint;
   bool rawMode;
 };

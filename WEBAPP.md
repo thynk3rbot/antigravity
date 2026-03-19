@@ -1515,109 +1515,29 @@ This concludes the official specification. Would you like me to generate a check
 can you aggregate the requirements from this entire conversation into the specification, where is the document in aggregated normalized form?
 
 Gemini said
-This consolidated Functional and Technical Specification serves as the definitive architecture for the LoRaLink Any2Any ecosystem. It is optimized for a fleet of WiFi LoRa 32 (V3) devices managed by a centralized PC-based Fleet Administrator.
+This document now serves as the technical documentation for the **LoRaLink Fleet Administrator**, a PC-based multi-transport configuration tool. 
 
-LoRaLink Any2Any: Master Specification (v1.5.0)
-1. System Overview
-The LoRaLink Any2Any system is a multi-transport IoT fleet administration framework. It bridges high-bandwidth PC-to-Gateway communication (WiFi) with long-range Gateway-to-Node mesh networking (LoRa/ESP-NOW).
+> [!IMPORTANT]
+> For the core firmware architecture, mesh protocols, and hardware specifications, please refer to the **[System Specification](SYSTEM.md)**.
 
-1.1 Hardware Reference
-Target Board: WiFi LoRa 32 V3 (ESP32-S3 + SX1262).
+## Fleet Administrator: Functional Specification
 
-Pin Mapping: All software logic must adhere to the Official V3 Pinout Diagram.
+The Fleet Administrator is the primary interface for managing a network of LoRaLink nodes from a centralized PC.
 
-Board Identity: Stored in the hw_registry NVS namespace to survive factory resets and define physical capabilities.
+### 1. Dashboard & Monitoring
+- **Live Pin Grid**: Real-time state visualization of all administratively enabled pins.
+- **Connectivity Health**: Status tracking for nodes via WiFi, BLE, and LoRa signal metrics (RSSI/SNR).
+- **Protocol Switching**: Automatic failover between high-bandwidth (WiFi) and local (BLE/Serial) interfaces.
 
-2. Administrative Pin Configuration (APC)
-The core architectural principle is Administrative Filtering. This layer ensures that only authorized pins generate system activity or network traffic.
+### 2. Fleet Management
+- **Administrative Pin Control (APC)**: Provisioning tool to enable/disable specific physical GPIOs across nodes.
+- **Friendly Naming**: Persistent aliases for pins (e.g., "110V Pump") synced to node NVS.
+- **Group Operations**: Logic to push configuration or schedules to tagged subsets of devices.
 
-2.1 The pin_enabled Flag
-Definition: A persistent boolean flag in the loralink NVS namespace.
-
-Authority: Only the Fleet Admin (PC via WiFi) can toggle this flag.
-
-Enforcement:
-
-Task Manager: Ignores any scheduled actions for pins where pin_enabled == false.
-
-I/O Driver: Blocks physical state changes for disabled pins.
-
-Telemetry: Pins marked false are strictly excluded from all status broadcasts.
-
-2.2 Identification & Labeling
-Interest List: On boot, the device builds a runtime list of pins that are both physically present (cap_mask) and administratively active (pin_enabled).
-
-Friendly Names: The pin_names namespace stores human-readable aliases (e.g., "Pin 5" → "Main 110V Pump").
-
-3. Communication & Handshake Protocol
-The system uses a tiered transport approach: PC Admin → WiFi → Gateway → LoRa → Fleet.
-
-3.1 Secure WiFi Handshake
-Since the PC Admin connects via WiFi, the following sequence is mandatory for session establishment:
-
-Authentication: The Admin app must provide the AES crypto_key to establish a session.
-
-Discovery Manifest: Upon login, the Gateway pushes a Hardware Manifest JSON.
-
-Contents: board_id, fw_ver, and the "Interest List" (current pin_enabled statuses and labels).
-
-UI Sync: The Admin UI dynamically renders only the pins provided in the manifest, hiding unconfigured or disabled hardware.
-
-3.2 Sparse Telemetry Protocol
-To protect low-bandwidth LoRa airtime:
-
-Broadcast by Exception: Nodes only broadcast status when an Enabled pin changes state.
-
-Payload Pruning: JSON payloads are "Sparse"—they contain only keys for enabled pins.
-
-Implicit State: If a pin is absent from the JSON object, the Admin app assumes its state is unchanged or that the pin is administratively disabled.
-
-4. Operational Safety & Power Interlocks
-Hardware safety is prioritized via autonomous logic within the shared codebase.
-
-4.1 Critical Power Management
-Battery ADC (Pin 1): Continuous monitoring is mandatory.
-
-Threshold: If voltage drops below 3.4V, the system must force all enabled relays (Pins 5, 46, 6, 7) to LOW to preserve the radio heartbeat.
-
-4.2 External Rail Control (Vext)
-Vext (Pin 36): Toggles the power rail for external sensors.
-
-Logic: Vext is only energized (Pulled LOW) if an enabled sensor (e.g., DHT on Pin 15) requires a reading. It remains HIGH (Off) otherwise to maximize battery life.
-
-5. NVS Namespace Registry
-The system utilizes the ESP32 Preferences library with a partitioned schema.
-
-Namespace	Responsibility	Data Persistence Type
-hw_registry	Board Identity	Persistent (Static)
-loralink	System & Comms	Persistent (pin_enabled, crypto_key)
-lora_hw	Pin States	Volatile (Wiped on Factory Reset)
-pin_names	UI Labels	Persistent (Admin Defined)
-espnow	Peer Table	Volatile (Wiped on Factory Reset)
-
-# Implemented Features (v1.5.0)
-
-The following features have been fully implemented in the PC-based Fleet Administrator (`tools/webapp/server.py`) and the device firmware.
-
-## 1. Multi-Column Dashboard UI
-- **4-Panel Layout**: Centralized monitoring of Live Pins, Dashboards, and Integrations.
-- **Interactive Pin Grid**: GPIO pins are displayed in a compact, multi-column grid with real-time state indicators (Green for High, Black for Low).
-- **Responsive Design**: Optimized for various screen sizes with premium aesthetics and smooth transitions.
-
-## 2. Graphical Schedule Editor
-- **GUI-Based Task Management**: Replaced raw JSON editing with an interactive, categorized interface.
-- **Task Categorization**: Pins are grouped by type (Relays, LEDs, Custom) for easier management.
-- **Persistence**: Schedules are saved to NVS and synchronized across both HTTP and BLE transports.
-
-## 3. MQTT & Integration Page
-- **Centralized Integration**: A dedicated `/integration` page for configuring MQTT broker settings, topics, and credentials.
-- **Excel Data Streaming**: Support for the `STREAM` command to push data batches from PC tools directly to the mesh.
-
-## 4. Persistent Friendly Naming
-- **Custom Aliases**: Users can assign and save friendly names for GPIO pins (e.g., "Main Pump", "Status LED") that persist across reboots via the `pin_names` NVS namespace.
-
-## 5. Hybrid Transport Reliability
-- **Failover Strategy**: The webapp intelligently switches between WiFi (HTTP) and BLE based on connectivity health, ensuring continuous control of the fleet.
+### 3. Integration & Data Flows
+- **MQTT Bridge**: Forwarding mesh telemetry to centralized brokers for logging and analytics.
+- **Excel/CSV Streaming**: Direct injection of data batches into the mesh via the `STREAM` command.
+- **Schedule Editor**: Graphical interface for defining complex pin behaviors without manual JSON/CSV editing.
 
 ---
-*Hardware Reference*: [WiFi LoRa 32 (V3) Pinout Map](https://heltec.org/project/wifi-lora-32-v3/)
+*Hardware Reference*: [WiFi LoRa 32 (V3) Pinout Map](media/Heltec_pinmap.png)

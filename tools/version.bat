@@ -33,7 +33,7 @@ setlocal enabledelayedexpansion
 set "version=%2"
 if not "!version:~0,1!"=="" (
     REM Simple regex check for format X.X.XX-2,3,4
-    echo !version! | findstr /R "^[0-9]\+\.[0-9]\+\.[0-9][0-9]-[234]$" >nul
+    echo !version!| findstr /R "^[0-9]*\.[0-9]*\.[0-9][0-9]-[234]$" >nul
     if errorlevel 1 (
         echo [ERROR] Invalid version format: !version!
         echo Expected format: MAJOR.MINOR.POINT-PLATFORM
@@ -74,13 +74,14 @@ if "%2"=="" (
 )
 setlocal enabledelayedexpansion
 set "version=%2"
-echo !version! | findstr /R "^[0-9]\+\.[0-9]\+\.[0-9][0-9]-[234]$" >nul
+echo !version!| findstr /R "^[0-9]*\.[0-9]*\.[0-9][0-9]-[234]$" >nul
 if errorlevel 1 (
     echo [ERROR] Invalid version format: !version!
     exit /b 1
 )
-if not exist "%VERSION_FILE%" (
-    type nul > "%VERSION_FILE%"
+if exist "%VERSION_FILE%" (
+    findstr /V /C:"-%version:~-1%" "%VERSION_FILE%" > "%VERSION_FILE%.tmp"
+    move /Y "%VERSION_FILE%.tmp" "%VERSION_FILE%" >nul
 )
 >> "%VERSION_FILE%" echo !version!
 echo [OK] Version set to: !version!
@@ -104,7 +105,7 @@ if not exist "%VERSION_FILE%" (
 echo [INFO] Validating all versions...
 for /f "tokens=*" %%a in (%VERSION_FILE%) do (
     set "version=%%a"
-    echo !version! | findstr /R "^[0-9]\+\.[0-9]\+\.[0-9][0-9]-[234]$" >nul
+    echo !version!| findstr /R "^[0-9]*\.[0-9]*\.[0-9][0-9]-[234]$" >nul
     if errorlevel 1 (
         echo [ERROR] Invalid format: !version!
         exit /b 1

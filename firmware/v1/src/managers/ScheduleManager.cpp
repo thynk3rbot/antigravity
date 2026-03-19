@@ -9,6 +9,7 @@
 #include "MCPManager.h"
 #include "PowerManager.h"
 #include "WiFiManager.h"
+#include "GPSManager.h"
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <TaskScheduler.h>
@@ -266,8 +267,15 @@ void ScheduleManager::peripheralSerialTask() {
       line.trim();
       pSerialBuffer = "";
       if (line.length() > 0) {
-        CommandManager::getInstance().handleCommand(line,
-                                                    CommInterface::COMM_SERIAL);
+        // NMEA Filter: Do not process raw GPS strings as commands (prevents mesh saturation)
+        if (line.startsWith("$")) {
+          for (size_t i = 0; i < line.length(); i++) {
+            GPSManager::getInstance().gps.encode(line[i]);
+          }
+          GPSManager::getInstance().gps.encode('\n');
+        } else {
+          CommandManager::getInstance().handleCommand(line, CommInterface::COMM_SERIAL);
+        }
       }
     } else if (c != '\r') {
       if (pSerialBuffer.length() < 512) {

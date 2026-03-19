@@ -214,7 +214,6 @@ void DataManager::LoadSettings() {
   gpsEnabled = p.getBool("gps_en", true);
   
   uint32_t defaultBaud = 9600;
-  if (hardwareVariant == 4) defaultBaud = 115200;
   gpsBaud = p.getUInt("gps_baud", defaultBaud);
 
   displayEnabled = p.getBool("disp_en", true);
