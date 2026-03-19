@@ -11,6 +11,7 @@
 #include "ble_transport.h"
 #include "../App/nvs_manager.h"
 #include <Arduino.h>
+#include <functional>
 
 #if !defined(NATIVE_TEST)
   #include <NimBLEDevice.h>
@@ -36,6 +37,7 @@ char BLETransport::statusString[32] = "Disconnected";
 
 BLETransport::ConnectionCallback BLETransport::connectCallback = nullptr;
 BLETransport::ConnectionCallback BLETransport::disconnectCallback = nullptr;
+BLETransport::RxStringCallback BLETransport::s_rxStringCallback = nullptr;
 
 // ============================================================================
 // NimBLE GATT Callback Helpers (only compiled when BLE hardware is available)
@@ -368,7 +370,17 @@ void BLETransport::bleOnDisconnect() {
 void BLETransport::bleOnRxData(const uint8_t* data, uint16_t len) {
     if (data == nullptr || len == 0) return;
 
-    // Append to RX ring buffer, dropping overflow bytes
+    // Fire string callback (for CommandManager) if registered
+    if (s_rxStringCallback) {
+        String str((const char*)data, len);
+        str.trim();
+        if (str.length() > 0) {
+            s_rxStringCallback(str);
+            return;  // consumed by CommandManager; skip raw buffer
+        }
+    }
+
+    // Fallback: append to RX ring buffer
     uint16_t space = RX_BUFFER_SIZE - rxPos;
     uint16_t toCopy = (len <= space) ? len : space;
     if (toCopy > 0) {
@@ -381,6 +393,14 @@ void BLETransport::bleOnRxData(const uint8_t* data, uint16_t len) {
         lastError = (int)TransportStatus::BUFFER_FULL;
         Serial.println("[BLE] RX buffer overflow — bytes dropped");
     }
+}
+
+bool BLETransport::sendStringStatic(const String& str) {
+    return send((const uint8_t*)str.c_str(), (uint16_t)str.length());
+}
+
+void BLETransport::setRxCallback(RxStringCallback cb) {
+    s_rxStringCallback = cb;
 }
 
 void BLETransport::bleProcessTxQueue() {

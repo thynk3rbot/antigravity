@@ -1,5 +1,6 @@
 #include "command_manager.h"
 #include "nvs_config.h"
+#include "schedule_manager.h"
 #include <Arduino.h>
 
 // ---------------------------------------------------------------------------
@@ -47,6 +48,8 @@ void CommandManager::process(const String& input, ResponseCallback responseCallb
         response = _handleHelp();
     } else if (cmd == "GETCONFIG") {
         response = _handleGetConfig();
+    } else if (cmd == "SCHED") {
+        response = _handleSched(args);
     } else {
         response = "{\"ok\":false,\"error\":\"Unknown command: " + cmd + "\"}";
     }
@@ -188,14 +191,92 @@ String CommandManager::_handleReboot() {
 
 String CommandManager::_handleHelp() {
     String help = "Available commands:\n";
-    help += "  STATUS              - Return JSON status blob\n";
-    help += "  RELAY <1|2> <ON|OFF>- Control relay 1 or 2\n";
-    help += "  SETWIFI <SSID> <PW> - Set WiFi credentials (PW may contain spaces)\n";
-    help += "  BLINK               - Blink LED 3 times\n";
-    help += "  REBOOT              - Reboot the device\n";
-    help += "  HELP                - Show this help message\n";
-    help += "  GETCONFIG           - Return current NVS configuration as JSON";
+    help += "  STATUS                          - Return JSON status blob\n";
+    help += "  RELAY <1|2> <ON|OFF>            - Control relay 1 or 2\n";
+    help += "  SETWIFI <SSID> <PW>             - Set WiFi credentials\n";
+    help += "  BLINK                           - Blink LED 3 times\n";
+    help += "  REBOOT                          - Reboot the device\n";
+    help += "  GETCONFIG                       - Return NVS config as JSON\n";
+    help += "  SCHED LIST                      - List all scheduled tasks\n";
+    help += "  SCHED ADD <n> <type> <pin> <s>  - Add task (type: TOGGLE PULSE ON OFF PWM READ)\n";
+    help += "  SCHED REM <name>                - Remove task by name\n";
+    help += "  SCHED ENABLE/DISABLE <name>     - Enable or pause a task\n";
+    help += "  SCHED CLEAR                     - Remove all tasks\n";
+    help += "  SCHED SAVE                      - Persist tasks to flash\n";
+    help += "  HELP                            - Show this help message";
     return help;
+}
+
+String CommandManager::_handleSched(const String& args) {
+    String a = args;
+    a.trim();
+
+    // Extract sub-command
+    int spaceIdx = a.indexOf(' ');
+    String sub  = (spaceIdx < 0) ? a : a.substring(0, spaceIdx);
+    String rest = (spaceIdx < 0) ? "" : a.substring(spaceIdx + 1);
+    sub.toUpperCase();
+
+    if (sub == "LIST") {
+        return ScheduleManager::getReport();
+
+    } else if (sub == "SAVE") {
+        ScheduleManager::saveSchedules();
+        return "{\"ok\":true,\"msg\":\"Schedules saved\"}";
+
+    } else if (sub == "CLEAR") {
+        ScheduleManager::clearTasks();
+        return "{\"ok\":true,\"msg\":\"All schedules cleared\"}";
+
+    } else if (sub == "ADD") {
+        // Format: ADD <name> <type> <pin> <interval_s> [duration_s]
+        // e.g.  : ADD PumpA TOGGLE 32 30
+        //         ADD ValveB PULSE 33 600 5
+        String parts[6];
+        int count = 0;
+        int start = 0;
+        for (int i = 0; i <= (int)rest.length() && count < 6; i++) {
+            if (i == (int)rest.length() || rest[i] == ' ') {
+                if (i > start) parts[count++] = rest.substring(start, i);
+                start = i + 1;
+            }
+        }
+        if (count < 4) {
+            return "{\"ok\":false,\"error\":\"Usage: SCHED ADD <name> <type> <pin> <interval_s> [duration_s]\"}";
+        }
+        String name     = parts[0];
+        String type     = parts[1]; type.toUpperCase();
+        int    pin      = parts[2].toInt();
+        unsigned long iv  = parts[3].toInt();
+        unsigned long dur = (count >= 5) ? parts[4].toInt() : 0;
+
+        bool ok = ScheduleManager::addTask(name, type, pin, iv, dur, "CMD");
+        if (ok) {
+            return "{\"ok\":true,\"name\":\"" + name + "\",\"type\":\"" + type +
+                   "\",\"pin\":" + String(pin) + ",\"interval_s\":" + String(iv) + "}";
+        }
+        return "{\"ok\":false,\"error\":\"Failed to add task (low heap or bad args)\"}";
+
+    } else if (sub == "REM") {
+        String name = rest;
+        name.trim();
+        bool ok = ScheduleManager::removeTask(name);
+        if (ok) return "{\"ok\":true,\"removed\":\"" + name + "\"}";
+        return "{\"ok\":false,\"error\":\"Task not found: " + name + "\"}";
+
+    } else if (sub == "ENABLE") {
+        String name = rest; name.trim();
+        bool ok = ScheduleManager::enableTask(name);
+        return ok ? "{\"ok\":true}" : "{\"ok\":false,\"error\":\"Task not found\"}";
+
+    } else if (sub == "DISABLE") {
+        String name = rest; name.trim();
+        bool ok = ScheduleManager::disableTask(name);
+        return ok ? "{\"ok\":true}" : "{\"ok\":false,\"error\":\"Task not found\"}";
+
+    } else {
+        return "{\"ok\":false,\"error\":\"Unknown SCHED sub-command. Try: LIST ADD REM CLEAR SAVE ENABLE DISABLE\"}";
+    }
 }
 
 String CommandManager::_handleGetConfig() {

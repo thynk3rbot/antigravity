@@ -33,6 +33,8 @@
 #include "../lib/App/power_manager.h"
 #include "../lib/App/oled_manager.h"
 #include "../lib/App/http_api.h"
+#include "../lib/App/command_manager.h"
+#include "../lib/App/schedule_manager.h"
 
 // Bench Mode (optional, compile-time selectable)
 #ifdef BENCH_MODE
@@ -183,6 +185,9 @@ void controlTask(void* param) {
       lastTelemetrySend = now;
     }
 
+    // Advance scheduled GPIO tasks (TaskScheduler cooperative poll)
+    ScheduleManager::execute();
+
     // Age out stale mesh neighbors
     static uint32_t lastAgeOut = 0;
     if (now - lastAgeOut > 60000) {  // Every 60 seconds
@@ -324,6 +329,11 @@ void setup() {
     OLEDManager::update();
   });
 
+  // Enable external power rail (VEXT) — powers OLED and peripherals on Heltec boards.
+  // Must happen before Wire.begin() / OLED init or the display has no power.
+  PowerManager::enableVEXT();
+  delay(50);  // Allow rail to stabilize
+
   Serial.println("  ✓ Power manager initialized");
 
   // ========================================================================
@@ -392,22 +402,37 @@ void setup() {
     Serial.println("  ! WiFi credentials not configured, skipping WiFi");
   }
 
-  // Optional BLE Transport (for wireless testing with ble_instrument.py)
+  // Initialize Command Manager
+  CommandManager::begin();
+  CommandManager::setRelayCallback([](uint8_t relay, bool state) {
+    // relay is 1-based; setState uses a bitmask over all channels
+    uint8_t mask = relayHAL.getState();
+    uint8_t bit  = relay - 1;
+    if (state) mask |=  (1u << bit);
+    else       mask &= ~(1u << bit);
+    relayHAL.setState(mask);
+  });
+
+  // Optional BLE Transport — RX wired to CommandManager
   if (!BLETransport::initStatic()) {
     Serial.println("  ! BLE transport init failed (non-fatal)");
   } else {
     Serial.printf("  ✓ BLE transport initialized (%s)\n", nodeID.c_str());
+    BLETransport::setRxCallback([](const String& data) {
+      CommandManager::process(data, [](const String& resp) {
+        BLETransport::sendStringStatic(resp);
+      });
+    });
   }
 
   // Optional MQTT Transport (Hub only, requires WiFi and broker configured)
   #ifdef ENABLE_MQTT_TRANSPORT
     if (MQTTTransport::initStatic()) {
       Serial.println("  ✓ MQTT transport initialized (configuring broker...)");
-
-      // Register command callback for MQTT
       MQTTTransport::onCommand([](const std::string& cmd) {
-        Serial.printf("[MQTT] Received command: %s\n", cmd.c_str());
-        // Forward to CommandManager in future (Task 9)
+        CommandManager::process(String(cmd.c_str()), [](const String& resp) {
+          MQTTTransport::instance()->publishResponse(resp);
+        });
       });
     } else {
       Serial.println("  ! MQTT transport init failed (non-fatal)");
@@ -430,6 +455,14 @@ void setup() {
   meshCoordinator.init();
   meshCoordinator.setOwnNodeID(g_ourNodeID);
   Serial.println("  ✓ Mesh coordinator initialized");
+
+  // Initialize GPIO scheduler (loads /schedule.json from LittleFS)
+  if (ScheduleManager::init()) {
+    Serial.printf("  ✓ Scheduler initialized (%d task(s) loaded)\n",
+                  ScheduleManager::getTaskCount());
+  } else {
+    Serial.println("  ! Scheduler init failed (non-fatal)");
+  }
 
   // ========================================================================
   // Step 6 (Optional): Run Bench Mode Diagnostics

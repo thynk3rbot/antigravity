@@ -157,10 +157,11 @@
   #define BAT_ADC_UNIT 1         // ADC1
   #define BAT_ADC_CHANNEL ADC1_CHANNEL_6
 #elif defined(ARDUINO_HELTEC_WIFI_LORA_32_V3)
-  // Heltec V3 (ESP32-S3): Battery voltage on GPIO 34 (ADC1_CH8)
-  #define BAT_ADC_PIN 34
+  // Heltec V3 (ESP32-S3): Battery voltage on GPIO 1 (ADC1_CH0)
+  // NOTE: GPIO 34 does not exist on ESP32-S3; battery sense is GPIO 1
+  #define BAT_ADC_PIN 1
   #define BAT_ADC_UNIT 1         // ADC1
-  #define BAT_ADC_CHANNEL ADC1_CHANNEL_8
+  #define BAT_ADC_CHANNEL ADC1_CHANNEL_0
 #elif defined(ARDUINO_HELTEC_WIFI_LORA_32_V4)
   // Heltec V4 (ESP32-S3R2): Battery voltage on GPIO 14 (ADC2_CH3)
   #define BAT_ADC_PIN 14
@@ -201,15 +202,10 @@
 // Conditional: Hub-Only Features
 // ============================================================================
 
+// WiFi + OTA enabled on all boards (nodes need OTA for field updates)
+#define ENABLE_WIFI_TRANSPORT
 #ifdef ROLE_HUB
-  // Hub has WiFi capability (all Heltec boards support this)
-  #define ENABLE_WIFI_TRANSPORT
   #define ENABLE_MQTT_TRANSPORT
-  // #define ENABLE_HTTP_OTA      // Optional for v2.1
-#else
-  // Nodes: explicitly disable WiFi-dependent features
-  #undef ENABLE_WIFI_TRANSPORT
-  #undef ENABLE_MQTT_TRANSPORT
 #endif
 
 // V4-only features (PSRAM available)

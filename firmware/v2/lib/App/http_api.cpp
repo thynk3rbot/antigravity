@@ -6,6 +6,7 @@
 #include "http_api.h"
 #include "nvs_manager.h"
 #include "status_builder.h"
+#include "command_manager.h"
 #include <Arduino.h>
 #include <ESPAsyncWebServer.h>
 #include <ArduinoJson.h>
@@ -267,55 +268,26 @@ void HttpAPI::handleCommand(AsyncWebServerRequest* request) {
 
   Serial.printf("[HttpAPI] POST /api/command cmd=%s\n", cmd);
 
-  // Handle specific commands
-  if (strcmp(cmd, "SETWIFI") == 0) {
-    const char* ssid = doc["params"]["ssid"];
-    const char* pass = doc["params"]["pass"];
-
-    if (!ssid || !pass) {
-      DynamicJsonDocument errDoc(256);
-      errDoc["status"] = "ERROR";
-      errDoc["message"] = "SETWIFI requires ssid and pass parameters";
-
-      String jsonStr;
-      serializeJson(errDoc, jsonStr);
-
-      AsyncWebServerResponse* response = request->beginResponse(400, "application/json", jsonStr);
-      response->addHeader("Access-Control-Allow-Origin", "*");
-      request->send(response);
-      return;
+  // Build command string: "CMD arg1 arg2" format for CommandManager
+  String cmdStr = String(cmd);
+  if (doc.containsKey("args")) {
+    cmdStr += " " + doc["args"].as<String>();
+  } else if (doc.containsKey("params")) {
+    // Flatten params as space-separated for simple commands
+    for (JsonPair p : doc["params"].as<JsonObject>()) {
+      cmdStr += " " + String(p.value().as<const char*>());
     }
-
-    // Store WiFi credentials in NVS
-    NVSManager::setWiFiSSID(ssid);
-    NVSManager::setWiFiPassword(pass);
-
-    Serial.printf("[HttpAPI] WiFi credentials updated: SSID=%s\n", ssid);
-
-    DynamicJsonDocument respDoc(256);
-    respDoc["status"] = "OK";
-    respDoc["message"] = "WiFi credentials saved";
-    respDoc["ssid"] = ssid;
-
-    String jsonStr;
-    serializeJson(respDoc, jsonStr);
-
-    AsyncWebServerResponse* response = request->beginResponse(200, "application/json", jsonStr);
-    response->addHeader("Access-Control-Allow-Origin", "*");
-    request->send(response);
-  } else {
-    // Unknown command
-    DynamicJsonDocument errDoc(256);
-    errDoc["status"] = "ERROR";
-    errDoc["message"] = "Unknown command";
-
-    String jsonStr;
-    serializeJson(errDoc, jsonStr);
-
-    AsyncWebServerResponse* response = request->beginResponse(400, "application/json", jsonStr);
-    response->addHeader("Access-Control-Allow-Origin", "*");
-    request->send(response);
   }
+
+  // Route through CommandManager — handles STATUS, RELAY, SETWIFI, BLINK, REBOOT, HELP
+  String responseJson;
+  CommandManager::process(cmdStr, [&responseJson](const String& resp) {
+    responseJson = resp;
+  });
+
+  AsyncWebServerResponse* response = request->beginResponse(200, "application/json", responseJson);
+  response->addHeader("Access-Control-Allow-Origin", "*");
+  request->send(response);
 }
 
 void HttpAPI::handleOTACheck(AsyncWebServerRequest* request) {

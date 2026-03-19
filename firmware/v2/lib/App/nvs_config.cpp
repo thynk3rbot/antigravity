@@ -1,5 +1,6 @@
 #include "nvs_config.h"
 #include <WiFi.h>
+#include <esp_efuse.h>
 
 // ============================================================================
 // Static member definitions
@@ -50,19 +51,25 @@ void NVSConfig::factoryReset() {
 // ============================================================================
 
 String NVSConfig::_generateNodeId() {
-    // Generate from last 5 characters of MAC (e.g. "AA:BB:CC:DD:EE:FF" -> "DDEEFF")
-    // WiFi.macAddress() returns "AA:BB:CC:DD:EE:FF" (17 chars)
-    // substring(9) -> "DD:EE:FF", then strip colons
-    String mac = WiFi.macAddress();
-    String suffix = mac.substring(9); // "DD:EE:FF"
-    suffix.replace(":", "");          // "DDEEFF"
-    suffix.toUpperCase();
-    return "NODE_" + suffix;
+    // Use ESP efuse base MAC — works before WiFi.begin(), unlike WiFi.macAddress()
+    uint8_t mac[6];
+    esp_efuse_mac_get_default(mac);
+    char suffix[7];
+    snprintf(suffix, sizeof(suffix), "%02X%02X%02X", mac[3], mac[4], mac[5]);
+    return "NODE_" + String(suffix);
+}
+
+static bool _isStaleNodeId(const String& id) {
+    return id.length() == 0
+        || id.equalsIgnoreCase("unknown")
+        || id.equalsIgnoreCase("node")
+        || id.equalsIgnoreCase("default");
 }
 
 String NVSConfig::getNodeId() {
     Preferences prefs;
     if (!prefs.begin(NVS_NAMESPACE, true)) {
+        // Namespace open failed — return generated ID without persisting
         Serial.println("[NVSConfig] ERROR: Failed to open NVS for getNodeId");
         return _generateNodeId();
     }
@@ -70,10 +77,10 @@ String NVSConfig::getNodeId() {
     String id = prefs.getString(NVS_KEY_NODE_ID, "");
     prefs.end();
 
-    if (id.length() == 0) {
-        // Not set yet — generate from MAC and persist it
+    if (_isStaleNodeId(id)) {
         id = _generateNodeId();
-        Serial.printf("[NVSConfig] Node ID not found, generated: %s\n", id.c_str());
+        Serial.printf("[NVSConfig] Node ID was '%s', generated: %s\n",
+                      id.length() ? id.c_str() : "(empty)", id.c_str());
         setNodeId(id);
     }
 

@@ -49,6 +49,7 @@ private:
     static String _handleReboot();
     static String _handleHelp();
     static String _handleGetConfig();
+    static String _handleSched(const String& args);
 
     // Parse "CMD ARGS" -> cmd and args
     static void _parseCommand(const String& input, String& cmd, String& args);

@@ -91,9 +91,41 @@ Follow these rules for all builds, bugs, and enhancements:
 - **Feature Specification Rule**: If the USER requests a feature enhancement, the ASSISTANT **must** demand a formal specification in a standard, non-pedantic format. **Do not proceed** with implementation until the user complies with the request.
 - **DevOps Workflow**: Refer to the [`devops.md`](file:///c:/Users/spw1/OneDrive/Documents/Code/Antigravity%20Repository/antigravity/.agents/workflows/devops.md) workflow for more details.
 
+## Firmware Versioning [MANDATORY]
+
+**Format:** `MAJOR.MINOR.POINT-PLATFORM` (e.g., `0.0.00-2`, `0.1.05-3`, `1.0.00-4`)
+
+**Platforms:** 2, 3, 4 (target hardware variants)
+
+**CRITICAL:** Version **MUST** be bumped for EVERY firmware flash. Build system will warn if not updated.
+
+### Version Management Commands
+
+Store in `.version` file. Use `tools/version.sh` (bash) or `tools/version.bat` (Windows):
+
+```bash
+# Show current version for a platform
+tools/version.sh current 2
+
+# Bump point release (0.0.XX → 0.0.YY)
+tools/version.sh bump point 2
+
+# Bump minor version (0.XX.00 → 0.YY.00)
+tools/version.sh bump minor 3
+
+# Set specific version
+tools/version.sh set 0.1.00-2
+
+# Validate all versions
+tools/version.sh validate-all
+```
+
+See `VERSIONING.md` for full methodology and rules.
+
 ## Shortcuts & Workflows
 
 - `/devops` - Current project devops procedures and rules
+- `/version` - Firmware version management (`tools/version.sh`)
 - `/build` - `pio run -e heltec_wifi_lora_32_V3`
 - `/flash` - Build + Upload + Monitor (`/flash.md`)
 - `/commit` - Verify build -> Stage -> Commit -> Push

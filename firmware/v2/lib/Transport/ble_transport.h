@@ -25,6 +25,8 @@
 #include <string>
 #include <cstdint>
 #include <cstring>
+#include <functional>
+#include <Arduino.h>
 
 /**
  * @class BLETransport
@@ -144,6 +146,18 @@ public:
     static void onDisconnect(ConnectionCallback callback);
 
     // ========================================================================
+    // String-level TX/RX (for CommandManager integration)
+    // ========================================================================
+
+    using RxStringCallback = std::function<void(const String&)>;
+
+    /** @brief Send a String over NUS TX characteristic */
+    static bool sendStringStatic(const String& str);
+
+    /** @brief Register callback fired when a NUS string is received from client */
+    static void setRxCallback(RxStringCallback cb);
+
+    // ========================================================================
     // Internal BLE Event Handlers
     // (public so NimBLE GATT callback classes in ble_transport.cpp can call them)
     // ========================================================================
@@ -185,6 +199,7 @@ private:
     static uint32_t rxBytes;
     static int      lastError;
     static char     statusString[32];
+    static RxStringCallback s_rxStringCallback;
 
     static ConnectionCallback connectCallback;
     static ConnectionCallback disconnectCallback;
