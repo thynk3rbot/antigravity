@@ -22,6 +22,7 @@
 #include "../lib/Transport/message_router.h"
 #include "../lib/Transport/lora_transport.h"
 #include "../lib/Transport/wifi_transport.h"
+#include "../lib/Transport/ble_transport.h"
 #include "../lib/Transport/interface.h"
 
 // Application Layer
@@ -66,6 +67,9 @@ void radioTask(void* param) {
   uint8_t rxBuffer[256];
 
   while (1) {
+    // Poll BLE transport for any incoming data
+    BLETransport::pollStatic();
+
     // Poll message router (processes all registered transports)
     // In future: may add MQTT, BLE, Serial transports here
     messageRouter.process();
@@ -378,6 +382,13 @@ void setup() {
     }
   } else {
     Serial.println("  ! WiFi credentials not configured, skipping WiFi");
+  }
+
+  // Optional BLE Transport (for wireless testing with ble_instrument.py)
+  if (!BLETransport::initStatic()) {
+    Serial.println("  ! BLE transport init failed (non-fatal)");
+  } else {
+    Serial.printf("  ✓ BLE transport initialized (GW-%s)\n", nodeID.c_str());
   }
 
   // ========================================================================
