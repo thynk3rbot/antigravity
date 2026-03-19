@@ -1,163 +1,159 @@
 /**
  * @file wifi_transport.h
- * @brief WiFi transport layer for LoRaLink v2
+ * @brief WiFi Transport Layer for LoRaLink v2
  *
- * Manages WiFi connectivity with auto-reconnect, MDNS hostname,
- * and integration with the transport interface for potential future use.
- * Primary purpose: Enable HTTP API server for device configuration and monitoring.
+ * Manages WiFi connectivity, ArduinoOTA, mDNS, and integrates with
+ * TransportInterface for the message routing system.
+ *
+ * Primary purpose: Provide WiFi connectivity for the HTTP API server.
+ * HTTP endpoints are handled by HttpAPI (lib/App/http_api.h).
+ *
+ * Usage (from main.cpp):
+ *   WiFiTransport::init(ssid, pass, "loralink-Peer1");
+ *   // In loop / FreeRTOS task:
+ *   WiFiTransport::poll();   // drives OTA + reconnect
  */
 
 #pragma once
 
 #include "interface.h"
+#include <Arduino.h>
+#include <WiFi.h>
+#include <ArduinoOTA.h>
+#include <ESPmDNS.h>
+#include <functional>
 #include <string>
 #include <cstdint>
-#include <esp_wifi.h>
+
+// ============================================================================
+// Reconnect / backoff tunables
+// ============================================================================
+
+#define WIFI_CONNECT_TIMEOUT_MS     10000   // 10 s initial connect wait
+#define WIFI_RECONNECT_INTERVAL_MS  30000   // 30 s between reconnect attempts
+#define WIFI_POLL_INTERVAL_MS       500     // poll granularity inside connect()
 
 /**
  * @class WiFiTransport
- * @brief WiFi connectivity layer with auto-reconnect capability
+ * @brief Static WiFi transport layer with OTA + mDNS support
  *
- * Manages:
- * - WiFi station mode initialization and connection
- * - Automatic reconnection with exponential backoff
- * - MDNS hostname registration (loralink-{NODEID}.local)
- * - Event-driven connection/disconnection handling
- *
- * Note: Currently implements basic connection management.
- * Send/receive methods are placeholder implementations as WiFi
- * transport is primarily used for HTTP API (handled separately).
+ * All state is static (singleton-style) so main.cpp can call
+ * WiFiTransport::init() without instantiating an object.
+ * The instance virtual methods delegate to the static implementation,
+ * satisfying the TransportInterface contract used by MessageRouter.
  */
 class WiFiTransport : public TransportInterface {
 public:
     // ========================================================================
-    // Initialization & Control
+    // Static Lifecycle API  (called from main.cpp)
     // ========================================================================
 
     /**
-     * @brief Initialize WiFi in station mode
+     * @brief Initialize WiFi transport
      *
-     * Configures WiFi, starts connection process, registers event handler,
-     * and sets up MDNS hostname.
+     * 1. Sets WiFi STA mode.
+     * 2. Calls _connect() – waits up to WIFI_CONNECT_TIMEOUT_MS.
+     * 3. On success: starts ArduinoOTA (hostname = mdnsHostname) and mDNS.
      *
-     * @param ssid WiFi network name
+     * @param ssid     WiFi network name
      * @param password WiFi password
-     * @param hostname mDNS hostname (e.g., "loralink-Peer1")
-     * @return true if initialization successful, false on error
+     * @param mdnsHostname mDNS hostname (e.g. "loralink-Peer1")
+     * @return true if WiFi connected at init time, false on timeout/error
+     *         (transport continues retrying in poll())
      */
     static bool init(const std::string& ssid, const std::string& password,
-                     const std::string& hostname = "loralink");
+                     const std::string& mdnsHostname = "loralink");
 
     /**
-     * @brief Check if connected to WiFi
+     * @brief Drive OTA handler and reconnect logic
      *
-     * @return true if currently connected and IP assigned, false otherwise
+     * Must be called periodically (e.g. from a FreeRTOS task or loop()).
+     * - Calls ArduinoOTA.handle()
+     * - Attempts reconnection if WiFi dropped (every WIFI_RECONNECT_INTERVAL_MS)
+     */
+    static void service();
+
+    /**
+     * @brief Check if currently connected
+     * @return true if WiFi status == WL_CONNECTED
      */
     static bool isConnected();
 
     /**
-     * @brief Get current IP address as string
-     *
-     * @return IP address (e.g., "192.168.1.100") or empty string if not connected
+     * @brief Get current IP address
+     * @return IP string (e.g. "192.168.1.100") or empty string if not connected
      */
     static std::string getIP();
 
     /**
-     * @brief Manually trigger WiFi reconnection
-     *
-     * Useful for forcing reconnection after credential change.
+     * @brief Get current SSID
+     * @return SSID string used at init time
      */
-    static void reconnect();
+    static std::string getSSID();
 
     /**
-     * @brief Get WiFi connection status as human-readable string
-     *
-     * @return Status string: "Connected", "Connecting", "Disconnected", "Error"
-     */
-    static const char* getStatusString();
-
-    /**
-     * @brief Get signal strength (RSSI)
-     *
-     * @return RSSI in dBm (e.g., -45 to -100), or 0 if not connected
+     * @brief Get WiFi RSSI
+     * @return RSSI in dBm, or 0 if not connected
      */
     static int8_t getWiFiSignalStrength();
 
     /**
-     * @brief Get number of reconnection attempts made
-     *
-     * @return Count of reconnection attempts since init
+     * @brief Get reconnect attempt counter
+     * @return Number of reconnect attempts since init
      */
     static uint8_t getReconnectAttempts();
 
-    // ========================================================================
-    // TransportInterface Implementation (placeholder)
-    // ========================================================================
+    /**
+     * @brief Force reconnect using stored credentials
+     */
+    static void reconnect();
 
     /**
-     * @brief Initialize transport (part of interface)
-     * Delegates to static init() method.
+     * @brief Human-readable connection status
+     * @return "Connected", "Connecting", "Disconnected", or "Error"
      */
+    static const char* getStatusString();
+
+    // ========================================================================
+    // TransportInterface Virtual Methods  (instance delegates to static state)
+    // ========================================================================
+
+    /** @brief Delegates to static isConnected() */
     virtual bool init() override;
 
-    /**
-     * @brief Check if transport is ready
-     */
+    /** @brief Delegates to static isConnected() */
     virtual bool isReady() const override;
 
     /**
-     * @brief Send data (placeholder - WiFi uses HTTP API instead)
+     * @brief Not applicable – WiFi commands arrive via HTTP callbacks
+     * @return -1 (not implemented)
      */
     virtual int send(const uint8_t* payload, size_t len) override;
 
     /**
-     * @brief Receive data (placeholder - WiFi uses HTTP API instead)
+     * @brief Not applicable – WiFi data arrives via HTTP
+     * @return 0 (no data)
      */
     virtual int recv(uint8_t* buffer, size_t maxLen) override;
 
-    /**
-     * @brief Check if data available
-     */
+    /** @brief Always false – no P2P receive queue */
     virtual bool isAvailable() const override { return false; }
 
-    /**
-     * @brief Poll transport (optional periodic updates)
-     */
+    /** @brief Calls service() – drives OTA + reconnect */
     virtual void poll() override;
 
-    /**
-     * @brief Get transport name
-     */
     virtual const char* getName() const override { return "WiFi"; }
 
-    /**
-     * @brief Get transport type
-     */
     virtual TransportType getType() const override { return TransportType::HTTP; }
 
-    /**
-     * @brief Get signal strength (RSSI)
-     */
-    virtual int8_t getSignalStrength() const override { return getWiFiSignalStrength(); }
+    virtual int8_t getSignalStrength() const override {
+        return getWiFiSignalStrength();
+    }
 
-    /**
-     * @brief Get status string
-     */
     virtual const char* getStatus() const override { return getStatusString(); }
 
-    /**
-     * @brief Get last error code
-     */
-    virtual int getLastError() const override { return lastError; }
-
-    /**
-     * @brief Clear error state
-     */
-    virtual void clearError() override { lastError = 0; }
-
-    /**
-     * @brief Get last error message
-     */
+    virtual int  getLastError() const override { return _lastError; }
+    virtual void clearError()         override { _lastError = 0; }
     virtual const char* getLastErrorString() const override;
 
 private:
@@ -165,35 +161,35 @@ private:
     // Static State
     // ========================================================================
 
-    static bool connected;
-    static std::string currentIP;
-    static std::string hostname;
-    static uint32_t lastReconnectTime;
-    static uint8_t reconnectAttempts;
-    static uint8_t reconnectBackoffSeconds;
-    static wifi_event_t lastWiFiEvent;
-    static int lastError;
+    static std::string _ssid;
+    static std::string _password;
+    static std::string _hostname;
+
+    static bool     _otaStarted;
+    static bool     _mdnsStarted;
+    static uint32_t _lastReconnectAttempt;
+    static uint8_t  _reconnectAttempts;
+    static int      _lastError;
 
     // ========================================================================
-    // WiFi Event Handler
+    // Internal Helpers
     // ========================================================================
 
     /**
-     * @brief WiFi event handler
+     * @brief Block (with 500 ms polls) until connected or timeout
      *
-     * Called by ESP-IDF when WiFi events occur.
-     * Handles connection, disconnection, and error events.
+     * @param timeoutMs Maximum wait in milliseconds
+     * @return true if connected within timeout
      */
-    static void onWiFiEvent(void* arg, esp_event_base_t eventBase,
-                           int32_t eventId, void* eventData);
+    static bool _connect(uint32_t timeoutMs = WIFI_CONNECT_TIMEOUT_MS);
 
     /**
-     * @brief Internal method to apply exponential backoff
+     * @brief Start ArduinoOTA with the configured hostname
      */
-    static void scheduleReconnect();
+    static void _startOTA();
 
     /**
-     * @brief Internal method to perform exponential backoff calculation
+     * @brief Register mDNS service
      */
-    static uint8_t getNextBackoffTime();
+    static void _startMDNS();
 };
