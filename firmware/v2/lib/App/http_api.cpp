@@ -5,6 +5,7 @@
 
 #include "http_api.h"
 #include "nvs_manager.h"
+#include "status_builder.h"
 #include <Arduino.h>
 #include <ESPAsyncWebServer.h>
 #include <ArduinoJson.h>
@@ -123,25 +124,15 @@ void HttpAPI::handleRoot(AsyncWebServerRequest* request) {
 }
 
 void HttpAPI::handleStatus(AsyncWebServerRequest* request) {
-  if (cachedStatus.empty()) {
-    // Return placeholder if no status cached yet
-    DynamicJsonDocument doc(512);
-    doc["status"] = "unknown";
-    doc["message"] = "Device status not yet cached";
-    doc["uptime"] = millis() / 1000;
+  // Build full status JSON from all managers
+  StaticJsonDocument<2048> statusDoc = StatusBuilder::buildStatus();
 
-    String jsonStr;
-    serializeJson(doc, jsonStr);
+  String jsonStr;
+  serializeJson(statusDoc, jsonStr);
 
-    AsyncWebServerResponse* response = request->beginResponse(200, "application/json", jsonStr);
-    response->addHeader("Access-Control-Allow-Origin", "*");
-    request->send(response);
-  } else {
-    // Return cached status
-    AsyncWebServerResponse* response = request->beginResponse(200, "application/json", cachedStatus.c_str());
-    response->addHeader("Access-Control-Allow-Origin", "*");
-    request->send(response);
-  }
+  AsyncWebServerResponse* response = request->beginResponse(200, "application/json", jsonStr);
+  response->addHeader("Access-Control-Allow-Origin", "*");
+  request->send(response);
 
   Serial.println("[HttpAPI] GET /api/status");
 }
