@@ -113,7 +113,6 @@ private:
   static void restartTask();
   static void bleTask();
   static void espNowTask();
-  static void peripheralSerialTask();
   static void batteryMonitorCallback();
 
   // System Callbacks (deferred operations)
@@ -137,7 +136,6 @@ private:
   Task tRestart;
   Task tBLE;
   Task tESPNow;
-  Task tPeripheralSerial;
   Task tBatteryMonitor;
   int blinkCount;
 

@@ -9,7 +9,6 @@
 #include "MCPManager.h"
 #include "PowerManager.h"
 #include "WiFiManager.h"
-#include "GPSManager.h"
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <TaskScheduler.h>
@@ -47,8 +46,6 @@ ScheduleManager::ScheduleManager()
       tRestart(1000, TASK_ONCE, &ScheduleManager::restartTask),
       tBLE(20, TASK_FOREVER, &ScheduleManager::bleTask),
       tESPNow(50, TASK_FOREVER, &ScheduleManager::espNowTask),
-      tPeripheralSerial(20, TASK_FOREVER,
-                        &ScheduleManager::peripheralSerialTask),
       tBatteryMonitor(300000, TASK_FOREVER,
                       &ScheduleManager::batteryMonitorCallback),
       blinkCount(0), tRepeaterDefer(REPEATER_JITTER_MAX_MS, TASK_ONCE,
@@ -98,7 +95,6 @@ void ScheduleManager::init() {
   runner.addTask(tRestart);
   runner.addTask(tBLE);
   runner.addTask(tESPNow);
-  runner.addTask(tPeripheralSerial);
   runner.addTask(tBatteryMonitor);
   runner.addTask(tRepeaterDefer);
   runner.addTask(tBeaconLegacy);
@@ -147,15 +143,11 @@ void ScheduleManager::init() {
   }
 #endif
 
-  // Peripheral Serial task (GPS)
-  Serial1.begin(115200, SERIAL_8N1, PIN_GPS_RX, PIN_GPS_TX);
-  tPeripheralSerial.enable();
 
   // Battery protection monitor
   tBatteryMonitor.enableDelayed(10000);
 
   Serial.setTimeout(5);
-  Serial1.setTimeout(5);
 
   loadDynamicSchedules();
 }
@@ -258,32 +250,6 @@ void ScheduleManager::serialTask() {
   }
 }
 
-void ScheduleManager::peripheralSerialTask() {
-  static String pSerialBuffer = "";
-  while (Serial1.available()) {
-    char c = Serial1.read();
-    if (c == '\n' || (c == '\r' && Serial1.peek() != '\n')) {
-      String line = pSerialBuffer;
-      line.trim();
-      pSerialBuffer = "";
-      if (line.length() > 0) {
-        // NMEA Filter: Do not process raw GPS strings as commands (prevents mesh saturation)
-        if (line.startsWith("$")) {
-          for (size_t i = 0; i < line.length(); i++) {
-            GPSManager::getInstance().gps.encode(line[i]);
-          }
-          GPSManager::getInstance().gps.encode('\n');
-        } else {
-          CommandManager::getInstance().handleCommand(line, CommInterface::COMM_SERIAL);
-        }
-      }
-    } else if (c != '\r') {
-      if (pSerialBuffer.length() < 512) {
-        pSerialBuffer += c;
-      }
-    }
-  }
-}
 
 void ScheduleManager::heartbeatTask() {
   static bool initial = true;

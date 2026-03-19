@@ -21,17 +21,17 @@ void GPSManager::init() {
     pinMode(PIN_GPS_RST, OUTPUT);
     pinMode(PIN_GPS_WAKE, OUTPUT);
     
-    // Hardware Reset Pulse
+    // Hardware Reset Pulse - UC6580 needs a solid reset
     digitalWrite(PIN_GPS_RST, LOW);
-    delay(100);
+    delay(250);
     digitalWrite(PIN_GPS_RST, HIGH);
-    delay(100);
+    delay(500); // Allow internal LDOs to stabilize
 
-    // Wake Pulse
+    // Wake Pulse - Trigger cold start if needed
     digitalWrite(PIN_GPS_WAKE, LOW);
-    delay(50);
-    digitalWrite(PIN_GPS_WAKE, HIGH);
     delay(100);
+    digitalWrite(PIN_GPS_WAKE, HIGH);
+    delay(200);
     
     LOG_PRINTLN("GPS: V4 GNSS (GPIO 34) Power Rail Enabled.");
   #endif
