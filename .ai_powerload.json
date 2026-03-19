@@ -1,0 +1,29 @@
+{
+  "timestamp": "2026-03-13T07:49:47",
+  "domains": {
+    "AgTech": [
+      "chemicals.json",
+      "nutribuddy_formula.json"
+    ],
+    "Strategy": [
+      "MARKETING_BRIEF.md",
+      "ROADMAP.md",
+      "MARKETING_PLAN_PROMPT.md"
+    ],
+    "Hardware": [
+      "esp32c6_wroom1.json",
+      "esp32s3_box3b.json",
+      "heltec_v3.json",
+      "lilygo_tbeam.json",
+      "wio_e5.json",
+      "xiao_samd21.json"
+    ]
+  },
+  "specs": [
+    "spec_auto_discovery.md",
+    "spec_cockpit_ui.md",
+    "spec_wake_on_radio_cad.md",
+    "spec_wifi_persistence.md"
+  ],
+  "status": "POWERLOAD_COMPLETE"
+}

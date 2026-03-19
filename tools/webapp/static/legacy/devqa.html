@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dev / QA — LoRaLink</title>
+  <link rel="stylesheet" href="/static/css/shared.css" />
+  <link rel="stylesheet" href="/static/css/devqa.css" />
+  <style>
+    :root {
+      /* Layout specific overrides */
+      --hdr-h:    44px;
+      --status-h: 32px;
+      --cmd-w:    280px;
+      
+      /* Color mapping to shared.css */
+      --bg:       var(--bg-main);
+      --surface:  var(--bg-card);
+      --dim:      var(--text-dim);
+      --bright:   #fff;
+      --mono:     'JetBrains Mono', 'Cascadia Code', monospace;
+      --sans:     "Outfit", sans-serif;
+    }
+    
+    html, body { 
+      height: 100%; 
+      overflow: hidden; 
+      background: var(--bg); 
+      color: var(--text); 
+      font-family: var(--sans); 
+      font-size: 13px; 
+    }
+  </style>
+</head>
+<body>
+
+<!-- ════════════════════════════════════════ HEADER -->
+<header id="dq-hdr" data-debug-id="DQ-HDR">
+  <span class="hdr-brand" data-debug-id="DQ-HDR-TITLE">Dev / QA</span>
+  <div class="hdr-sep"></div>
+
+  <select id="dq-device-select" data-debug-id="DQ-HDR-DEVICE"
+          title="Select entry node" onchange="onDeviceChange(this.value)">
+    <option value="">— no device —</option>
+  </select>
+
+  <span id="dq-transport-badge" data-debug-id="DQ-HDR-TRANSPORT" class="badge unk">transport: --</span>
+  <span id="dq-ws-badge"        data-debug-id="DQ-HDR-WS"        class="badge unk">WS ●</span>
+
+  <div class="hdr-sep"></div>
+
+  <nav id="dq-nav" data-debug-id="DQ-HDR-NAV">
+    <a href="/"                        class="nav-link" data-debug-id="DQ-NAV-FLEET">Fleet</a>
+    <a href="/product-builder"         class="nav-link" data-debug-id="DQ-NAV-BUILDER">Builder</a>
+    <a href="/static/scheduler.html"   class="nav-link" data-debug-id="DQ-NAV-SCHED">Sched</a>
+    <a href="/static/mqtt_dashboard.html" class="nav-link" data-debug-id="DQ-NAV-MQTT">MQTT</a>
+    <a href="/static/devqa.html"       class="nav-link active" data-debug-id="DQ-NAV-DEVQA">Dev/QA</a>
+  </nav>
+
+  <div class="hdr-right" data-debug-id="DQ-HDR-RIGHT">
+    <button class="btn sm" id="dq-debug-btn" data-debug-id="DQ-HDR-DEBUG"
+            onclick="toggleDebugIds()" title="Toggle debug ID overlays on all elements">Debug IDs</button>
+  </div>
+</header>
+
+<!-- ════════════════════════════════════════ MAIN -->
+<main id="dq-main" data-debug-id="DQ-MAIN">
+
+  <!-- ── CMD Panel ──────────────────────────────────────── -->
+  <section id="dq-cmd" data-debug-id="DQ-CMD">
+
+    <div class="cmd-section" data-debug-id="DQ-CMD-TRANSPORT">
+      <div class="cmd-label">Transport</div>
+      <div class="tp-pills" data-debug-id="DQ-CMD-TP-PILLS">
+        <button id="dq-tp-auto"   class="btn tp-btn active" data-debug-id="DQ-CMD-TP-AUTO"   onclick="setTransport('auto',   this)">Auto</button>
+        <button id="dq-tp-http"   class="btn tp-btn"        data-debug-id="DQ-CMD-TP-HTTP"   onclick="setTransport('http',   this)">HTTP</button>
+        <button id="dq-tp-ble"    class="btn tp-btn"        data-debug-id="DQ-CMD-TP-BLE"    onclick="setTransport('ble',    this)">BLE</button>
+        <button id="dq-tp-serial" class="btn tp-btn"        data-debug-id="DQ-CMD-TP-SERIAL" onclick="setTransport('serial', this)">Serial</button>
+      </div>
+    </div>
+
+    <div class="cmd-section" data-debug-id="DQ-CMD-INPUT-AREA">
+      <div class="cmd-label">Command</div>
+      <div class="input-row" data-debug-id="DQ-CMD-INPUT-ROW">
+        <input id="dq-cmd-input" data-debug-id="DQ-CMD-INPUT"
+               type="text" placeholder="e.g. STATUS"
+               autocomplete="off" spellcheck="false"
+               onkeydown="onCmdKey(event)" />
+        <button class="btn primary" data-debug-id="DQ-CMD-SEND" onclick="sendCmd()">Send</button>
+      </div>
+    </div>
+
+      <div id="dq-ai-suggestion" class="ai-suggest-panel mt-2" data-debug-id="DQ-AI-SUGGESTION">
+        <div id="dq-ai-content" class="ai-bubble cursor-pointer" onclick="useSuggestion()">
+          <div id="dq-ai-header" class="flex-row items-center mb-1">
+            <div id="dq-ai-cmd" class="text-bold mono">...</div>
+            <div id="dq-ai-spinner" class="spinner ml-auto" style="display:none"></div>
+          </div>
+          <div id="dq-ai-reason" class="ai-reason">...</div>
+        </div>
+      </div>
+
+    <div class="cmd-section" data-debug-id="DQ-CMD-PALETTE">
+      <div class="cmd-label">Quick Commands</div>
+      <div id="dq-palette-grid" class="palette-grid" data-debug-id="DQ-CMD-PALETTE-GRID"></div>
+    </div>
+
+    <div id="dq-history-section" data-debug-id="DQ-CMD-HISTORY">
+      <div class="cmd-label">
+        History
+        <button class="micro-btn" data-debug-id="DQ-CMD-HISTORY-CLEAR" onclick="clearHistory()">clear</button>
+      </div>
+      <ul id="dq-history-list" data-debug-id="DQ-CMD-HISTORY-LIST"></ul>
+    </div>
+
+    <div class="cmd-section" data-debug-id="DQ-CMD-REGRESSION">
+      <div class="cmd-label">Regression & Endurance</div>
+      <div class="flex-row flex-gap-4 mb-2">
+        <button class="btn primary sm" id="dq-regression-btn" onclick="runRegression()">Run Suite</button>
+        <button class="btn sm" id="dq-overdrive-btn" onclick="triggerOverdrive()">Start Overdrive</button>
+      </div>
+      
+      <div id="dq-overdrive-config" class="overdrive-config flex-row flex-gap-8 border-top pt-2">
+        <label>Loops: <input type="number" id="dq-over-cycles" class="overdrive-input" value="50"></label>
+        <label>Delay: <input type="number" id="dq-over-delay" class="overdrive-input" value="300">s</label>
+      </div>
+
+      <div id="dq-reg-results" class="reg-results-log mt-1 text-xs text-dim"></div>
+      
+      <div class="cmd-label mt-2">Historical Reports</div>
+      <ul id="dq-reports-list" class="reports-list-ul max-height-120 ov-y-auto mt-1">
+        <li class="text-dim">Loading reports...</li>
+      </ul>
+      <button class="btn sm mt-1 w-full" onclick="loadReports()">↻ Refresh Reports</button>
+    </div>
+
+  </section>
+
+  <!-- ── LOG Panel ──────────────────────────────────────── -->
+  <section id="dq-log" data-debug-id="DQ-LOG">
+
+    <div id="dq-log-toolbar" data-debug-id="DQ-LOG-TOOLBAR">
+      <button class="btn sm" id="dq-log-pause-btn" data-debug-id="DQ-LOG-PAUSE" onclick="togglePause()">⏸ Pause</button>
+      <button class="btn sm" data-debug-id="DQ-LOG-CLEAR" onclick="clearLog()">✕ Clear</button>
+      <input id="dq-log-filter" data-debug-id="DQ-LOG-FILTER"
+             type="text" placeholder="filter output…" oninput="applyFilter()" />
+      <span id="dq-log-count" data-debug-id="DQ-LOG-COUNT">0 lines</span>
+    </div>
+
+    <div id="dq-log-output" data-debug-id="DQ-LOG-OUTPUT"></div>
+
+  </section>
+
+</main>
+
+<!-- ════════════════════════════════════════ STATUS BAR -->
+<footer id="dq-status" data-debug-id="DQ-STATUS">
+  <div id="dq-status-fields" data-debug-id="DQ-STATUS-FIELDS"></div>
+</footer>
+
+<script>
+// ════════════════════════════════════════════════════════════════════════════
+// Dev/QA — device-agnostic command/log tool
+// Debug ID schema: DQ-{PANEL}-{ELEMENT}
+// All DOM writes use textContent / createElement — no innerHTML with external data.
+// ════════════════════════════════════════════════════════════════════════════
+
+// ── State ─────────────────────────────────────────────────────────────────
+let _ws        = null;
+let _paused    = false;
+let _transport = 'auto';
+let _history   = [];       // command history, most-recent first
+let _histIdx   = -1;
+let _logLines  = [];       // {dir, dirClass, body, bodyClass} entries
+let _logCount  = 0;
+let _deviceId  = null;
+const MAX_LOG  = 500;
+
+// Default palette — device-agnostic.
+// Future devices extend this via GET /api/devqa_palette → { commands: [...] }
+const DEFAULT_PALETTE = [
+  'STATUS', 'PEER ALL STATUS', 'MESH',
+  'STREAM ON', 'STREAM OFF',
+  'SCHED LIST', 'SCHED CLEAR',
+  'GPIO 6 HIGH', 'GPIO 6 LOW',
+  'GPIO 7 HIGH', 'GPIO 7 LOW',
+  'LORA STATUS', 'LOG',
+];
+
+// ── Boot ──────────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', async () => {
+  buildPalette(DEFAULT_PALETTE);
+  wsConnect();
+  await loadDevices();
+  await loadTransportStatus();
+  loadDevicePalette();   // silent — only replaces palette if device exposes it
+  loadReports();         // Load historical nightly reports
+  document.getElementById('dq-cmd-input').focus();
+});
+
+// ── WebSocket ─────────────────────────────────────────────────────────────
+function wsConnect() {
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  _ws = new WebSocket(`${proto}://${location.host}/ws`);
+
+  _ws.onopen = () => {
+    setBadge('dq-ws-badge', 'ok', 'WS ●');
+    logSys('WebSocket connected');
+  };
+  _ws.onclose = () => {
+    setBadge('dq-ws-badge', 'err', 'WS ○');
+    logSys('WebSocket closed — retry in 3s…');
+    setTimeout(wsConnect, 3000);
+  };
+  _ws.onerror = () => setBadge('dq-ws-badge', 'err', 'WS ✗');
+
+  _ws.onmessage = (e) => {
+    let msg;
+    try { msg = JSON.parse(e.data); } catch { logIn(e.data); return; }
+
+    const t = msg.type || 'msg';
+    let logText = '';
+
+    if (t === 'status') {
+      renderStatus(msg);
+      logText = '[status] transport=' + (msg.transport || '?') +
+                ' http=' + msg.http_ok + ' ble=' + msg.ble_ok +
+                (msg.last_cmd ? ' last_cmd=' + msg.last_cmd : '');
+      logIn(logText);
+    } else if (t === 'serial_hello') {
+      logText = '[serial:hello] port=' + msg.port + ' device=' + (msg.device || '?') + ' fw=' + (msg.fw || '?');
+      logIn(logText);
+    } else if (t === 'serial_sensor') {
+      logText = '[serial:sensor] port=' + msg.port + ' ' + safeJson(msg);
+      logIn(logText);
+    } else {
+      // Show all types raw — future devices broadcast arbitrary message types
+      logText = '[' + t + '] ' + safeJson(msg);
+      logIn(logText);
+    }
+
+    // If we're waiting for the device response after a command, capture it and fire recommendation
+    if (_pendingRecommend && logText) {
+      _pendingRecommend = false;
+      _lastResponse = logText;
+      fetchRecommendation(_lastCmd, _lastResponse);
+    }
+  };
+}
+
+// ── Transport ─────────────────────────────────────────────────────────────
+function setTransport(tp, btn) {
+  _transport = tp;
+  document.querySelectorAll('.tp-pills .btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  logSys('Transport: ' + tp);
+}
+
+async function loadTransportStatus() {
+  try {
+    const r = await fetch('/api/transport');
+    if (!r.ok) return;
+    const d = await r.json();
+    const t = d.active || d.transport || 'unknown';
+    setBadge('dq-transport-badge', t !== 'unknown' ? 'ok' : 'unk', 'transport: ' + t);
+  } catch {}
+}
+
+// ── Device selector ───────────────────────────────────────────────────────
+async function loadDevices() {
+  try {
+    const r = await fetch('/api/nodes');
+    if (!r.ok) return;
+    const d = await r.json();
+    const nodes = d.nodes || d || [];
+    const sel = document.getElementById('dq-device-select');
+    while (sel.options.length > 1) sel.remove(1);
+    nodes.forEach(n => {
+      const opt = document.createElement('option');
+      opt.value = n.id || n.address;
+      opt.textContent = (n.name || n.id) + ' (' + (n.type || n.address) + ')';
+      sel.appendChild(opt);
+    });
+    if (sel.options.length === 1) {
+      // No nodes registered — add generic primary
+      const opt = document.createElement('option');
+      opt.value = '__primary__';
+      opt.textContent = 'Primary device';
+      sel.appendChild(opt);
+      sel.value = '__primary__';
+      _deviceId = '__primary__';
+    }
+  } catch {}
+}
+
+function onDeviceChange(val) {
+  _deviceId = val || null;
+  logSys('Device: ' + (val || 'none'));
+}
+
+// ── Command send ──────────────────────────────────────────────────────────
+// Tracks last cmd/response pair for the AI recommendation call.
+// _pendingRecommend is set true after a command is sent; the next WS
+// status message is captured as the device response, then recommendation fires.
+let _lastCmd = '';
+let _lastResponse = '';
+let _pendingRecommend = false;
+
+async function sendCmd() {
+  const input = document.getElementById('dq-cmd-input');
+  const cmd = input.value.trim();
+  if (!cmd) return;
+
+  input.value = '';
+  _histIdx = -1;
+  addToHistory(cmd);
+  logOut(cmd);
+  _lastCmd = cmd;
+  _lastResponse = '';
+
+  try {
+    const body = { cmd };
+    if (_transport !== 'auto') body.transport = _transport;
+    if (_deviceId && _deviceId !== '__primary__') body.device = _deviceId;
+
+    const r = await fetch('/api/cmd', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const text = await r.text();
+    if (!r.ok) {
+      logErr('cmd failed (' + r.status + '): ' + text);
+    } else {
+      // Flag that the next WS message is the device response to this command
+      _pendingRecommend = true;
+      // Safety fallback: if no WS response arrives in 5s, fire anyway
+      setTimeout(() => {
+        if (_pendingRecommend) {
+          _pendingRecommend = false;
+          fetchRecommendation(_lastCmd, _lastResponse);
+        }
+      }, 5000);
+    }
+  } catch (err) {
+    logErr('send error: ' + err.message);
+  }
+}
+
+// ── AI recommendation ──────────────────────────────────────────────────────
+async function fetchRecommendation(cmd, response) {
+  const spinner = document.getElementById('dq-ai-spinner');
+  const cmdEl   = document.getElementById('dq-ai-cmd');
+  const reasonEl= document.getElementById('dq-ai-reason');
+
+  if (spinner) spinner.style.display = 'inline-block';
+  try {
+    const r = await fetch('/api/recommend', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        cmd,
+        response,
+        // Send last 10 history entries as {cmd} objects for context
+        history: _history.slice(0, 10).map(c => ({ cmd: c })),
+      }),
+    });
+    if (!r.ok) return;
+    const d = await r.json();
+    if (d.command) {
+      cmdEl.textContent    = d.command;    // safe — textContent
+      reasonEl.textContent = d.reason || '';
+    }
+  } catch {}
+  finally {
+    if (spinner) spinner.style.display = 'none';
+  }
+}
+
+function useSuggestion() {
+  const cmdObj = document.getElementById('dq-ai-cmd');
+  const cmd = cmdObj ? cmdObj.textContent : '';
+  if (!cmd || cmd === '...' || cmd === '—') return;
+  document.getElementById('dq-cmd-input').value = cmd;
+  document.getElementById('dq-cmd-input').focus();
+}
+
+function onCmdKey(e) {
+  if (e.key === 'Enter') { sendCmd(); return; }
+  const input = document.getElementById('dq-cmd-input');
+  if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    if (_histIdx < _history.length - 1) input.value = _history[++_histIdx];
+  }
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    if (_histIdx > 0) { input.value = _history[--_histIdx]; }
+    else { _histIdx = -1; input.value = ''; }
+  }
+}
+
+// ── History ───────────────────────────────────────────────────────────────
+function addToHistory(cmd) {
+  const existing = _history.indexOf(cmd);
+  if (existing !== -1) _history.splice(existing, 1);
+  _history.unshift(cmd);
+  if (_history.length > 50) _history.pop();
+  renderHistory();
+}
+
+function renderHistory() {
+  const ul = document.getElementById('dq-history-list');
+  // Remove all children safely
+  while (ul.firstChild) ul.removeChild(ul.firstChild);
+  _history.forEach(cmd => {
+    const li = document.createElement('li');
+    li.textContent = cmd;     // textContent — safe
+    li.title = cmd;
+    li.onclick = () => {
+      document.getElementById('dq-cmd-input').value = cmd;
+      document.getElementById('dq-cmd-input').focus();
+    };
+    ul.appendChild(li);
+  });
+}
+
+function clearHistory() {
+  _history = [];
+  _histIdx = -1;
+  renderHistory();
+}
+
+// ── Quick palette ─────────────────────────────────────────────────────────
+function buildPalette(cmds) {
+  const grid = document.getElementById('dq-palette-grid');
+  while (grid.firstChild) grid.removeChild(grid.firstChild);
+  cmds.forEach((cmd, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'palette-btn';
+    btn.setAttribute('data-debug-id', 'DQ-CMD-PAL-' + i);
+    btn.textContent = cmd;    // textContent — safe
+    btn.title = cmd;
+    btn.onclick = () => {
+      document.getElementById('dq-cmd-input').value = cmd;
+      sendCmd();
+    };
+    grid.appendChild(btn);
+  });
+}
+
+async function loadDevicePalette() {
+  // Future devices expose GET /api/devqa_palette → { commands: ["CMD1", ...] }
+  // Silently ignored if not available.
+  try {
+    const r = await fetch('/api/devqa_palette');
+    if (!r.ok) return;
+    const d = await r.json();
+    if (Array.isArray(d.commands) && d.commands.length) {
+      // Validate: only accept string commands
+      const safe = d.commands.filter(c => typeof c === 'string' && c.length < 80);
+      buildPalette(safe);
+      logSys('Device palette loaded: ' + safe.length + ' commands');
+    }
+  } catch {}
+}
+
+// ── Log output ────────────────────────────────────────────────────────────
+function ts() {
+  return new Date().toTimeString().slice(0, 8);
+}
+
+function appendLog(dir, dirClass, body, bodyClass) {
+  if (_logCount >= MAX_LOG) {
+    const out = document.getElementById('dq-log-output');
+    if (out.firstChild) out.removeChild(out.firstChild);
+    _logLines.shift();
+  }
+  const entry = { dir, dirClass, body, bodyClass };
+  _logLines.push(entry);
+  _logCount++;
+
+  if (!_paused) {
+    const filter = document.getElementById('dq-log-filter').value.toLowerCase();
+    _appendLogRow(entry, filter);
+  }
+  updateLogCount();
+}
+
+function _appendLogRow(entry, filter) {
+  const out = document.getElementById('dq-log-output');
+  const row = document.createElement('div');
+  row.className = 'log-line';
+
+  const tsEl   = document.createElement('span');
+  tsEl.className = 'log-ts';
+  tsEl.textContent = ts();
+
+  const dirEl  = document.createElement('span');
+  dirEl.className = 'log-dir ' + entry.dirClass;
+  dirEl.textContent = entry.dir;
+
+  const bodyEl = document.createElement('span');
+  bodyEl.className = 'log-body' + (entry.bodyClass ? ' ' + entry.bodyClass : '');
+  bodyEl.textContent = entry.body;   // textContent — safe even with device data
+
+  row.append(tsEl, dirEl, bodyEl);
+
+  if (filter && !(entry.dir + ' ' + entry.body).toLowerCase().includes(filter)) {
+    row.classList.add('hidden');
+  }
+
+  out.appendChild(row);
+  out.scrollTop = out.scrollHeight;
+}
+
+function logOut(body) { appendLog('→', 'out', body, 'cmd'); }
+function logIn(body)  { appendLog('←', 'in',  body, ''); }
+function logSys(body) { appendLog('·', 'sys', body, ''); }
+function logErr(body) { appendLog('!', 'err', body, ''); }
+
+function updateLogCount() {
+  const visible = document.querySelectorAll('#dq-log-output .log-line:not(.hidden)').length;
+  document.getElementById('dq-log-count').textContent = visible + ' / ' + _logCount;
+}
+
+function togglePause() {
+  _paused = !_paused;
+  const btn = document.getElementById('dq-log-pause-btn');
+  btn.textContent = _paused ? '▶ Resume' : '⏸ Pause';
+  btn.classList.toggle('active', _paused);
+  if (!_paused) {
+    // Flush all buffered entries
+    const out = document.getElementById('dq-log-output');
+    while (out.firstChild) out.removeChild(out.firstChild);
+    const filter = document.getElementById('dq-log-filter').value.toLowerCase();
+    _logLines.forEach(e => _appendLogRow(e, filter));
+  }
+}
+
+function clearLog() {
+  _logLines = [];
+  _logCount = 0;
+  const out = document.getElementById('dq-log-output');
+  while (out.firstChild) out.removeChild(out.firstChild);
+  updateLogCount();
+}
+
+function applyFilter() {
+  const filter = document.getElementById('dq-log-filter').value.toLowerCase();
+  const rows = document.querySelectorAll('#dq-log-output .log-line');
+  rows.forEach((row, i) => {
+    const entry = _logLines[i];
+    if (!entry) return;
+    const text = entry.dir + ' ' + entry.body;
+    row.classList.toggle('hidden', !!filter && !text.toLowerCase().includes(filter));
+  });
+  updateLogCount();
+}
+
+// ── Status bar ────────────────────────────────────────────────────────────
+const STATUS_SKIP = new Set(['type', 'peer', 'log', 'pins', 'nodes', 'mesh']);
+
+function renderStatus(d) {
+  // Transport State Coloring
+  const httpBtn = document.getElementById('dq-tp-http');
+  const bleBtn = document.getElementById('dq-tp-ble');
+  const serBtn = document.getElementById('dq-tp-serial');
+
+  if (httpBtn) {
+    httpBtn.classList.toggle('ok', !!d.http_ok);
+    httpBtn.classList.toggle('err', !d.http_ok);
+  }
+  if (bleBtn) {
+    bleBtn.classList.toggle('ok', !!d.ble_ok);
+    bleBtn.classList.toggle('err', !d.ble_ok);
+  }
+  if (serBtn) {
+    serBtn.classList.toggle('ok', !!d.serial_ok);
+  }
+
+  const fields = document.getElementById('dq-status-fields');
+  while (fields.firstChild) fields.removeChild(fields.firstChild);
+
+  // Render whatever the device returns — not hardcoded to any device type.
+  const entries = Object.entries(d)
+    .filter(([k]) => !STATUS_SKIP.has(k))
+    .slice(0, 14);
+
+  entries.forEach(([k, v]) => {
+    const val = typeof v === 'object' ? safeJson(v) : String(v);
+    const sf  = document.createElement('span');
+    sf.className = 'sf';
+
+    const keyEl = document.createElement('span');
+    keyEl.className = 'sf-key';
+    keyEl.textContent = k;        // safe
+
+    const valEl = document.createElement('span');
+    const isOk = (k === 'http_ok' || k === 'ble_ok');
+    valEl.className = 'sf-val' + (isOk ? (v ? ' ok' : ' err') : '');
+    valEl.textContent = val;      // safe
+
+    sf.append(keyEl, valEl);
+    fields.appendChild(sf);
+  });
+
+  // Mirror transport to header badge
+  if (d.transport) setBadge('dq-transport-badge', 'ok', 'transport: ' + d.transport);
+}
+
+async function runRegression() {
+  const btn = document.getElementById('dq-regression-btn');
+  const resultsEl = document.getElementById('dq-reg-results');
+  
+  btn.disabled = true;
+  btn.textContent = 'Running...';
+  resultsEl.textContent = 'Executing suite...';
+  logSys('Regression Suite Started');
+
+  try {
+    const target = (_deviceId === '__primary__') ? null : _deviceId;
+    const r = await fetch('/api/test/regression', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ target }),
+    });
+    
+    if (!r.ok) throw new Error('Regression API failed');
+    
+    const d = await r.json();
+    const passed = d.results.filter(x => x.status === 'PASS').length;
+    const total = d.results.length;
+    
+    resultsEl.textContent = `Results: ${passed}/${total} passed`;
+    if (d.passed) {
+      logSys('Regression Suite: ALL PASSED');
+      resultsEl.style.color = 'var(--green)';
+    } else {
+      logErr('Regression Suite: FAILED');
+      resultsEl.style.color = 'var(--red)';
+    }
+  } catch (err) {
+    logErr('Regression failed: ' + err.message);
+    resultsEl.textContent = 'Error: ' + err.message;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Run Nightly Suite';
+  }
+}
+
+// ── Debug ID toggle ───────────────────────────────────────────────────────
+function toggleDebugIds() {
+  const on = document.body.classList.toggle('debug-ids');
+  document.getElementById('dq-debug-btn').classList.toggle('active', on);
+  logSys('Debug IDs: ' + (on ? 'ON' : 'OFF'));
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────
+function setBadge(id, state, text) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = text;          // safe
+  el.className = 'badge ' + state;
+}
+
+function safeJson(v) {
+  try { return JSON.stringify(v); } catch { return String(v); }
+}
+
+async function triggerOverdrive() {
+  const btn = document.getElementById('dq-overdrive-btn');
+  const cycles = parseInt(document.getElementById('dq-over-cycles').value) || 50;
+  const delay = parseInt(document.getElementById('dq-over-delay').value) || 300;
+  
+  btn.disabled = true;
+  btn.textContent = 'Starting...';
+  logSys(`Triggering Overdrive: ${cycles} loops, ${delay}s delay...`);
+
+  try {
+    const r = await fetch('/api/test/overdrive', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cycles, delay }),
+    });
+    if (!r.ok) throw new Error('Overdrive trigger failed');
+    logSys('Overdrive started in background. Monitor via logs.');
+  } catch (err) {
+    logErr('Failed to start overdrive: ' + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Start Overdrive';
+  }
+}
+
+async function loadReports() {
+  const list = document.getElementById('dq-reports-list');
+  try {
+    const r = await fetch('/api/test/reports');
+    if (!r.ok) return;
+    const d = await r.json();
+    
+    while (list.firstChild) list.removeChild(list.firstChild);
+    
+    if (!d.reports || d.reports.length === 0) {
+      const li = document.createElement('li');
+      li.style.color = 'var(--dim)';
+      li.textContent = 'No reports found.';
+      list.appendChild(li);
+      return;
+    }
+    
+    d.reports.forEach(repo => {
+      const li = document.createElement('li');
+      li.style.padding = '4px 0';
+      li.style.borderBottom = '1px solid var(--border)';
+      li.style.display = 'flex';
+      li.style.justifyContent = 'space-between';
+      
+      const name = document.createElement('span');
+      name.textContent = repo.name.replace('Report_overdrive_', '').replace('.html', '');
+      name.style.cursor = 'pointer';
+      name.style.color = 'var(--accent)';
+      name.onclick = () => window.open('/api/test/reports/' + repo.name, '_blank');
+      
+      const date = document.createElement('span');
+      date.style.fontSize = '9px';
+      date.style.color = 'var(--dim)';
+      date.textContent = new Date(repo.mtime * 1000).toLocaleDateString();
+      
+      li.append(name, date);
+      list.appendChild(li);
+    });
+  } catch (err) {
+    console.error('Failed to load reports', err);
+  }
+}
+</script>
+</body>
+</html>

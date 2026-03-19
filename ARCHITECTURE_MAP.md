@@ -255,9 +255,10 @@ The project is built around prioritized **any-to-any command routing**.
 - ESP-NOW
 - MQTT
 - Serial
+- Local AI (via ASK command routing over Serial)
 
 ### Command Routing Principle
-Messages can enter from one interface and be routed to another based on addressing / target logic managed by `CommandManager`.
+Messages can enter from one interface and be routed to another based on addressing / target logic managed by `CommandManager`. For example, `ASK <prompt>` forwards mesh queries directly to the Local AI Workstation over Serial.
 
 ### Agent Audit Goals
 Whenever analyzing the routing system, determine:

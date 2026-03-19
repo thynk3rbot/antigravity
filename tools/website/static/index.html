@@ -8,17 +8,23 @@
 </head>
 <body>
 
-<nav>
-  <a class="logo" href="/">
-    <img src="/static/media/logo.png" alt="LoRaLink">
-    <span>LoRaLink</span>
+<header style="background:var(--glass); border-bottom:1px solid var(--border); padding:0 2rem; height:var(--header-h); display:flex; align-items:center; position:sticky; top:0; z-index:100; backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px);">
+  <a class="logo" href="/" style="display:flex; align-items:center; gap:.6rem; text-decoration:none;">
+    <img src="/static/media/logo.png" alt="LoRaLink" style="height:40px; filter:drop-shadow(0 0 8px rgba(0,212,255,0.65));">
+    <span style="font-size:1rem; font-weight:700; color:var(--text-bright); letter-spacing:.04em; text-transform:uppercase;">LoRaLink</span>
   </a>
-  <a href="/features">Features</a>
-  <a href="/dashboard">Dashboard</a>
-  <a href="http://localhost:8001" target="_blank" rel="noopener">Docs</a>
-  <a href="http://localhost:8000" target="_blank" rel="noopener">LoRaLink App</a>
-  <a href="/contact" class="nav-cta">Get in Touch</a>
-</nav>
+
+  <nav class="suit-header-nav" style="display:flex; gap:16px; padding:0 20px; height:32px; align-items:center; border-left:1px solid var(--border); margin-left:20px;">
+      <a href="http://localhost:8000" style="color:var(--text-dim); text-decoration:none; font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:1px; display:flex; align-items:center; gap:5px; transition:0.2s;"><i class="fas fa-microchip"></i> LoRaLink</a>
+      <a href="http://localhost:8100" style="color:var(--text-dim); text-decoration:none; font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:1px; display:flex; align-items:center; gap:5px; transition:0.2s;"><i class="fas fa-vial"></i> NutriCalc</a>
+      <a href="http://localhost:8200" style="color:var(--text-dim); text-decoration:none; font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:1px; display:flex; align-items:center; gap:5px; transition:0.2s;"><i class="fas fa-route"></i> Rag-Router</a>
+  </nav>
+
+  <div style="margin-left:auto; display:flex; gap:1.5rem; align-items:center;">
+    <a href="/features" style="color:var(--text-dim); text-decoration:none; font-size:0.9rem;">Features</a>
+    <a href="http://localhost:8000" class="btn btn-sm">Launch App</a>
+  </div>
+</header>
 
 <div class="hero">
   <h1>Unified Mesh Firmware<br>for <span>ESP32-S3</span> Devices</h1>

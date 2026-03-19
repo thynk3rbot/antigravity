@@ -6,7 +6,24 @@
 
 ## Overview
 
-LoRaLink-AnyToAny is a modular firmware framework that enables **any wireless interface to communicate with any other**. Send a command via Bluetooth, and it routes to LoRa. Receive an ESP-NOW message, and it triggers a relay. Configure everything via a sleek web dashboard — all driven by a priority-based task scheduler.
+LoRaLink-AnyToAny is a modular firmware framework that enables **any wireless interface to communicate with any other**. Send a command via Bluetooth, and it routes to LoRa. Receive an ESP-NOW message, and it triggers a relay. Configure everything via a sleek web dashboard.
+
+## Project Status
+
+- [x] **v2 Firmware Migration** — Established FreeRTOS foundation and HAL for Heltec V3/V4.
+- [x] **Hardware Pin Audit** — Corrected VEXT/ADC pins for battery telemetry on V3 boards.
+- [x] **Local AI Integration** — Added Generic LLM provider to RAG Router for Ollama/LM Studio support.
+- [x] **Industrial SCADA** — Validated quadruple relay control with safety interlocks.
+- [ ] **LMX Messenger PoC** — (In Progress) Encrypted text mesh protocol.
+
+## Project Structure
+
+This repository contains both the stable and development versions of the LoRaLink firmware, along with supporting tools:
+
+- **[firmware/v1/](file:///c:/Users/spw1/Documents/Code/Antigravity/firmware/v1/)** — Stable Any-to-Any Framework (v1.6.0). Supports V2/V3 hardware, TaskScheduler, and GPS.
+- **[firmware/v2/](file:///c:/Users/spw1/Documents/Code/Antigravity/firmware/v2/)** — Next-Gen FreeRTOS-based Firmware (v2.0.0). Focuses on HAL abstraction and V4 board support.
+- **[tools/](file:///c:/Users/spw1/Documents/Code/Antigravity/tools/)** — Management tools, WebApp dashboard, and local RAG router.
+- **[01_planning/](file:///c:/Users/spw1/Documents/Code/Antigravity/01_planning/)** — Architecture specs and design documents.
 
 ## Supported Interfaces
 
@@ -17,6 +34,7 @@ LoRaLink-AnyToAny is a modular firmware framework that enables **any wireless in
 | **BLE** | ~30m | Medium | Phone/tablet control |
 | **WiFi** | LAN | High | Web dashboard, OTA, API |
 | **Serial** | Wired | High | Debug, local terminal |
+| **Local AI** | Host | Very High | Autonomous tasking, offline reasoning |
 
 ## Architecture
 
@@ -37,12 +55,20 @@ Navigate to the device IP in any browser:
 - **Dashboard** (`/`) — Live status, protocol badges, message log, command input
 - **Config** (`/config`) — Device name, WiFi, LoRa params, ESP-NOW peers, factory reset
 
-## Quick Start
-
+### 1. Single Device (USB)
 1. **Install** [PlatformIO](https://platformio.org/)
 2. **Clone** this repo
 3. **Build & Upload**: `pio run -t upload`
 4. **Monitor**: `pio device monitor`
+
+### 2. Fleet Deployment (OTA)
+To deploy to multiple devices on the network simultaneously:
+1. Ensure devices are on WiFi (`172.16.0.26` and `172.16.0.27`).
+2. Run the dual deployment script:
+   ```powershell
+   .\tools\deploy_dual.ps1
+   ```
+   *Note: This ensures all devices run the exact same firmware version (currently v0.1.0).*
 
 ## Commands
 
@@ -64,6 +90,7 @@ Navigate to the device IP in any browser:
 | `SETSCHED <ms>` | Set 110V toggle interval |
 | `GETSCHED` | Get dynamic schedule JSON |
 | `WIPECONFIG` | Factory reset all settings |
+| `ASK <prompt>` | Forward prompt to the PC's Local AI |
 | `<target> <cmd>` | Send command to specific node |
 | `ALL <cmd>` | Broadcast command to all nodes |
 

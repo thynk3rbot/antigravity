@@ -1,0 +1,24 @@
+# LoRaLink Fleet Deployment Script
+Write-Host "--- Starting LoRaLink Fleet Deployment ---" -ForegroundColor Cyan
+
+$pio = "$env:USERPROFILE\.platformio\penv\Scripts\pio.exe"
+
+# 1. Flash V3 units (IPs 26, 27)
+Write-Host "Deploying V3 to Master (172.16.0.27)..." -ForegroundColor Yellow
+& $pio run -d firmware/v1 --environment ota_master --target upload
+
+Write-Host "Deploying V3 to Slave (172.16.0.26)..." -ForegroundColor Yellow
+& $pio run -d firmware/v1 --environment ota_slave --target upload
+
+# 2. Flash V4c units (IPs 28, 29)
+Write-Host "Deploying V4 to Slave (172.16.0.28)..." -ForegroundColor Yellow
+& $pio run -d firmware/v1 --environment v4_ota_28 --target upload
+
+Write-Host "Deploying V4 to Slave (172.16.0.29)..." -ForegroundColor Yellow
+& $pio run -d firmware/v1 --environment v4_ota_29 --target upload
+
+# 3. Flash V2 unit (USB) for Node 30
+Write-Host "Deploying V2/Webserver to Node 30 (via USB auto-detect)..." -ForegroundColor Yellow
+& $pio run -d firmware/v1 --environment heltec_wifi_lora_32_V2 --target upload
+
+Write-Host "--- Deployment Cycle Complete ---" -ForegroundColor Cyan

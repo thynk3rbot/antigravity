@@ -1,8 +1,13 @@
+
 # LoRaLink v1.6.0 Verification & Next-Steps Plan
 
 This document outlines the validation steps for the **Range Boost (Binary Mode)** and **Power-Miser (Smart Ag)** features before the next firmware flash.
 
 ## 📦 Release v1.6.0 Components
+
+- **Current Baseline (Verified 2026-03-11):**
+  - **Master:** v1.6.37 (IP: 172.16.0.27) -> **PASS (11/11)**
+  - **Slave:** v1.6.34 (IP: 172.16.0.26) -> **PASS (11/11)**
 
 1. **Range Boost Core:** Implementation of variable-sized physical packets (ToA reduction).
 2. **Binary Protocol Layer:** Byte-oriented command structure (`0xAA` token) for 40% bandwidth efficiency.
@@ -44,9 +49,39 @@ We will verify the logic using the following manual tests:
 
 ---
 
-## 🚀 Phase 2: Next Implementation Plans (High Risk)
+## ⚡ Gaps & "Tough Questions" Analysis (Skeptical Mode)
 
-After v1.6.0 is verified in the field, we move to the autonomous logic:
+Current testing coverage is strong on **Gateway-to-PC** availability, but reveals the following vulnerabilities:
+
+1. **Blind Mesh Routing (FIXED)**: 
+   - **Risk**: The regression suite previously marked Mesh commands (`M1 STATUS`) as **PASS** even if the node was offline.
+   - **Resolution (2026-03-11)**: Implemented "Response-Aware Validation" in `nightly_test.py`. The executor now polls the Gateway's `/api/status` for the specific `[NodeID] Response` string.
+   - **Verification**: `Skeptical_Retry` test against `FakeNode` correctly timed out (FAIL), proving the suite now detects mesh-routing failures.
+
+2. **Binary Transport Verification**:
+   - `BINCMD` paths are not yet exercised in the nightly suite. We are only verifying the text-based CLI bridges.
+   - **Edge Case**: What happens if the binary token `0xAA` is corrupted? The failover fallback needs an automated "Noise Simulation" test.
+
+3. **Power-Miser Edge Cases**:
+   - We haven't verified behavior during "Oscillating Voltage" (Brownout simulator).
+   - **Request**: Can we automate a voltage sweep through the `M3 (Slave)` ADC simulation path?
+
+## 🧪 Phase 3: "Empty-Config" Discovery Test
+
+To verify the **Any-To-Any** discovery and webapp auto-population logic:
+
+1. **Setup**: Use `pio run -t erase` or the PRG-button factory reset to wipe both Master and Slave.
+2. **Flash**: Deploy the same "empty" v1.6.0 binary to both units.
+3. **App Start**: Launch the `Fleet Admin` webapp and initiate a `/api/discover` scan.
+4. **Goal**: Verify that the Slave node (unconfigured) is correctly discovered via LoRa/mDNS and populates the Node Registry with its default MAC-suffix identity automatically.
+
+---
+
+## 📂 Source Management Tracking
+- [x] **v1.6.0 Baseline Committed**: `feature/lora-traffic-optimization`
+- [x] **Nightly Test Engine Integrated**: `tools/testing/engine.py`
+- [x] **Response-Aware Mesh Validation Added**: `tools/nightly_test.py`
+- [x] **Registry UUID Mapping Fixed**: `server.py`
 
 ### 2.1 Wake-on-Radio (WoR) via CAD
 

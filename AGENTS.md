@@ -29,7 +29,10 @@ This repository is designed for high-efficiency pair programming between human a
 ## Project Shortcuts
 
 - **Build:** `pio run -e heltec_wifi_lora_32_V3`
-- **Flash:** `pio run -t upload`
+- **Flash (USB):** `pio run -t upload`
+- **Flash (Master OTA):** `pio run -e ota_master -t upload`
+- **Flash (Slave OTA):** `pio run -e ota_slave -t upload`
+- **Dual Flash:** `.\tools\deploy_dual.ps1`
 - **Clean:** `rmdir /s /q .pio` (Windows)
 - **Manager Path:** `src/managers/`
 - **Main Path:** `src/main.cpp`
@@ -43,3 +46,9 @@ This repository is designed for high-efficiency pair programming between human a
   - Classes: `ManagerName` (PascalCase)
   - Functions: `handlePacket()` (camelCase)
   - Constants: `PIN_LED` (UPPER_CASE)
+
+## Deployment Standards (Peer1/Peer2)
+
+- **Version Lock:** All devices in a fleet MUST run the exact same `FIRMWARE_VERSION`.
+- **No Auto-Increment:** The `increment_version.py` script is disabled to prevent version drift. Manual bumps only.
+- **Sequential OTA:** Use `dual-flash` workflow or `deploy_dual.ps1` for simultaneous updates.

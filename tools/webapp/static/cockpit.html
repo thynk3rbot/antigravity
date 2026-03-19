@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LoRaLink Cockpit | Industrial Workspace</title>
+    <link rel="stylesheet" href="/static/css/index.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="industrial-theme">
+
+    <header class="workspace-header">
+        <div class="logo-area">
+            <div class="logo-icon"><i class="fas fa-satellite-dish"></i></div>
+            <div class="logo-text">
+                <h1>LoRaLink <span class="v-tag" id="fw-ver">v2.4.0</span></h1>
+                <div class="status-line">
+                    <span id="connection-dot" class="dot pulse"></span>
+                    <span id="active-node-name">MASTER GATEWAY</span>
+                </div>
+            </div>
+        </div>
+
+        <nav class="suit-header-nav">
+            <a href="/" class="suit-link active"><i class="fas fa-microchip"></i> LoRaLink</a>
+            <a href="http://localhost:8100" class="suit-link"><i class="fas fa-vial"></i> NutriCalc</a>
+            <a href="http://localhost:8200" class="suit-link"><i class="fas fa-route"></i> Rag-Router</a>
+            <a href="http://localhost:8010" class="suit-link"><i class="fas fa-globe"></i> Viai.club</a>
+        </nav>
+
+        <div class="header-actions">
+            <div id="system-time" class="mono">00:00:00</div>
+            <select id="active-node-select" class="node-select" onchange="switchTargetNode(this.value)" title="Select target node">
+                <option>SCANNING...</option>
+            </select>
+        </div>
+    </header>
+
+    <main class="workspace-body">
+        <nav class="sidebar">
+            <div class="nav-item active" data-module="cockpit" title="Primary Cockpit">
+                <i class="fas fa-gauge-high"></i>
+            </div>
+            <div class="nav-item" data-module="mesh" title="Mesh Swarm">
+                <i class="fas fa-network-wired"></i>
+            </div>
+            <div class="nav-item" data-module="scheduler" title="IO Scheduler">
+                <i class="fas fa-calendar-alt"></i>
+            </div>
+            <div class="nav-item" data-module="files" title="Filesystem">
+                <i class="fas fa-folder-open"></i>
+            </div>
+            <div class="nav-spacer"></div>
+            <div class="nav-item" data-module="admin" title="System Admin">
+                <i class="fas fa-sliders"></i>
+            </div>
+            <div class="nav-item" data-module="spectrum" title="Spectrum Analyzer">
+                <i class="fas fa-wave-square"></i>
+            </div>
+        </nav>
+
+        <section class="module-view">
+            <header class="view-header">
+                <div>
+                    <h2 id="view-title">Primary Cockpit</h2>
+                    <div class="gauge-cluster" id="cockpit-gauges">
+                        <div class="mini-gauge">
+                            <i class="fas fa-battery-three-quarters"></i>
+                            <div class="mg-data">
+                                <span class="mg-label">Battery</span>
+                                <span class="mg-value" id="stat-bat">--</span>
+                            </div>
+                        </div>
+                        <div class="mini-gauge">
+                            <i class="fas fa-signal"></i>
+                            <div class="mg-data">
+                                <span class="mg-label">RSSI</span>
+                                <span class="mg-value" id="stat-rssi">--</span>
+                            </div>
+                        </div>
+                        <div class="mini-gauge">
+                            <i class="fas fa-clock"></i>
+                            <div class="mg-data">
+                                <span class="mg-label">Uptime</span>
+                                <span class="mg-value" id="stat-uptime">--</span>
+                            </div>
+                        </div>
+                        <div class="mini-gauge">
+                            <i class="fas fa-memory"></i>
+                            <div class="mg-data">
+                                <span class="mg-label">Heap</span>
+                                <span class="mg-value" id="stat-heap">--</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="view-actions" id="industrial-badges">
+                    <div class="transport-hud" id="transport-hud">
+                        <div class="link-badge" id="link-http">HTTP</div>
+                        <div class="link-badge" id="link-ble">BLE</div>
+                        <div class="link-badge" id="link-serial">SERIAL</div>
+                        <div class="link-badge active" id="link-mqtt">MQTT</div>
+                    </div>
+                </div>
+            </header>
+
+            <div class="view-content">
+                <!-- ── Module: Cockpit ────────────────────────────────────────── -->
+                <div id="mod-cockpit" class="module-container active">
+                    <div class="cockpit-layout">
+                        <!-- Left: Controls -->
+                        <div class="cockpit-sidebar">
+                            <div class="panel">
+                                <div class="panel-title">GPIO Controls</div>
+                                <div id="gpio-grid" class="gpio-grid p-8">
+                                    <!-- Dynamic controls -->
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Center: Board Visualizer -->
+                        <div class="cockpit-main">
+                            <div class="panel h-full">
+                                <div class="panel-title">Hardware Abstraction (SVG)</div>
+                                <div id="board-visual-container" class="board-visualizer">
+                                    <div class="list-empty">Initializing Hardware...</div>
+                                </div>
+                                <div class="p-8 border-top flex-gap-8">
+                                    <button class="btn btn-sm" onclick="sendCommand('BLINK')">TEST LED</button>
+                                    <button class="btn btn-sm btn-danger" onclick="sendCommand('RESTART')">REBOOT</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Right: Trace -->
+                        <div class="cockpit-trace">
+                            <div class="panel h-full">
+                                <div class="panel-title">System Trace</div>
+                                <div id="log-output" class="log-output"></div>
+                                <div class="cmd-bar p-8 border-top">
+                                    <input type="text" id="cmd-input" class="cmd-input" placeholder="CMD..." onkeydown="if(event.key==='Enter') runCommand()">
+                                    <button class="btn btn-sm" onclick="runCommand()">SEND</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ── Module: Mesh ────────────────────────────────────────── -->
+                <div id="mod-mesh" class="module-container">
+                    <div class="panel p-24">
+                        <div class="flex-row-sb mb-16">
+                            <h3>FLEET TOPOLOGY</h3>
+                            <button class="btn btn-sm btn-danger" onclick="broadcastReboot()">REBOOT ALL</button>
+                        </div>
+                        <div class="suit-grid" id="mesh-grid">
+                            <div class="list-empty">Scanning for MQTT Mesh Nodes...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ── Module: Scheduler ────────────────────────────────────── -->
+                <div id="mod-scheduler" class="module-container">
+                    <div id="scheduler-content">
+                        <!-- Redrawn by index.js -->
+                    </div>
+                </div>
+
+                <!-- ── Module: Files ────────────────────────────────────────── -->
+                <div id="mod-files" class="module-container">
+                    <div class="panel">
+                        <div class="panel-title">LittleFS & NVS File Browser</div>
+                        <table class="file-table">
+                            <thead>
+                                <tr>
+                                    <th>Filename</th>
+                                    <th>Size</th>
+                                    <th style="text-align: right;">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="file-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- ── Module: Spectrum ────────────────────────────────────── -->
+                <div id="mod-spectrum" class="module-container">
+                    <div class="panel h-full">
+                        <div class="panel-title">RF Spectrum Analyzer (902-928 MHz)</div>
+                        <div class="spectrum-container p-24" style="text-align:center;">
+                            <canvas id="spectrum-canvas" width="800" height="400" style="background:#000; border:1px solid var(--accent-blue); max-width:100%;"></canvas>
+                            <div class="mt-16 flex-row-sb" style="max-width: 800px; margin: 0 auto;">
+                                <div class="label">Center: 915.0 MHz</div>
+                                <div class="label">Span: 26.0 MHz</div>
+                                <div class="label">Peak: -92 dBm</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- ── Task Editor Modal ──────────────────────────────────────── -->
+    <div class="modal" id="task-editor-modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Task Configuration</h3>
+                <button class="close-btn" onclick="closeTaskEditor()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Task Name</label>
+                    <input type="text" id="edit-task-name" class="input-styled" placeholder="e.g. Pump Toggle">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Operation Type</label>
+                        <select id="edit-task-type" class="input-styled" onchange="onEditorTypeChange()">
+                            <option value="TOGGLE">TOGGLE</option>
+                            <option value="PULSE">PULSE</option>
+                            <option value="PWM">PWM</option>
+                            <option value="ON">ALWAYS ON</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Target Pin</label>
+                        <input type="text" id="edit-task-pin" class="input-styled" placeholder="GPIO #">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Interval (Seconds)</label>
+                        <input type="number" id="edit-task-interval" class="input-styled" value="60">
+                    </div>
+                    <div class="form-group" id="duration-field-group">
+                        <label>Duration (Seconds)</label>
+                        <input type="number" id="edit-task-duration" class="input-styled" value="1">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-danger" onclick="deleteCurrentTask()">DELETE</button>
+                <div class="flex-gap-8">
+                    <button class="btn btn-secondary" onclick="closeTaskEditor()">CANCEL</button>
+                    <button class="btn" onclick="saveTaskFromEditor()">UPDATE TASK</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/index.js"></script>
+</body>
+</html>

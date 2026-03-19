@@ -1,0 +1,190 @@
+/* LoRaLink Premium Overlay Styles */
+:root {
+  --bg-deep: #020617;
+  --bg-glass: rgba(15, 23, 42, 0.7);
+  --primary: #00d2ff;
+  --secondary: #7000ff;
+  --glow: rgba(0, 210, 255, 0.3);
+  --text-main: #f8fafc;
+  --text-sub: #94a3b8;
+  --border-glass: rgba(255, 255, 255, 0.1);
+}
+
+.premium-body {
+  background-color: var(--bg-deep);
+  color: var(--text-main);
+  background-image: 
+    radial-gradient(circle at 20% 20%, rgba(112, 0, 255, 0.05), transparent),
+    radial-gradient(circle at 80% 80%, rgba(0, 210, 255, 0.05), transparent);
+  background-attachment: fixed;
+}
+
+/* Overriding index.html Hero */
+.hero-premium {
+  min-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4rem 10%;
+  text-align: center;
+}
+
+.hero-premium h1 {
+  font-size: 4rem;
+  font-weight: 900;
+  letter-spacing: -2px;
+  margin-bottom: 1.5rem;
+  background: linear-gradient(135deg, var(--primary), var(--secondary));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  line-height: 1.1;
+}
+
+.hero-premium .tagline-premium {
+  font-size: 1.5rem;
+  color: var(--text-sub);
+  max-width: 900px;
+  margin-bottom: 3rem;
+  font-weight: 500;
+}
+
+/* Feature Grid Improvements */
+.premium-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+  gap: 2rem;
+  margin: 4rem 0;
+}
+
+.premium-card {
+  background: var(--bg-glass);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border-glass);
+  border-radius: 20px;
+  padding: 2.5rem;
+  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  position: relative;
+  overflow: hidden;
+}
+
+.premium-card:hover {
+  transform: translateY(-10px);
+  border-color: var(--primary);
+  box-shadow: 0 20px 40px -10px var(--glow);
+}
+
+.premium-card::after {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle, var(--glow) 0%, transparent 70%);
+  opacity: 0;
+  transition: opacity 0.4s;
+}
+
+.premium-card:hover::after {
+  opacity: 1;
+}
+
+.premium-card h3 {
+  font-size: 1.25rem;
+  color: var(--primary);
+  margin-bottom: 1rem;
+  font-weight: 700;
+  z-index: 1;
+  position: relative;
+}
+
+.premium-card p {
+  font-size: 0.95rem;
+  color: var(--text-sub);
+  line-height: 1.5;
+  z-index: 1;
+  position: relative;
+}
+
+/* Vision Split (Implemented Copy) */
+.premium-split {
+  display: flex;
+  gap: 4rem;
+  align-items: center;
+  padding: 6rem 10%;
+  background: rgba(255,255,255,0.02);
+  border-radius: 40px;
+  margin: 4rem 0;
+}
+
+.split-image {
+  flex: 1;
+  border-radius: 30px;
+  overflow: hidden;
+  box-shadow: 0 40px 80px -20px rgba(0,0,0,0.6);
+}
+
+.split-image img {
+  width: 100%;
+  display: block;
+}
+
+.split-content {
+  flex: 1;
+}
+
+.split-content h2 {
+  font-size: 2.5rem;
+  margin-bottom: 2rem;
+  color: var(--text-main);
+}
+
+.split-content p {
+  font-size: 1.1rem;
+  color: var(--text-sub);
+  margin-bottom: 1.5rem;
+}
+
+.badge-group {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 2rem;
+}
+
+.badge-premium {
+  background: rgba(0, 210, 255, 0.1);
+  color: var(--primary);
+  padding: 6px 16px;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  border: 1px solid var(--primary);
+}
+
+/* Documentation Link Section */
+.docs-footer-section {
+  padding: 6rem 10%;
+  text-align: center;
+}
+
+.docs-footer-section h2 {
+  font-size: 2rem;
+  margin-bottom: 3rem;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+  .premium-split {
+    flex-direction: column;
+    padding: 4rem 5%;
+  }
+  .hero-premium h1 {
+    font-size: 3rem;
+  }
+}

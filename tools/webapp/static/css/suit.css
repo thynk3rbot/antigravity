@@ -1,0 +1,120 @@
+:root {
+  /* -- Core Palette: Deep Space Industrial -- */
+  --suit-bg: #0a0b10;
+  --suit-panel: #141620;
+  --suit-card: rgba(30, 35, 45, 0.4);
+  --suit-glass: rgba(20, 25, 35, 0.85);
+  --suit-accent: #00f2ff;
+  --suit-accent-dim: rgba(0, 242, 255, 0.2);
+  --suit-purple: #7000ff;
+  --suit-text: #e0e6ed;
+  --suit-text-dim: #90a0b0;
+  --suit-border: rgba(255, 255, 255, 0.08);
+  --suit-ok: #00ff88;
+  --suit-warn: #ffaa00;
+  --suit-err: #ff4d4d;
+  
+  /* -- Sizing Standards -- */
+  --suit-radius: 12px;
+  --suit-gap: 12px;
+}
+
+/* -- Standardized Glassmorphism -- */
+.suit-glass {
+  background: var(--suit-glass);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--suit-border);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+/* -- Tiny Gauging System -- */
+.mini-gauge {
+  background: var(--suit-card);
+  border: 1px solid var(--suit-border);
+  border-radius: 8px;
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 140px;
+  transition: all 0.2s;
+}
+
+.mini-gauge:hover {
+  border-color: var(--suit-accent);
+  background: rgba(0, 242, 255, 0.05);
+}
+
+.mini-gauge i {
+  font-size: 14px;
+  color: var(--suit-accent);
+  opacity: 0.8;
+}
+
+.mg-data {
+  display: flex;
+  flex-direction: column;
+}
+
+.mg-label {
+  font-size: 9px;
+  font-weight: 800;
+  color: var(--suit-text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.mg-value {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--suit-text);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* -- Inter-Suite Navigation -- */
+.suit-nav {
+  display: flex;
+  gap: 16px;
+  padding: 0 20px;
+  height: 100%;
+  align-items: center;
+  border-left: 1px solid var(--suit-border);
+  margin-left: 20px;
+}
+
+.suit-link {
+  color: var(--suit-text-dim);
+  text-decoration: none;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  transition: 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.suit-link:hover, .suit-link.active {
+  color: var(--suit-accent);
+}
+
+.suit-link i { font-size: 12px; }
+
+/* -- Industrial Badges -- */
+.ind-badge {
+  font-size: 9px;
+  font-weight: 900;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid var(--suit-border);
+  color: var(--suit-text-dim);
+}
+
+.ind-badge.active {
+  border-color: var(--suit-ok);
+  color: var(--suit-ok);
+  background: rgba(0, 255, 136, 0.1);
+}

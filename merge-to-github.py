@@ -12,6 +12,7 @@ Usage:
     python merge-to-github.py --auto-increment    # Auto-increment patch version
 """
 
+import os
 import subprocess
 import sys
 import re
@@ -19,7 +20,15 @@ from pathlib import Path
 from datetime import datetime
 
 REPO_PATH = Path.cwd()
-CONFIG_H = REPO_PATH / "src" / "config.h"
+# Config file locations (monorepo support)
+CONFIG_H_OPTS = [
+    REPO_PATH / "src" / "config.h",
+    REPO_PATH / "firmware" / "v1" / "src" / "config.h",
+]
+
+# Pick the first one that exists
+CONFIG_H = next((p for p in CONFIG_H_OPTS if p.exists()), CONFIG_H_OPTS[0])
+
 VERSION_REGEX = r'#define FIRMWARE_VERSION "v((\d+)\.(\d+)\.(\d+))"'
 
 
@@ -52,8 +61,10 @@ if sys.platform == "win32":
 
 
 def get_version_from_config():
-    """Read firmware version from src/config.h"""
+    """Read firmware version from config.h"""
     try:
+        if not CONFIG_H.exists():
+            return None
         content = CONFIG_H.read_text()
         match = re.search(VERSION_REGEX, content)
         if match:
@@ -61,7 +72,7 @@ def get_version_from_config():
         else:
             return None
     except Exception as e:
-        print(f"{Colors.FAIL}Error reading config.h: {e}{Colors.ENDC}")
+        print(f"{Colors.FAIL}Error reading config file: {e}{Colors.ENDC}")
         return None
 
 
@@ -110,7 +121,7 @@ def detect_version_change():
 
     if current is None:
         print(
-            f"{Colors.FAIL}Could not read current version from src/config.h{Colors.ENDC}"
+            f"{Colors.FAIL}Could not read current version from {CONFIG_H}{Colors.ENDC}"
         )
         return False
 
@@ -176,24 +187,28 @@ def get_modified_files_by_agent():
             # porcelain format has 3 char prefix (XY )
             path = line[3:]
 
-            # Determine owner (sync'd with AGENT_ASSIGNMENTS.md)
+            # Determine owner (sync'd with AGENT_ASSIGNMENTS.md - 3-Phase Router)
             owner = "unassigned"
-            if (
-                "src/managers/" in path
-                or "src/config.h" in path
-                or "src/crypto.h" in path
-                or "src/main.cpp" in path
-            ):
-                owner = "Antigravity"
+            if "01_planning/" in path or "docs/plans/" in path:
+                owner = "OpenAI"
             elif (
-                "tools/webapp/" in path
+                "02_coding/" in path
+                or "src/" in path
+                or "tools/webapp/" in path
                 or "tools/pc_app/" in path
-                or "docs/" in path
-                or "INTEGRATION.md" in path
+                or "firmware/" in path
             ):
                 owner = "Claude"
-            elif "PerformanceManager" in path or "PowerManager" in path:
-                owner = "Codex"
+            elif (
+                "03_review/" in path
+                or "docs/" in path
+                or "main.cpp" in path
+                or "config.h" in path
+                or "crypto.h" in path
+                or "INTEGRATION.md" in path
+                or "README.md" in path
+            ):
+                owner = "Antigravity"
 
             if owner not in files_by_agent:
                 files_by_agent[owner] = []
@@ -332,8 +347,9 @@ def increment_patch_version():
             f"{Colors.OKGREEN}✓ Version auto-incremented: v{current} → v{new_version}{Colors.ENDC}"
         )
 
-        # Stage the change
-        subprocess.run(f"git add src/config.h", cwd=REPO_PATH, shell=True)
+        # Stage the change (use relative path via os.path.relpath for git compatibility)
+        rel_config_h = os.path.relpath(CONFIG_H, REPO_PATH)
+        subprocess.run(f'git add "{rel_config_h}"', cwd=REPO_PATH, shell=True)
 
         return True
 

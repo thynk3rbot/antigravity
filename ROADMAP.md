@@ -27,12 +27,13 @@ Focus: Improving reliability, protocol support, and the embedded core.
 
 Focus: Ultra-low-power autonomous operation for solar-field units.
 
-- [x] **Voltage-Aware Intelligence**: Multi-tier throttling for heartbeats and OLED (Normal/Conserve/Critical).
-- [x] **Safe-Shutdown (Critical Mode)**: Implemented proactive radio lockout and link downgrade when battery hits <3.45V to prevent deep-discharge damage.
-- [x] **Modem-Sleep (Conserve Mode)**: Integrated automatic 50% current reduction via WiFi PowerSave (Modem Sleep) when battery is <3.80V.
-- [x] **Peripheral Gating**: `VEXT_CTRL` management to physically cut power to sensors between samples.
+- [x] **Voltage-Aware Intelligence**: Multi-tier throttling with hysteresis (Normal/Conserve/Critical). 50mV deadband prevents oscillation.
+- [x] **Safe-Shutdown (Critical Mode)**: Proactive WiFi kill, LORA downgrade, and link lockout when battery hits <3.45V.
+- [x] **Modem-Sleep (Conserve Mode)**: Automatic 50% current reduction via WiFi PowerSave (Modem Sleep) when battery is <3.80V.
+- [x] **Peripheral Gating**: `VEXT_CTRL` dynamically managed — rail OFF in CONSERVE/CRITICAL, ON in NORMAL.
+- [x] **Solar Trend Analysis**: Ring buffer tracks charge/drain velocity (mV/min) and predicts "Time to Empty" (hours).
+- [x] **BLE Power Gating**: BLE task processing skipped entirely in CRITICAL mode.
 - [ ] **Wake-on-Radio (CAD)**: Pulse radio in low-power detection mode instead of constant RX.
-- [ ] **Solar Trend Analysis**: Track charge/drain velocity to predict "Time to Empty".
 - [ ] **NVS Hibernate**: Preserve state across multi-day deep-sleep cycles.
 
 ### Mid-Term
@@ -85,4 +86,25 @@ Focus: Growing the user base and establishing the brand.
 
 ---
 
-### Last Updated: 2026-03-08
+## 🏗️ Track 5: Unified Architecture (Industrial-Strength)
+
+Focus: LORALINK-UNIFIED "Architectural Anchors" for protocol-agnostic, peer-sovereign operations.
+
+- [ ] **Transport-Agnostic Envelope (LL-CORE-01)**: Implement HMAC-SHA256 signature verification at the gateway/router level before logic execution.
+- [ ] **The Fallback Ladder (LL-CORE-02)**: Intelligent radio stack pruning (Hardwire > WiFi > LoRa) to conserve power once a secure link is established.
+- [ ] **Semantic URI Addressing (LL-CORE-03)**: Transition to hardware-agnostic C2 via `ll://[node_id]/[subsystem]/[target]`.
+- [ ] **Ranch-Ready Lexicon (LL-C2-01)**: Standardize all human-readable serial/MQTT/LoRa commands for parity in manual overrides.
+
+---
+
+## 🧠 Track 6: Sovereign Intelligence & Swarms
+
+Focus: Local AI Gateway integration and collective fleet behavior (Swarms).
+
+- [ ] **Local AI Gateway (LL-AI-01)**: Deploy local inference bridge (Ollama/LocalAI) for offline telemetry analysis.
+- [ ] **Swarm Orchestration (LL-AI-02)**: Implement "Master/Member" election and consensus-based command execution via PC Daemon.
+- [ ] **Remote Device Programming**: Enable Serial-to-LoRa tunneling for remote OTA and specific device "lock-on" diagnostics.
+
+---
+
+### Last Updated: 2026-03-17

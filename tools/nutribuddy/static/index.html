@@ -8,21 +8,60 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
 <style>
   :root {
-    --bg: #0f1117; --surface: #1a1d27; --surface2: #232635;
-    --border: #2e3147; --accent: #4ade80; --accent2: #60a5fa;
-    --warn: #fbbf24; --danger: #f87171; --text: #e2e8f0; --muted: #64748b;
-    --radius: 8px;
+    --bg: #0a0b10;
+    --surface: #141620;
+    --surface2: rgba(30,35,45,0.4);
+    --border: rgba(255,255,255,0.08);
+    --accent: #00f2ff;
+    --accent2: #7000ff;
+    --warn: #ffaa00;
+    --danger: #ff4d4d;
+    --text: #e0e6ed;
+    --muted: #90a0b0;
+    --radius: 12px;
+    --glass: rgba(20,25,35,0.85);
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; font-size: 14px; min-height: 100vh; }
 
-  header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 8px 20px; display: flex; align-items: center; gap: 16px; position: sticky; top: 0; z-index: 100; }
-  header .logo-container { display: flex; align-items: center; gap: 12px; }
-  header .logo-icon { width: 40px; height: 40px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
-  header h1 { font-size: 18px; font-weight: 700; color: var(--accent); letter-spacing: 0.5px; margin: 0; }
-  header .sub { font-size: 12px; color: var(--muted); }
-  .mqtt-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); transition: background 0.3s; }
-  .mqtt-dot.connected { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+  header { 
+    background: var(--glass); 
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--border); 
+    padding: 12px 24px; 
+    display: flex; 
+    align-items: center; 
+    justify-content: space-between;
+    position: sticky; top: 0; z-index: 1000; 
+  }
+  
+  .suit-header-nav {
+    display: flex;
+    gap: 16px;
+    padding: 0 20px;
+    height: 32px;
+    align-items: center;
+    border-left: 1px solid var(--border);
+    margin-left: 20px;
+  }
+
+  .suit-link {
+    color: var(--muted);
+    text-decoration: none;
+    font-size: 10px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    transition: 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .suit-link:hover, .suit-link.active {
+    color: var(--accent);
+  }
 
   nav { display: flex; gap: 4px; padding: 10px 20px; background: var(--surface); border-bottom: 1px solid var(--border); overflow-x: auto; }
   nav button { background: none; border: 1px solid var(--border); color: var(--muted); padding: 6px 14px; border-radius: var(--radius); cursor: pointer; font-size: 13px; white-space: nowrap; transition: all 0.2s; }
@@ -235,54 +274,21 @@
 
 <header>
   <div class="logo-container">
-    <div class="logo-icon">
-      <svg width="40" height="40" viewBox="0 0 920 920" xmlns="http://www.w3.org/2000/svg">
-        <style>
-          :root{--bg:#0f1117;--surface:#1a1d27;--accent:#4ade80;--accent2:#60a5fa;--border:#2e3147;--text:#e2e8f0;}
-          @keyframes orbit{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}
-          @keyframes rise{0%{transform:translateY(0);opacity:1;}80%{opacity:1;}100%{transform:translateY(-160px);opacity:0;}}
-          .spin{animation:orbit 40s linear infinite;transform-origin:460px 460px;}
-          .riseN{animation:rise 7s infinite;}
-          .riseP{animation:rise 7s 2.3s infinite;}
-          .riseK{animation:rise 7s 4.6s infinite;}
-        </style>
-        <circle cx="460" cy="460" r="430" fill="var(--bg)" stroke="var(--border)" stroke-width="10"/>
-        <circle cx="460" cy="460" r="380" fill="none" stroke="var(--accent)" stroke-width="12" stroke-dasharray="22 16"/>
-        <g class="spin">
-          <circle cx="460" cy="460" r="300" fill="none" stroke="var(--accent2)" stroke-width="6" opacity="0.6"/>
-        </g>
-        <g stroke="var(--accent)" stroke-width="28" stroke-linecap="round">
-          <line x1="320" y1="300" x2="320" y2="560"/>
-          <line x1="320" y1="300" x2="520" y2="560"/>
-          <line x1="520" y1="300" x2="520" y2="560"/>
-        </g>
-        <path d="M650 300 A240 240 0 1 0 650 560" stroke="var(--accent2)" stroke-width="28" fill="none" stroke-linecap="round"/>
-        <rect x="300" y="560" width="320" height="150" rx="32" fill="var(--surface)" stroke="var(--border)" stroke-width="8"/>
-        <rect x="300" y="620" width="320" height="90" fill="var(--accent2)" opacity="0.22"/>
-        <g stroke="var(--accent)" stroke-width="8" fill="none">
-          <path d="M350 560 C320 640 310 700 340 780"/>
-          <path d="M460 560 C460 640 460 700 460 780"/>
-          <path d="M570 560 C600 640 610 700 580 780"/>
-        </g>
-        <g class="riseN">
-          <circle cx="340" cy="780" r="18" fill="var(--accent)"/>
-          <text x="340" y="785" text-anchor="middle" font-size="18" fill="#0f1117" font-weight="bold">N</text>
-        </g>
-        <g class="riseP">
-          <circle cx="460" cy="780" r="18" fill="var(--accent)"/>
-          <text x="460" y="785" text-anchor="middle" font-size="18" fill="#0f1117" font-weight="bold">P</text>
-        </g>
-        <g class="riseK">
-          <circle cx="580" cy="780" r="18" fill="var(--accent)"/>
-          <text x="580" y="785" text-anchor="middle" font-size="18" fill="#0f1117" font-weight="bold">K</text>
-        </g>
-      </svg>
+    <div class="logo-icon" style="background: linear-gradient(135deg, var(--accent), var(--accent2)); border-radius: 10px; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 20px rgba(0, 242, 255, 0.3);">
+      <i class="fas fa-vial" style="color: #000; font-size: 1.2rem;"></i>
     </div>
-    <div>
-      <h1>NutriCalc</h1>
-      <span class="sub">Hydroponic Nutrient Planner</span>
+    <div style="margin-left: 12px;">
+      <h1 style="font-size: 1.3rem; margin: 0; letter-spacing: -0.5px; color: var(--text);">NutriCalc <span style="font-size: 0.75rem; background: rgba(255,255,255,0.1); padding: 2px 8px; border-radius: 4px; color: var(--muted);">v1.2.0</span></h1>
+      <span class="sub" style="font-size: 0.7rem; color: var(--muted); text-transform: uppercase; font-weight: 700; letter-spacing: 1px; display: block; margin-top: 2px;">Hydroponic Nutrient Planner</span>
     </div>
   </div>
+
+  <nav class="suit-header-nav">
+      <a href="http://localhost:8000" class="suit-link"><i class="fas fa-microchip"></i> LoRaLink</a>
+      <a href="/" class="suit-link active"><i class="fas fa-vial"></i> NutriCalc</a>
+      <a href="http://localhost:8200" class="suit-link"><i class="fas fa-route"></i> Rag-Router</a>
+      <a href="http://localhost:8010" class="suit-link"><i class="fas fa-globe"></i> Viai.club</a>
+  </nav>
   <div style="margin-left:auto;display:flex;align-items:center;gap:14px;">
     <div class="unit-toggle">
       <button id="unit-metric" class="active" title="Metric units (g, L)">Metric</button>

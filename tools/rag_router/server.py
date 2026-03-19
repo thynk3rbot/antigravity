@@ -20,6 +20,9 @@ from pydantic import BaseModel
 
 load_dotenv()
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+STATIC_DIR = os.path.join(BASE_DIR, "static")
+
 DIFY_BASE_URL = os.getenv("DIFY_BASE_URL", "http://localhost:5001/v1")
 DIFY_API_KEY = os.getenv("DIFY_API_KEY", "")
 MQTT_BROKER = os.getenv("MQTT_BROKER", "localhost")
@@ -313,7 +316,7 @@ async def lifespan(app):
 
 
 app = FastAPI(title="RAG Router", version="0.1.0", lifespan=lifespan)
-app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
 class ManualQuery(BaseModel):
@@ -338,11 +341,15 @@ class ProductRegistration(BaseModel):
 
 @app.get("/")
 async def index():
-    return FileResponse("static/index.html")
+    return FileResponse(os.path.join(STATIC_DIR, "index.html"))
+
+@app.get("/health")
+async def health():
+    return {"status": "ok", "service": "rag_router"}
 
 @app.get("/test")
 async def test_page():
-    return FileResponse("static/test.html")
+    return FileResponse(os.path.join(STATIC_DIR, "test.html"))
 
 @app.get("/api/nodes")
 async def get_nodes():

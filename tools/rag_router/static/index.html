@@ -5,15 +5,65 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>RAG Router -- LoRaLink Sensor Console</title>
 <style>
-  :root { --bg: #0a0e17; --surface: #111827; --border: #1f2937; --text: #e5e7eb; --dim: #6b7280; --accent: #3b82f6; --green: #10b981; --red: #ef4444; --yellow: #f59e0b; }
+  :root { 
+    --bg: #0a0b10; 
+    --surface: #141620; 
+    --border: rgba(255,255,255,0.08); 
+    --text: #e0e6ed; 
+    --dim: #90a0b0; 
+    --accent: #00f2ff; 
+    --accent2: #7000ff;
+    --green: #00ff88; 
+    --red: #ff4d4d; 
+    --yellow: #ffaa00; 
+    --glass: rgba(20,25,35,0.85);
+  }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { font-family: 'JetBrains Mono', 'Fira Code', monospace; background: var(--bg); color: var(--text); min-height: 100vh; }
-  header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 12px 24px; display: flex; align-items: center; gap: 16px; }
-  header h1 { font-size: 16px; font-weight: 600; }
-  header .status { font-size: 11px; padding: 2px 8px; border-radius: 4px; }
-  header .status.ok { background: #064e3b; color: var(--green); }
-  header .status.err { background: #450a0a; color: var(--red); }
-  .layout { display: grid; grid-template-columns: 300px 1fr; height: calc(100vh - 49px); }
+  header { 
+    background: var(--glass); 
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--border); 
+    padding: 12px 24px; 
+    display: flex; 
+    align-items: center; 
+    justify-content: space-between;
+    position: sticky; top: 0; z-index: 1000; 
+  }
+  
+  .suit-header-nav {
+    display: flex;
+    gap: 16px;
+    padding: 0 20px;
+    height: 32px;
+    align-items: center;
+    border-left: 1px solid var(--border);
+    margin-left: 20px;
+  }
+
+  .suit-link {
+    color: var(--dim);
+    text-decoration: none;
+    font-size: 10px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    transition: 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .suit-link:hover, .suit-link.active {
+    color: var(--accent);
+  }
+
+  header h1 { font-size: 1.2rem; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 8px; }
+  header .status { font-size: 10px; font-weight: 800; padding: 2px 8px; border-radius: 4px; text-transform: uppercase; }
+  header .status.ok { background: rgba(0,255,136,0.1); color: var(--green); border: 1px solid var(--green); }
+  header .status.err { background: rgba(255,77,77,0.1); color: var(--red); border: 1px solid var(--red); }
+  .layout { display: grid; grid-template-columns: 300px 1fr; height: calc(100vh - 61px); }
   .sidebar { background: var(--surface); border-right: 1px solid var(--border); overflow-y: auto; }
   .sidebar h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--dim); padding: 16px 16px 8px; }
   .node-card { padding: 12px 16px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.15s; }
@@ -49,11 +99,27 @@
 <body>
 
 <header>
-  <h1>RAG Router</h1>
-  <span id="ws-status" class="status err">DISCONNECTED</span>
-  <span id="mqtt-status" class="status err">MQTT --</span>
-  <span style="flex:1"></span>
-  <span style="font-size:11px;color:var(--dim)">LoRaLink Sensor Console</span>
+  <div style="display: flex; align-items: center; gap: 12px;">
+    <div style="width: 40px; height: 40px; background: linear-gradient(135deg, var(--accent), var(--accent2)); border-radius: 10px; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 20px rgba(0, 242, 255, 0.3);">
+      <i class="fas fa-route" style="color: #000; font-size: 1.2rem;"></i>
+    </div>
+    <div>
+      <h1 style="font-size: 1.1rem; margin: 0; letter-spacing: -0.5px; color: var(--text);">Rag-Router <span style="font-size: 0.7rem; background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 4px; color: var(--dim);">v1.0.0</span></h1>
+      <span style="font-size: 0.65rem; color: var(--dim); text-transform: uppercase; font-weight: 700; letter-spacing: 1px; display: block; margin-top: 1px;">Expert Knowledge Broker</span>
+    </div>
+  </div>
+
+  <nav class="suit-header-nav">
+      <a href="http://localhost:8000" class="suit-link"><i class="fas fa-microchip"></i> LoRaLink</a>
+      <a href="http://localhost:8100" class="suit-link"><i class="fas fa-vial"></i> NutriCalc</a>
+      <a href="/" class="suit-link active"><i class="fas fa-route"></i> Rag-Router</a>
+      <a href="http://localhost:8010" class="suit-link"><i class="fas fa-globe"></i> Viai.club</a>
+  </nav>
+
+  <div style="margin-left:auto; display:flex; gap:10px; align-items:center;">
+    <span id="ws-status" class="status err">WS: OFF</span>
+    <span id="mqtt-status" class="status err">MQTT: OFF</span>
+  </div>
 </header>
 
 <div class="layout">

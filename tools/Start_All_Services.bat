@@ -33,6 +33,9 @@ echo.
 echo Launching Corporate Website (Port 8010)...
 start "LoRaLink Website" cmd /c "%~dp0Start_Website.bat"
 echo.
+echo Launching Local AI Workstation (Port 3000)...
+start "AI Workstation" cmd /c "%~dp0Start_AI_Workstation.bat"
+echo.
 echo All services launched in separate windows!
 echo.
 echo   MQTT Broker:    localhost:1883  (TCP)
@@ -41,6 +44,7 @@ echo   EMQX Dashboard: http://localhost:18083  (admin / public)
 echo   Docs:           http://localhost:8001
 echo   Controller:     http://localhost:8000
 echo   Website:        http://localhost:8010
+echo   AI WebUI:       http://localhost:3000
 echo.
 echo You can now close this supervisor window.
 pause

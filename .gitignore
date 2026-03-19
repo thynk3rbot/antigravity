@@ -44,3 +44,4 @@ build_log*.txt
 # Multi-agent coordination (lock files, audit trails)
 .locks/
 agent-audit.log
+tools/OllamaSetup.exe
