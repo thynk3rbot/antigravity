@@ -94,9 +94,9 @@ bool BLETransport::initStatic() {
         return true;
     }
 
-    // Build device name "GW-<nodeId>"
+    // Use nodeId directly as BLE device name (no hardcoded prefix)
     std::string nodeId     = NVSManager::getNodeID("Unknown");
-    std::string deviceName = "GW-" + nodeId;
+    std::string deviceName = nodeId;
 
     Serial.printf("[BLE] Initializing NimBLE NUS as '%s'\n", deviceName.c_str());
 

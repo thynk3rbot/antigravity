@@ -394,7 +394,7 @@ void setup() {
   if (!BLETransport::initStatic()) {
     Serial.println("  ! BLE transport init failed (non-fatal)");
   } else {
-    Serial.printf("  ✓ BLE transport initialized (GW-%s)\n", nodeID.c_str());
+    Serial.printf("  ✓ BLE transport initialized (%s)\n", nodeID.c_str());
   }
 
   // Optional MQTT Transport (Hub only, requires WiFi and broker configured)

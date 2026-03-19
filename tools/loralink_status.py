@@ -338,7 +338,10 @@ async def scan_ble(timeout: float = 8.0) -> list[str]:
     addrs = []
     for d in sorted(devices, key=lambda x: x.name or "~"):
         name = d.name or "(no name)"
-        marker = " <-- LoRaLink" if d.name and ("Peer" in d.name or "HT-" in d.name or "lora" in d.name.lower()) else ""
+        # Identify LoRaLink devices by NUS service UUID — name-independent
+        uuids = [str(u).lower() for u in (d.metadata.get("uuids") or [])]
+        is_loralink = NUS_SERVICE_UUID.lower() in uuids
+        marker = " <-- LoRaLink" if is_loralink else ""
         print(f"  {d.address}  {name}{marker}")
         addrs.append(d.address)
     return addrs
