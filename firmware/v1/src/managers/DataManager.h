@@ -58,7 +58,9 @@ public:
   bool wifiEnabled;
   bool bleEnabled;
   bool gpsEnabled;
+  uint32_t gpsBaud;
   bool displayEnabled;
+
   uint8_t hardwareVariant; // 2=V2, 3=V3, 4=V4
   bool traceLogging;
   char transportMode; // 'J'=JSON, 'C'=CSV, 'K'=KV, 'B'=BIN (message format)
@@ -124,7 +126,10 @@ public:
   void SetESPNowEnabled(bool enabled);
   void SetWifiEnabled(bool enabled);
   void SetBleEnabled(bool enabled);
+  void SetGpsEnabled(bool enabled);
+  void SetGpsBaud(uint32_t baud);
   void SaveESPNowPeer(int index, const uint8_t *mac, const char *name);
+
   void RemoveESPNowPeer(int index);
   void LoadESPNowPeers();
 

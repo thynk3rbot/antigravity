@@ -5,7 +5,12 @@
 #include "DataManager.h"
 #include "heltec.h"
 
-#define NUM_PAGES 5
+#ifdef SUPPORT_GPS
+  #define NUM_PAGES 5
+#else
+  #define NUM_PAGES 4
+#endif
+
 
 class DisplayManager {
 public:

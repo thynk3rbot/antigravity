@@ -12,6 +12,7 @@
 #include "ProductManager.h"
 #include "ScheduleManager.h"
 #include "WiFiManager.h"
+#include "GPSManager.h"
 #include <Arduino.h>
 #include <WiFi.h>
 #include <esp32-hal-ledc.h>
@@ -799,6 +800,31 @@ void CommandManager::initRegistry() {
     // Acknowledge receipt
     CommandManager::getInstance().sendResponse("SYS: Forwarded to Local AI", source);
     lora.lastMsgReceived = "SYS: AI Prompt Sent";
+  });
+
+  registerCommand("GPSTEST", [](const String &args, CommInterface source) {
+    GPSManager &gps = GPSManager::getInstance();
+    LoRaManager &lora = LoRaManager::getInstance();
+    
+    String sub = args;
+    sub.trim();
+    sub.toUpperCase();
+
+    if (sub == "STATUS" || sub == "") {
+      String diag = gps.getDiagnostic();
+      CommandManager::getInstance().sendResponse(diag, source);
+    } else if (sub == "RESET") {
+      gps.resetGNSS();
+      CommandManager::getInstance().sendResponse("GPS: Reset triggered", source);
+    } else if (sub == "RAW ON") {
+      gps.setRawMode(true);
+      CommandManager::getInstance().sendResponse("GPS: Raw stream to Serial ON", source);
+    } else if (sub == "RAW OFF") {
+      gps.setRawMode(false);
+      CommandManager::getInstance().sendResponse("GPS: Raw stream OFF", source);
+    } else {
+      CommandManager::getInstance().sendResponse("USAGE: GPSTEST STATUS|RESET|RAW ON|RAW OFF", source);
+    }
   });
 
   registerCommand("GPIO", [this](const String &args, CommInterface source) {

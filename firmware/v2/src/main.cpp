@@ -192,7 +192,7 @@ void controlTask(void* param) {
 
     // Poll MQTT transport (handles connection, message receipt, telemetry publish)
     #ifdef ENABLE_MQTT_TRANSPORT
-      MQTTTransport::poll();
+      MQTTTransport::pollStatic();
     #endif
 
     vTaskDelay(pdMS_TO_TICKS(500));  // 500ms control loop period
@@ -401,7 +401,7 @@ void setup() {
 
   // Optional MQTT Transport (Hub only, requires WiFi and broker configured)
   #ifdef ENABLE_MQTT_TRANSPORT
-    if (MQTTTransport::init()) {
+    if (MQTTTransport::initStatic()) {
       Serial.println("  ✓ MQTT transport initialized (configuring broker...)");
 
       // Register command callback for MQTT

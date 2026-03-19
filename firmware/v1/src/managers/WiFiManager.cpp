@@ -3,7 +3,9 @@
 #include "CommandManager.h"
 #include "DataManager.h"
 #include "ESPNowManager.h"
+#include "GPSManager.h"
 #include "LoRaManager.h"
+
 #include "PerformanceManager.h"
 #include "PowerManager.h"
 #include "ProductManager.h"
@@ -360,13 +362,15 @@ c+='<div class="card"><div class="lbl">RSSI</div><div class="val">'+(d.rssi||'â€
 c+='<div class="card ok-border"><div class="lbl">Nodes</div><div class="val ok">'+(d.nodes!=null?d.nodes:'â€”')+'</div></div>';
 document.getElementById('cards').innerHTML=c;
 
-if(d.gps_fix || d.gps_sats > 0) {
+if(d.gps_en && (d.gps_chars > 0 || d.gps_fix)) {
   var ghtml='<div class="sect-hdr">GPS System</div><div class="grid">';
-  ghtml+='<div class="card '+(d.gps_fix?'ok-border':'warn-border')+'"><div class="lbl">Status</div><div class="val '+(d.gps_fix?'ok':'wt')+'">'+(d.gps_fix?'FIXED':'NO FIX')+' ('+d.gps_sats+')</div></div>';
+  ghtml+='<div class="card '+(d.gps_fix?'ok-border':'warn-border')+'"><div class="lbl">Status</div><div class="val '+(d.gps_fix?'ok':'wt')+'">'+(d.gps_fix?'FIXED':'WAITING')+' ('+d.gps_sats+')</div></div>';
+  ghtml+='<div class="card"><div class="lbl">Processed</div><div class="val" style="font-size:10px">'+d.gps_chars+' ch</div></div>';
   if(d.gps_fix) ghtml+='<div class="card span-2" style="border-left-color:#00d4ff"><div class="lbl">Coordinates</div><div class="val" style="font-size:11px;color:#00d4ff">'+d.lat.toFixed(6)+', '+d.lon.toFixed(6)+'</div></div>';
   ghtml+='</div>';
   document.getElementById('gps-sect').innerHTML=ghtml;
 } else { document.getElementById('gps-sect').innerHTML=''; }
+
 
 if(sched && sched.tasks && sched.tasks.length > 0) {
   var shtml='<div class="sect-hdr">Upcoming Protocol</div><div class="grid">';
@@ -500,6 +504,24 @@ body.debug-on .dbg-id{display:inline-block!important}
   html += String(LORA_PWR);
   html += R"rawhtml( dBm' disabled></div>
 </div>
+
+<div class='sec'>
+<span class='dbg-id'>CFG-GPS</span>
+<h2>&#x1F4E1; GPS System</h2>
+<div class='row'><label>Enabled</label><select name='gps_en'><option value='0')rawhtml";
+  if (!data.gpsEnabled) html += " selected";
+  html += R"rawhtml(>OFF</option><option value='1')rawhtml";
+  if (data.gpsEnabled) html += " selected";
+  html += R"rawhtml(>ON</option></select></div>
+<div class='row'><label>Baud Rate</label><select name='gps_baud'>
+<option value='9600')rawhtml"; if(data.gpsBaud==9600) html+=" selected"; html+=R"rawhtml(>9600 (Normal/External)</option>
+<option value='19200')rawhtml"; if(data.gpsBaud==19200) html+=" selected"; html+=R"rawhtml(>19200</option>
+<option value='38400')rawhtml"; if(data.gpsBaud==38400) html+=" selected"; html+=R"rawhtml(>38400</option>
+<option value='57600')rawhtml"; if(data.gpsBaud==57600) html+=" selected"; html+=R"rawhtml(>57600</option>
+<option value='115200')rawhtml"; if(data.gpsBaud==115200) html+=" selected"; html+=R"rawhtml(>115200 (V4 Internal)</option>
+</select></div>
+</div>
+
 
 <div class='sec'>
 <span class='dbg-id'>CFG-ESPNOW</span>
@@ -680,7 +702,16 @@ void WiFiManager::serveConfigSave() {
                      server.arg("subnet"));
   }
 
+  if (server.hasArg("gps_en")) {
+    data.SetGpsEnabled(server.arg("gps_en") == "1");
+  }
+
+  if (server.hasArg("gps_baud")) {
+    data.SetGpsBaud(server.arg("gps_baud").toInt());
+  }
+
   if (server.hasArg("espnow_en")) {
+
     data.SetESPNowEnabled(server.arg("espnow_en") == "1");
   }
 
@@ -776,6 +807,9 @@ void WiFiManager::serveApiStatus() {
   json += "\"lon\":" + String(data.gpsLon, 6) + ",";
   json += "\"gps_fix\":" + String(data.gpsFixed ? "true" : "false") + ",";
   json += "\"gps_sats\":" + String(data.gpsSats) + ",";
+  json += "\"gps_en\":" + String(data.gpsEnabled ? "true" : "false") + ",";
+  json += "\"gps_chars\":" + String(GPSManager::getInstance().getCharsProcessed()) + ",";
+
 
   // Standard pins array for labeled diagnostics - FILTERED to "Usable" only
   json += "\"pins\":[";

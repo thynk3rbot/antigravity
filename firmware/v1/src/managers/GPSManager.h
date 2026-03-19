@@ -14,11 +14,21 @@ public:
 
   void init();
   void loop();
+  void setRawMode(bool enabled);
+  bool getRawMode() const { return rawMode; }
+  void resetGNSS();
+  String getDiagnostic();
+  
+  uint32_t getCharsProcessed() const { return gps.charsProcessed(); }
+  uint32_t getSentencesWithFix() const { return gps.sentencesWithFix(); }
+  uint32_t getFailedChecksum() const { return gps.failedChecksum(); }
+
 
 private:
   GPSManager();
   TinyGPSPlus gps;
   unsigned long lastPrint;
+  bool rawMode;
 };
 
 #endif // GPS_MANAGER_H

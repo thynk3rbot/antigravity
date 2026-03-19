@@ -7,7 +7,7 @@
 // ============================================================================
 //   FIRMWARE & FEATURE FLAGS
 // ============================================================================
-#define FIRMWARE_VERSION "v0.2.7"
+#define FIRMWARE_VERSION "v0.2.8"
 #define FIRMWARE_NAME "LoRaLink Any2Any"
 #define HARDWARE_ID "Heltec ESP32 LoRa V3"
 #define CONFIG_SCHEMA "1.0"
@@ -63,6 +63,12 @@
 #define PIN_RELAY_12V_3 27
 #define PIN_SENSOR_DHT 2
 #define PIN_MCP_INT 13
+
+// Legacy/Dynamic Resolution Defaults
+#define PIN_DEFAULT_GPS_RX PIN_GPS_RX
+#define PIN_DEFAULT_GPS_TX PIN_GPS_TX
+#define PIN_DEFAULT_MCP_INT PIN_MCP_INT
+#define VEXT PIN_VEXT_CTRL
 #else
 // ── Heltec WiFi LoRa 32 V3 & V4 (ESP32-S3 Universal) ──────────────────────
 #define PIN_LED_BUILTIN 35

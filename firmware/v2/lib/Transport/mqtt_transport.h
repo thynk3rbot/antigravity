@@ -139,6 +139,14 @@ public:
     /** @return Node ID used in topic construction */
     String getNodeId() const { return _nodeId; }
 
+    // ========================================================================
+    // Static singleton helpers (for main.cpp compatibility)
+    // ========================================================================
+    static bool initStatic();
+    static void pollStatic();
+    static void onCommand(std::function<void(const std::string&)> cb);
+    static MQTTTransport* instance();
+
 private:
     // ========================================================================
     // Internal helpers

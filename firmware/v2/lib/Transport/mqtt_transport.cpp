@@ -330,3 +330,28 @@ String MQTTTransport::_commandTopic() const {
 String MQTTTransport::_responseTopic() const {
     return "loralink/" + _nodeId + "/response";
 }
+
+// ============================================================================
+// Static singleton helpers (main.cpp compatibility)
+// ============================================================================
+
+MQTTTransport* MQTTTransport::instance() {
+    if (!_instance) {
+        _instance = new MQTTTransport();
+    }
+    return _instance;
+}
+
+bool MQTTTransport::initStatic() {
+    return instance()->init();
+}
+
+void MQTTTransport::pollStatic() {
+    if (_instance) _instance->poll();
+}
+
+void MQTTTransport::onCommand(std::function<void(const std::string&)> cb) {
+    instance()->setCommandCallback([cb](const String& s) {
+        cb(s.c_str());
+    });
+}

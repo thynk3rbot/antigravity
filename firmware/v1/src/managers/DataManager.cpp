@@ -193,8 +193,22 @@ void DataManager::LoadSettings() {
   wifiEnabled = p.getBool("wifi_en", true);
   bleEnabled = p.getBool("ble_en", true);
   gpsEnabled = p.getBool("gps_en", true);
+  
+  uint32_t defaultBaud = 9600;
+  if (hardwareVariant == 4) defaultBaud = 115200;
+  gpsBaud = p.getUInt("gps_baud", defaultBaud);
+
   displayEnabled = p.getBool("disp_en", true);
-  hardwareVariant = p.getUChar("hw_ver", 4); // Default to V4 (4) if missing
+#if defined(ARDUINO_LORA_HELTEC_V2)
+  hardwareVariant = p.getUChar("hw_ver", 2);
+#elif defined(ARDUINO_LORA_HELTEC_V3)
+  hardwareVariant = p.getUChar("hw_ver", 3);
+#elif defined(ARDUINO_LORA_HELTEC_V4)
+  hardwareVariant = p.getUChar("hw_ver", 4);
+#else
+  hardwareVariant = p.getUChar("hw_ver", 4); 
+#endif
+
 
   LOG_PRINTLN("INIT: Loading Integrations...");
   mqttEnabled = p.getBool("mqtt_en", false);
@@ -344,6 +358,22 @@ void DataManager::SetBleEnabled(bool enabled) {
   Preferences p;
   p.begin("loralink", false);
   p.putBool("ble_en", enabled);
+  p.end();
+}
+
+void DataManager::SetGpsEnabled(bool enabled) {
+  gpsEnabled = enabled;
+  Preferences p;
+  p.begin("loralink", false);
+  p.putBool("gps_en", enabled);
+  p.end();
+}
+
+void DataManager::SetGpsBaud(uint32_t baud) {
+  gpsBaud = baud;
+  Preferences p;
+  p.begin("loralink", false);
+  p.putUInt("gps_baud", baud);
   p.end();
 }
 

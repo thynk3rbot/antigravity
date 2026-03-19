@@ -97,13 +97,6 @@ bool DisplayManager::IsDisplayActive() { return displayActive; }
 
 void DisplayManager::NextPage() {
   currentPage = (currentPage + 1) % NUM_PAGES;
-  
-#ifndef ARDUINO_LORA_HELTEC_V4
-  // Auto-skip GPS page (3) on V3/V2 unless external GPS is truly detected
-  if (currentPage == 3 && !DataManager::getInstance().gpsFixed && DataManager::getInstance().gpsSats == 0) {
-    currentPage = (currentPage + 1) % NUM_PAGES;
-  }
-#endif
 
   LOG_PRINTF("DISP: NextPage() -> Page %d\n", currentPage);
   SetDisplayActive(true);
@@ -134,13 +127,14 @@ void DisplayManager::DrawUi() {
     drawStatus(data);
     break;
   case 3:
-#ifdef ARDUINO_LORA_HELTEC_V4
+#ifdef SUPPORT_GPS
     drawGPS(data);
 #else
-    // On V3/V2, if we accidentally land here, show Log instead
+    // If GPS disabled, show Log instead
     drawLog(data);
 #endif
     break;
+
   case 4:
     drawLog(data);
     break;
