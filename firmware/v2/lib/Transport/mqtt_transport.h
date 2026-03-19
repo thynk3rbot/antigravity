@@ -2,292 +2,184 @@
  * @file mqtt_transport.h
  * @brief MQTT Transport Layer for LoRaLink v2
  *
- * Implements MQTT client for publishing device telemetry and subscribing to commands.
- * Uses PubSubClient library for broker communication.
+ * Implements MQTT client for publishing device telemetry and subscribing to
+ * commands. Uses PubSubClient library over WiFiClient.
  *
- * Features:
- * - Auto-connect to configured MQTT broker
- * - Telemetry publishing (battery, signals, heap, uptime)
- * - Command subscription and callback mechanism
- * - Automatic reconnection with exponential backoff
- * - Graceful fallback if broker unavailable (non-critical transport)
- *
- * Topics:
- * - Publish: loralink/{nodeID}/telemetry (30-second interval)
- * - Publish: loralink/{nodeID}/status (on demand)
- * - Subscribe: loralink/{nodeID}/command (device-specific commands)
- * - Subscribe: loralink/broadcast/command (broadcast commands)
+ * Topics (v0.1.0 convention):
+ * - Publish:   loralink/{nodeId}/telemetry   (retain=true)
+ * - Publish:   loralink/{nodeId}/response
+ * - Subscribe: loralink/{nodeId}/command
+ * - Subscribe: loralink/broadcast/command
  */
 
 #pragma once
 
 #include "interface.h"
-#include <string>
-#include <cstdint>
+#include <PubSubClient.h>
+#include <WiFiClient.h>
 #include <functional>
-#include <queue>
 
-// Forward declarations
-class PubSubClient;
-class WiFiClient;
+// ============================================================================
+// MQTT Configuration
+// ============================================================================
+
+struct MQTTConfig {
+    String broker;
+    uint16_t port;
+    String username;
+    String password;
+    String clientId;
+};
+
+// ============================================================================
+// MQTTTransport Class
+// ============================================================================
 
 /**
  * @class MQTTTransport
  * @brief MQTT client transport for LoRaLink telemetry and command handling
  *
- * Thread-safe singleton using static methods (not a TransportInterface implementation).
- * MQTT communication is optional and gracefully degrades if broker unavailable.
+ * Inherits from TransportInterface. MQTT communication is optional and
+ * gracefully degrades if the broker is unavailable or unconfigured.
  *
- * Note: MQTTTransport does not inherit from TransportInterface because it uses
- * a different communication pattern (callback-based for commands, publish-based for telemetry)
- * rather than send/recv. However, it provides similar diagnostic methods.
+ * send() / recv() are stubs — MQTT uses publish/subscribe rather than
+ * point-to-point framing, so LoRa packet routing does not apply here.
+ *
+ * Usage:
+ *   MQTTTransport mqtt;
+ *   mqtt.init();           // load config from NVS, connect
+ *   mqtt.setCommandCallback(...);
+ *   // in loop:
+ *   mqtt.poll();
+ *   mqtt.publishTelemetry("{...}");
  */
-class MQTTTransport {
+class MQTTTransport : public TransportInterface {
 public:
-    // ========================================================================
-    // Initialization & Control
-    // ========================================================================
-
-    /**
-     * @brief Initialize MQTT client and connect to broker
-     *
-     * Reads broker address/port from NVSManager.
-     * If broker not configured, initialization succeeds but connection is skipped.
-     *
-     * Must be called after WiFi transport is initialized.
-     *
-     * @return true if initialization successful (or skipped due to no config),
-     *         false on critical error
-     */
-    static bool init();
-
-    /**
-     * @brief Check if connected to MQTT broker
-     * @return true if currently connected, false otherwise
-     */
-    static bool isConnected();
-
-    /**
-     * @brief Poll MQTT client
-     *
-     * Must be called frequently (at least every 100-500ms).
-     * Handles:
-     * - Reconnection attempts
-     * - Message receipt and callback invocation
-     * - Automatic reconnection with exponential backoff
-     *
-     * Non-blocking; safe to call from any task.
-     */
-    static void poll();
-
-    /**
-     * @brief Gracefully disconnect and shutdown MQTT
-     */
-    static void shutdown();
-
-    /**
-     * @brief Get connection status as string
-     * @return Status: "Connected", "Connecting", "Disconnected", "Not configured"
-     */
-    static const char* getStatusString();
+    MQTTTransport();
 
     // ========================================================================
-    // Publishing
+    // TransportInterface overrides
+    // ========================================================================
+
+    bool init() override;
+    void shutdown() override;
+
+    /**
+     * PubSubClient::connected() is not const, so isReady() cannot be const.
+     * We still satisfy the virtual signature via override.
+     */
+    bool isReady() const override;
+
+    /** Not used for LoRa packet routing — always returns 0. */
+    int send(const uint8_t* payload, size_t len) override;
+
+    /** Not used for LoRa packet routing — always returns 0. */
+    int recv(uint8_t* buffer, size_t maxLen) override;
+
+    /** Always returns false — MQTT uses callbacks, not polled recv. */
+    bool isAvailable() const override;
+
+    /**
+     * @brief Drive the MQTT client state machine
+     *
+     * - If disconnected and reconnect interval elapsed: attempt _connect()
+     * - Calls _mqttClient.loop() when connected
+     * Must be called frequently (every loop iteration or at least every 100 ms).
+     */
+    void poll() override;
+
+    const char* getName() const override { return "MQTT"; }
+    TransportType getType() const override { return TransportType::MQTT; }
+    const char* getStatus() const override;
+
+    // ========================================================================
+    // MQTT-specific API
     // ========================================================================
 
     /**
-     * @brief Publish telemetry data
+     * @brief Override broker configuration (optional; otherwise loaded from NVS)
      *
-     * Gathers:
-     * - Battery voltage and percentage (from PowerManager)
-     * - Power mode (from PowerManager)
-     * - LoRa RSSI/SNR (from last packet)
-     * - WiFi RSSI (if connected)
-     * - Free heap (esp_get_free_heap_size)
-     * - Uptime (millis())
-     * - Peer count (from MeshCoordinator)
+     * Can be called before or after init(). If called after init() while
+     * connected, the current connection is dropped and re-established.
+     */
+    void configure(const MQTTConfig& config);
+
+    /**
+     * @brief Publish a telemetry JSON payload (retained)
      *
-     * Published to: loralink/{nodeID}/telemetry
+     * Topic: loralink/{nodeId}/telemetry
      *
-     * @return true if published successfully, false on error
+     * @param jsonPayload  Fully-formed JSON string
+     * @return true if broker accepted the publish
      */
-    static bool publishTelemetry();
+    bool publishTelemetry(const String& jsonPayload);
 
     /**
-     * @brief Publish device status
+     * @brief Publish a command response
      *
-     * Publishes full device status JSON (typically from /api/status endpoint).
+     * Topic: loralink/{nodeId}/response
      *
-     * Topic: loralink/{nodeID}/status
+     * @param jsonPayload  Response JSON string
+     * @return true if broker accepted the publish
+     */
+    bool publishResponse(const String& jsonPayload);
+
+    /**
+     * @brief Register callback invoked when a command arrives
      *
-     * @param statusJson JSON string with device status
-     * @return true if published successfully, false on error
+     * The callback receives the raw payload string from either
+     * loralink/{nodeId}/command or loralink/broadcast/command.
      */
-    static bool publishStatus(const std::string& statusJson);
+    using CommandCallback = std::function<void(const String& cmd)>;
+    void setCommandCallback(CommandCallback cb);
 
-    /**
-     * @brief Publish custom message to arbitrary topic
-     *
-     * @param topic MQTT topic (e.g., "loralink/custom")
-     * @param payload Message payload (plain text or JSON)
-     * @return true if published successfully, false on error
-     */
-    static bool publish(const std::string& topic, const std::string& payload);
+    /** @return true if currently connected to the broker */
+    bool isConnected() const;
 
-    // ========================================================================
-    // Command Subscription & Callbacks
-    // ========================================================================
-
-    /**
-     * @brief Command callback type
-     *
-     * Called when a command is received on subscribed topics.
-     * Payload is plain text command (e.g., "STATUS", "RELAY:ON:0").
-     */
-    typedef std::function<void(const std::string& command)> CommandCallback;
-
-    /**
-     * @brief Register callback for received commands
-     *
-     * Callback is invoked when message arrives on:
-     * - loralink/{nodeID}/command (device-specific)
-     * - loralink/broadcast/command (broadcast to all devices)
-     *
-     * @param callback Function to call with command text
-     */
-    static void onCommand(CommandCallback callback);
-
-    // ========================================================================
-    // Diagnostics & Statistics
-    // ========================================================================
-
-    /**
-     * @brief Get broker address
-     * @return Broker hostname/IP, or empty string if not configured
-     */
-    static std::string getBrokerAddress();
-
-    /**
-     * @brief Get broker port
-     * @return Port number (typically 1883)
-     */
-    static uint16_t getBrokerPort();
-
-    /**
-     * @brief Get number of reconnection attempts
-     * @return Count of failed connection attempts
-     */
-    static uint8_t getReconnectAttempts();
-
-    /**
-     * @brief Get bytes published since init
-     * @return Total bytes sent via MQTT
-     */
-    static uint32_t getTxBytes();
-
-    /**
-     * @brief Get bytes received since init
-     * @return Total bytes received via MQTT
-     */
-    static uint32_t getRxBytes();
-
-    /**
-     * @brief Get last error code
-     * @return Error code (0 = no error)
-     */
-    static int getLastError();
-
-    /**
-     * @brief Get human-readable diagnostic status
-     * @return Status string with connection info, statistics
-     */
-    static std::string getDiagnostics();
+    /** @return Node ID used in topic construction */
+    String getNodeId() const { return _nodeId; }
 
 private:
     // ========================================================================
-    // Configuration & State
-    // ========================================================================
-
-    // Broker configuration
-    static std::string brokerAddress;
-    static uint16_t brokerPort;
-    static bool brokerConfigured;
-
-    // Connection state
-    static bool initialized;
-    static bool connected;
-    static uint32_t lastConnectAttempt;
-    static uint8_t reconnectAttempts;
-    static uint8_t reconnectBackoffSeconds;
-    static const uint8_t MAX_RECONNECT_ATTEMPTS;
-    static const uint8_t MAX_BACKOFF_SECONDS;
-
-    // Node ID for topic naming
-    static std::string nodeID;
-
-    // Statistics
-    static uint32_t txBytes;
-    static uint32_t rxBytes;
-    static int lastErrorCode;
-    static const char* lastErrorMessage;
-
-    // Callbacks & message queue
-    static CommandCallback commandCallback;
-    static std::queue<std::string> commandQueue;
-    static const size_t MAX_COMMAND_QUEUE_SIZE;
-
-    // Telemetry timing
-    static uint32_t lastTelemetryTime;
-    static const uint32_t MQTT_TELEMETRY_INTERVAL_MS;
-
-    // MQTT client instances (managed internally)
-    static WiFiClient* wifiClient;
-    static PubSubClient* mqttClient;
-
-    // ========================================================================
-    // Internal Methods
+    // Internal helpers
     // ========================================================================
 
     /**
-     * @brief Internal method to establish broker connection
-     * @return true if connected successfully, false otherwise
+     * @brief Set server and attempt broker connection
+     * @return true on successful connect
      */
-    static bool connect();
+    bool _connect();
 
-    /**
-     * @brief Internal method to handle incoming MQTT messages
-     * Called by PubSubClient message callback.
-     */
-    static void onMQTTMessage(char* topic, uint8_t* payload, unsigned int length);
+    /** Subscribe to device and broadcast command topics */
+    void _subscribe();
 
-    /**
-     * @brief Schedule reconnection with exponential backoff
-     */
-    static void scheduleReconnect();
+    /** Build topic strings */
+    String _telemetryTopic() const;
+    String _commandTopic() const;
+    String _responseTopic() const;
 
-    /**
-     * @brief Get next backoff time (exponential)
-     * @return Seconds to wait before next reconnect attempt
-     */
-    static uint8_t getNextBackoffTime();
+    // ========================================================================
+    // Static callback (PubSubClient requires a plain function pointer)
+    // ========================================================================
 
-    /**
-     * @brief Subscribe to command topics
-     * @return true if subscription successful, false otherwise
-     */
-    static bool subscribeToCommands();
+    static void _mqttCallback(char* topic, byte* payload, unsigned int length);
 
-    /**
-     * @brief Process queued commands (call from poll or main loop)
-     */
-    static void processCommandQueue();
+    /** Singleton pointer used by the static callback to reach the instance */
+    static MQTTTransport* _instance;
 
-    /**
-     * @brief Static wrapper for PubSubClient callback
-     * (MQTT callback must be a C function pointer, so we use a static method)
-     */
-    friend void mqttMessageCallback(char* topic, uint8_t* payload, unsigned int length);
+    // ========================================================================
+    // Member data
+    // ========================================================================
 
-    // Private constructor (singleton)
-    MQTTTransport();
+    WiFiClient    _wifiClient;
+    PubSubClient  _mqttClient;
+    MQTTConfig    _config;
+    CommandCallback _commandCallback;
+
+    bool     _configured;           ///< true once a non-empty broker is known
+    uint32_t _lastReconnectAttempt; ///< millis() timestamp of last attempt
+    String   _nodeId;               ///< loaded from NVSConfig
+
+    static constexpr uint32_t RECONNECT_INTERVAL_MS = 30000;
+    static constexpr uint16_t DEFAULT_PORT          = 1883;
 };
