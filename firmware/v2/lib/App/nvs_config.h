@@ -10,6 +10,10 @@
 #define NVS_KEY_RELAY1     "relay1_state"
 #define NVS_KEY_RELAY2     "relay2_state"
 #define NVS_KEY_POWER_MODE "power_mode"
+#define NVS_KEY_MQTT_BROKER "mqtt_broker"
+#define NVS_KEY_MQTT_PORT   "mqtt_port"
+#define NVS_KEY_MQTT_USER   "mqtt_user"
+#define NVS_KEY_MQTT_PASS   "mqtt_pass"
 
 class NVSConfig {
 public:
@@ -36,6 +40,15 @@ public:
     // Power mode (0=NORMAL, 1=CONSERVE, 2=CRITICAL)
     static uint8_t getPowerMode();
     static bool setPowerMode(uint8_t mode);
+
+    // MQTT broker configuration
+    static String getMqttBroker();
+    static bool setMqttBroker(const String& broker);
+    static uint16_t getMqttPort();
+    static bool setMqttPort(uint16_t port);
+    static String getMqttUsername();
+    static String getMqttPassword();
+    static bool setMqttCredentials(const String& user, const String& pass);
 
 private:
     static bool _initialized;

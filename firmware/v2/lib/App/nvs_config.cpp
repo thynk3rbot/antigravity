@@ -246,3 +246,100 @@ bool NVSConfig::setPowerMode(uint8_t mode) {
     Serial.printf("[NVSConfig] Power mode set: %u\n", mode);
     return true;
 }
+
+// ============================================================================
+// MQTT Configuration
+// ============================================================================
+
+String NVSConfig::getMqttBroker() {
+    Preferences prefs;
+    if (!prefs.begin(NVS_NAMESPACE, true)) {
+        Serial.println("[NVSConfig] ERROR: Failed to open NVS for getMqttBroker");
+        return "";
+    }
+    String broker = prefs.getString(NVS_KEY_MQTT_BROKER, "");
+    prefs.end();
+    return broker;
+}
+
+bool NVSConfig::setMqttBroker(const String& broker) {
+    Preferences prefs;
+    if (!prefs.begin(NVS_NAMESPACE, false)) {
+        Serial.println("[NVSConfig] ERROR: Failed to open NVS for setMqttBroker");
+        return false;
+    }
+    bool ok = prefs.putString(NVS_KEY_MQTT_BROKER, broker);
+    prefs.end();
+    if (!ok) {
+        Serial.println("[NVSConfig] ERROR: Failed to write mqtt_broker");
+        return false;
+    }
+    Serial.printf("[NVSConfig] MQTT broker set: %s\n", broker.c_str());
+    return true;
+}
+
+uint16_t NVSConfig::getMqttPort() {
+    Preferences prefs;
+    if (!prefs.begin(NVS_NAMESPACE, true)) {
+        Serial.println("[NVSConfig] ERROR: Failed to open NVS for getMqttPort");
+        return 1883;
+    }
+    uint16_t port = prefs.getUShort(NVS_KEY_MQTT_PORT, 1883);
+    prefs.end();
+    return port;
+}
+
+bool NVSConfig::setMqttPort(uint16_t port) {
+    Preferences prefs;
+    if (!prefs.begin(NVS_NAMESPACE, false)) {
+        Serial.println("[NVSConfig] ERROR: Failed to open NVS for setMqttPort");
+        return false;
+    }
+    bool ok = prefs.putUShort(NVS_KEY_MQTT_PORT, port);
+    prefs.end();
+    if (!ok) {
+        Serial.println("[NVSConfig] ERROR: Failed to write mqtt_port");
+        return false;
+    }
+    Serial.printf("[NVSConfig] MQTT port set: %u\n", port);
+    return true;
+}
+
+String NVSConfig::getMqttUsername() {
+    Preferences prefs;
+    if (!prefs.begin(NVS_NAMESPACE, true)) {
+        Serial.println("[NVSConfig] ERROR: Failed to open NVS for getMqttUsername");
+        return "";
+    }
+    String user = prefs.getString(NVS_KEY_MQTT_USER, "");
+    prefs.end();
+    return user;
+}
+
+String NVSConfig::getMqttPassword() {
+    Preferences prefs;
+    if (!prefs.begin(NVS_NAMESPACE, true)) {
+        Serial.println("[NVSConfig] ERROR: Failed to open NVS for getMqttPassword");
+        return "";
+    }
+    String pass = prefs.getString(NVS_KEY_MQTT_PASS, "");
+    prefs.end();
+    return pass;
+}
+
+bool NVSConfig::setMqttCredentials(const String& user, const String& pass) {
+    Preferences prefs;
+    if (!prefs.begin(NVS_NAMESPACE, false)) {
+        Serial.println("[NVSConfig] ERROR: Failed to open NVS for setMqttCredentials");
+        return false;
+    }
+    bool ok = prefs.putString(NVS_KEY_MQTT_USER, user) &&
+              prefs.putString(NVS_KEY_MQTT_PASS, pass);
+    prefs.end();
+    if (!ok) {
+        Serial.println("[NVSConfig] ERROR: Failed to write MQTT credentials");
+        return false;
+    }
+    Serial.printf("[NVSConfig] MQTT credentials set (user: %s)\n", user.c_str());
+    return true;
+}
