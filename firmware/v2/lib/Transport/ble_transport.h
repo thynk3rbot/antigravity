@@ -4,20 +4,19 @@
  *
  * Implements Nordic UART Service (NUS) for wireless communication with:
  * - Mobile apps (iOS/Android BLE scanners)
+ * - loralink_status.py fleet management tool
  * - ble_instrument.py test harness
- * - Custom BLE clients
  *
  * Service: 6E400001-B5A3-F393-E0A9-E50E24DCCA9E (Nordic UART Service)
- * TX (notify):  6E400002-B5A3-F393-E0A9-E50E24DCCA9E
- * RX (write):   6E400003-B5A3-F393-E0A9-E50E24DCCA9E
+ * TX (notify):  6E400003-B5A3-F393-E0A9-E50E24DCCA9E  (device → phone)
+ * RX (write):   6E400002-B5A3-F393-E0A9-E50E24DCCA9E  (phone → device)
  *
  * Features:
- * - Device name: "GW-{NODEID}" (e.g., "GW-Peer1")
+ * - Device name: "GW-{NODEID}" (e.g., "GW-Peer1") — required by loralink_status.py
  * - Single concurrent connection (peripheral mode)
- * - Automatic fragmentation/reassembly for > 20 bytes
- * - Line-buffering for command processing (newline-terminated)
- * - Non-blocking TX queue with notifications
- * - Graceful connection/disconnection handling
+ * - Automatic fragmentation for payloads > 20 bytes
+ * - Line-buffering for newline-terminated command processing
+ * - Graceful connection/disconnection handling with advertising restart
  */
 
 #pragma once
@@ -31,8 +30,8 @@
  * @class BLETransport
  * @brief Bluetooth Low Energy NUS (Nordic UART Service) transport layer
  *
- * Provides peer-to-peer BLE communication compatible with ble_instrument.py
- * and standard BLE terminal applications.
+ * Provides peripheral BLE communication compatible with loralink_status.py
+ * and standard BLE terminal applications. Uses NimBLE-Arduino stack.
  */
 class BLETransport : public TransportInterface {
 public:
@@ -41,9 +40,9 @@ public:
     // ========================================================================
 
     /**
-     * @brief Initialize BLE with NUS service (static version)
+     * @brief Initialize BLE with NUS service (static entry point)
      *
-     * Sets up BLE stack, creates NUS service, and starts advertising
+     * Sets up NimBLE stack, creates NUS GATT service, and starts advertising
      * with device name "GW-{NODEID}".
      *
      * @return true if initialization successful, false on error
@@ -51,248 +50,164 @@ public:
     static bool initStatic();
 
     /**
-     * @brief Check if BLE client is currently connected
-     *
+     * @brief Check if a BLE client is currently connected
      * @return true if a BLE client is connected, false otherwise
      */
     static bool isConnected();
 
     /**
-     * @brief Send data via BLE NUS TX characteristic (with notifications)
+     * @brief Send raw bytes via BLE NUS TX characteristic (with notifications)
      *
-     * Data larger than 20 bytes will be automatically fragmented and sent
-     * in multiple notifications. Non-blocking operation - queues data for transmission.
+     * Data larger than NUS_PAYLOAD_SIZE bytes is automatically fragmented.
      *
      * @param data Pointer to data buffer
-     * @param len Number of bytes to send
-     * @return true if data queued successfully, false if queue full
+     * @param len  Number of bytes to send
+     * @return true if sent successfully, false on error or not connected
      */
     static bool send(const uint8_t* data, uint16_t len);
 
     /**
-     * @brief Get current MTU size for BLE packets
-     *
-     * Typically 23 bytes (20-byte payload + 3-byte header for NUS).
-     *
-     * @return MTU size in bytes
+     * @brief Get current MTU payload size for NUS packets
+     * @return Max NUS payload bytes (20)
      */
     static uint16_t getMTU();
 
     /**
-     * @brief Shutdown BLE (disconnect, stop advertising) - static version
-     *
-     * Cleanly closes BLE connection and disables advertising.
-     * Device can be re-initialized later.
+     * @brief Shutdown BLE — disconnect, stop advertising, deinit NimBLE
      */
     static void shutdownStatic();
 
     /**
      * @brief Get current BLE connection status string
-     *
-     * @return Status string: "Connected", "Advertising", "Disconnected", "Error"
+     * @return "Connected", "Advertising", "Stopped", "Init Error", etc.
      */
     static const char* getStatusString();
+
+    /**
+     * @brief Process BLE state machine (call from main loop)
+     *
+     * Restarts advertising if disconnected and not already advertising.
+     * NimBLE is interrupt-driven so no data polling is needed here.
+     */
+    static void pollStatic();
 
     // ========================================================================
     // TransportInterface Implementation
     // ========================================================================
 
-    /**
-     * @brief Initialize transport (delegates to static init())
-     */
+    /** @brief Initialize transport (delegates to initStatic()) */
     virtual bool init() override;
 
-    /**
-     * @brief Check if transport is ready (BLE initialized and/or connected)
-     */
+    /** @brief Check if transport is ready (BLE initialized) */
     virtual bool isReady() const override;
 
     /**
-     * @brief Send raw bytes via BLE
-     *
-     * @param payload Pointer to data buffer
-     * @param len Number of bytes to send
-     * @return Number of bytes sent, or negative TransportStatus code
+     * @brief Send raw bytes via BLE NUS
+     * @return Bytes sent, or negative TransportStatus code
      */
     virtual int send(const uint8_t* payload, size_t len) override;
 
     /**
-     * @brief Receive raw bytes (non-blocking)
-     *
-     * Returns data from the RX buffer if available.
-     * Data is buffered and presented as complete lines (newline-terminated).
-     *
-     * @param buffer Output buffer
-     * @param maxLen Maximum bytes to read
-     * @return Number of bytes received, 0 if no data, or negative TransportStatus code
+     * @brief Receive raw bytes — returns next complete newline-terminated line
+     * @return Bytes received, 0 if no complete line, or negative error code
      */
     virtual int recv(uint8_t* buffer, size_t maxLen) override;
 
-    /**
-     * @brief Check if data is available without blocking
-     *
-     * @return true if a complete line is ready in RX buffer, false otherwise
-     */
+    /** @brief Check if a complete newline-terminated line is ready */
     virtual bool isAvailable() const override;
 
-    /**
-     * @brief Poll the BLE transport (called periodically)
-     *
-     * Processes pending TX queue and connection events.
-     */
+    /** @brief Poll BLE state machine (delegates to pollStatic()) */
     virtual void poll() override;
 
-    /**
-     * @brief Shutdown BLE transport
-     */
+    /** @brief Shutdown BLE transport (delegates to shutdownStatic()) */
     virtual void shutdown() override;
 
-    /**
-     * @brief Poll the BLE transport (static version, called periodically)
-     *
-     * Processes pending TX queue and connection events.
-     */
-    static void pollStatic();
-
-    /**
-     * @brief Get transport name
-     */
-    virtual const char* getName() const override { return "BLE"; }
-
-    /**
-     * @brief Get transport type
-     */
-    virtual TransportType getType() const override { return TransportType::BLE; }
-
-    /**
-     * @brief Get status string
-     */
-    virtual const char* getStatus() const override { return getStatusString(); }
-
-    /**
-     * @brief Get bytes sent since init
-     */
-    virtual uint32_t getTxBytes() const override { return txBytes; }
-
-    /**
-     * @brief Get bytes received since init
-     */
-    virtual uint32_t getRxBytes() const override { return rxBytes; }
-
-    /**
-     * @brief Get last error code
-     */
-    virtual int getLastError() const override { return lastError; }
-
-    /**
-     * @brief Clear error state
-     */
-    virtual void clearError() override { lastError = 0; }
-
-    /**
-     * @brief Get last error message
-     */
-    virtual const char* getLastErrorString() const override;
+    virtual const char*    getName()     const override { return "BLE"; }
+    virtual TransportType  getType()     const override { return TransportType::BLE; }
+    virtual const char*    getStatus()   const override { return getStatusString(); }
+    virtual uint32_t       getTxBytes()  const override { return txBytes; }
+    virtual uint32_t       getRxBytes()  const override { return rxBytes; }
+    virtual int            getLastError() const override { return lastError; }
+    virtual void           clearError()  override       { lastError = 0; }
+    virtual const char*    getLastErrorString() const override;
 
     // ========================================================================
-    // BLE Callback Registration (for application integration)
+    // Connection Event Callbacks
     // ========================================================================
 
-    /**
-     * @brief Function pointer type for connection callbacks
-     */
     using ConnectionCallback = void (*)(void);
 
-    /**
-     * @brief Register callback for BLE connection event
-     *
-     * @param callback Function to call when client connects
-     */
+    /** @brief Register callback invoked when a BLE client connects */
     static void onConnect(ConnectionCallback callback);
 
-    /**
-     * @brief Register callback for BLE disconnection event
-     *
-     * @param callback Function to call when client disconnects
-     */
+    /** @brief Register callback invoked when a BLE client disconnects */
     static void onDisconnect(ConnectionCallback callback);
+
+    // ========================================================================
+    // Internal BLE Event Handlers
+    // (public so NimBLE GATT callback classes in ble_transport.cpp can call them)
+    // ========================================================================
+
+    /** @brief Called by NimBLE server callback on client connect */
+    static void bleOnConnect();
+
+    /** @brief Called by NimBLE server callback on client disconnect */
+    static void bleOnDisconnect();
+
+    /**
+     * @brief Called by NimBLE RX characteristic callback on write
+     * @param data Received bytes
+     * @param len  Number of received bytes
+     */
+    static void bleOnRxData(const uint8_t* data, uint16_t len);
 
 private:
     // ========================================================================
     // Constants
     // ========================================================================
 
-    static constexpr size_t RX_BUFFER_SIZE = 256;   // Input buffer size
-    static constexpr size_t TX_BUFFER_SIZE = 256;   // Output buffer size
-    static constexpr size_t TX_QUEUE_SIZE = 4;      // Number of queued TX packets
-    static constexpr uint16_t BLE_MTU = 23;         // Max payload: 20 bytes + 3-byte ATT header
-    static constexpr uint16_t NUS_PAYLOAD_SIZE = 20; // Max bytes per NUS packet
-
-    // NUS Service UUIDs
-    static constexpr const char* NUS_SERVICE_UUID = "6E400001-B5A3-F393-E0A9-E50E24DCCA9E";
-    static constexpr const char* NUS_TX_UUID = "6E400002-B5A3-F393-E0A9-E50E24DCCA9E";  // Notify
-    static constexpr const char* NUS_RX_UUID = "6E400003-B5A3-F393-E0A9-E50E24DCCA9E";  // Write
+    static constexpr size_t   RX_BUFFER_SIZE   = 256;
+    static constexpr size_t   TX_BUFFER_SIZE   = 256;
+    static constexpr uint16_t BLE_MTU          = 23;   // ATT MTU: 20-byte payload + 3-byte header
+    static constexpr uint16_t NUS_PAYLOAD_SIZE = 20;   // Max bytes per NUS notification
 
     // ========================================================================
-    // State Management
+    // Static State
     // ========================================================================
 
-    static bool initialized;
-    static bool connected;
-    static uint8_t rxBuffer[RX_BUFFER_SIZE];
+    static bool     initialized;
+    static bool     connected;
+    static uint8_t  rxBuffer[RX_BUFFER_SIZE];
     static uint16_t rxPos;
-    static uint8_t txBuffer[TX_BUFFER_SIZE];
+    static uint8_t  txBuffer[TX_BUFFER_SIZE];
     static uint16_t txPos;
     static uint32_t txBytes;
     static uint32_t rxBytes;
-    static int lastError;
-    static char statusString[32];
+    static int      lastError;
+    static char     statusString[32];
 
     static ConnectionCallback connectCallback;
     static ConnectionCallback disconnectCallback;
 
     // ========================================================================
-    // BLE Callback Handlers (internal)
+    // Internal Helpers
     // ========================================================================
 
     /**
-     * @brief Called when BLE client connects
-     */
-    static void bleOnConnect();
-
-    /**
-     * @brief Called when BLE client disconnects
-     */
-    static void bleOnDisconnect();
-
-    /**
-     * @brief Called when data received on RX characteristic
-     *
-     * @param data Pointer to received data
-     * @param len Number of bytes received
-     */
-    static void bleOnRxData(const uint8_t* data, uint16_t len);
-
-    /**
-     * @brief Called periodically to send queued TX data
-     */
-    static void bleProcessTxQueue();
-
-    /**
-     * @brief Search for newline in RX buffer and extract line
-     *
-     * @param outLine Pointer to output buffer
-     * @param outLen Pointer to store line length (including newline)
-     * @return true if complete line found, false otherwise
+     * @brief Extract next newline-terminated line from rxBuffer
+     * @param outLine  Destination buffer
+     * @param outLen   Set to line length on success
+     * @return true if a complete line was extracted
      */
     static bool getNextLine(uint8_t* outLine, uint16_t& outLen);
 
     /**
-     * @brief Internal receive implementation (static)
-     *
-     * @param buffer Output buffer
-     * @param maxLen Maximum bytes to read
-     * @return Number of bytes received, 0 if no data, or negative error code
+     * @brief Internal recv implementation
      */
     static int recvImpl(uint8_t* buffer, size_t maxLen);
+
+    /**
+     * @brief Process TX queue (placeholder; NimBLE handles TX directly)
+     */
+    static void bleProcessTxQueue();
 };
