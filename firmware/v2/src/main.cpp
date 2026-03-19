@@ -21,6 +21,7 @@
 // Transport Layer
 #include "../lib/Transport/message_router.h"
 #include "../lib/Transport/lora_transport.h"
+#include "../lib/Transport/wifi_transport.h"
 #include "../lib/Transport/interface.h"
 
 // Application Layer
@@ -29,6 +30,7 @@
 #include "../lib/App/nvs_manager.h"
 #include "../lib/App/power_manager.h"
 #include "../lib/App/oled_manager.h"
+#include "../lib/App/http_api.h"
 
 // Bench Mode (optional, compile-time selectable)
 #ifdef BENCH_MODE
@@ -351,7 +353,32 @@ void setup() {
 
   messageRouter.registerTransport(&loraTransport);
   messageRouter.setMessageHandler(onMessageReceived);
-  Serial.println("  ✓ Transport initialized");
+  Serial.println("  ✓ LoRa transport initialized");
+
+  // Optional WiFi Transport (graceful fallback if connection fails)
+  std::string wifiSSID = NVSManager::getWiFiSSID();
+  std::string wifiPass = NVSManager::getWiFiPassword();
+  std::string nodeID = NVSManager::getNodeID("Node");
+
+  // Build mDNS hostname from node ID
+  std::string mdnsHostname = "loralink-" + nodeID;
+
+  if (!wifiSSID.empty() && !wifiPass.empty()) {
+    if (WiFiTransport::init(wifiSSID, wifiPass, mdnsHostname)) {
+      Serial.println("  ✓ WiFi transport initialized (connecting...)");
+
+      // Initialize HTTP API server
+      if (HttpAPI::init()) {
+        Serial.println("  ✓ HTTP API server started on port 80");
+      } else {
+        Serial.println("  ! HTTP API server failed to start (non-fatal)");
+      }
+    } else {
+      Serial.println("  ! WiFi transport init failed, continuing without WiFi");
+    }
+  } else {
+    Serial.println("  ! WiFi credentials not configured, skipping WiFi");
+  }
 
   // ========================================================================
   // Step 5: Initialize Application Layer
@@ -448,8 +475,8 @@ void loop() {
   uint32_t now = millis();
 
   if (now - lastStatus > 10000) {
-    Serial.printf("[STATUS] Uptime: %lu s, Neighbors: %u, Relayed: %u\n",
-                  (now - g_bootTimestamp) / 1000,
+    Serial.printf("[STATUS] Uptime: %u s, Neighbors: %u, Relayed: %u\n",
+                  (unsigned int)((now - g_bootTimestamp) / 1000),
                   meshCoordinator.getNeighborCount(),
                   meshCoordinator.getRelayCount());
 
