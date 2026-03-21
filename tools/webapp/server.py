@@ -30,6 +30,15 @@ from typing import Optional, Set
 import threading
 import uuid
 import aiofiles
+import socket
+
+# zeroconf — for mDNS discovery
+try:
+    from zeroconf import ServiceBrowser, ServiceInfo, Zeroconf, ServiceListener
+    ZEROCONF = True
+except ImportError:
+    print("WARNING: zeroconf not installed — mDNS discovery disabled")
+    ZEROCONF = False
 
 # pyserial — optional, degrades gracefully
 try:
@@ -151,6 +160,16 @@ class NodeRegistry:
         return list(self._nodes)
 
     def add(self, name: str, type_: str, address: str) -> NodeConfig:
+        # Upsert logic: if name + type exists, update the address
+        existing = next((n for n in self._nodes if n.name == name and n.type == type_), None)
+        if existing:
+            if existing.address != address:
+                print(f"[nodes] Updating {name} address: {existing.address} -> {address}")
+                existing.address = address
+                self._save()
+            return existing
+
+        # New node
         node = NodeConfig(id=str(uuid.uuid4()), name=name, type=type_, address=address)
         self._nodes.append(node)
         self._save()
@@ -317,6 +336,39 @@ class WebSocketManager:
             except Exception:
                 dead.add(ws)
         self._connections -= dead
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# 2c. mDNS Discovery Engine
+# ════════════════════════════════════════════════════════════════════════════
+
+
+class LoRaLinkListener(ServiceListener):
+    def __init__(self, discovered_list: list) -> None:
+        self.discovered = discovered_list
+
+    def add_service(self, zc: Zeroconf, type_: str, name: str) -> None:
+        info = zc.get_service_info(type_, name)
+        if info:
+            ip = socket.inet_ntoa(info.addresses[0])
+            node_id = info.properties.get(b"id", b"").decode("utf-8") or name.split(".")[0]
+            # Deduplicate
+            if not any(d["address"] == ip for d in self.discovered):
+                self.discovered.append({
+                    "name": node_id,
+                    "address": ip,
+                    "type": info.properties.get(b"type", b"gateway").decode("utf-8"),
+                    "ver": info.properties.get(b"ver", b"v2.0.0").decode("utf-8"),
+                    "last_seen": time.time()
+                })
+                print(f"[mDNS] Found: {node_id} at {ip}")
+
+    def update_service(self, zc: Zeroconf, type_: str, name: str) -> None:
+        pass
+
+    def remove_service(self, zc: Zeroconf, type_: str, name: str) -> None:
+        # Optional: mark offline
+        pass
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -685,6 +737,8 @@ def build_app(
     _transport: Optional[TransportManager] = None
     _poller: Optional[StatusPoller] = None
     _poll_task: Optional[asyncio.Task] = None
+    _zc: Optional[Zeroconf] = None
+    _browser: Optional[ServiceBrowser] = None
 
     def _effective_ip() -> Optional[str]:
         """Resolve the effective IP: active_ip (if set) overrides startup device_ip."""
@@ -762,12 +816,28 @@ def build_app(
         if BLEAK and not no_ble:
             asyncio.create_task(_ble_scan())
 
+        # mDNS discovery start
+        if ZEROCONF:
+            try:
+                nonlocal _zc, _browser
+                _zc = Zeroconf()
+                listener = LoRaLinkListener(state.discovered_devices)
+                _browser = ServiceBrowser(_zc, "_http._tcp.local.", listener)
+                print("[mDNS] Browser started listening for _http._tcp.local.")
+            except Exception as e:
+                print(f"[mDNS] Failed to start: {e}")
+
     @app.on_event("shutdown")
     async def _shutdown() -> None:
         if _poller:
             _poller.stop()
         if _poll_task:
             _poll_task.cancel()
+        if _zc:
+            if _browser:
+                _browser.cancel()
+            _zc.close()
+            print("[mDNS] Browser stopped")
         if _transport:
             await _transport.close()
         for ble in _ble_peers:
@@ -960,9 +1030,20 @@ def build_app(
             )
 
         async def _scan_subnet() -> None:
-            """Scan 172.16.0.1-254 for devices responding to /api/status."""
+            """Scan the local subnet for devices responding to /api/status."""
             found = []
-            base_ip = "172.16.0"
+            
+            # Dynamically detect local subnet
+            try:
+                s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                s.connect(("8.8.8.8", 80))
+                local_ip = s.getsockname()[0]
+                s.close()
+                base_ip = ".".join(local_ip.split(".")[:-1])
+                print(f"[discover] Local IP: {local_ip}, scanning {base_ip}.0/24...")
+            except Exception:
+                base_ip = "172.16.0"
+                print(f"[discover] Could not detect local IP, falling back to {base_ip}.0/24")
 
             async with aiohttp.ClientSession() as session:
                 tasks = []

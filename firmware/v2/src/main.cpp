@@ -24,6 +24,7 @@
 #include "../lib/Transport/wifi_transport.h"
 #include "../lib/Transport/ble_transport.h"
 #include "../lib/Transport/mqtt_transport.h"
+#include "../lib/Transport/serial_transport.h"
 #include "../lib/Transport/interface.h"
 
 // Application Layer
@@ -35,6 +36,7 @@
 #include "../lib/App/http_api.h"
 #include "../lib/App/command_manager.h"
 #include "../lib/App/schedule_manager.h"
+#include "../lib/App/gps_manager.h"
 
 // Bench Mode (optional, compile-time selectable)
 #ifdef BENCH_MODE
@@ -70,12 +72,12 @@ void radioTask(void* param) {
   uint8_t rxBuffer[256];
 
   while (1) {
-    // Poll BLE transport for any incoming data
-    BLETransport::pollStatic();
-
     // Poll message router (processes all registered transports)
-    // In future: may add MQTT, BLE, Serial transports here
     messageRouter.process();
+
+    // Poll human-readable CLI transports (Serial and BLE)
+    serialTransport.poll();
+    BLETransport::pollStatic();
 
     // Also poll LoRa directly for any remaining packets
     int len = loraTransport.recv(rxBuffer, sizeof(rxBuffer));  // Non-blocking
@@ -158,9 +160,41 @@ void controlTask(void* param) {
       OLEDManager::setUptime(now - g_bootTimestamp);
       OLEDManager::setFreeHeap(esp_get_free_heap_size());
 
+      GPSManager::GPSData gpsData = GPSManager::getData();
+      OLEDManager::setGPS(gpsData.lat, gpsData.lon, gpsData.satellites, gpsData.hasFix);
       // Refresh display
       OLEDManager::update();
       lastOLEDUpdate = now;
+
+      // =====================================================================
+      // Update CommandManager status for CLI/BLE
+      // =====================================================================
+      CommandManager::StatusData status;
+      status.nodeId = NVSManager::getNodeID("Node").c_str();
+      status.version = FIRMWARE_VERSION;
+      status.ipAddr = WiFi.localIP().toString();
+      status.batVoltage = PowerManager::getBatteryVoltage();
+      status.batPercent = PowerManager::getBatteryPercent();
+      status.powerMode = kModeNames[static_cast<uint8_t>(PowerManager::getMode())];
+      status.relay1 = (relayHAL.getState() & 0x01);
+      status.relay2 = (relayHAL.getState() & 0x02);
+      status.loraRSSI = rssi;
+      status.loraSNR = loraTransport.getLastSNR();
+      status.loraTX = loraTransport.getTxBytes();
+      status.loraRX = loraTransport.getRxBytes();
+      status.meshNeighbors = meshCoordinator.getNeighborCount();
+      status.uptime = now - g_bootTimestamp;
+      status.freeHeap = esp_get_free_heap_size();
+
+      CommandManager::updateStatus(status);
+      
+      // Heartbeat status print to serial every 10 iterations (5 seconds)
+      static uint8_t iterations = 0;
+      if (++iterations >= 10) {
+          iterations = 0;
+          Serial.printf("[HEARTBEAT] Bat: %.2fV, RSSI: %d, Neighbors: %u, Heap: %u\n", 
+                        status.batVoltage, status.loraRSSI, status.meshNeighbors, status.freeHeap);
+      }
     }
 
     // Periodically send telemetry
@@ -199,6 +233,9 @@ void controlTask(void* param) {
     #ifdef ENABLE_MQTT_TRANSPORT
       MQTTTransport::pollStatic();
     #endif
+
+    // Update GNSS tracking
+    GPSManager::update();
 
     vTaskDelay(pdMS_TO_TICKS(500));  // 500ms control loop period
   }
@@ -287,10 +324,16 @@ void onMessageReceived(TransportType transportType,
 // ============================================================================
 
 void setup() {
-  // Initialize serial early for debug output
+  // 1. Initialize serial IMMEDIATELY
   Serial.begin(SERIAL_BAUD);
+  
+  // Wait for Native USB Serial to connect (max 3 seconds)
+  uint32_t startWait = millis();
+  while (!Serial && (millis() - startWait < 3000)) {
+    delay(10);
+  }
+  
   delay(500);
-
   Serial.println("\n\n=== LoRaLink v2 Boot ===");
   Serial.printf("Version: %s\n", FIRMWARE_VERSION);
   Serial.printf("Role: %s\n", DEVICE_ROLE);
@@ -300,7 +343,12 @@ void setup() {
   // Record boot timestamp
   g_bootTimestamp = millis();
 
-  // ========================================================================
+  Serial.println("\n\n=== LoRaLink v2 Boot ===");
+  Serial.printf("Version: %s\n", FIRMWARE_VERSION);
+  Serial.printf("Role: %s\n", DEVICE_ROLE);
+  Serial.printf("Radio: %s\n", RADIO_MODEL);
+  Serial.printf("PSRAM: %s\n", HAS_PSRAM_STR);
+
   // Step 1: Initialize NVS (Persistent Storage)
   // ========================================================================
   Serial.println("\n[1/7] Initializing NVS persistence layer...");
@@ -363,27 +411,38 @@ void setup() {
   relayHAL.init();
   Serial.println("  ✓ HAL initialized");
 
-  // ========================================================================
-  // Step 4: Initialize Transport Layer
-  // ========================================================================
-  Serial.println("[4/8] Initializing transports...");
+  // Get Node ID early for diagnostics and BLE
+  std::string nodeIDStr = NVSManager::getNodeID("Node");
+  if (nodeIDStr.empty()) nodeIDStr = "Unknown";
 
+  // LoRa Transport
   if (!loraTransport.init()) {
-    Serial.println("ERROR: LoRa transport init failed!");
-    while (1) delay(1000);
+    Serial.println("  ! LoRa transport init failed (check hardware)");
+  } else {
+    messageRouter.registerTransport(&loraTransport);
+    Serial.println("  ✓ LoRa transport initialized");
   }
 
-  messageRouter.registerTransport(&loraTransport);
-  messageRouter.setMessageHandler(onMessageReceived);
-  Serial.println("  ✓ LoRa transport initialized");
+  // Serial CLI Transport (Always active on Native USB)
+  if (!serialTransport.init()) {
+      Serial.println("  ! Serial CLI init failed");
+  } else {
+      Serial.println("  ✓ Serial CLI initialized");
+  }
+
+  // BLE Transport (Always active)
+  if (!BLETransport::initStatic()) {
+      Serial.println("  ! BLE transport failed to start");
+  } else {
+      Serial.println("  ✓ BLE transport initialized");
+  }
 
   // Optional WiFi Transport (graceful fallback if connection fails)
   std::string wifiSSID = NVSManager::getWiFiSSID();
   std::string wifiPass = NVSManager::getWiFiPassword();
-  std::string nodeID = NVSManager::getNodeID("Node");
 
   // Build mDNS hostname from node ID
-  std::string mdnsHostname = "loralink-" + nodeID;
+  std::string mdnsHostname = "loralink-" + nodeIDStr;
 
   if (!wifiSSID.empty() && !wifiPass.empty()) {
     if (WiFiTransport::init(wifiSSID, wifiPass, mdnsHostname)) {
@@ -417,10 +476,12 @@ void setup() {
   if (!BLETransport::initStatic()) {
     Serial.println("  ! BLE transport init failed (non-fatal)");
   } else {
-    Serial.printf("  ✓ BLE transport initialized (%s)\n", nodeID.c_str());
+    Serial.printf("  ✓ BLE transport initialized (%s)\n", nodeIDStr.c_str());
     BLETransport::setRxCallback([](const String& data) {
+      Serial.printf("[BLE] Command received: '%s'\n", data.c_str());
       CommandManager::process(data, [](const String& resp) {
         BLETransport::sendStringStatic(resp);
+        Serial.printf("[BLE] Response sent: %u bytes\n", resp.length());
       });
     });
   }
@@ -451,6 +512,9 @@ void setup() {
     g_ourNodeID = 1;  // TODO: Read from NVS or config
     Serial.println("  ✓ Node mode");
   #endif
+
+  // Initialize GNSS (V4 support)
+  GPSManager::init();
 
   meshCoordinator.init();
   meshCoordinator.setOwnNodeID(g_ourNodeID);

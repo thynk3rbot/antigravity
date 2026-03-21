@@ -90,6 +90,11 @@ private:
     static void addPeerInfo(JsonDocument& doc);
 
     /**
+     * @brief Add GPS info (latitude, longitude, altitude, satellites, fix_type)
+     */
+    static void addGPSInfo(JsonDocument& doc);
+
+    /**
      * @brief Add transport status object (wifi, ble, mqtt, lora booleans)
      */
     static void addTransportStatus(JsonDocument& doc);

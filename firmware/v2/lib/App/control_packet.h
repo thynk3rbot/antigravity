@@ -22,7 +22,7 @@ enum class PacketType : uint8_t {
   ACK = 0x03,           // Any -> Any (acknowledgment for reliability)
   MESH_PROBE = 0x04,    // Discovery/beacon packet
   HEARTBEAT = 0x05,     // Periodic life-sign
-  RESERVED_06 = 0x06,
+  GPS_LOCATION = 0x06,  // Node -> Any (GPS coordinates)
   RESERVED_07 = 0x07,
   RESERVED_08 = 0x08,
   RESERVED_09 = 0x09,
@@ -118,6 +118,24 @@ struct ActionPayload {
 static_assert(sizeof(ActionPayload) == 2, "ActionPayload must be 2 bytes");
 
 // ============================================================================
+// Payload Union: GPS (8 bytes)
+// ============================================================================
+
+/**
+ * @struct GpsPayload
+ * @brief GPS coordinates reported by nodes (8 bytes)
+ *
+ * Reported periodically or on-demand by nodes.
+ * Uses 1e7 scaling for 32-bit integer storage (approx 0.11m precision).
+ */
+struct GpsPayload {
+  int32_t lat_x1e7;        // Latitude * 1,000,000,0 (range: -90e7 to 90e7)
+  int32_t lon_x1e7;        // Longitude * 1,000,000,0 (range: -180e7 to 180e7)
+};
+
+static_assert(sizeof(GpsPayload) == 8, "GpsPayload must be 8 bytes");
+
+// ============================================================================
 // Complete Control Packet (14 bytes)
 // ============================================================================
 
@@ -141,6 +159,7 @@ struct ControlPacket {
   union {
     TelemetryPayload telemetry;
     ActionPayload action;
+    GpsPayload gps;
     uint8_t raw[8];  // Raw byte access (8 bytes)
   } payload;
 
@@ -221,6 +240,30 @@ struct ControlPacket {
 
     memset(pkt.payload.raw, 0, sizeof(pkt.payload.raw));
 
+    return pkt;
+  }
+
+  /**
+   * @brief Create a GPS coordinate packet
+   * @param src Source node ID
+   * @param dest Destination (0xFF = broadcast)
+   * @param lat Latitude (double)
+   * @param lon Longitude (double)
+   * @param requireAck If true, requests ACK from destination
+   * @return Initialized ControlPacket
+   */
+  static ControlPacket makeGPS(uint8_t src, uint8_t dest, double lat, double lon, bool requireAck = false) {
+    ControlPacket pkt;
+    memset(&pkt, 0, sizeof(pkt));
+    pkt.header.type = static_cast<uint8_t>(PacketType::GPS_LOCATION);
+    pkt.header.src = src;
+    pkt.header.dest = dest;
+    pkt.header.seq = 0;
+    pkt.header.flags = 0;
+    if (requireAck) pkt.header.flags |= PKT_FLAG_REQUIRE_ACK;
+
+    pkt.payload.gps.lat_x1e7 = static_cast<int32_t>(lat * 10000000.0);
+    pkt.payload.gps.lon_x1e7 = static_cast<int32_t>(lon * 10000000.0);
     return pkt;
   }
 

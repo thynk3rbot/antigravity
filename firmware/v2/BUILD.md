@@ -223,7 +223,7 @@ Boot sequence (115200 baud):
 
 ```
 === LoRaLink v2 Boot ===
-Version: 0.2.0
+Version: 0.3.0
 Role: HUB
 Radio: SX1276 (V2)
 PSRAM: No

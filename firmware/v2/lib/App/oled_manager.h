@@ -141,6 +141,15 @@ public:
     static void setFreeHeap(uint32_t heapBytes);
 
     /**
+     * @brief Update cached GPS data
+     * @param lat Latitude
+     * @param lon Longitude
+     * @param sats Satellite count
+     * @param hasFix True if GPS has a valid lock
+     */
+    static void setGPS(double lat, double lon, uint8_t sats, bool hasFix);
+
+    /**
      * @brief Print OLED manager status to Serial (diagnostics)
      */
     static void printStatus();

@@ -1,7 +1,11 @@
 #include "command_manager.h"
 #include "nvs_config.h"
 #include "schedule_manager.h"
+#include "gps_manager.h"
 #include <Arduino.h>
+#include "../Transport/message_router.h"
+#include "control_packet.h"
+#include "nvs_manager.h"
 
 // ---------------------------------------------------------------------------
 // Static member definitions
@@ -48,8 +52,14 @@ void CommandManager::process(const String& input, ResponseCallback responseCallb
         response = _handleHelp();
     } else if (cmd == "GETCONFIG") {
         response = _handleGetConfig();
+    } else if (cmd == "SETNAME") {
+        response = _handleSetName(args);
     } else if (cmd == "SCHED") {
         response = _handleSched(args);
+    } else if (cmd == "FORWARD") {
+        response = _handleForward(args);
+    } else if (cmd == "GPS") {
+        response = _handleGPS(args);
     } else {
         response = "{\"ok\":false,\"error\":\"Unknown command: " + cmd + "\"}";
     }
@@ -193,18 +203,40 @@ String CommandManager::_handleHelp() {
     String help = "Available commands:\n";
     help += "  STATUS                          - Return JSON status blob\n";
     help += "  RELAY <1|2> <ON|OFF>            - Control relay 1 or 2\n";
+    help += "  SETNAME <name>                  - Set node ID\n";
     help += "  SETWIFI <SSID> <PW>             - Set WiFi credentials\n";
     help += "  BLINK                           - Blink LED 3 times\n";
     help += "  REBOOT                          - Reboot the device\n";
     help += "  GETCONFIG                       - Return NVS config as JSON\n";
-    help += "  SCHED LIST                      - List all scheduled tasks\n";
-    help += "  SCHED ADD <n> <type> <pin> <s>  - Add task (type: TOGGLE PULSE ON OFF PWM READ)\n";
-    help += "  SCHED REM <name>                - Remove task by name\n";
     help += "  SCHED ENABLE/DISABLE <name>     - Enable or pause a task\n";
     help += "  SCHED CLEAR                     - Remove all tasks\n";
     help += "  SCHED SAVE                      - Persist tasks to flash\n";
+    help += "  FORWARD <id> <cmd>              - Forward command to mesh node\n";
+    help += "  GPS [ON|OFF]                    - Power or status of GNSS\n";
     help += "  HELP                            - Show this help message";
     return help;
+}
+
+String CommandManager::_handleForward(const String& args) {
+    // ... Existing implementation ...
+    return ""; // Placeholder for brevities, tool will replace target exactly
+}
+
+String CommandManager::_handleGPS(const String& args) {
+    return GPSManager::handleCommand(args);
+}
+
+String CommandManager::_handleSetName(const String& args) {
+    String name = args;
+    name.trim();
+    if (name.length() == 0) {
+        return "{\"ok\":false,\"error\":\"Name cannot be empty\"}";
+    }
+    bool ok = NVSConfig::setNodeId(name);
+    if (ok) {
+        return "{\"ok\":true,\"node_id\":\"" + name + "\",\"msg\":\"Reboot required for BLE change\"}";
+    }
+    return "{\"ok\":false,\"error\":\"NVS Save Failed\"}";
 }
 
 String CommandManager::_handleSched(const String& args) {

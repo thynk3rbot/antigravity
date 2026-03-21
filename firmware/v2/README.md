@@ -1,7 +1,7 @@
 # LoRaLink v2 - Lightweight Multi-Transport Mesh & Environment Controller
 
-**Version:** 0.2.0
-**Status:** Architecture & Headers Complete (Implementation in Progress)
+**Version:** 0.3.0
+**Status:** Feature Complete (Ready for Bench Testing)
 
 LoRaLink v2 is a decentralized IoT mesh networking system for ESP32-based controllers with multi-hop LoRa communication, local relay control, and optional cloud bridging.
 
@@ -16,8 +16,8 @@ LoRaLink v2 is a decentralized IoT mesh networking system for ESP32-based contro
 ### Hardware Support
 - **3 Board Variants:** Heltec V2, V3, V4 (compile-time validation)
 - **GPIO Relay Control:** 8 relay channels per node (via bitmask)
-- **Telemetry Collection:** Battery voltage, temperature, signal strength
-- **Power Management:** 3-tier battery modes (Normal, Conserve, Critical)
+- **Telemetry Collection:** Battery voltage, temperature, signal strength, GPS coordinates
+- **Power Management:** 3-tier battery modes (Normal, Conserve, Critical), GNSS rail control
 
 ### Transports (Pluggable)
 - **LoRa:** 1-10 km range, default transport
@@ -94,7 +94,8 @@ lib/App/control_packet.h (14-byte packets)
     ├── TELEMETRY (node telemetry)
     ├── ACTION (relay commands)
     ├── ACK (reliability)
-    └── HEARTBEAT (mesh discovery)
+    ├── HEARTBEAT (mesh discovery)
+    └── GPS_LOCATION (GNSS coordinates)
 
                 ↓
 
@@ -188,7 +189,7 @@ From LoRaLink v0.1.0, the following **critical features** are inherited:
 - ✅ **Telemetry collection** (ADC, RSSI, uptime)
 - ✅ **MQTT hub bridge** (Transport layer, Hub-only)
 - ✅ **OTA capability** (Arduino OTA, optional)
-- ✅ **OLED display** (status UI, 4-page navigation)
+- ✅ **OLED display** (status UI, 4-page base + 1 conditional GPS page, manual nav)
 
 **Simplified vs v1:**
 - FreeRTOS tasks instead of TaskScheduler
@@ -206,8 +207,8 @@ From LoRaLink v0.1.0, the following **critical features** are inherited:
 | **board_config.h** | ✅ Complete | Pin mapping + validation |
 | **HAL stubs** | ⏳ Next | radio_hal.cpp, relay_hal.cpp |
 | **Transport stubs** | ⏳ Next | lora_transport.cpp, message_router.cpp |
-| **App logic** | ⏳ Next | mesh_coordinator.cpp, telemetry |
-| **Main loop** | ⏳ Next | Task implementations |
+| **App logic** | ✅ Complete | Mesh, Telemetry, GPS integrated |
+| **Main loop** | ✅ Complete | FreeRTOS tasks active |
 | **Testing** | ⏳ Future | Unit tests, integration tests |
 | **Docs** | ⏳ Future | API docs, user guide |
 

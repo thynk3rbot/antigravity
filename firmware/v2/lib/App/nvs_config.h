@@ -2,7 +2,7 @@
 #include <Arduino.h>
 #include <Preferences.h>
 
-#define NVS_NAMESPACE  "loralink"
+#define PREFERENCES_NAMESPACE  "loralink"
 #define NVS_KEY_NODE_ID    "node_id"
 #define NVS_KEY_WIFI_SSID  "wifi_ssid"
 #define NVS_KEY_WIFI_PASS  "wifi_pass"

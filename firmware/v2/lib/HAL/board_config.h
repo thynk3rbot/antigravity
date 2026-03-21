@@ -84,13 +84,25 @@
 // I2C Display (SSD1306 OLED, shared across V2/V3/V4)
 // ============================================================================
 
-#define I2C_SDA                 4
-#define I2C_SCL                 15
+#ifdef RADIO_SX1262
+  // Heltec V3/V4: OLED on GPIO 17/18
+  #define I2C_SDA                 17
+  #define I2C_SCL                 18
+#else
+  // Heltec V2: OLED on GPIO 4/15
+  #define I2C_SDA                 4
+  #define I2C_SCL                 15
+#endif
+
 #define I2C_FREQ_HZ             400000
 #define OLED_ADDRESS            0x3C
 #define OLED_WIDTH              128
 #define OLED_HEIGHT             64
-#define OLED_RESET_PIN          -1       // No reset pin
+#ifdef RADIO_SX1262
+  #define OLED_RESET_PIN          21       // V3/V4 use GPIO 21 for OLED RESET
+#else
+  #define OLED_RESET_PIN          16       // V2 uses GPIO 16
+#endif
 
 // ============================================================================
 // Button Control (GPIO 0 - BOOT button, low-active with pull-high)
@@ -162,19 +174,39 @@
   #define BAT_ADC_PIN 1
   #define BAT_ADC_UNIT 1         // ADC1
   #define BAT_ADC_CHANNEL ADC1_CHANNEL_0
-#elif defined(ARDUINO_HELTEC_WIFI_LORA_32_V4)
-  // Heltec V4 (ESP32-S3R2): Battery voltage on GPIO 14 (ADC2_CH3)
-  #define BAT_ADC_PIN 14
-  #define BAT_ADC_UNIT 2         // ADC2
-  #define BAT_ADC_CHANNEL ADC2_CHANNEL_3
+  #define BAT_ADC_PIN 1
+  #define BAT_ADC_UNIT 1         // ADC1
+  #define BAT_ADC_CHANNEL ADC1_CHANNEL_0
+  #define BAT_ADC_CTRL 37        // V4 requires GPIO 37 HIGH for battery sense
 #endif
 
 #define BAT_ADC_VOLTAGE_DIVIDER 2.0f    // External divider: Vbat/2 = ADC input
-#define VEXT_PIN 21                      // External power rail control (all boards)
+#ifdef RADIO_SX1262
+  #define VEXT_PIN              36       // V3/V4 use GPIO 36 for VEXT
+#else
+  #define VEXT_PIN              21       // V2 uses GPIO 21
+#endif
 
 // Battery voltage thresholds (in volts, actual cell voltage)
 #define BAT_VOLTAGE_NORMAL_MIN 3.2f      // Minimum voltage for NORMAL mode
 #define BAT_VOLTAGE_CONSERVE_MIN 2.8f    // Minimum voltage for CONSERVE mode (below = CRITICAL)
+
+// ============================================================================
+// GPS / GNSS UART Interface Pins
+// ============================================================================
+#ifdef ARDUINO_HELTEC_WIFI_LORA_32_V4
+  #define GPS_RX_PIN       39
+  #define GPS_TX_PIN       38
+  #define GPS_PPS_PIN      41
+  #define GPS_RST_PIN      42
+  #define GPS_WAKE_PIN     40
+  #define GPS_EN_PIN       34       // Power enable (Active LOW)
+#elif defined(ARDUINO_HELTEC_WIFI_LORA_32_V3)
+  #define GPS_RX_PIN       47
+  #define GPS_TX_PIN       48
+#endif
+
+#define GPS_SERIAL_BAUD    9600
 
 // ============================================================================
 // System GPIO (Control, Status)
@@ -183,11 +215,11 @@
 #define GPIO_PRG_BTN  0         // PRG button for factory reset (active-LOW)
 
 #ifdef RADIO_SX1262
-  // Heltec V3/V4 (ESP32-S3): VEXT control on GPIO 21
-  #define GPIO_VEXT     21
-#else
-  // Heltec V2 (ESP32): VEXT control on GPIO 36
+  // Heltec V3/V4 (ESP32-S3): VEXT control on GPIO 36
   #define GPIO_VEXT     36
+#else
+  // Heltec V2 (ESP32): VEXT control on GPIO 21
+  #define GPIO_VEXT     21
 #endif
 
 // ============================================================================

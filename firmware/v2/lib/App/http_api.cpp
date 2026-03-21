@@ -192,24 +192,19 @@ void HttpAPI::handleRelay(AsyncWebServerRequest* request) {
     return;
   }
 
+  // Execute relay control through CommandManager to ensure JSON persistence and OLED updates
+  char cmdBuf[32];
+  snprintf(cmdBuf, sizeof(cmdBuf), "RELAY 1 %s", action);
+  
+  String responseJson;
+  CommandManager::process(String(cmdBuf), [&responseJson](const String& resp) {
+    responseJson = resp;
+  });
+
   // Log relay control command
-  Serial.printf("[HttpAPI] POST /api/relay action=%s duration=%u ms\n",
-                action, (unsigned int)durationMs);
+  Serial.printf("[HttpAPI] Relay command executed: %s\n", cmdBuf);
 
-  // TODO: Execute relay control through RelayHAL or command manager
-  // For now, just acknowledge the request
-
-  DynamicJsonDocument respDoc(256);
-  respDoc["status"] = "OK";
-  respDoc["relay"] = action;
-  if (durationMs > 0) {
-    respDoc["duration_ms"] = durationMs;
-  }
-
-  String jsonStr;
-  serializeJson(respDoc, jsonStr);
-
-  AsyncWebServerResponse* response = request->beginResponse(200, "application/json", jsonStr);
+  AsyncWebServerResponse* response = request->beginResponse(200, "application/json", responseJson);
   response->addHeader("Access-Control-Allow-Origin", "*");
   request->send(response);
 }

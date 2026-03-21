@@ -17,15 +17,15 @@ bool NVSConfig::begin() {
 
     // Verify the namespace is accessible by opening and closing it
     Preferences prefs;
-    if (!prefs.begin(NVS_NAMESPACE, false)) {
+    if (!prefs.begin(PREFERENCES_NAMESPACE, false)) {
         Serial.printf("[NVSConfig] ERROR: Failed to open NVS namespace '%s'\n",
-                      NVS_NAMESPACE);
+                      PREFERENCES_NAMESPACE);
         return false;
     }
     prefs.end();
 
     _initialized = true;
-    Serial.printf("[NVSConfig] Initialized (namespace: '%s')\n", NVS_NAMESPACE);
+    Serial.printf("[NVSConfig] Initialized (namespace: '%s')\n", PREFERENCES_NAMESPACE);
     return true;
 }
 
@@ -36,7 +36,7 @@ bool NVSConfig::begin() {
 void NVSConfig::factoryReset() {
     Serial.println("[NVSConfig] Factory reset: erasing all keys...");
     Preferences prefs;
-    if (!prefs.begin(NVS_NAMESPACE, false)) {
+    if (!prefs.begin(PREFERENCES_NAMESPACE, false)) {
         Serial.println("[NVSConfig] ERROR: Failed to open namespace for factory reset");
         return;
     }
@@ -68,7 +68,7 @@ static bool _isStaleNodeId(const String& id) {
 
 String NVSConfig::getNodeId() {
     Preferences prefs;
-    if (!prefs.begin(NVS_NAMESPACE, true)) {
+    if (!prefs.begin(PREFERENCES_NAMESPACE, true)) {
         // Namespace open failed — return generated ID without persisting
         Serial.println("[NVSConfig] ERROR: Failed to open NVS for getNodeId");
         return _generateNodeId();
@@ -89,7 +89,7 @@ String NVSConfig::getNodeId() {
 
 bool NVSConfig::setNodeId(const String& id) {
     Preferences prefs;
-    if (!prefs.begin(NVS_NAMESPACE, false)) {
+    if (!prefs.begin(PREFERENCES_NAMESPACE, false)) {
         Serial.println("[NVSConfig] ERROR: Failed to open NVS for setNodeId");
         return false;
     }
@@ -109,7 +109,7 @@ bool NVSConfig::setNodeId(const String& id) {
 
 String NVSConfig::getWifiSSID() {
     Preferences prefs;
-    if (!prefs.begin(NVS_NAMESPACE, true)) {
+    if (!prefs.begin(PREFERENCES_NAMESPACE, true)) {
         Serial.println("[NVSConfig] ERROR: Failed to open NVS for getWifiSSID");
         return "";
     }
@@ -120,7 +120,7 @@ String NVSConfig::getWifiSSID() {
 
 String NVSConfig::getWifiPassword() {
     Preferences prefs;
-    if (!prefs.begin(NVS_NAMESPACE, true)) {
+    if (!prefs.begin(PREFERENCES_NAMESPACE, true)) {
         Serial.println("[NVSConfig] ERROR: Failed to open NVS for getWifiPassword");
         return "";
     }
@@ -131,7 +131,7 @@ String NVSConfig::getWifiPassword() {
 
 bool NVSConfig::setWifiCredentials(const String& ssid, const String& pass) {
     Preferences prefs;
-    if (!prefs.begin(NVS_NAMESPACE, false)) {
+    if (!prefs.begin(PREFERENCES_NAMESPACE, false)) {
         Serial.println("[NVSConfig] ERROR: Failed to open NVS for setWifiCredentials");
         return false;
     }
@@ -152,7 +152,7 @@ bool NVSConfig::setWifiCredentials(const String& ssid, const String& pass) {
 
 String NVSConfig::getCryptoKey() {
     Preferences prefs;
-    if (!prefs.begin(NVS_NAMESPACE, true)) {
+    if (!prefs.begin(PREFERENCES_NAMESPACE, true)) {
         Serial.println("[NVSConfig] ERROR: Failed to open NVS for getCryptoKey");
         return "0102030405060708090A0B0C0D0E0F10";
     }
@@ -168,7 +168,7 @@ String NVSConfig::getCryptoKey() {
 
 bool NVSConfig::setCryptoKey(const String& hexKey) {
     Preferences prefs;
-    if (!prefs.begin(NVS_NAMESPACE, false)) {
+    if (!prefs.begin(PREFERENCES_NAMESPACE, false)) {
         Serial.println("[NVSConfig] ERROR: Failed to open NVS for setCryptoKey");
         return false;
     }
@@ -189,7 +189,7 @@ bool NVSConfig::setCryptoKey(const String& hexKey) {
 bool NVSConfig::getRelayState(uint8_t relayNum) {
     const char* key = (relayNum == 1) ? NVS_KEY_RELAY1 : NVS_KEY_RELAY2;
     Preferences prefs;
-    if (!prefs.begin(NVS_NAMESPACE, true)) {
+    if (!prefs.begin(PREFERENCES_NAMESPACE, true)) {
         Serial.printf("[NVSConfig] ERROR: Failed to open NVS for getRelayState(%u)\n",
                       relayNum);
         return false;
@@ -207,7 +207,7 @@ bool NVSConfig::setRelayState(uint8_t relayNum, bool state) {
     }
     const char* key = (relayNum == 1) ? NVS_KEY_RELAY1 : NVS_KEY_RELAY2;
     Preferences prefs;
-    if (!prefs.begin(NVS_NAMESPACE, false)) {
+    if (!prefs.begin(PREFERENCES_NAMESPACE, false)) {
         Serial.printf("[NVSConfig] ERROR: Failed to open NVS for setRelayState(%u)\n",
                       relayNum);
         return false;
@@ -229,7 +229,7 @@ bool NVSConfig::setRelayState(uint8_t relayNum, bool state) {
 
 uint8_t NVSConfig::getPowerMode() {
     Preferences prefs;
-    if (!prefs.begin(NVS_NAMESPACE, true)) {
+    if (!prefs.begin(PREFERENCES_NAMESPACE, true)) {
         Serial.println("[NVSConfig] ERROR: Failed to open NVS for getPowerMode");
         return 0;
     }
@@ -240,7 +240,7 @@ uint8_t NVSConfig::getPowerMode() {
 
 bool NVSConfig::setPowerMode(uint8_t mode) {
     Preferences prefs;
-    if (!prefs.begin(NVS_NAMESPACE, false)) {
+    if (!prefs.begin(PREFERENCES_NAMESPACE, false)) {
         Serial.println("[NVSConfig] ERROR: Failed to open NVS for setPowerMode");
         return false;
     }
@@ -260,7 +260,7 @@ bool NVSConfig::setPowerMode(uint8_t mode) {
 
 String NVSConfig::getMqttBroker() {
     Preferences prefs;
-    if (!prefs.begin(NVS_NAMESPACE, true)) {
+    if (!prefs.begin(PREFERENCES_NAMESPACE, true)) {
         Serial.println("[NVSConfig] ERROR: Failed to open NVS for getMqttBroker");
         return "";
     }
@@ -271,7 +271,7 @@ String NVSConfig::getMqttBroker() {
 
 bool NVSConfig::setMqttBroker(const String& broker) {
     Preferences prefs;
-    if (!prefs.begin(NVS_NAMESPACE, false)) {
+    if (!prefs.begin(PREFERENCES_NAMESPACE, false)) {
         Serial.println("[NVSConfig] ERROR: Failed to open NVS for setMqttBroker");
         return false;
     }
@@ -287,7 +287,7 @@ bool NVSConfig::setMqttBroker(const String& broker) {
 
 uint16_t NVSConfig::getMqttPort() {
     Preferences prefs;
-    if (!prefs.begin(NVS_NAMESPACE, true)) {
+    if (!prefs.begin(PREFERENCES_NAMESPACE, true)) {
         Serial.println("[NVSConfig] ERROR: Failed to open NVS for getMqttPort");
         return 1883;
     }
@@ -298,7 +298,7 @@ uint16_t NVSConfig::getMqttPort() {
 
 bool NVSConfig::setMqttPort(uint16_t port) {
     Preferences prefs;
-    if (!prefs.begin(NVS_NAMESPACE, false)) {
+    if (!prefs.begin(PREFERENCES_NAMESPACE, false)) {
         Serial.println("[NVSConfig] ERROR: Failed to open NVS for setMqttPort");
         return false;
     }
@@ -314,7 +314,7 @@ bool NVSConfig::setMqttPort(uint16_t port) {
 
 String NVSConfig::getMqttUsername() {
     Preferences prefs;
-    if (!prefs.begin(NVS_NAMESPACE, true)) {
+    if (!prefs.begin(PREFERENCES_NAMESPACE, true)) {
         Serial.println("[NVSConfig] ERROR: Failed to open NVS for getMqttUsername");
         return "";
     }
@@ -325,7 +325,7 @@ String NVSConfig::getMqttUsername() {
 
 String NVSConfig::getMqttPassword() {
     Preferences prefs;
-    if (!prefs.begin(NVS_NAMESPACE, true)) {
+    if (!prefs.begin(PREFERENCES_NAMESPACE, true)) {
         Serial.println("[NVSConfig] ERROR: Failed to open NVS for getMqttPassword");
         return "";
     }
@@ -336,7 +336,7 @@ String NVSConfig::getMqttPassword() {
 
 bool NVSConfig::setMqttCredentials(const String& user, const String& pass) {
     Preferences prefs;
-    if (!prefs.begin(NVS_NAMESPACE, false)) {
+    if (!prefs.begin(PREFERENCES_NAMESPACE, false)) {
         Serial.println("[NVSConfig] ERROR: Failed to open NVS for setMqttCredentials");
         return false;
     }

@@ -39,6 +39,10 @@ struct CachedValues {
     uint8_t peerCount;        // Peer/node count
     uint32_t uptimeMs;        // System uptime
     uint32_t freeHeapBytes;   // Free heap
+    double gpsLat;            // GPS Latitude
+    double gpsLon;            // GPS Longitude
+    uint8_t gpsSats;          // GPS Satellites
+    bool gpsFix;              // GPS Fix status
 };
 
 static CachedValues g_cached = {};  // Zero-initialized, then set defaults
@@ -80,6 +84,7 @@ static void displayPage1();  // Network Status
 static void displayPage2();  // Power & LoRa
 static void displayPage3();  // Transport Status
 static void displayPage4();  // Relay & Temperature
+static void displayPage5();  // GPS (Conditional)
 
 // ============================================================================
 // Button Interrupt Handler
@@ -115,8 +120,8 @@ static void IRAM_ATTR buttonISRHandler() {
                     Serial.printf("[OLED] Brightness toggled: %u\n", g_brightness);
                 } else {
                     // Short press: rotate to next page
-                    g_currentPage = (g_currentPage + 1) % 4;
-                    g_lastAutoRotateTime = millis();  // Reset auto-rotate timer
+                    uint8_t maxPages = (g_cached.gpsFix || g_cached.gpsSats > 0) ? 5 : 4;
+                    g_currentPage = (g_currentPage + 1) % maxPages;
                     Serial.printf("[OLED] Page changed to: %u\n", g_currentPage);
                 }
             }
@@ -285,6 +290,46 @@ static void displayPage4() {
     display.display();
 }
 
+/**
+ * @brief Page 5: GPS Information (Conditional)
+ */
+static void displayPage5() {
+    display.clearDisplay();
+    display.setFont();
+    display.setTextSize(2);
+    display.setTextColor(SSD1306_WHITE);
+
+    // Header
+    display.setCursor(0, 0);
+    display.println("GNSS Status");
+
+    drawHLine(16);
+
+    // GPS info
+    display.setTextSize(1);
+    display.setCursor(0, 20);
+    if (g_cached.gpsFix) {
+        display.print("Lat: ");
+        display.println(g_cached.gpsLat, 6);
+        display.print("Lon: ");
+        display.println(g_cached.gpsLon, 6);
+    } else {
+        display.println("Searching for satellites...");
+        display.println();
+    }
+
+    display.setCursor(0, 40);
+    display.print("Sats: ");
+    display.println(g_cached.gpsSats);
+
+    display.print("Fix:  ");
+    display.println(g_cached.gpsFix ? "YES" : "NO");
+
+    display.print("Page: 5/5");
+
+    display.display();
+}
+
 // ============================================================================
 // Public API Implementation
 // ============================================================================
@@ -294,10 +339,21 @@ bool OLEDManager::init() {
     initCachedValues();
 
     // Initialize I2C with board config pins
+    Serial.printf("[OLED] Starting Wire on SDA:%d, SCL:%d\n", I2C_SDA, I2C_SCL);
     Wire.begin(I2C_SDA, I2C_SCL, I2C_FREQ_HZ);
-    delay(100);
-
+    
+    // Manual Hardware Reset for Heltec OLED
+    if (OLED_RESET_PIN != -1) {
+        Serial.printf("[OLED] Toggling Reset on GPIO %d\n", OLED_RESET_PIN);
+        pinMode(OLED_RESET_PIN, OUTPUT);
+        digitalWrite(OLED_RESET_PIN, LOW);
+        delay(20);
+        digitalWrite(OLED_RESET_PIN, HIGH);
+        delay(20);
+    }
+    
     // Initialize display
+    Serial.println("[OLED] Calling display.begin()...");
     if (!display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDRESS)) {
         Serial.println("[OLED] SSD1306 allocation failed");
         return false;
@@ -346,27 +402,14 @@ void OLEDManager::update() {
             display.dim(false);
         }
 
-        // Auto-rotate if no user interaction
-        if (now - g_lastAutoRotateTime >= OLED_AUTO_ROTATE_MS) {
-            g_currentPage = (g_currentPage + 1) % 4;
-            g_lastAutoRotateTime = now;
-        }
-
         // Render current page
         if (g_displayOn) {
             switch (g_currentPage) {
-                case 0:
-                    displayPage1();
-                    break;
-                case 1:
-                    displayPage2();
-                    break;
-                case 2:
-                    displayPage3();
-                    break;
-                case 3:
-                    displayPage4();
-                    break;
+                case 0: displayPage1(); break;
+                case 1: displayPage2(); break;
+                case 2: displayPage3(); break;
+                case 3: displayPage4(); break;
+                case 4: displayPage5(); break;
                 default:
                     g_currentPage = 0;
                     displayPage1();
@@ -461,6 +504,13 @@ void OLEDManager::setUptime(uint32_t uptimeMs) {
 
 void OLEDManager::setFreeHeap(uint32_t heapBytes) {
     g_cached.freeHeapBytes = heapBytes;
+}
+
+void OLEDManager::setGPS(double lat, double lon, uint8_t sats, bool hasFix) {
+    g_cached.gpsLat = lat;
+    g_cached.gpsLon = lon;
+    g_cached.gpsSats = sats;
+    g_cached.gpsFix = hasFix;
 }
 
 void OLEDManager::printStatus() {

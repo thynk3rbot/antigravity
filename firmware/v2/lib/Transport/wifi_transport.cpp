@@ -249,7 +249,13 @@ void WiFiTransport::_startMDNS() {
 
     // Advertise HTTP service so network browsers can discover the device
     MDNS.addService("http", "tcp", 80);
+    
+    // Add TXT records for LoRaLink discovery
+    // These allow the webapp to identify the device without an HTTP probe
+    MDNS.addServiceTxt("http", "tcp", "id", _hostname.c_str());
+    MDNS.addServiceTxt("http", "tcp", "type", "loralink-gateway");
+    MDNS.addServiceTxt("http", "tcp", "ver", "v2.0.0");
 
     _mdnsStarted = true;
-    Serial.printf("[mDNS] Advertised as %s.local\n", _hostname.c_str());
+    Serial.printf("[mDNS] Advertised as %s.local with TXT records\n", _hostname.c_str());
 }

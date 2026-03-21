@@ -17,8 +17,8 @@
 // NVS key constants — mirrored from nvs_config.h to avoid cross-lib include
 // (Preferences.h is an Arduino framework library not always auto-included
 // when nvs_config.h is pulled into a different PlatformIO lib context)
-#ifndef NVS_NAMESPACE
-#define NVS_NAMESPACE "loralink"
+#ifndef MQTT_NVS_NAMESPACE
+#define MQTT_NVS_NAMESPACE "loralink"
 #endif
 static const char* _kNodeId     = "node_id";
 static const char* _kMqttBroker = "mqtt_broker";
@@ -54,7 +54,7 @@ bool MQTTTransport::init() {
     // Load config directly from NVS (Preferences) to avoid cross-lib include
     {
         Preferences prefs;
-        if (prefs.begin(NVS_NAMESPACE, true)) {
+        if (prefs.begin(MQTT_NVS_NAMESPACE, true)) {
             // Node ID — generate from MAC if not set
             _nodeId = prefs.getString(_kNodeId, "");
             if (_nodeId.length() == 0) {

@@ -84,6 +84,12 @@ public:
   size_t getNeighborCount() const { return _neighbors.size(); }
 
   /**
+   * @brief Get reference to neighbor map
+   * @return Reference to the private neighbor map
+   */
+  const std::map<uint8_t, NeighborInfo>& getNeighbors() const { return _neighbors; }
+
+  /**
    * @brief Forget a neighbor (remove from table)
    * @param nodeID Node to remove
    */

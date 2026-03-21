@@ -34,7 +34,7 @@ enum class TransportType : uint8_t {
   LORA = 0,
   MQTT = 1,
   BLE = 2,
-  SERIAL_DEBUG = 3,
+  SERIAL_CLI = 3,
   ESPNOW = 4,  // Reserved for future use
   HTTP = 5,    // Reserved for future use
   UNKNOWN = 255

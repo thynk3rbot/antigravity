@@ -26,6 +26,10 @@ void PowerManager::begin() {
 #ifdef BAT_ADC_PIN
     pinMode(BAT_ADC_PIN, INPUT);
 #endif
+#ifdef BAT_ADC_CTRL
+    pinMode(BAT_ADC_CTRL, OUTPUT);
+    digitalWrite(BAT_ADC_CTRL, LOW);   // Disable by default (high power)
+#endif
 
     // Restore persisted power mode from NVS
     uint8_t saved = NVSConfig::getPowerMode();
@@ -63,13 +67,20 @@ void PowerManager::disableVEXT() {
 
 float PowerManager::getBatteryVoltage() {
 #ifdef BAT_ADC_PIN
+#ifdef BAT_ADC_CTRL
+    digitalWrite(BAT_ADC_CTRL, HIGH);  // Enable voltage divider
+    delay(5);
+#endif
     // Average 5 readings for stability
     uint32_t sum = 0;
     for (uint8_t i = 0; i < 5; i++) {
         sum += analogRead(BAT_ADC_PIN);
     }
+#ifdef BAT_ADC_CTRL
+    digitalWrite(BAT_ADC_CTRL, LOW);   // Disable voltage divider
+#endif
     float reading = static_cast<float>(sum) / 5.0f;
-    float voltage = (reading / ADC_MAX) * ADC_VREF * VDIV_RATIO;
+    float voltage = (reading / 4095.0f) * 3.3f * 2.0f; // V4 Standard Divider
     _lastVoltage = voltage;
     return voltage;
 #else

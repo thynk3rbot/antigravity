@@ -12,7 +12,7 @@ echo To access the Fleet Admin, go to http://localhost:8000 in your browser.
 echo.
 :loop
 cd /d "%~dp0\webapp"
-python server.py
+py server.py
 if errorlevel 1 (
     color 0C
     echo.

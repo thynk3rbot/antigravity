@@ -25,7 +25,7 @@
     "name": "PEER4V4",
     "type": "wifi",
     "address": "172.16.0.29",
-    "active": true
+    "active": false
   },
   {
     "id": "66df0fdb-bfed-49a3-bd12-8ed84a226e44",
@@ -33,5 +33,19 @@
     "type": "ble",
     "address": "PEER5V2",
     "active": false
+  },
+  {
+    "id": "70000000-0000-0000-0000-000000000007",
+    "name": "NodeCOM7",
+    "type": "serial",
+    "address": "COM7",
+    "active": false
+  },
+  {
+    "id": "80000000-0000-0000-0000-000000000008",
+    "name": "NodeCOM8",
+    "type": "serial",
+    "address": "COM8",
+    "active": true
   }
 ]

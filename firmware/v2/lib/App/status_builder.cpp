@@ -11,6 +11,7 @@
 #include "nvs_manager.h"
 #include "http_api.h"
 #include "mesh_coordinator.h"
+#include "gps_manager.h"
 #include "../Transport/wifi_transport.h"
 #include "../Transport/lora_transport.h"
 #include "../HAL/board_config.h"
@@ -42,6 +43,7 @@ StaticJsonDocument<2048> StatusBuilder::buildStatus() {
     addBLEInfo(doc);
     addMQTTInfo(doc);
     addPeerInfo(doc);
+    addGPSInfo(doc);
     addTransportStatus(doc);
     addRelayInfo(doc);
     addTelemetry(doc);
@@ -185,19 +187,37 @@ void StatusBuilder::addMQTTInfo(JsonDocument& doc) {
     }
 }
 
+void StatusBuilder::addGPSInfo(JsonDocument& doc) {
+    GPSManager::GPSData gps = GPSManager::getData();
+    JsonObject obj = doc.createNestedObject("gps");
+    obj["lat"] = gps.lat;
+    obj["lon"] = gps.lon;
+    obj["alt"] = gps.alt;
+    obj["sats"] = gps.satellites;
+    obj["fix"] = gps.hasFix;
+    obj["age"] = gps.fixAge;
+}
+
 void StatusBuilder::addPeerInfo(JsonDocument& doc) {
     // Get peer list from MeshCoordinator
-    doc.createNestedArray("peers");
+    JsonArray peersArray = doc.createNestedArray("peers");
 
-    // TODO: Implement when MeshCoordinator has public peer list API
-    // For now, create empty array. This will iterate over
-    // meshCoordinator.getNeighbors() or similar once available.
-
-    // Example:
-    // JsonObject peer1 = peersArray.createNestedObject();
-    // peer1["id"] = "Peer2";
-    // peer1["hop"] = 1;
-    // peer1["rssi"] = -75;
+    // Get neighbors from MeshCoordinator
+    const auto& neighbors = MeshCoordinator::instance().getNeighbors();
+    
+    for (const auto& pair : neighbors) {
+        const NeighborInfo& neighbor = pair.second;
+        JsonObject peerObj = peersArray.createNestedObject();
+        
+        char idStr[16];
+        snprintf(idStr, sizeof(idStr), "Node%u", neighbor.nodeID);
+        peerObj["id"] = idStr;
+        peerObj["node_id"] = neighbor.nodeID;
+        peerObj["hop"] = neighbor.hopCount;
+        peerObj["rssi"] = neighbor.rssi;
+        peerObj["last_seen"] = (millis() - neighbor.lastSeenMs) / 1000; // seconds ago
+        peerObj["packets"] = neighbor.packetCount;
+    }
 }
 
 void StatusBuilder::addTransportStatus(JsonDocument& doc) {
