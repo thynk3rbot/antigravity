@@ -3,6 +3,7 @@
 #include "schedule_manager.h"
 #include "gps_manager.h"
 #include <Arduino.h>
+#include <WiFi.h>
 #include "../Transport/message_router.h"
 #include "control_packet.h"
 #include "nvs_manager.h"
@@ -44,6 +45,8 @@ void CommandManager::process(const String& input, ResponseCallback responseCallb
         response = _handleRelay(args);
     } else if (cmd == "SETWIFI") {
         response = _handleSetWifi(args);
+    } else if (cmd == "SETIP") {
+        response = _handleSetIP(args);
     } else if (cmd == "BLINK") {
         response = _handleBlink();
     } else if (cmd == "REBOOT") {
@@ -205,6 +208,7 @@ String CommandManager::_handleHelp() {
     help += "  RELAY <1|2> <ON|OFF>            - Control relay 1 or 2\n";
     help += "  SETNAME <name>                  - Set node ID\n";
     help += "  SETWIFI <SSID> <PW>             - Set WiFi credentials\n";
+    help += "  SETIP <IP> <GW> <SN>            - Set static IP (Reboot required)\n";
     help += "  BLINK                           - Blink LED 3 times\n";
     help += "  REBOOT                          - Reboot the device\n";
     help += "  GETCONFIG                       - Return NVS config as JSON\n";
@@ -234,7 +238,54 @@ String CommandManager::_handleSetName(const String& args) {
     }
     bool ok = NVSConfig::setNodeId(name);
     if (ok) {
-        return "{\"ok\":true,\"node_id\":\"" + name + "\",\"msg\":\"Reboot required for BLE change\"}";
+        Serial.printf("[CMD] Node name set to: %s. Rebooting...\n", name.c_str());
+        delay(500);
+        ESP.restart();
+        return "{\"ok\":true,\"node_id\":\"" + name + "\",\"msg\":\"Rebooting...\"}";
+    }
+    return "{\"ok\":false,\"error\":\"NVS Save Failed\"}";
+}
+
+String CommandManager::_handleSetIP(const String& args) {
+    // Format: SETIP <IP> <GW> <SN>
+    String a = args;
+    a.trim();
+    if (a.length() == 0) {
+        // Clear static IP
+        NVSConfig::setStaticIP("");
+        return "{\"ok\":true,\"msg\":\"Static IP cleared. DHCP will be used after reboot.\"}";
+    }
+
+    // Split args
+    String ip, gw, sn;
+    int space1 = a.indexOf(' ');
+    if (space1 < 0) {
+        return "{\"ok\":false,\"error\":\"Usage: SETIP <IP> <GW> <SN>\"}";
+    }
+    ip = a.substring(0, space1);
+    String rest = a.substring(space1 + 1);
+    rest.trim();
+
+    int space2 = rest.indexOf(' ');
+    if (space2 < 0) {
+        return "{\"ok\":false,\"error\":\"Usage: SETIP <IP> <GW> <SN>\"}";
+    }
+    gw = rest.substring(0, space2);
+    sn = rest.substring(space2 + 1);
+    sn.trim();
+
+    // Basic validation (at least check if they look like IPs)
+    IPAddress test;
+    if (!test.fromString(ip) || !test.fromString(gw) || !test.fromString(sn)) {
+        return "{\"ok\":false,\"error\":\"Invalid IP format\"}";
+    }
+
+    bool ok = NVSConfig::setStaticIP(ip) && 
+              NVSConfig::setGateway(gw) && 
+              NVSConfig::setSubnet(sn);
+
+    if (ok) {
+        return "{\"ok\":true,\"msg\":\"Static IP set. Reboot required.\"}";
     }
     return "{\"ok\":false,\"error\":\"NVS Save Failed\"}";
 }

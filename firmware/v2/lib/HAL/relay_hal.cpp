@@ -4,6 +4,7 @@
  */
 
 #include "relay_hal.h"
+#include "mcp_hal.h"
 #include <Arduino.h>
 #include <cstring>
 
@@ -37,7 +38,10 @@ void RelayHAL::init() {
   uint8_t skipped = 0;
   for (int i = 0; i < MAX_RELAY_CHANNELS; i++) {
     uint8_t pin = _relayPins[i];
-    if (pin < 255) {
+    if (MCPHAL::isVirtual(pin)) {
+      mcpHAL.pinMode(pin, OUTPUT);
+      mcpHAL.digitalWrite(pin, LOW);
+    } else if (pin < 255) {
       pinMode(pin, OUTPUT);
       digitalWrite(pin, LOW);  // Start all OFF (active-LOW)
     } else {
@@ -166,7 +170,10 @@ void RelayHAL::_applyState(uint8_t newState) {
   for (int i = 0; i < MAX_RELAY_CHANNELS; i++) {
     uint8_t pin = _relayPins[i];
     // Skip pins with sentinel value 255 (reserved pins on V3/V4 SX1262 boards)
-    if (pin < 255) {
+    if (MCPHAL::isVirtual(pin)) {
+      bool shouldBeOn = (newState & (1 << i)) != 0;
+      mcpHAL.digitalWrite(pin, shouldBeOn ? HIGH : LOW);
+    } else if (pin < 255) {
       bool shouldBeOn = (newState & (1 << i)) != 0;
       // Relays are typically active-LOW, but this depends on hardware
       digitalWrite(pin, shouldBeOn ? HIGH : LOW);

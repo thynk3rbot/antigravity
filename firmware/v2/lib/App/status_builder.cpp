@@ -66,6 +66,7 @@ std::string StatusBuilder::buildStatusString() {
 void StatusBuilder::addBasicInfo(JsonDocument& doc) {
     // Device identity
     doc["id"] = NVSManager::getNodeID("Node").c_str();
+    doc["hw_id"] = NVSManager::getHardwareID().c_str();
 
     // Hardware version (detect from build flags)
     #ifdef ARDUINO_HELTEC_WIFI_LORA_32_V4
@@ -80,9 +81,9 @@ void StatusBuilder::addBasicInfo(JsonDocument& doc) {
 
     // Firmware version (from build define)
     #ifdef FIRMWARE_VERSION
-        doc["ver"] = FIRMWARE_VERSION;
+        doc["version"] = FIRMWARE_VERSION;
     #else
-        doc["ver"] = "v0.3.0";
+        doc["version"] = "0.2.1";
     #endif
 
     // IP address (empty if not connected)

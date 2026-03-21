@@ -156,6 +156,13 @@ public:
    */
   bool isChannelClear();
 
+    /**
+     * @brief Set LoRa preamble length
+     * @param length Number of symbols (e.g. 8 for standard, 512 for CAD wake-up)
+     * @return True if successful
+     */
+    bool setPreambleLength(uint16_t length);
+
   /**
    * @brief Get last TX time-on-air
    * @return Duration in milliseconds

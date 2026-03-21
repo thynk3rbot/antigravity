@@ -222,6 +222,9 @@ function updateDiscoveryUI(data) {
     
     // Discovered WiFi Nodes (mDNS)
     data.mdns.forEach(node => {
+        const isRegistered = Array.from(_nodes.values()).some(n => n.type === 'wifi' && (n.address === node.ip || n.name === node.name));
+        if (isRegistered) return; // Skip already registered in discovery view
+
         html += `
             <div class="suit-card-mini active">
                 <div class="flex-row-sb">
@@ -238,15 +241,19 @@ function updateDiscoveryUI(data) {
 
     // Serial Ports
     data.serial.forEach(port => {
+        const isRegistered = Array.from(_nodes.values()).some(n => n.type === 'serial' && n.address === port);
+        const cardClass = isRegistered ? 'suit-card-mini' : 'suit-card-mini active';
         html += `
-            <div class="suit-card-mini active">
+            <div class="${cardClass}">
                 <div class="flex-row-sb">
                     <span class="mg-label">SERIAL PORT</span>
                     <span class="ind-badge active">USB</span>
                 </div>
                 <div class="mg-value" style="font-size: 11px; margin-top: 4px;">${port}</div>
                 <div class="mt-8">
-                    <button class="btn btn-xs" style="width:100%" onclick="registerNode('USB-${port.slice(-1)}', 'serial', '${port}')">USE</button>
+                    ${isRegistered ? 
+                        '<button class="btn btn-xs btn-dim" style="width:100%" disabled>REGISTERED</button>' : 
+                        `<button class="btn btn-xs" style="width:100%" onclick="registerNode('USB-${port.slice(-5)}', 'serial', '${port}')">USE</button>`}
                 </div>
             </div>
         `;
@@ -457,18 +464,35 @@ function startTimeUpdate() {
 async function loadNodes() {
     const r = await fetch('/api/nodes');
     const data = await r.json();
-    updateNodeSelector(data.nodes);
+    _nodes.clear();
+    const nodeList = data.nodes || [];
+    nodeList.forEach(n => _nodes.set(n.id, n));
+    updateNodeSelector(nodeList);
 }
 
 function updateNodeSelector(nodes) {
     const sel = document.getElementById('active-node-select');
     if (!sel) return;
     const current = sel.value;
-    sel.innerHTML = nodes.map(n => `<option value="${n.id}" ${n.id === current ? 'selected' : ''}>${n.name} (${n.type})</option>`).join('');
+    
+    sel.innerHTML = nodes.map(n => {
+        const statusText = n.online ? "" : " [OFFLINE]";
+        const style = n.online ? "" : "color:var(--text-dim)";
+        return `<option value="${n.id}" ${n.id === current ? 'selected' : ''} style="${style}">${n.name}${statusText} (${n.type})</option>`;
+    }).join('');
     
     // Auto-select first if none active
     if (!_activeNodeId && nodes.length) {
-        _activeNodeId = nodes[0].id;
+        const firstOnline = nodes.find(n => n.online) || nodes[0];
+        _activeNodeId = firstOnline.id;
+    }
+
+    // Refresh cockpit if active node changed status
+    const active = nodes.find(n => n.id === _activeNodeId);
+    if (active && !active.online) {
+        document.body.classList.add('node-offline');
+    } else {
+        document.body.classList.remove('node-offline');
     }
 }
 

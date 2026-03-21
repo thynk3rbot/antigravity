@@ -50,6 +50,7 @@ private:
     static String _handleHelp();
     static String _handleGetConfig();
     static String _handleSetName(const String& args);
+    static String _handleSetIP(const String& args);
     static String _handleSched(const String& args);
     static String _handleForward(const String& args);
     static String _handleGPS(const String& args);

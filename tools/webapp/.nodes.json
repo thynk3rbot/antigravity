@@ -17,14 +17,14 @@
     "id": "56c35099-2c1e-4bed-86e5-5ea936e1e62d",
     "name": "PEER3V4",
     "type": "wifi",
-    "address": "172.16.0.28",
+    "address": "10.0.0.45",
     "active": false
   },
   {
     "id": "15190217-6b71-4c6b-9fbb-1b2d9669ec29",
     "name": "PEER4V4",
     "type": "wifi",
-    "address": "172.16.0.29",
+    "address": "10.0.0.117",
     "active": false
   },
   {
@@ -36,14 +36,14 @@
   },
   {
     "id": "70000000-0000-0000-0000-000000000007",
-    "name": "NodeCOM7",
+    "name": "Node-7-V4",
     "type": "serial",
     "address": "COM7",
     "active": false
   },
   {
     "id": "80000000-0000-0000-0000-000000000008",
-    "name": "NodeCOM8",
+    "name": "Node-8-V4",
     "type": "serial",
     "address": "COM8",
     "active": true

@@ -17,6 +17,8 @@
 #include "../lib/HAL/board_config.h"
 #include "../lib/HAL/radio_hal.h"
 #include "../lib/HAL/relay_hal.h"
+#include "../lib/HAL/sensor_hal.h"
+#include "../lib/HAL/dht_sensor.h"
 
 // Transport Layer
 #include "../lib/Transport/message_router.h"
@@ -31,6 +33,7 @@
 #include "../lib/App/control_packet.h"
 #include "../lib/App/mesh_coordinator.h"
 #include "../lib/App/nvs_manager.h"
+#include "../lib/App/nvs_config.h"
 #include "../lib/App/power_manager.h"
 #include "../lib/App/oled_manager.h"
 #include "../lib/App/http_api.h"
@@ -100,9 +103,13 @@ void radioTask(void* param) {
         // (messageRouter will call registered handler)
       } else if (meshCoordinator.shouldRelay(*pkt)) {
         // Multi-hop relay needed
-        // TODO: Implement relay forwarding with sequence tracking
-        Serial.printf("[RELAY] Forwarding to node %u via %u\n",
-                      pkt->header.dest, meshCoordinator.getNextHop(pkt->header.dest));
+        pkt->header.flags |= PKT_FLAG_IS_RELAY; // Mark as relayed
+        
+        // Forward via MessageRouter (will pick best transport or broadcast)
+        messageRouter.broadcastPacket((uint8_t*)pkt, sizeof(ControlPacket));
+        
+        Serial.printf("[RELAY] Forwarded packet from %u to %u\n",
+                      pkt->header.src, pkt->header.dest);
       }
     }
 
@@ -229,6 +236,9 @@ void controlTask(void* param) {
       lastAgeOut = now;
     }
 
+    // Run periodic mesh activities (Discovery, Heartbeat)
+    meshCoordinator.poll();
+
     // Poll MQTT transport (handles connection, message receipt, telemetry publish)
     #ifdef ENABLE_MQTT_TRANSPORT
       MQTTTransport::pollStatic();
@@ -248,6 +258,10 @@ void controlTask(void* param) {
 void onMessageReceived(TransportType transportType,
                        const uint8_t* payload, size_t len) {
   if (len < sizeof(ControlPacket)) {
+    // Check if it's a V1 legacy packet
+    if (meshCoordinator.handleV1Packet(payload, len)) {
+        return; // Handled as V1
+    }
     return;  // Runt packet
   }
 
@@ -358,7 +372,21 @@ void setup() {
     // Continue anyway, but config won't persist across reboots
   }
 
+  // Initialize NVSConfig for boot diagnostics and Arduino-style prefs
+  NVSConfig::begin();
+
   NVSManager::printInfo();  // Debug output
+
+  // Extract MAC suffix for OLED identification
+  uint8_t mac_raw[6];
+  esp_efuse_mac_get_default(mac_raw);
+  char mac_buf[8];
+  snprintf(mac_buf, sizeof(mac_buf), "[%02X:%02X]", mac_raw[4], mac_raw[5]);
+  OLEDManager::setMAC(mac_buf);
+
+  // Set diagnostics in OLED
+  OLEDManager::setDiagnostics(NVSConfig::getBootCount(), NVSConfig::getResetReason().c_str());
+  OLEDManager::addLog("System Initializing");
 
   // ========================================================================
   // Step 2: Initialize Power Manager (Battery Voltage Monitoring)
@@ -409,6 +437,14 @@ void setup() {
   }
 
   relayHAL.init();
+  
+  // Initialize Sensors
+  #ifdef PIN_SENSOR_DHT
+    static DHTSensorPlugin dhtPlugin(PIN_SENSOR_DHT);
+    sensorHAL.registerPlugin(&dhtPlugin);
+  #endif
+  sensorHAL.init();
+
   Serial.println("  ✓ HAL initialized");
 
   // Get Node ID early for diagnostics and BLE
@@ -428,6 +464,7 @@ void setup() {
       Serial.println("  ! Serial CLI init failed");
   } else {
       Serial.println("  ✓ Serial CLI initialized");
+      OLEDManager::addLog("Serial CLI Ready");
   }
 
   // BLE Transport (Always active)
@@ -484,6 +521,7 @@ void setup() {
         Serial.printf("[BLE] Response sent: %u bytes\n", resp.length());
       });
     });
+    OLEDManager::addLog("BLE Ready");
   }
 
   // Optional MQTT Transport (Hub only, requires WiFi and broker configured)

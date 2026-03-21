@@ -11,6 +11,7 @@
 
 #include "../Transport/interface.h"
 #include "control_packet.h"
+#include "mesh_config.h"
 #include <map>
 #include <stdint.h>
 
@@ -108,8 +109,31 @@ public:
   void clearNeighbors();
 
   // ========================================================================
-  // Relay Logic
+  // Discovery & V1 Compatibility
   // ========================================================================
+
+  /**
+   * @brief Check if node has discovered a master
+   */
+  bool isDiscovered() const { return _isDiscovered; }
+
+  /**
+   * @brief Mark node as discovered (Master reached)
+   */
+  void markDiscovered() { _isDiscovered = true; }
+
+  /**
+   * @brief Process a potential V1 legacy packet
+   * @param buffer 64-byte raw buffer
+   * @param len Buffer length
+   * @return true if handled as V1
+   */
+  bool handleV1Packet(const uint8_t* buffer, size_t len);
+
+  /**
+   * @brief Periodic mesh activities (Discovery, Aging)
+   */
+  void poll();
 
   /**
    * @brief Determine if packet should be relayed
@@ -217,6 +241,11 @@ private:
   uint32_t _neighborTimeoutMs = 300000;  // 5 minutes default
   uint8_t _maxHopsAllowed = 4;
   uint8_t _ownNodeID = 255;              // Uninitialized
+
+  // Discovery State
+  bool     _isDiscovered = false;
+  uint32_t _discoveryStartTime = 0;
+  uint32_t _lastDiscoveryPing = 0;
 
   // Statistics
   uint32_t _relayCount = 0;

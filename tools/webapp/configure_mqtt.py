@@ -3,7 +3,7 @@ import sys
 
 # Default settings
 BASE_URL = "http://localhost:8000"
-MQTT_SRV = "172.16.0.25"  # Your machine's IP on the Wi-Fi network
+MQTT_SRV = "10.0.0.18"  # Your machine's IP on the Wi-Fi network
 MQTT_PRT = "1883"
 
 def send_cmd(cmd):

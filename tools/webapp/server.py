@@ -114,6 +114,8 @@ class NodeConfig:
     type: str  # "wifi" | "serial" | "ble" | "lora"
     address: str  # IP, COM port, BLE prefix, or gateway node name
     active: bool = False
+    online: bool = True
+    last_seen: float = field(default_factory=time.time)
 
     def to_dict(self) -> dict:
         return {
@@ -122,6 +124,8 @@ class NodeConfig:
             "type": self.type,
             "address": self.address,
             "active": self.active,
+            "online": self.online,
+            "last_seen": self.last_seen,
         }
 
     @staticmethod
@@ -132,6 +136,8 @@ class NodeConfig:
             type=d["type"],
             address=d["address"],
             active=d.get("active", False),
+            online=d.get("online", True),
+            last_seen=d.get("last_seen", time.time()),
         )
 
 
@@ -159,21 +165,44 @@ class NodeRegistry:
     def list(self) -> list[NodeConfig]:
         return list(self._nodes)
 
-    def add(self, name: str, type_: str, address: str) -> NodeConfig:
-        # Upsert logic: if name + type exists, update the address
+    def add(self, name: str, type_: str, address: str, online: bool = True) -> NodeConfig:
+        # Upsert logic: if name + type exists, update the address and online status
         existing = next((n for n in self._nodes if n.name == name and n.type == type_), None)
         if existing:
+            changed = False
             if existing.address != address:
                 print(f"[nodes] Updating {name} address: {existing.address} -> {address}")
                 existing.address = address
+                changed = True
+            if existing.online != online:
+                existing.online = online
+                changed = True
+            if online:
+                existing.last_seen = time.time()
+                changed = True
+            if changed:
                 self._save()
             return existing
 
         # New node
-        node = NodeConfig(id=str(uuid.uuid4()), name=name, type=type_, address=address)
+        node = NodeConfig(
+            id=str(uuid.uuid4()), 
+            name=name, 
+            type=type_, 
+            address=address, 
+            online=online,
+            last_seen=time.time() if online else 0
+        )
         self._nodes.append(node)
         self._save()
         return node
+
+    def mark_offline(self, name: str, type_: str) -> None:
+        target = next((n for n in self._nodes if n.name == name and n.type == type_), None)
+        if target and target.online:
+            target.online = False
+            print(f"[nodes] Node {name} went OFFLINE")
+            self._save()
 
     def remove(self, node_id: str) -> bool:
         before = len(self._nodes)
@@ -310,6 +339,7 @@ class DeviceState:
     active_ip: Optional[str] = None  # routable IP for active WiFi/LoRa node
     discovered_devices: list = field(default_factory=list)  # from network scan
     discovery_time: float = 0.0  # timestamp of last discovery scan
+    espnow_ok: bool = False
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -344,21 +374,32 @@ class WebSocketManager:
 
 
 class LoRaLinkListener(ServiceListener):
-    def __init__(self, discovered_list: list) -> None:
+    def __init__(self, registry: NodeRegistry, discovered_list: list) -> None:
+        self.registry = registry
         self.discovered = discovered_list
 
     def add_service(self, zc: Zeroconf, type_: str, name: str) -> None:
         info = zc.get_service_info(type_, name)
-        if info:
+        if info and info.properties:
             ip = socket.inet_ntoa(info.addresses[0])
-            node_id = info.properties.get(b"id", b"").decode("utf-8") or name.split(".")[0]
-            # Deduplicate
+            
+            # Safe property decoding
+            def get_prop(key, default=""):
+                val = info.properties.get(key.encode() if isinstance(key, str) else key)
+                return val.decode("utf-8") if val else default
+
+            node_id = get_prop("id") or name.split(".")[0]
+            
+            # Automatically register/update in persistent registry
+            self.registry.add(node_id, "wifi", ip, online=True)
+            
+            # Update transient list for backward compat / immediate UI response
             if not any(d["address"] == ip for d in self.discovered):
                 self.discovered.append({
                     "name": node_id,
                     "address": ip,
-                    "type": info.properties.get(b"type", b"gateway").decode("utf-8"),
-                    "ver": info.properties.get(b"ver", b"v2.0.0").decode("utf-8"),
+                    "type": get_prop("type", "gateway"),
+                    "ver": get_prop("ver", "v2.0.0"),
                     "last_seen": time.time()
                 })
                 print(f"[mDNS] Found: {node_id} at {ip}")
@@ -367,8 +408,9 @@ class LoRaLinkListener(ServiceListener):
         pass
 
     def remove_service(self, zc: Zeroconf, type_: str, name: str) -> None:
-        # Optional: mark offline
-        pass
+        node_id = name.split(".")[0]
+        self.registry.mark_offline(node_id, "wifi")
+        print(f"[mDNS] Service removed: {node_id}")
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -758,12 +800,12 @@ def build_app(
                 for d in all_devs:
                     if (
                         d.name
+                        and d.name.strip()
                         and d.name.startswith(prefix)
                         and d.address not in matched_addrs
                     ):
                         matches.append(d)
                         matched_addrs.add(d.address)
-                        break
             print(f"[BLE] Found {len(matches)} matching device(s)")
             for i, dev in enumerate(matches[:2]):
                 buf = ResponseBuffer()
@@ -821,7 +863,7 @@ def build_app(
             try:
                 nonlocal _zc, _browser
                 _zc = Zeroconf()
-                listener = LoRaLinkListener(state.discovered_devices)
+                listener = LoRaLinkListener(node_reg, state.discovered_devices)
                 _browser = ServiceBrowser(_zc, "_http._tcp.local.", listener)
                 print("[mDNS] Browser started listening for _http._tcp.local.")
             except Exception as e:
@@ -1052,9 +1094,12 @@ def build_app(
                     tasks.append(_probe_device(session, ip))
 
                 results = await asyncio.gather(*tasks, return_exceptions=True)
-                found = [r for r in results if r is not None]
+                found = [r for r in results if r is not None and isinstance(r, dict)]
 
-            # Save discovery results
+            # Save discovery results & Register
+            for d in found:
+                node_reg.add(d["name"], "wifi", d["ip"], online=True)
+            
             state.discovered_devices = found
             state.discovery_time = time.time()
 
@@ -1107,12 +1152,16 @@ def build_app(
     @app.get("/api/discovery")
     async def _discovery_snapshot() -> JSONResponse:
         """Snapshot of discovered devices (mDNS, BLE, Serial) for automation."""
+        # Filter out unnamed or "Unknown" entries to prevent cache clutter (per user request)
+        valid_mdns = [
+            {"name": d["name"], "ip": d.get("ip") or d.get("address", "")} 
+            for d in (state.discovered_devices or [])
+            if d.get("name") and d.get("name") != "Unknown"
+        ]
+        
         return JSONResponse({
-            "mdns": [
-                {"name": d["name"], "ip": d.get("ip") or d.get("address", "")} 
-                for d in (state.discovered_devices or [])
-            ],
-            "ble": state.peer_names or [],
+            "mdns": valid_mdns,
+            "ble": [n for n in (state.peer_names or []) if n and n.strip()],
             "serial": [state.serial_port] if state.serial_port else []
         })
 
@@ -1132,7 +1181,7 @@ def build_app(
 
     @app.get("/api/nodes")
     async def _nodes_list() -> JSONResponse:
-        return JSONResponse([n.to_dict() for n in node_reg.list()])
+        return JSONResponse({"ok": True, "nodes": [n.to_dict() for n in node_reg.list()]})
 
     @app.post("/api/nodes")
     async def _nodes_add(body: dict) -> JSONResponse:

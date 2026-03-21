@@ -613,8 +613,8 @@
           <div class="flex-row-sm">
             <input type="text" id="sip1" placeholder="IP 1" class="input-styled" style="width:105px; font-size:10px;" value="172.16.0.26"/>
             <input type="text" id="sip2" placeholder="IP 2" class="input-styled" style="width:105px; font-size:10px;" value="172.16.0.27"/>
-            <input type="text" id="sip3" placeholder="IP 3" class="input-styled" style="width:105px; font-size:10px;" value="172.16.0.28"/>
-            <input type="text" id="sip4" placeholder="IP 4" class="input-styled" style="width:105px; font-size:10px;" value="172.16.0.29"/>
+            <input type="text" id="sip3" placeholder="IP 3" class="input-styled" style="width:105px; font-size:10px;" value="10.0.0.45"/>
+            <input type="text" id="sip4" placeholder="IP 4" class="input-styled" style="width:105px; font-size:10px;" value="10.0.0.117"/>
             <button class="btn sm" onclick="loadSwarmFrames()">SYTHESIZE VIEW</button>
           </div>
         </div>
@@ -1220,10 +1220,13 @@
       function renderStatus(d) {
         // Header
         const id = d.id || "—";
-        document.getElementById("fwv").textContent = d.version
-          ? `v${d.version}`
-          : "";
-        document.getElementById("dev-id").textContent = id;
+        const version = d.version || d.ver || "";
+        document.getElementById("fwv").textContent = version ? `v${version}` : "";
+        let fullId = id;
+        if (d.hw_id && d.hw_id !== id) {
+            fullId = `${id} (HW: [${d.hw_id}])`;
+        }
+        document.getElementById("dev-id").textContent = fullId;
 
         // Interface badges
         document.getElementById("ifc").innerHTML =
@@ -1236,7 +1239,7 @@
         // Metric cards
         const bat = parseFloat(d.bat) || 0;
         const rssi = d.rssi || 0;
-        setText("c-id", id + (d.hw ? ` (${d.hw})` : ""));
+        setText("c-id", fullId);
         setText("c-uptime", d.uptime || "—");
         setVal(
           "c-bat",

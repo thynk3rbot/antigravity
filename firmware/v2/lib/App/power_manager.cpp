@@ -120,12 +120,16 @@ void PowerManager::autoUpdateMode() {
     float voltage = getBatteryVoltage();
     _lastVoltage = voltage;
 
-    PowerMode newMode;
-    if (voltage >= VOLT_NORMAL) {
+    PowerMode newMode = _mode;
+    float hysteresis = 0.05f; // 50mV parity with V1
+
+    if (isPowered()) {
         newMode = PowerMode::NORMAL;
-    } else if (voltage >= VOLT_CONSERVE) {
+    } else if (voltage >= VOLT_NORMAL + (_mode > PowerMode::NORMAL ? hysteresis : 0)) {
+        newMode = PowerMode::NORMAL;
+    } else if (voltage >= VOLT_CONSERVE + (_mode > PowerMode::CONSERVE ? hysteresis : 0)) {
         newMode = PowerMode::CONSERVE;
-    } else {
+    } else if (voltage < VOLT_CONSERVE - (newMode < PowerMode::CRITICAL ? hysteresis : 0)) {
         newMode = PowerMode::CRITICAL;
     }
 
@@ -151,11 +155,19 @@ uint32_t PowerManager::getHeartbeatIntervalMs() {
 }
 
 uint32_t PowerManager::getSleepIntervalMs() {
+    if (isPowered()) return 0;
     switch (_mode) {
         case PowerMode::CONSERVE: return 5000;
         case PowerMode::CRITICAL: return 30000;
         default:                  return 0;      // NORMAL — no sleep
     }
+}
+
+bool PowerManager::isPowered() {
+    float volt = _lastVoltage;
+    // USB/Mains: battery reads near 0V (no battery) or > 4.25V (charging/bus)
+    // Same logic as V1 PowerManager::isPowered()
+    return (volt < 0.1f || volt > 4.25f);
 }
 
 // ============================================================================
@@ -178,5 +190,6 @@ void PowerManager::printStatus() {
     Serial.printf("Battery Percent:   %u%%\n", getBatteryPercent());
     Serial.printf("Heartbeat:         %lu ms\n", getHeartbeatIntervalMs());
     Serial.printf("Sleep Interval:    %lu ms\n", getSleepIntervalMs());
+    Serial.printf("USB Powered:       %s\n", isPowered() ? "Yes" : "No");
     Serial.println("=========================================\n");
 }

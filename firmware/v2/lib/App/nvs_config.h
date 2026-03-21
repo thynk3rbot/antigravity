@@ -3,7 +3,7 @@
 #include <Preferences.h>
 
 #define PREFERENCES_NAMESPACE  "loralink"
-#define NVS_KEY_NODE_ID    "node_id"
+#define NVS_KEY_NODE_ID    "dev_name"
 #define NVS_KEY_WIFI_SSID  "wifi_ssid"
 #define NVS_KEY_WIFI_PASS  "wifi_pass"
 #define NVS_KEY_CRYPTO_KEY "crypto_key"
@@ -14,6 +14,11 @@
 #define NVS_KEY_MQTT_PORT   "mqtt_port"
 #define NVS_KEY_MQTT_USER   "mqtt_user"
 #define NVS_KEY_MQTT_PASS   "mqtt_pass"
+#define NVS_KEY_BOOT_COUNT  "boot_count"
+#define NVS_KEY_RESET_REASON "reset_reason"
+#define NVS_KEY_STATIC_IP    "static_ip"
+#define NVS_KEY_GATEWAY      "gateway"
+#define NVS_KEY_SUBNET       "subnet"
 
 class NVSConfig {
 public:
@@ -28,6 +33,14 @@ public:
     static String getWifiSSID();
     static String getWifiPassword();
     static bool setWifiCredentials(const String& ssid, const String& pass);
+
+    // Static IP configuration
+    static String getStaticIP();
+    static bool setStaticIP(const String& ip);
+    static String getGateway();
+    static bool setGateway(const String& gw);
+    static String getSubnet();
+    static bool setSubnet(const String& sn);
 
     // Crypto key (16 bytes, stored as hex string)
     static String getCryptoKey();
@@ -49,6 +62,12 @@ public:
     static String getMqttUsername();
     static String getMqttPassword();
     static bool setMqttCredentials(const String& user, const String& pass);
+
+    // Diagnostics
+    static uint32_t getBootCount();
+    static void incrementBootCount();
+    static String getResetReason();
+    static void setResetReason(const String& reason);
 
 private:
     static bool _initialized;

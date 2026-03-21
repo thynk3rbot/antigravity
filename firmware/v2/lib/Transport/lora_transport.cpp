@@ -4,6 +4,7 @@
  */
 
 #include "lora_transport.h"
+#include "crypto_hal.h"
 #include <cstring>
 #include <Arduino.h>
 
@@ -234,17 +235,27 @@ bool LoRaTransport::isDuplicate(uint32_t packetHash) {
 // ============================================================================
 
 bool LoRaTransport::_encryptPacket(uint8_t* plaintext, size_t* len) {
-  // TODO: Implement AES-128-GCM encryption
-  // For now, just copy data unchanged
-  (void)plaintext;
-  (void)len;
+  if (!plaintext || !len) return false;
+  
+  uint8_t temp[256];
+  if (!cryptoHAL.encrypt(plaintext, *len, _encryptionKey, temp)) {
+    return false;
+  }
+  
+  *len = *len + CRYPTO_OVERHEAD;
+  memcpy(plaintext, temp, *len);
   return true;
 }
 
 bool LoRaTransport::_decryptPacket(uint8_t* ciphertext, size_t* len) {
-  // TODO: Implement AES-128-GCM decryption
-  // For now, just copy data unchanged
-  (void)ciphertext;
-  (void)len;
+  if (!ciphertext || !len || *len <= CRYPTO_OVERHEAD) return false;
+  
+  uint8_t temp[256];
+  if (!cryptoHAL.decrypt(ciphertext, *len, _encryptionKey, temp)) {
+    return false;
+  }
+  
+  *len = *len - CRYPTO_OVERHEAD;
+  memcpy(ciphertext, temp, *len);
   return true;
 }

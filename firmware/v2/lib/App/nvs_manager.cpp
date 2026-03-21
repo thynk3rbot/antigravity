@@ -83,7 +83,7 @@ bool NVSManager::setNodeID(const std::string& id) {
     return false;
   }
 
-  err = nvs_set_str(handle, "node_id", id.c_str());
+  err = nvs_set_str(handle, "dev_name", id.c_str());
   if (err != ESP_OK) {
     logError("setNodeID", "node_id", err);
     nvs_close(handle);
@@ -102,12 +102,12 @@ bool NVSManager::setNodeID(const std::string& id) {
   return true;
 }
 
-// Generate node ID from efuse MAC — deterministic, no WiFi required
-static std::string generateNodeIdFromMac() {
+// Generate hardware ID from efuse MAC — deterministic, immutable
+std::string NVSManager::getHardwareID() {
   uint8_t mac[6];
   esp_efuse_mac_get_default(mac);
   char buf[16];
-  snprintf(buf, sizeof(buf), "NODE_%02X%02X%02X", mac[3], mac[4], mac[5]);
+  snprintf(buf, sizeof(buf), "%02X%02X%02X", mac[3], mac[4], mac[5]);
   return std::string(buf);
 }
 
@@ -117,7 +117,7 @@ static bool isStaleNodeId(const std::string& id) {
   // Case-insensitive comparison against known placeholders
   std::string lower = id;
   for (char& c : lower) c = (char)tolower((unsigned char)c);
-  return lower == "unknown" || lower == "node" || lower == "default";
+  return lower == "unknown" || lower == "node" || lower == "default" || lower == "unnamed" || lower == "unamed";
 }
 
 std::string NVSManager::getNodeID(const std::string& defaultVal) {
@@ -126,18 +126,18 @@ std::string NVSManager::getNodeID(const std::string& defaultVal) {
   if (err != ESP_OK) {
     // NVS open failed — generate from MAC and attempt to persist
     logError("getNodeID", "open", err);
-    std::string generated = generateNodeIdFromMac();
+    std::string generated = getHardwareID();
     Serial.printf("[NVS] NVS unavailable, using generated ID: %s\n", generated.c_str());
     setNodeID(generated);  // best-effort persist
     return generated;
   }
 
   size_t required_size = 0;
-  err = nvs_get_str(handle, "node_id", nullptr, &required_size);
+  err = nvs_get_str(handle, "dev_name", nullptr, &required_size);
 
   if (err == ESP_ERR_NVS_NOT_FOUND) {
     nvs_close(handle);
-    std::string generated = generateNodeIdFromMac();
+    std::string generated = getHardwareID();
     Serial.printf("[NVS] Node ID not set, generated: %s\n", generated.c_str());
     setNodeID(generated);
     return generated;
@@ -146,24 +146,24 @@ std::string NVSManager::getNodeID(const std::string& defaultVal) {
   if (err != ESP_OK) {
     logError("getNodeID", "size_query", err);
     nvs_close(handle);
-    return generateNodeIdFromMac();  // still usable even if can't persist
+    return getHardwareID();  // still usable even if can't persist
   }
 
   char* buf = new char[required_size];
-  err = nvs_get_str(handle, "node_id", buf, &required_size);
+  err = nvs_get_str(handle, "dev_name", buf, &required_size);
   nvs_close(handle);
 
   if (err != ESP_OK) {
     logError("getNodeID", "read", err);
     delete[] buf;
-    return generateNodeIdFromMac();
+    return getHardwareID();
   }
 
   std::string result(buf);
   delete[] buf;
 
   if (isStaleNodeId(result)) {
-    std::string generated = generateNodeIdFromMac();
+    std::string generated = getHardwareID();
     Serial.printf("[NVS] Node ID was '%s', regenerated: %s\n",
                   result.c_str(), generated.c_str());
     setNodeID(generated);

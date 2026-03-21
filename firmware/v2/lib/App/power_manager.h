@@ -32,8 +32,11 @@ public:
     static void autoUpdateMode();  // Call periodically - auto-sets mode based on voltage
 
     // Mode-dependent intervals (used by heartbeat, mesh aging, etc.)
-    static uint32_t getHeartbeatIntervalMs();  // NORMAL=30s, CONSERVE=60s, CRITICAL=120s
-    static uint32_t getSleepIntervalMs();      // NORMAL=0 (no sleep), CONSERVE=5s, CRITICAL=30s
+    static uint32_t getHeartbeatIntervalMs();
+    static uint32_t getSleepIntervalMs();
+
+    // USB / Mains Detection
+    static bool isPowered();
 
     // Legacy compatibility methods (used by main.cpp)
     static void update();                           // Calls autoUpdateMode() + fires callback on change
@@ -45,10 +48,10 @@ private:
     static float _lastVoltage;
     static PowerModeCallback _modeChangeCallback;
 
-    // Voltage thresholds
-    static constexpr float VOLT_NORMAL   = 3.7f;  // Above this = NORMAL
-    static constexpr float VOLT_CONSERVE = 3.4f;  // Above this = CONSERVE
-    // Below VOLT_CONSERVE = CRITICAL
+    // Voltage thresholds (User requested V1 parity)
+    static constexpr float VOLT_NORMAL   = 3.80f;  // Above this = NORMAL
+    static constexpr float VOLT_CONSERVE = 3.65f;  // Above this = CONSERVE
+    static constexpr float VOLT_CRITICAL = 3.45f;  // Below this = CRITICAL
 
     // ADC conversion constants (calibrate for ESP32 ADC)
     static constexpr float ADC_VREF     = 3.3f;

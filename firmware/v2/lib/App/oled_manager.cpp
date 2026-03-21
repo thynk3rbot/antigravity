@@ -43,7 +43,16 @@ struct CachedValues {
     double gpsLon;            // GPS Longitude
     uint8_t gpsSats;          // GPS Satellites
     bool gpsFix;              // GPS Fix status
+    uint32_t bootCount;       // Boot count
+    char resetReason[32];     // Reset reason [Power On, SW, etc]
+    char macSuffix[8];        // MAC suffix [A1:B2]
 };
+
+// Log buffer for Page 6
+#define MAX_OLED_LOGS 5
+static char g_logs[MAX_OLED_LOGS][32];
+static uint8_t g_logIndex = 0;
+static uint8_t g_logCount = 0;
 
 static CachedValues g_cached = {};  // Zero-initialized, then set defaults
 
@@ -70,7 +79,9 @@ static uint8_t g_brightness = 127;  // Default brightness (0-255)
 static bool g_displayOn = true;
 static uint32_t g_lastUpdateTime = 0;
 static uint32_t g_lastAutoRotateTime = 0;
+static uint32_t g_lastActivityTime = 0;  // For auto-sleep
 static const uint32_t UPDATE_INTERVAL_MS = 500;
+static const uint32_t SLEEP_TIMEOUT_MS = 30000; // 30 seconds
 
 // Button state for debouncing and long-press detection
 static uint32_t g_buttonPressTime = 0;
@@ -83,8 +94,9 @@ static bool g_buttonPressed = false;
 static void displayPage1();  // Network Status
 static void displayPage2();  // Power & LoRa
 static void displayPage3();  // Transport Status
-static void displayPage4();  // Relay & Temperature
+static void displayPage4();  // Relay & Temperature & Diagnostics
 static void displayPage5();  // GPS (Conditional)
+static void displayPage6();  // System Logs
 
 // ============================================================================
 // Button Interrupt Handler
@@ -120,8 +132,16 @@ static void IRAM_ATTR buttonISRHandler() {
                     Serial.printf("[OLED] Brightness toggled: %u\n", g_brightness);
                 } else {
                     // Short press: rotate to next page
-                    uint8_t maxPages = (g_cached.gpsFix || g_cached.gpsSats > 0) ? 5 : 4;
+                    g_lastActivityTime = now; // Wake up or stay awake
+                    if (!g_displayOn) {
+                        OLEDManager::setDisplayOn(true);
+                        return; // Just wake up, don't change page
+                    }
+                    uint8_t maxPages = (g_cached.gpsFix || g_cached.gpsSats > 0) ? 6 : 5;
                     g_currentPage = (g_currentPage + 1) % maxPages;
+                    if (g_currentPage == 4 && !(g_cached.gpsFix || g_cached.gpsSats > 0)) {
+                        g_currentPage = 5; // Skip GPS if no fix
+                    }
                     Serial.printf("[OLED] Page changed to: %u\n", g_currentPage);
                 }
             }
@@ -151,28 +171,32 @@ static void drawHLine(int16_t y) {
 static void displayPage1() {
     display.clearDisplay();
     display.setFont();
-    display.setTextSize(2);
+    display.setTextSize(1);
     display.setTextColor(SSD1306_WHITE);
 
     // Header
     display.setCursor(0, 0);
     display.println("LoRaLink");
 
-    drawHLine(16);
+    drawHLine(10);
 
     // Network info
     display.setTextSize(1);
-    display.setCursor(0, 20);
+    display.setCursor(0, 14);
     display.print("IP: ");
     display.println(g_cached.ip);
 
     display.print("Peers: ");
     display.println(g_cached.peerCount);
 
-    display.print("WiFi: ");
+    display.print("WiFi:  ");
     display.println(g_cached.wifiActive ? "ON" : "OFF");
 
-    display.print("Page: 1/4");
+    display.setCursor(80, 56);
+    display.print(g_cached.macSuffix);
+
+    display.setCursor(0, 56);
+    display.print("Page: 1/6");
 
     display.display();
 }
@@ -183,18 +207,18 @@ static void displayPage1() {
 static void displayPage2() {
     display.clearDisplay();
     display.setFont();
-    display.setTextSize(2);
+    display.setTextSize(1);
     display.setTextColor(SSD1306_WHITE);
 
     // Header
     display.setCursor(0, 0);
     display.println("Power & LoRa");
 
-    drawHLine(16);
+    drawHLine(10);
 
     // Power info
     display.setTextSize(1);
-    display.setCursor(0, 20);
+    display.setCursor(0, 14);
     display.print("Batt: ");
     display.print(g_cached.batVoltage, 2);
     display.println("V");
@@ -210,7 +234,7 @@ static void displayPage2() {
     display.print(g_cached.loraSNR);
     display.println(" dB");
 
-    display.print("Page: 2/4");
+    display.print("Page: 2/6");
 
     display.display();
 }
@@ -221,18 +245,18 @@ static void displayPage2() {
 static void displayPage3() {
     display.clearDisplay();
     display.setFont();
-    display.setTextSize(2);
+    display.setTextSize(1);
     display.setTextColor(SSD1306_WHITE);
 
     // Header
     display.setCursor(0, 0);
     display.println("Transports");
 
-    drawHLine(16);
+    drawHLine(10);
 
     // Transport status
     display.setTextSize(1);
-    display.setCursor(0, 20);
+    display.setCursor(0, 14);
     display.print("WiFi: ");
     display.println(g_cached.wifiActive ? "ON" : "OFF");
 
@@ -245,7 +269,7 @@ static void displayPage3() {
     display.print("LoRa: ");
     display.println(g_cached.loraActive ? "ON" : "OFF");
 
-    display.print("Page: 3/4");
+    display.print("Page: 3/6");
 
     display.display();
 }
@@ -256,18 +280,18 @@ static void displayPage3() {
 static void displayPage4() {
     display.clearDisplay();
     display.setFont();
-    display.setTextSize(2);
+    display.setTextSize(1);
     display.setTextColor(SSD1306_WHITE);
 
     // Header
     display.setCursor(0, 0);
     display.println("System Status");
 
-    drawHLine(16);
+    drawHLine(10);
 
     // System info
     display.setTextSize(1);
-    display.setCursor(0, 20);
+    display.setCursor(0, 14);
     display.print("Relay: ");
     display.println(g_cached.relayOn ? "ON" : "OFF");
 
@@ -285,7 +309,14 @@ static void displayPage4() {
     display.print(g_cached.freeHeapBytes / 1024);
     display.println(" KB");
 
-    display.print("Page: 4/4");
+    // Diagnostics
+    display.print("Boot: ");
+    display.print(g_cached.bootCount);
+    display.print(" [");
+    display.print(g_cached.resetReason);
+    display.println("]");
+
+    display.print("Page: 4/6");
 
     display.display();
 }
@@ -296,18 +327,18 @@ static void displayPage4() {
 static void displayPage5() {
     display.clearDisplay();
     display.setFont();
-    display.setTextSize(2);
+    display.setTextSize(1);
     display.setTextColor(SSD1306_WHITE);
 
     // Header
     display.setCursor(0, 0);
     display.println("GNSS Status");
 
-    drawHLine(16);
+    drawHLine(10);
 
     // GPS info
     display.setTextSize(1);
-    display.setCursor(0, 20);
+    display.setCursor(0, 14);
     if (g_cached.gpsFix) {
         display.print("Lat: ");
         display.println(g_cached.gpsLat, 6);
@@ -325,8 +356,32 @@ static void displayPage5() {
     display.print("Fix:  ");
     display.println(g_cached.gpsFix ? "YES" : "NO");
 
-    display.print("Page: 5/5");
+    display.print("Page: 5/6");
+    display.display();
+}
 
+/**
+ * @brief Page 6: System Logs
+ */
+static void displayPage6() {
+    display.clearDisplay();
+    display.setFont();
+    display.setTextSize(1);
+    display.setTextColor(SSD1306_WHITE);
+
+    display.setCursor(0, 0);
+    display.println("System Logs");
+    drawHLine(10);
+
+    for (int i = 0; i < g_logCount; i++) {
+        // Show in reverse order (newest at top)
+        int idx = (g_logIndex - 1 - i + MAX_OLED_LOGS) % MAX_OLED_LOGS;
+        display.setCursor(0, 14 + (i * 10));
+        display.println(g_logs[idx]);
+    }
+
+    display.setCursor(0, 56);
+    display.print("Page: 6/6");
     display.display();
 }
 
@@ -378,6 +433,7 @@ bool OLEDManager::init() {
     // Initialize timers
     g_lastUpdateTime = millis();
     g_lastAutoRotateTime = millis();
+    g_lastActivityTime = millis();
 
     // Display initial page
     g_currentPage = 0;
@@ -393,9 +449,13 @@ void OLEDManager::update() {
     if (now - g_lastUpdateTime >= UPDATE_INTERVAL_MS) {
         g_lastUpdateTime = now;
 
+        // Auto-sleep logic
+        if (g_displayOn && (now - g_lastActivityTime >= SLEEP_TIMEOUT_MS)) {
+            setDisplayOn(false);
+            Serial.println("[OLED] Auto-sleep triggered (30s inactivity)");
+        }
+
         // Apply brightness (via dim if needed)
-        // Note: Adafruit_SSD1306 has limited brightness control
-        // Full control via ssd1306_command() if needed
         if (g_brightness < 127) {
             display.dim(true);
         } else {
@@ -410,6 +470,7 @@ void OLEDManager::update() {
                 case 2: displayPage3(); break;
                 case 3: displayPage4(); break;
                 case 4: displayPage5(); break;
+                case 5: displayPage6(); break;
                 default:
                     g_currentPage = 0;
                     displayPage1();
@@ -511,6 +572,34 @@ void OLEDManager::setGPS(double lat, double lon, uint8_t sats, bool hasFix) {
     g_cached.gpsLon = lon;
     g_cached.gpsSats = sats;
     g_cached.gpsFix = hasFix;
+}
+
+void OLEDManager::setDiagnostics(uint32_t bootCount, const char* reason) {
+    g_cached.bootCount = bootCount;
+    if (reason != nullptr) {
+        strncpy(g_cached.resetReason, reason, sizeof(g_cached.resetReason) - 1);
+        g_cached.resetReason[sizeof(g_cached.resetReason) - 1] = '\0';
+    }
+}
+
+void OLEDManager::setMAC(const char* mac) {
+    if (mac != nullptr) {
+        strncpy(g_cached.macSuffix, mac, sizeof(g_cached.macSuffix) - 1);
+        g_cached.macSuffix[sizeof(g_cached.macSuffix) - 1] = '\0';
+    }
+}
+
+void OLEDManager::addLog(const char* msg) {
+    if (msg == nullptr) return;
+    
+    // Add to circular buffer
+    strncpy(g_logs[g_logIndex], msg, 31);
+    g_logs[g_logIndex][31] = '\0';
+    
+    g_logIndex = (g_logIndex + 1) % MAX_OLED_LOGS;
+    if (g_logCount < MAX_OLED_LOGS) {
+        g_logCount++;
+    }
 }
 
 void OLEDManager::printStatus() {

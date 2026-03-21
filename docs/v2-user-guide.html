@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>V2 User Guide — LoRaLink Docs</title>
+  <link rel="stylesheet" href="css/docs.css">
+  <link rel="stylesheet" href="css/premium.css">
+  <script src="config.js"></script>
+</head>
+<body class="premium-body">
+  <main class="doc-main">
+    <div class="breadcrumb"><a href="index.html">Home</a><span class="sep">›</span>V2 User Guide</div>
+    <h1 style="background: linear-gradient(135deg, var(--primary), var(--secondary)); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">🚀 LoRaLink V2 User Guide</h1>
+    <p class="tagline-premium">The definitive manual for the v2.0 "Sovereign" firmware release.</p>
+
+    <section id="getting-started" class="premium-card" style="margin-bottom: 3rem;">
+      <h3>⚡ Getting Started</h3>
+      <p>V2 introduces <strong>Auto-Discovery</strong> and <strong>Hardware Agnostic Plugins</strong>. To begin:</p>
+      <ul>
+        <li>Connect your Heltec V3/V4 to USB.</li>
+        <li>Open the <a href="http://localhost:8000" style="color: var(--primary);">Fleet Admin</a> dashboard.</li>
+        <li>Watch as your device automatically appears in the "Assets" sidebar via mDNS.</li>
+      </ul>
+    </section>
+
+    <h2>🔗 Mesh Architecture</h2>
+    <div class="premium-grid">
+      <div class="premium-card">
+        <h3>Tier 1: LoRa (10km)</h3>
+        <p>The backbone. Uses SX1262 (V3/V4) or SX1276 (V2) for ultra-long-range command delivery.</p>
+        <div class="badge-premium">Encrypted</div>
+      </div>
+      <div class="premium-card">
+        <h3>Tier 2: ESP-NOW (200m)</h3>
+        <p>High-speed, low-power peer-to-peer. Perfect for high-frequency telemetry swarm updates.</p>
+        <div class="badge-premium">Fast</div>
+      </div>
+      <div class="premium-card">
+        <h3>Tier 3: WiFi (LAN)</h3>
+        <p>High-bandwidth local access. Required for Webapp, REST API, and OTA updates.</p>
+        <div class="badge-premium">Web UI</div>
+      </div>
+    </div>
+
+    <h2>🛠️ Hardware Plugin System</h2>
+    <p>V2 decouples logical peripherals from physical pins. You can drive any device on any board.</p>
+    <table class="glass" style="width: 100%; border-collapse: collapse; margin: 2rem 0;">
+      <thead>
+        <tr style="border-bottom: 2px solid var(--border-glass);">
+          <th style="padding: 1rem; color: var(--primary);">Plugin</th>
+          <th style="padding: 1rem; color: var(--primary);">Description</th>
+          <th style="padding: 1rem; color: var(--primary);">Config command</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr style="border-bottom: 1px solid var(--border-glass);">
+          <td style="padding: 1rem;">DHT Sensor</td>
+          <td style="padding: 1rem;">Temp/Humidity monitoring</td>
+          <td style="padding: 1rem;"><code>SETDHT [PIN] [TYPE]</code></td>
+        </tr>
+        <tr style="border-bottom: 1px solid var(--border-glass);">
+          <td style="padding: 1rem;">RelayHAL</td>
+          <td style="padding: 1rem;">Power control (Native or MCP23017)</td>
+          <td style="padding: 1rem;"><code>RELAY [0-7] [ON/OFF]</code></td>
+        </tr>
+        <tr style="border-bottom: 1px solid var(--border-glass);">
+          <td style="padding: 1rem;">RadioHAL</td>
+          <td style="padding: 1rem;">LoRa tuning (Freq, BW, Preamble)</td>
+          <td style="padding: 1rem;"><code>SETRADIO [FREQ] [BW]</code></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>🚨 Troubleshooting</h2>
+    <div class="premium-card" style="border-left: 4px solid #ef4444;">
+      <h3>"Node Offline" in Dashboard</h3>
+      <p>If a node appears greyed out:</p>
+      <ol>
+        <li>Verify the device has power (OLED should show heartbeat).</li>
+        <li>Ensure the <strong>Zeroconf/mDNS</strong> service is running on your PC.</li>
+        <li>Run a "Subnet Scan" from the Hardware tab to force-refresh the registry.</li>
+      </ol>
+    </div>
+
+    <footer style="margin-top: 5rem; text-align: center; border-top: 1px solid var(--border-glass); padding-top: 2rem;">
+      <p style="color: var(--text-sub);">LoRaLink V2.0.8 — Sovereign Connectivity </p>
+    </footer>
+  </main>
+</body>
+</html>

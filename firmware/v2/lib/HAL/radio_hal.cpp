@@ -259,12 +259,25 @@ const char* RadioHAL::getRadioState() const {
   return "ACTIVE";
 }
 
+bool RadioHAL::setPreambleLength(uint16_t length) {
+  if (!_initialized) return false;
+  int state = _radio->setPreambleLength(length);
+  return (state == RADIOLIB_ERR_NONE);
+}
+
 bool RadioHAL::isChannelClear() {
   if (!_initialized) {
     return false;
   }
-  // CAD (Channel Activity Detection) - simplified
-  return true;  // Placeholder
+  
+  // RadioLib CAD Implementation
+  int state = _radio->scanChannel();
+  
+  if (state == RADIOLIB_LORA_DETECTED) {
+    return false; // Activity detected
+  }
+  
+  return true; // Channel is clear
 }
 
 uint16_t RadioHAL::getLastTxDuration() const {

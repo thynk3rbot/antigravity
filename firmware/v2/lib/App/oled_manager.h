@@ -150,6 +150,25 @@ public:
     static void setGPS(double lat, double lon, uint8_t sats, bool hasFix);
 
     /**
+     * @brief Update cached diagnostics
+     * @param bootCount Current boot count
+     * @param reason Last reset reason (e.g., "Power On", "Software")
+     */
+    static void setDiagnostics(uint32_t bootCount, const char* reason);
+
+    /**
+     * @brief Update cached MAC suffix
+     * @param mac Null-terminated hex string (e.g., "[A1:B2]")
+     */
+    static void setMAC(const char* mac);
+
+    /**
+     * @brief Add a system log message to the log page
+     * @param msg Message to add (will be truncated to fit)
+     */
+    static void addLog(const char* msg);
+
+    /**
      * @brief Print OLED manager status to Serial (diagnostics)
      */
     static void printStatus();

@@ -15,6 +15,7 @@
 
 #include "wifi_transport.h"
 #include <Arduino.h>
+#include "../App/nvs_config.h"
 
 // ============================================================================
 // Static Member Initialisation
@@ -189,6 +190,24 @@ const char* WiFiTransport::getLastErrorString() const {
 // ============================================================================
 
 bool WiFiTransport::_connect(uint32_t timeoutMs) {
+    // Apply static IP if configured in NVS
+    String staticIP = NVSConfig::getStaticIP();
+    if (staticIP.length() > 0) {
+        IPAddress local_IP, gateway, subnet;
+        if (local_IP.fromString(staticIP)) {
+            String gwStr = NVSConfig::getGateway();
+            String snStr = NVSConfig::getSubnet();
+            
+            if (gwStr.length() > 0 && subnet.fromString(snStr)) {
+                gateway.fromString(gwStr);
+                WiFi.config(local_IP, gateway, subnet);
+            } else {
+                WiFi.config(local_IP, IPAddress(0,0,0,0), IPAddress(255,255,255,0));
+            }
+            Serial.printf("[WiFi] Static IP requested: %s\n", staticIP.c_str());
+        }
+    }
+
     WiFi.begin(_ssid.c_str(), _password.c_str());
 
     uint32_t start = millis();

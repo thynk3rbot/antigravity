@@ -22,10 +22,35 @@ bool NVSConfig::begin() {
                       PREFERENCES_NAMESPACE);
         return false;
     }
-    prefs.end();
 
     _initialized = true;
-    Serial.printf("[NVSConfig] Initialized (namespace: '%s')\n", PREFERENCES_NAMESPACE);
+
+    // Increment boot count
+    uint32_t count = prefs.getUInt(NVS_KEY_BOOT_COUNT, 0);
+    prefs.putUInt(NVS_KEY_BOOT_COUNT, count + 1);
+
+    // Get reset reason
+    esp_reset_reason_t reason = esp_reset_reason();
+    String reasonStr;
+    switch (reason) {
+        case ESP_RST_POWERON: reasonStr = "Power On"; break;
+        case ESP_RST_EXT:     reasonStr = "External Pin"; break;
+        case ESP_RST_SW:      reasonStr = "Software"; break;
+        case ESP_RST_PANIC:   reasonStr = "Panic"; break;
+        case ESP_RST_INT_WDT: reasonStr = "Internal WDT"; break;
+        case ESP_RST_TASK_WDT: reasonStr = "Task WDT"; break;
+        case ESP_RST_WDT:      reasonStr = "Other WDT"; break;
+        case ESP_RST_DEEPSLEEP: reasonStr = "Deep Sleep"; break;
+        case ESP_RST_BROWNOUT: reasonStr = "Brownout"; break;
+        case ESP_RST_SDIO:     reasonStr = "SDIO"; break;
+        default:               reasonStr = "Unknown"; break;
+    }
+    prefs.putString(NVS_KEY_RESET_REASON, reasonStr);
+    
+    prefs.end();
+
+    Serial.printf("[NVSConfig] Initialized (namespace: '%s', Boot: %u, Reason: %s)\n", 
+                  PREFERENCES_NAMESPACE, count + 1, reasonStr.c_str());
     return true;
 }
 
@@ -63,7 +88,9 @@ static bool _isStaleNodeId(const String& id) {
     return id.length() == 0
         || id.equalsIgnoreCase("unknown")
         || id.equalsIgnoreCase("node")
-        || id.equalsIgnoreCase("default");
+        || id.equalsIgnoreCase("default")
+        || id.equalsIgnoreCase("unnamed")
+        || id.equalsIgnoreCase("unamed");
 }
 
 String NVSConfig::getNodeId() {
@@ -143,6 +170,91 @@ bool NVSConfig::setWifiCredentials(const String& ssid, const String& pass) {
         return false;
     }
     Serial.printf("[NVSConfig] WiFi credentials set (SSID: %s)\n", ssid.c_str());
+    return true;
+}
+
+// ============================================================================
+// Static IP Configuration
+// ============================================================================
+
+String NVSConfig::getStaticIP() {
+    Preferences prefs;
+    if (!prefs.begin(PREFERENCES_NAMESPACE, true)) {
+        Serial.println("[NVSConfig] ERROR: Failed to open NVS for getStaticIP");
+        return "";
+    }
+    String ip = prefs.getString(NVS_KEY_STATIC_IP, "");
+    prefs.end();
+    return ip;
+}
+
+bool NVSConfig::setStaticIP(const String& ip) {
+    Preferences prefs;
+    if (!prefs.begin(PREFERENCES_NAMESPACE, false)) {
+        Serial.println("[NVSConfig] ERROR: Failed to open NVS for setStaticIP");
+        return false;
+    }
+    bool ok = prefs.putString(NVS_KEY_STATIC_IP, ip);
+    prefs.end();
+    if (!ok) {
+        Serial.println("[NVSConfig] ERROR: Failed to write static_ip");
+        return false;
+    }
+    Serial.printf("[NVSConfig] Static IP set: %s\n", ip.c_str());
+    return true;
+}
+
+String NVSConfig::getGateway() {
+    Preferences prefs;
+    if (!prefs.begin(PREFERENCES_NAMESPACE, true)) {
+        Serial.println("[NVSConfig] ERROR: Failed to open NVS for getGateway");
+        return "";
+    }
+    String gw = prefs.getString(NVS_KEY_GATEWAY, "");
+    prefs.end();
+    return gw;
+}
+
+bool NVSConfig::setGateway(const String& gw) {
+    Preferences prefs;
+    if (!prefs.begin(PREFERENCES_NAMESPACE, false)) {
+        Serial.println("[NVSConfig] ERROR: Failed to open NVS for setGateway");
+        return false;
+    }
+    bool ok = prefs.putString(NVS_KEY_GATEWAY, gw);
+    prefs.end();
+    if (!ok) {
+        Serial.println("[NVSConfig] ERROR: Failed to write gateway");
+        return false;
+    }
+    Serial.printf("[NVSConfig] Gateway set: %s\n", gw.c_str());
+    return true;
+}
+
+String NVSConfig::getSubnet() {
+    Preferences prefs;
+    if (!prefs.begin(PREFERENCES_NAMESPACE, true)) {
+        Serial.println("[NVSConfig] ERROR: Failed to open NVS for getSubnet");
+        return "";
+    }
+    String sn = prefs.getString(NVS_KEY_SUBNET, "");
+    prefs.end();
+    return sn;
+}
+
+bool NVSConfig::setSubnet(const String& sn) {
+    Preferences prefs;
+    if (!prefs.begin(PREFERENCES_NAMESPACE, false)) {
+        Serial.println("[NVSConfig] ERROR: Failed to open NVS for setSubnet");
+        return false;
+    }
+    bool ok = prefs.putString(NVS_KEY_SUBNET, sn);
+    prefs.end();
+    if (!ok) {
+        Serial.println("[NVSConfig] ERROR: Failed to write subnet");
+        return false;
+    }
+    Serial.printf("[NVSConfig] Subnet set: %s\n", sn.c_str());
     return true;
 }
 
@@ -349,4 +461,47 @@ bool NVSConfig::setMqttCredentials(const String& user, const String& pass) {
     }
     Serial.printf("[NVSConfig] MQTT credentials set (user: %s)\n", user.c_str());
     return true;
+}
+
+// ============================================================================
+// Diagnostics
+// ============================================================================
+
+uint32_t NVSConfig::getBootCount() {
+    Preferences prefs;
+    if (!prefs.begin(PREFERENCES_NAMESPACE, true)) {
+        return 0;
+    }
+    uint32_t count = prefs.getUInt(NVS_KEY_BOOT_COUNT, 0);
+    prefs.end();
+    return count;
+}
+
+void NVSConfig::incrementBootCount() {
+    Preferences prefs;
+    if (!prefs.begin(PREFERENCES_NAMESPACE, false)) {
+        return;
+    }
+    uint32_t count = prefs.getUInt(NVS_KEY_BOOT_COUNT, 0);
+    prefs.putUInt(NVS_KEY_BOOT_COUNT, count + 1);
+    prefs.end();
+}
+
+String NVSConfig::getResetReason() {
+    Preferences prefs;
+    if (!prefs.begin(PREFERENCES_NAMESPACE, true)) {
+        return "Unknown";
+    }
+    String reason = prefs.getString(NVS_KEY_RESET_REASON, "Unknown");
+    prefs.end();
+    return reason;
+}
+
+void NVSConfig::setResetReason(const String& reason) {
+    Preferences prefs;
+    if (!prefs.begin(PREFERENCES_NAMESPACE, false)) {
+        return;
+    }
+    prefs.putString(NVS_KEY_RESET_REASON, reason);
+    prefs.end();
 }

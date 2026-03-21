@@ -7,6 +7,9 @@
 #include <Arduino.h>
 #include <cstring>
 #include <vector>
+#include "power_manager.h"
+#include "../Transport/lora_transport.h"
+#include "../Transport/espnow_transport.h"
 
 // Static instance
 MeshCoordinator& meshCoordinator = MeshCoordinator::instance();
@@ -27,7 +30,51 @@ void MeshCoordinator::init() {
   _relayCount = 0;
   _droppedDuplicates = 0;
 
+  _isDiscovered = false;
+  _discoveryStartTime = millis();
+  _lastDiscoveryPing = 0;
+
   Serial.println("[MeshCoordinator] Initialized");
+}
+
+void MeshCoordinator::poll() {
+  ageOutNeighbors();
+
+  uint32_t now = millis();
+  uint32_t interval = DISCOVERY_INTERVAL_S * 1000;
+
+  if (PowerManager::isPowered()) {
+    interval = USB_HEART_BEAT_S * 1000;
+  } else if (!_isDiscovered && (now - _discoveryStartTime < DISCOVERY_BURST_MS)) {
+    interval = DISCOVERY_INTERVAL_S * 1000;
+  } else {
+    interval = NORMAL_HEART_BEAT_S * 1000;
+  }
+
+  if (now - _lastDiscoveryPing > interval) {
+    // Send discovery heartbeats on all transports
+    ControlPacket pkt = ControlPacket::makeHeartbeat(_ownNodeID);
+    loraTransport.send((uint8_t*)&pkt, sizeof(pkt));
+    espNowTransport.send((uint8_t*)&pkt, sizeof(pkt));
+    
+    _lastDiscoveryPing = now;
+    Serial.printf("[MeshCoordinator] Discovery/Heartbeat sent (Interval: %lu ms)\n", interval);
+  }
+}
+
+bool MeshCoordinator::handleV1Packet(const uint8_t* buffer, size_t len) {
+  if (len < 1 || buffer[0] != V1_BINARY_TOKEN) {
+    return false;
+  }
+
+  // V1 Token detected! (0xAA)
+  Serial.printf("[MeshCoordinator] Legacy V1 Packet (0x%02X) detected\n", buffer[0]);
+  
+  // TODO: Implement full mapping to V1BinaryCmd
+  // For now, if we see 0xAA from Master, mark as discovered
+  // (In V1, Master usually ACKs with 0xAA 0x00 0x08 ...)
+  
+  return true;
 }
 
 // ============================================================================

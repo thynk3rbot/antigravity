@@ -44,12 +44,7 @@ public:
     // Device Identity
     // ========================================================================
 
-    /**
-     * @brief Set device node ID
-     *
-     * @param id Node identifier (max 16 bytes, e.g., "Peer1", "PEER3V4")
-     * @return true if set successfully, false on error
-     */
+    static std::string getHardwareID();
     static bool setNodeID(const std::string& id);
 
     /**
