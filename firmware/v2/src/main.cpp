@@ -166,6 +166,8 @@ void controlTask(void* param) {
       OLEDManager::setPeerCount(meshCoordinator.getNeighborCount());
       OLEDManager::setUptime(now - g_bootTimestamp);
       OLEDManager::setFreeHeap(esp_get_free_heap_size());
+      OLEDManager::setDeviceName(NVSManager::getNodeID("Node").c_str());
+      OLEDManager::setVersion(FIRMWARE_VERSION);
 
       GPSManager::GPSData gpsData = GPSManager::getData();
       OLEDManager::setGPS(gpsData.lat, gpsData.lon, gpsData.satellites, gpsData.hasFix);
@@ -386,6 +388,7 @@ void setup() {
 
   // Set diagnostics in OLED
   OLEDManager::setDiagnostics(NVSConfig::getBootCount(), NVSConfig::getResetReason().c_str());
+  OLEDManager::setVersion(FIRMWARE_VERSION);
   OLEDManager::addLog("System Initializing");
 
   // ========================================================================
@@ -450,6 +453,8 @@ void setup() {
   // Get Node ID early for diagnostics and BLE
   std::string nodeIDStr = NVSManager::getNodeID("Node");
   if (nodeIDStr.empty()) nodeIDStr = "Unknown";
+
+  OLEDManager::setDeviceName(nodeIDStr.c_str());
 
   // LoRa Transport
   if (!loraTransport.init()) {

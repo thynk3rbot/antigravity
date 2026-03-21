@@ -46,6 +46,8 @@ struct CachedValues {
     uint32_t bootCount;       // Boot count
     char resetReason[32];     // Reset reason [Power On, SW, etc]
     char macSuffix[8];        // MAC suffix [A1:B2]
+    char deviceName[32];      // User-set name
+    char version[16];         // Firmware version
 };
 
 // Log buffer for Page 6
@@ -71,6 +73,8 @@ void initCachedValues() {
     g_cached.peerCount = 0;
     g_cached.uptimeMs = 0;
     g_cached.freeHeapBytes = 0;
+    strncpy(g_cached.deviceName, "Node", sizeof(g_cached.deviceName) - 1);
+    strncpy(g_cached.version, "v0.0.0", sizeof(g_cached.version) - 1);
 }
 
 // Display state
@@ -166,7 +170,7 @@ static void drawHLine(int16_t y) {
 // ============================================================================
 
 /**
- * @brief Page 1: Network Status
+ * @brief Page 1: Network Status & Identity
  */
 static void displayPage1() {
     display.clearDisplay();
@@ -174,9 +178,12 @@ static void displayPage1() {
     display.setTextSize(1);
     display.setTextColor(SSD1306_WHITE);
 
-    // Header
+    // Header: Name and Version
     display.setCursor(0, 0);
-    display.println("LoRaLink");
+    display.print(g_cached.deviceName);
+    
+    display.setCursor(90, 0);
+    display.print(g_cached.version);
 
     drawHLine(10);
 
@@ -586,6 +593,20 @@ void OLEDManager::setMAC(const char* mac) {
     if (mac != nullptr) {
         strncpy(g_cached.macSuffix, mac, sizeof(g_cached.macSuffix) - 1);
         g_cached.macSuffix[sizeof(g_cached.macSuffix) - 1] = '\0';
+    }
+}
+
+void OLEDManager::setDeviceName(const char* name) {
+    if (name != nullptr) {
+        strncpy(g_cached.deviceName, name, sizeof(g_cached.deviceName) - 1);
+        g_cached.deviceName[sizeof(g_cached.deviceName) - 1] = '\0';
+    }
+}
+
+void OLEDManager::setVersion(const char* ver) {
+    if (ver != nullptr) {
+        strncpy(g_cached.version, ver, sizeof(g_cached.version) - 1);
+        g_cached.version[sizeof(g_cached.version) - 1] = '\0';
     }
 }
 

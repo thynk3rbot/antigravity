@@ -83,7 +83,7 @@ void StatusBuilder::addBasicInfo(JsonDocument& doc) {
     #ifdef FIRMWARE_VERSION
         doc["version"] = FIRMWARE_VERSION;
     #else
-        doc["version"] = "0.2.1";
+        doc["version"] = "0.2.2";
     #endif
 
     // IP address (empty if not connected)

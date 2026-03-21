@@ -163,6 +163,18 @@ public:
     static void setMAC(const char* mac);
 
     /**
+     * @brief Update cached device name
+     * @param name User-set name or generated node ID
+     */
+    static void setDeviceName(const char* name);
+
+    /**
+     * @brief Update cached firmware version
+     * @param ver Semantic version string (e.g., "0.2.2")
+     */
+    static void setVersion(const char* ver);
+
+    /**
      * @brief Add a system log message to the log page
      * @param msg Message to add (will be truncated to fit)
      */
