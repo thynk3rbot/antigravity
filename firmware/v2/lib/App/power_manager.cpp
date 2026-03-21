@@ -123,6 +123,7 @@ void PowerManager::enableVEXT() {
     digitalWrite(VEXT_PIN, LOW);   // V2/V3 VEXT is Active LOW
 #endif
     _vextPulseState = 0;           // Immediately stable
+    delay(10);                     // AG stability fix: settle power rail before I2C/SPI init
 #endif
 #endif
 }

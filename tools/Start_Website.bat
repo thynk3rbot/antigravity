@@ -11,7 +11,7 @@ echo To access the website, go to http://localhost:8010 in your browser.
 echo.
 :loop
 cd /d "%~dp0\website"
-python server.py
+py server.py
 if errorlevel 1 (
     color 0C
     echo.
