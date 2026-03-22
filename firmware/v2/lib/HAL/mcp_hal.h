@@ -7,6 +7,7 @@
 
 #include <stdint.h>
 #include <Arduino.h>
+#include "interfaces.h"
 #include <Adafruit_MCP23X17.h>
 
 /**
@@ -60,6 +61,24 @@ private:
     
     uint8_t _getChipIndex(uint8_t virtualPin) { return (virtualPin - 100) / 16; }
     uint8_t _getPinIndex(uint8_t virtualPin) { return (virtualPin - 100) % 16; }
+};
+
+/**
+ * @class MCPDigitalIO
+ * @brief Logic for MCP23017 expander pins
+ */
+class MCPDigitalIO : public IDigitalIO {
+public:
+    MCPDigitalIO(uint8_t virtualPin, MCPHAL& hal = MCPHAL::getInstance()) 
+        : _pin(virtualPin), _hal(hal) {}
+    
+    void mode(uint8_t m) override { _hal.pinMode(_pin, m); }
+    void write(bool level) override { _hal.digitalWrite(_pin, level ? HIGH : LOW); }
+    bool read() override { return _hal.digitalRead(_pin) == HIGH; }
+
+private:
+    uint8_t _pin;
+    MCPHAL& _hal;
 };
 
 extern MCPHAL& mcpHAL;

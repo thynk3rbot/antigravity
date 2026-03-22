@@ -7,6 +7,7 @@
 #include "../Transport/message_router.h"
 #include "control_packet.h"
 #include "nvs_manager.h"
+#include <ArduinoJson.h>
 
 // ---------------------------------------------------------------------------
 // Static member definitions
@@ -36,7 +37,46 @@ void CommandManager::process(const String& input, ResponseCallback responseCallb
     if (trimmed.length() == 0) return;
 
     String cmd, args;
-    _parseCommand(trimmed, cmd, args);
+    
+    // 1. Try JSON Decoding
+    if (trimmed.startsWith("{")) {
+        StaticJsonDocument<256> doc;
+        DeserializationError error = deserializeJson(doc, trimmed);
+        if (!error) {
+            cmd = doc["cmd"].as<String>();
+            args = doc["args"].as<String>();
+            if (args == "null") args = ""; 
+        } else {
+            _parseCommand(trimmed, cmd, args);
+        }
+    } 
+    // 2. Try KV Decoding (key=val)
+    else if (trimmed.indexOf('=') > 0 && !trimmed.startsWith("RELAY")) { // Avoid mapping RELAY command args
+        // Very basic KV: CMD=name ARGS=rest
+        if (trimmed.indexOf("CMD=") >= 0) {
+            int cmdStart = trimmed.indexOf("CMD=") + 4;
+            int cmdEnd = trimmed.indexOf(' ', cmdStart);
+            if (cmdEnd < 0) cmdEnd = trimmed.length();
+            cmd = trimmed.substring(cmdStart, cmdEnd);
+            
+            if (trimmed.indexOf("ARGS=") >= 0) {
+                args = trimmed.substring(trimmed.indexOf("ARGS=") + 5);
+            }
+        } else {
+            _parseCommand(trimmed, cmd, args);
+        }
+    }
+    // 3. Try CSV Decoding
+    else if (trimmed.indexOf(',') > 0) {
+        int commaIdx = trimmed.indexOf(',');
+        cmd = trimmed.substring(0, commaIdx);
+        args = trimmed.substring(commaIdx + 1);
+        args.replace(',', ' '); // Convert remaining commas to spaces for internal parsing
+    }
+    // 4. Fallback to Plaintext
+    else {
+        _parseCommand(trimmed, cmd, args);
+    }
 
     String response;
     if (cmd == "STATUS") {
@@ -63,6 +103,8 @@ void CommandManager::process(const String& input, ResponseCallback responseCallb
         response = _handleForward(args);
     } else if (cmd == "GPS") {
         response = _handleGPS(args);
+    } else if (cmd == "ASK") {
+        response = _handleAsk(args);
     } else {
         response = "{\"ok\":false,\"error\":\"Unknown command: " + cmd + "\"}";
     }
@@ -130,8 +172,8 @@ String CommandManager::_handleRelay(const String& args) {
     stateStr.toUpperCase();
 
     int relayNum = relayStr.toInt();
-    if (relayNum < 1 || relayNum > 2) {
-        return "{\"ok\":false,\"error\":\"Relay number must be 1 or 2\"}";
+    if (relayNum < 1 || relayNum > 8) {
+        return "{\"ok\":false,\"error\":\"Relay number must be 1 to 8\"}";
     }
 
     bool state;
@@ -205,10 +247,10 @@ String CommandManager::_handleReboot() {
 String CommandManager::_handleHelp() {
     String help = "Available commands:\n";
     help += "  STATUS                          - Return JSON status blob\n";
-    help += "  RELAY <1|2> <ON|OFF>            - Control relay 1 or 2\n";
+    help += "  RELAY <1-8> <ON|OFF>            - Control relay channel (1-8)\n";
     help += "  SETNAME <name>                  - Set node ID\n";
     help += "  SETWIFI <SSID> <PW>             - Set WiFi credentials\n";
-    help += "  SETIP <IP> <GW> <SN>            - Set static IP (Reboot required)\n";
+    help += "  SETIP <IP> [GW] [SN]            - Set static IP (Reboot required)\n";
     help += "  BLINK                           - Blink LED 3 times\n";
     help += "  REBOOT                          - Reboot the device\n";
     help += "  GETCONFIG                       - Return NVS config as JSON\n";
@@ -217,8 +259,22 @@ String CommandManager::_handleHelp() {
     help += "  SCHED SAVE                      - Persist tasks to flash\n";
     help += "  FORWARD <id> <cmd>              - Forward command to mesh node\n";
     help += "  GPS [ON|OFF]                    - Power or status of GNSS\n";
+    help += "  ASK <prompt>                    - Send query to Local AI Workstation\n";
     help += "  HELP                            - Show this help message";
     return help;
+}
+
+String CommandManager::_handleAsk(const String& args) {
+    if (args.length() == 0) {
+        return "{\"ok\":false,\"error\":\"Usage: ASK <prompt>\"}";
+    }
+
+    // Route the query to the PC Daemon via Serial streamer
+    // This allows the RAG Router or other daemons to intercept the query.
+    Serial.print("AI_QUERY:");
+    Serial.println(args);
+
+    return "{\"ok\":true,\"msg\":\"Query sent to AI Workstation\"}";
 }
 
 String CommandManager::_handleForward(const String& args) {
@@ -250,35 +306,51 @@ String CommandManager::_handleSetIP(const String& args) {
     // Format: SETIP <IP> <GW> <SN>
     String a = args;
     a.trim();
-    if (a.length() == 0) {
-        // Clear static IP
-        NVSConfig::setStaticIP("");
-        return "{\"ok\":true,\"msg\":\"Static IP cleared. DHCP will be used after reboot.\"}";
-    }
-
     // Split args
     String ip, gw, sn;
     int space1 = a.indexOf(' ');
     if (space1 < 0) {
-        return "{\"ok\":false,\"error\":\"Usage: SETIP <IP> <GW> <SN>\"}";
-    }
-    ip = a.substring(0, space1);
-    String rest = a.substring(space1 + 1);
-    rest.trim();
+        if (a.length() == 0 || a == "CLEAR" || a == "DHCP") {
+            NVSConfig::setStaticIP("");
+            return "{\"ok\":true,\"msg\":\"Static IP cleared. DHCP will be used after reboot.\"}";
+        }
+        // Only one arg: just the IP
+        ip = a;
+        gw = "";
+        sn = "";
+    } else {
+        ip = a.substring(0, space1);
+        String rest = a.substring(space1 + 1);
+        rest.trim();
 
-    int space2 = rest.indexOf(' ');
-    if (space2 < 0) {
-        return "{\"ok\":false,\"error\":\"Usage: SETIP <IP> <GW> <SN>\"}";
+        int space2 = rest.indexOf(' ');
+        if (space2 < 0) {
+            gw = rest;
+            sn = "";
+        } else {
+            gw = rest.substring(0, space2);
+            sn = rest.substring(space2 + 1);
+            sn.trim();
+        }
     }
-    gw = rest.substring(0, space2);
-    sn = rest.substring(space2 + 1);
-    sn.trim();
 
-    // Basic validation (at least check if they look like IPs)
+    // Basic validation
     IPAddress test;
-    if (!test.fromString(ip) || !test.fromString(gw) || !test.fromString(sn)) {
-        return "{\"ok\":false,\"error\":\"Invalid IP format\"}";
+    if (!test.fromString(ip)) {
+        return "{\"ok\":false,\"error\":\"Invalid IP address format\"}";
     }
+
+    if (gw.length() > 0 && !test.fromString(gw)) {
+        return "{\"ok\":false,\"error\":\"Invalid Gateway address format\"}";
+    }
+
+    if (sn.length() > 0 && !test.fromString(sn)) {
+        return "{\"ok\":false,\"error\":\"Invalid Subnet mask format\"}";
+    }
+
+    // Default gateway/subnet if not provided
+    if (gw.length() == 0) gw = "0.0.0.0";
+    if (sn.length() == 0) sn = "255.255.255.0";
 
     bool ok = NVSConfig::setStaticIP(ip) && 
               NVSConfig::setGateway(gw) && 

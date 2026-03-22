@@ -41,24 +41,39 @@ void MeshCoordinator::poll() {
   ageOutNeighbors();
 
   uint32_t now = millis();
+  
+  // Wait before first discovery ping to listen for existing nodes
+  if (now < _discoveryStartTime + BOOT_SILENCE_MS) {
+    return;
+  }
+
   uint32_t interval = DISCOVERY_INTERVAL_S * 1000;
 
   if (PowerManager::isPowered()) {
     interval = USB_HEART_BEAT_S * 1000;
   } else if (!_isDiscovered && (now - _discoveryStartTime < DISCOVERY_BURST_MS)) {
-    interval = DISCOVERY_INTERVAL_S * 1000;
+    // If we've already found the Hub (Node 0) from an incoming packet, we can slow down immediately
+    if (_neighbors.count(0) > 0) {
+      interval = NORMAL_HEART_BEAT_S * 1000;
+    } else {
+      interval = DISCOVERY_INTERVAL_S * 1000;
+    }
   } else {
     interval = NORMAL_HEART_BEAT_S * 1000;
   }
 
-  if (now - _lastDiscoveryPing > interval) {
+  // Add random jitter to prevent synchronized collisions (up to 500ms)
+  static uint32_t jitter = random(500); 
+
+  if (now - _lastDiscoveryPing > interval + jitter) {
     // Send discovery heartbeats on all transports
     ControlPacket pkt = ControlPacket::makeHeartbeat(_ownNodeID);
     loraTransport.send((uint8_t*)&pkt, sizeof(pkt));
     espNowTransport.send((uint8_t*)&pkt, sizeof(pkt));
     
     _lastDiscoveryPing = now;
-    Serial.printf("[MeshCoordinator] Discovery/Heartbeat sent (Interval: %lu ms)\n", interval);
+    jitter = random(500); // Re-roll jitter for next ping
+    Serial.printf("[MeshCoordinator] Heartbeat sent (Interval: %lu ms, Jitter: %lu ms)\n", interval, jitter);
   }
 }
 

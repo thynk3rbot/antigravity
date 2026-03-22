@@ -14,6 +14,10 @@
 #include "gps_manager.h"
 #include "../Transport/wifi_transport.h"
 #include "../Transport/lora_transport.h"
+#include "../Transport/ble_transport.h"
+#ifdef ENABLE_MQTT_TRANSPORT
+#include "../Transport/mqtt_transport.h"
+#endif
 #include "../HAL/board_config.h"
 #include <Arduino.h>
 #include <esp_heap_caps.h>
@@ -48,6 +52,8 @@ StaticJsonDocument<2048> StatusBuilder::buildStatus() {
     addRelayInfo(doc);
     addTelemetry(doc);
     addSystemInfo(doc);
+    addPluginList(doc);
+    addHardwareMap(doc);
 
     return doc;
 }
@@ -160,20 +166,20 @@ void StatusBuilder::addWiFiInfo(JsonDocument& doc) {
 }
 
 void StatusBuilder::addBLEInfo(JsonDocument& doc) {
-    // BLE is not yet implemented (Task 7)
-    // For now, return default values
-    doc["ble_enabled"] = false;
-
     // Device name format: "GW-{NODEID}"
     std::string nodeID = NVSManager::getNodeID("Node");
     std::string bleDeviceName = "GW-" + nodeID;
     doc["ble_device_name"] = bleDeviceName.c_str();
+    doc["ble_enabled"] = true; // BLE is always enabled in v2
+    doc["ble_connected"] = BLETransport::isConnected();
 }
 
 void StatusBuilder::addMQTTInfo(JsonDocument& doc) {
-    // MQTT is not yet implemented (Task 8)
-    // For now, return default values
-    doc["mqtt_connected"] = false;
+    #ifdef ENABLE_MQTT_TRANSPORT
+      doc["mqtt_connected"] = MQTTTransport::instance()->isConnected();
+    #else
+      doc["mqtt_connected"] = false;
+    #endif
 
     // MQTT broker address (from NVS)
     std::string broker = NVSManager::getMQTTBroker("");
@@ -225,8 +231,12 @@ void StatusBuilder::addTransportStatus(JsonDocument& doc) {
     JsonObject transports = doc.createNestedObject("transports");
 
     transports["wifi"] = WiFiTransport::isConnected();
-    transports["ble"] = false;  // Not implemented yet
-    transports["mqtt"] = false; // Not implemented yet
+    transports["ble"] = BLETransport::isConnected();
+    #ifdef ENABLE_MQTT_TRANSPORT
+      transports["mqtt"] = MQTTTransport::instance()->isConnected();
+    #else
+      transports["mqtt"] = false;
+    #endif
     transports["lora"] = true;  // LoRa is always available
 }
 
@@ -305,4 +315,14 @@ void StatusBuilder::addSystemInfo(JsonDocument& doc) {
     schedule["enabled"] = false;  // TODO: Get from ScheduleManager
     schedule.createNestedArray("entries");
     // TODO: Populate with schedule entries from ScheduleManager
+}
+
+void StatusBuilder::addPluginList(JsonDocument& doc) {
+    JsonArray plugins = doc.createNestedArray("plugins");
+    // TODO: Get list from pluginManager
+}
+
+void StatusBuilder::addHardwareMap(JsonDocument& doc) {
+    JsonObject map = doc.createNestedObject("hardware_map");
+    // TODO: Populate with actual GPIO mapping from board_config.h
 }

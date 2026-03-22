@@ -25,7 +25,13 @@ import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional, Set
+from typing import Optional, Set, TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from zeroconf import ServiceBrowser, ServiceInfo, Zeroconf, ServiceListener  # type: ignore
+    import serial  # type: ignore
+    import aiohttp  # type: ignore
+    # Note: BLE imports removed from here to avoid redefinition conflicts with local assignments
 
 import threading
 import uuid
@@ -34,57 +40,139 @@ import socket
 
 # zeroconf — for mDNS discovery
 try:
-    from zeroconf import ServiceBrowser, ServiceInfo, Zeroconf, ServiceListener
+    from zeroconf import ServiceBrowser, ServiceInfo, Zeroconf, ServiceListener  # type: ignore
     ZEROCONF = True
 except ImportError:
-    print("WARNING: zeroconf not installed — mDNS discovery disabled")
     ZEROCONF = False
+    class ServiceListener:  # type: ignore
+        def add_service(self, *args, **kwargs): pass
+        def update_service(self, *args, **kwargs): pass
+        def remove_service(self, *args, **kwargs): pass
+    class Zeroconf:  # type: ignore
+        def __init__(self, *args, **kwargs): pass
+        def get_service_info(self, *args, **kwargs): return None
+        def close(self): pass
+    class ServiceBrowser:  # type: ignore
+        def __init__(self, *args, **kwargs): pass
+        def cancel(self): pass
+    class ServiceInfo:  # type: ignore
+        def __init__(self, *args, **kwargs):
+            self.properties = {}
+            self.addresses = [b'\x00\x00\x00\x00']
+    print("WARNING: zeroconf not installed — mDNS discovery disabled")
+    
+# Twilio — for SMS integration
+try:
+    from twilio.twiml.messaging_response import MessagingResponse
+    from fastapi import Form
+    TWILIO = True
+except ImportError:
+    TWILIO = False
+    class MessagingResponse:
+        def message(self, *args, **kwargs): pass
+    TWILIO_WARNING = "WARNING: twilio not installed — SMS webhook disabled"
 
 # pyserial — optional, degrades gracefully
 try:
     import serial
     import serial.tools.list_ports
-
     PYSERIAL = True
 except ImportError:
     PYSERIAL = False
+    class DummySerial:
+        class Serial:
+            def __init__(self, *args, **kwargs):
+                self.is_open = False
+            def close(self): pass
+            def write(self, data): return len(data)
+            def read(self, size=1): return b""
+            def flush(self): pass
+        class tools:
+            class list_ports:
+                @staticmethod
+                def comports(): return []
+    serial = DummySerial
     print("WARNING: pyserial not installed — Serial transport disabled")
 
 # ── FastAPI / WebSocket ──────────────────────────────────────────────────────
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import (
     FileResponse,
     HTMLResponse,
     JSONResponse,
     PlainTextResponse,
+    Response,
 )
 from fastapi.staticfiles import StaticFiles
 import uvicorn
 
 # ── aiohttp for device HTTP ──────────────────────────────────────────────────
 try:
-    import aiohttp
-
+    import aiohttp  # type: ignore
     AIOHTTP = True
 except ImportError:
     AIOHTTP = False
+    class DummyAiohttp:
+        class ClientSession:
+            def __init__(self, *args, **kwargs):
+                self.closed = True
+            async def __aenter__(self): return self
+            async def __aexit__(self, *args): pass
+            async def close(self): pass
+            
+            class _RequestContextManager:
+                def __init__(self):
+                    self.status = 200
+                    self.content_type = "application/json"
+                async def __aenter__(self): return self
+                async def __aexit__(self, *args): pass
+                async def json(self, *args, **kwargs): return {}
+                async def text(self, *args, **kwargs): return ""
+                async def read(self): return b""
+            
+            def get(self, *args, **kwargs): return self._RequestContextManager()
+            def post(self, *args, **kwargs): return self._RequestContextManager()
+            
+        class ClientTimeout:
+            def __init__(self, *args, **kwargs): pass
+    aiohttp = DummyAiohttp  # type: ignore
 
 # ── BLE stack — import from sibling ble_instrument.py ────────────────────────
 _tools_dir = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_tools_dir))
 try:
-    from ble_instrument import (
+    from ble_instrument import (  # type: ignore
         BLELink,
         BLEConstants,
         Config as BLEConfig,
         ResponseBuffer,
     )
-    from bleak import BleakScanner
-
+    from bleak import BleakScanner  # type: ignore
     BLEAK = True
 except ImportError:
     BLEAK = False
+    class BleakScanner:  # type: ignore
+        @staticmethod
+        async def discover(timeout: float = 10.0, **kwargs: Any) -> list: return []
+    class BLELink:  # type: ignore
+        def __init__(self, *args, **kwargs):
+            self.is_connected = False
+            self.device_name = "Dummy"
+        async def connect(self, dev: Any) -> None: pass
+        async def send_command(self, *args, **kwargs): return False
+    class BLEConstants: pass  # type: ignore
+    class BLEConfig:  # type: ignore
+        def __init__(self, **kwargs: Any): pass
+    class ResponseBuffer: pass  # type: ignore
     print("WARNING: bleak not available — BLE transport disabled")
+
+try:
+    from simulator import SimulatorBridge
+    SIMULATOR_AVAILABLE = True
+except ImportError:
+    SIMULATOR_AVAILABLE = False
+
 
 STATIC_DIR = Path(__file__).parent / "static"
 SETTINGS_FILE = Path(__file__).parent / ".settings.json"
@@ -336,14 +424,62 @@ class DeviceState:
     serial_ok: bool = False
     serial_port: Optional[str] = None
     active_node: Optional[str] = None  # display name of active node
+    active_type: Optional[str] = None  # "wifi" | "serial" | "ble" | "lora" (new)
     active_ip: Optional[str] = None  # routable IP for active WiFi/LoRa node
     discovered_devices: list = field(default_factory=list)  # from network scan
     discovery_time: float = 0.0  # timestamp of last discovery scan
     espnow_ok: bool = False
+    tp_mode: str = "J" # "J"=JSON, "C"=CSV, "K"=KV, "B"=BIN (default JSON)
+    sim_running: bool = False
+    ai_status: str = "idle" # "idle" | "querying" | "error"
+
 
 
 # ════════════════════════════════════════════════════════════════════════════
-# 2. WebSocketManager — browser connection pool
+# 2. AI Gateway — Ollama LLM Bridge
+# ════════════════════════════════════════════════════════════════════════════
+
+
+class AIGateway:
+    """Handles asynchronous communication with the local Ollama instance."""
+
+    def __init__(self, model: str = "qwen2.5-coder:14b") -> None:
+        self.api_url = os.environ.get("OLLAMA_API", "http://localhost:11434/api/generate")
+        self.model = model
+        self.max_len = 200
+
+    async def query_ai(self, prompt: str) -> str:
+        """Fetch a response from local Ollama instance."""
+        print(f"[AI] Prompting {self.model}: '{prompt[:30]}...'")
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    self.api_url,
+                    json={
+                        "model": self.model,
+                        "prompt": prompt,
+                        "stream": False
+                    },
+                    timeout=aiohttp.ClientTimeout(total=45.0)
+                ) as r:
+                    if r.status == 200:
+                        data = await r.json()
+                        result = data.get('response', '').strip()
+                        # Clean for mesh: no newlines, limited length
+                        result = result.replace('\n', ' ').replace('\r', '')
+                        if len(result) > self.max_len:
+                            result = result[:self.max_len-3] + "..."
+                        return result
+                    else:
+                        return f"AI_ERR: HTTP {r.status}"
+        except asyncio.TimeoutError:
+            return "AI_ERR: Timeout"
+        except Exception as e:
+            return f"AI_ERR: {str(e)[:40]}"
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# 2b. WebSocketManager — browser connection pool
 # ════════════════════════════════════════════════════════════════════════════
 
 
@@ -424,31 +560,65 @@ class SerialLink:
     def __init__(self, port: str, baud: int = 115200) -> None:
         self._port = port
         self._baud = baud
-        self._ser: Optional[serial.Serial] = None if PYSERIAL else None
+        self._ser: Any = None
         self._loop: Optional[asyncio.AbstractEventLoop] = None
+        self._read_task: Optional[asyncio.Task] = None
+        self.line_queue: asyncio.Queue = asyncio.Queue()
 
     async def connect(self) -> None:
         if not PYSERIAL:
             raise RuntimeError("pyserial not installed")
         self._loop = asyncio.get_event_loop()
         await self._loop.run_in_executor(None, self._open)
-        print(f"[Serial] Connected to {self._port}")
+        
+        # Start background read loop
+        self._read_task = asyncio.create_task(self._read_loop())
+        
+        # Prime the board to ensure serial streaming is enabled
+        await self.send_command("STREAM ON")
+        print(f"[Serial] Connected to {self._port} and streaming enabled")
 
     def _open(self) -> None:
         self._ser = serial.Serial(self._port, self._baud, timeout=1)
 
     async def disconnect(self) -> None:
+        if self._read_task:
+            self._read_task.cancel()
         if self._ser and self._ser.is_open:
             self._ser.close()
         print(f"[Serial] Disconnected from {self._port}")
+
+    async def _read_loop(self) -> None:
+        """Background loop reading lines from Serial."""
+        while self._ser and self._ser.is_open:
+            try:
+                line = await self._loop.run_in_executor(None, self._read_line)  # type: ignore
+                if line:
+                    await self.line_queue.put(line)
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                print(f"[Serial] Read error: {e}")
+                await asyncio.sleep(1)
+                
+    def _read_line(self) -> str:
+        """Synchronous read call to be run in executor."""
+        if not self._ser or not self._ser.is_open:
+            return ""
+        try:
+            return self._ser.readline().decode('utf-8', errors='ignore').strip()
+        except:
+            return ""
 
     async def send_command(self, cmd: str) -> bool:
         if not self.is_connected or not self._loop:
             return False
         try:
             data = (cmd.strip() + "\n").encode()
-            await self._loop.run_in_executor(None, self._ser.write, data)
-            return True
+            if self._ser:
+                await self._loop.run_in_executor(None, self._ser.write, data)
+                return True
+            return False
         except Exception as e:
             print(f"[Serial] Write error: {e}")
             return False
@@ -473,21 +643,40 @@ class TransportManager:
         state: DeviceState,
         device_ip: Optional[str],
         peers: list,  # list[BLELink] — 0, 1, or 2 peers
-        serial_link: Optional["SerialLink"] = None,
+        serial_link: Any = None,
+        sim_bridge: Any = None
     ) -> None:
         self.state = state
         self.device_ip = device_ip
         self._peers = peers
-        self._session: Optional[aiohttp.ClientSession] = None
+        self._session: Any = None
         self._round_counter: int = 0
-        self._serial: Optional[SerialLink] = serial_link
+        self._serial: Any = serial_link
+        self._sim: Any = sim_bridge
 
     # ── Public send ──────────────────────────────────────────────────────────
 
-    async def send_command(self, cmd: str) -> bool:
+    async def send_command(self, cmd: str, node_id: Optional[str] = None) -> bool:
         transport = await self.pick_transport(cmd)
+        
+        # Translate command based on tp_mode
+        wire_cmd = cmd
+        if self.state.tp_mode == "J":
+            wire_cmd = json.dumps({"cmd": cmd})
+        elif self.state.tp_mode == "C":
+            # Very basic CSV translation: space to comma
+            wire_cmd = ",".join(cmd.split())
+        elif self.state.tp_mode == "K":
+            # KV: CMD=name ARGS=rest
+            parts = cmd.split(None, 1)
+            c = parts[0]
+            a = parts[1] if len(parts) > 1 else ""
+            wire_cmd = f"CMD={c} ARGS={a}"
+        
+        if transport == "sim":
+            return await self._sim.send_command(wire_cmd)
         if transport == "serial":
-            ok = await self._send_serial(cmd)
+            ok = await self._send_serial(wire_cmd)
             self.state.serial_ok = ok
             self.state.transport = "serial" if ok else "disconnected"
             return ok
@@ -510,6 +699,9 @@ class TransportManager:
 
     async def pick_transport(self, cmd: str) -> str:
         """Dispatch to the saved transport strategy (persisted in .settings.json)."""
+        if self.state.sim_running and self._sim:
+            return "sim"
+            
         strategy = self.state.settings.get("transport_strategy", "http_first")
         _ip = self.state.active_ip or self.device_ip
         http_ok = bool(_ip and AIOHTTP)
@@ -518,27 +710,41 @@ class TransportManager:
             # Always BLE — ignores HTTP entirely
             return "ble"
 
+        # NEW: Prefer Serial if explicitly selected/active and connected
+        if self.state.active_type == "serial" and self.state.serial_ok:
+            return "serial"
+
         elif strategy == "readwrite_split":
             # STATUS / MESH queries → HTTP; mutating commands → BLE
             read_prefixes = ("STATUS", "SCHED LIST", "MESH", "LOG")
             is_read = any(cmd.upper().startswith(p) for p in read_prefixes)
-            return ("http" if http_ok else "ble") if is_read else "ble"
+            if is_read:
+                return "http" if http_ok else ("serial" if self.state.serial_ok else "ble")
+            return "ble"
 
         elif strategy == "immediate_fallback":
             # HTTP only when there is a perfect track record (zero failures)
-            return "http" if (http_ok and self.state.http_failures == 0) else "ble"
+            if http_ok and self.state.http_failures == 0:
+                return "http"
+            return "serial" if self.state.serial_ok else "ble"
 
         elif strategy == "roundrobin":
             # Alternate between HTTP and BLE on every command
             self._round_counter += 1
-            return "http" if (self._round_counter % 2 == 0 and http_ok) else "ble"
+            if self._round_counter % 2 == 0:
+                return "http" if http_ok else ("serial" if self.state.serial_ok else "ble")
+            return "ble"
 
         elif strategy == "serial_only":
             return "serial"
 
         else:  # http_first (default)
-            # HTTP while reachable; fall back to BLE after 3 consecutive failures
-            return "http" if (http_ok and self.state.http_failures < 3) else "ble"
+            # HTTP while reachable; fall back to Serial (then BLE) after 3 consecutive failures
+            if http_ok and self.state.http_failures < 3:
+                return "http"
+            if self.state.serial_ok:
+                return "serial"
+            return "ble"
 
     # ── Private transports ───────────────────────────────────────────────────
 
@@ -572,7 +778,7 @@ class TransportManager:
             return False
         return await self._serial.send_command(cmd)
 
-    async def _get_session(self) -> aiohttp.ClientSession:
+    async def _get_session(self) -> Any:
         if self._session is None or self._session.closed:
             self._session = aiohttp.ClientSession()
         return self._session
@@ -596,17 +802,51 @@ class StatusPoller:
         ws_manager: WebSocketManager,
         device_ip: Optional[str],
         peers: list,  # list[BLELink] — 0, 1, or 2 peers
+        node_reg: Any = None,
+        sim_bridge: Any = None
     ) -> None:
         self.state = state
         self.ws_manager = ws_manager
         self.device_ip = device_ip
         self._peers = peers
-        self._session: Optional[aiohttp.ClientSession] = None
+        self._session: Any = None
         self._running = False
+        self._node_reg = node_reg
+        self._sim: Any = sim_bridge
+        self._trigger = asyncio.Event()
+
+    def trigger(self) -> None:
+        self._trigger.set()
 
     async def run(self) -> None:
         self._running = True
         while self._running:
+            # Wait for interval OR trigger
+            try:
+                await asyncio.wait_for(self._trigger.wait(), timeout=self.INTERVAL)
+                self._trigger.clear()
+            except asyncio.TimeoutError:
+                pass
+
+            if self.state.sim_running and self._sim:
+                status = self._sim.get_status()
+                if status:
+                    self.state.status = status
+                    self.state.last_update = time.time()
+                    self.state.transport = "sim"
+                    await self.ws_manager.broadcast({
+                        "type": "status",
+                        "peer": "SIM",
+                        "transport": "sim",
+                        "active_node": self.state.active_node,
+                        "http_ok": True,
+                        "ble_ok": False,
+                        "serial_ok": False,
+                        **status,
+                    })
+                await asyncio.sleep(self.INTERVAL)
+                continue
+
             # HTTP poll (primary — returns full status JSON)
             status = await self._poll_http()
             if status:
@@ -617,6 +857,7 @@ class StatusPoller:
                         "type": "status",
                         "peer": "A",
                         "transport": self.state.transport,
+                        "active_node": self.state.active_node,
                         "http_ok": self.state.http_ok,
                         "ble_ok": self.state.ble_ok,
                         **status,
@@ -640,6 +881,7 @@ class StatusPoller:
                                 "type": "status",
                                 "peer": peer_label,
                                 "transport": "ble",
+                                "active_node": self.state.active_node,
                                 "http_ok": self.state.http_ok,
                                 "ble_ok": self.state.ble_ok,
                                 **result,
@@ -694,7 +936,7 @@ class StatusPoller:
         existing = self.state.status or {}
         return {**existing, "_via": "ble", "_peer": ble.device_name}
 
-    async def _get_session(self) -> aiohttp.ClientSession:
+    async def _get_session(self) -> Any:
         if self._session is None or self._session.closed:
             self._session = aiohttp.ClientSession()
         return self._session
@@ -716,7 +958,7 @@ async def _proxy_get(device_ip: Optional[str], path: str) -> Optional[dict]:
         async with aiohttp.ClientSession() as s:
             async with s.get(
                 f"http://{device_ip}{path}",
-                timeout=aiohttp.ClientTimeout(total=3.0),
+                timeout=aiohttp.ClientTimeout(total=3.0),  # type: ignore
             ) as r:
                 return await r.json(content_type=None)
     except Exception:
@@ -731,7 +973,7 @@ async def _proxy_post(device_ip: Optional[str], path: str, data: dict) -> bool:
             async with s.post(
                 f"http://{device_ip}{path}",
                 data=data,
-                timeout=aiohttp.ClientTimeout(total=3.0),
+                timeout=aiohttp.ClientTimeout(total=3.0),  # type: ignore
             ) as r:
                 return r.status == 200
     except Exception:
@@ -747,7 +989,7 @@ async def _send_cmd_to_ip(ip: str, cmd: str) -> bool:
             async with s.post(
                 f"http://{ip}/api/cmd",
                 data={"cmd": cmd},
-                timeout=aiohttp.ClientTimeout(total=4.0),
+                timeout=aiohttp.ClientTimeout(total=4.0),  # type: ignore
             ) as r:
                 return r.status == 200
     except Exception:
@@ -765,14 +1007,12 @@ def build_app(
     device_name2: Optional[str] = None,
     no_ble: bool = False,
 ) -> FastAPI:
-    app = FastAPI(title="LoRaLink PC Control")
     state = DeviceState()
     ws_mgr = WebSocketManager()
-
     node_reg = NodeRegistry()
     seq_reg = SequenceRegistry()
     CONFIGS_DIR.mkdir(parents=True, exist_ok=True)
-    _serial_link: Optional[SerialLink] = None
+    _serial_link: Any = None
 
     # Singletons populated at startup
     _ble_peers: list = []  # up to 2 BLELink instances
@@ -781,6 +1021,158 @@ def build_app(
     _poll_task: Optional[asyncio.Task] = None
     _zc: Optional[Zeroconf] = None
     _browser: Optional[ServiceBrowser] = None
+    _sim_bridge: Optional[Any] = None
+    _ai_gateway = AIGateway()
+    _processor_task: Optional[asyncio.Task] = None
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        nonlocal _ble_peers, _transport, _poller, _poll_task, _serial_link, _processor_task, _zc, _browser, _sim_bridge
+        
+        # --- STARTUP ---
+        # Initialize active IP to the startup device_ip
+        state.active_ip = device_ip
+
+        # Load persisted transport strategy
+        if SETTINGS_FILE.exists():
+            try:
+                saved = json.loads(SETTINGS_FILE.read_text())
+                if saved.get("transport_strategy") in _TRANSPORT_STRATEGIES:
+                    state.settings["transport_strategy"] = saved["transport_strategy"]
+                    print(f"[settings] Transport strategy: {state.settings['transport_strategy']}")
+            except Exception:
+                pass
+
+        # Restore active node from registry on startup
+        an = node_reg.active_node()
+        if an:
+            state.active_node = an.name
+            state.active_type = an.type
+            if an.type in ("wifi", "lora") and an.address:
+                state.active_ip = an.address
+            
+            # Auto-connect Serial if it was active
+            if an.type == "serial" and PYSERIAL:
+                _serial_link = SerialLink(an.address)
+                try:
+                    await _serial_link.connect()
+                    state.serial_ok = _serial_link.is_connected
+                    state.serial_port = an.address
+                    print(f"[serial] Auto-connected to {an.address}")
+                except Exception as e:
+                    print(f"[serial] Auto-connect failed: {e}")
+                    state.serial_ok = False
+            
+            print(f"[nodes] Restored active node: {an.name} ({an.type})")
+        else:
+            state.active_node = None
+            state.active_type = "wifi" if state.active_ip else "ble"
+
+        _sim_bridge = None
+        if SIMULATOR_AVAILABLE:
+            test_script = str(Path(__file__).parent.parent / "test_sim.py")
+            _sim_bridge = SimulatorBridge(f"py -u {test_script}")
+
+        # HTTP transport + status poller start immediately
+        _transport = TransportManager(state, device_ip, _ble_peers, _serial_link, _sim_bridge)
+        _poller = StatusPoller(state, ws_mgr, device_ip, _ble_peers, node_reg, _sim_bridge)
+        _poll_task = asyncio.create_task(_poller.run())
+        
+        # Start unified message processor
+        _processor_task = asyncio.create_task(_msg_processor_task())
+        
+        port = int(os.environ.get("PORT", 8000))
+        print(f"[server] Listening at http://localhost:{port}")
+
+        # BLE scan deferred
+        if BLEAK and not no_ble:
+            asyncio.create_task(_ble_scan())
+
+        # mDNS discovery start
+        if ZEROCONF:
+            try:
+                _zc = Zeroconf()
+                listener = LoRaLinkListener(node_reg, state.discovered_devices)
+                _browser = ServiceBrowser(_zc, "_http._tcp.local.", listener)
+                print("[mDNS] Browser started listening for _http._tcp.local.")
+            except Exception as e:
+                print(f"[mDNS] Failed to start: {e}")
+
+        yield
+
+        # --- SHUTDOWN ---
+        if _processor_task:
+            _processor_task.cancel()
+        if _sim_bridge and _sim_bridge._running:
+            await _sim_bridge.stop()
+        if _poller:
+            _poller.stop()
+        if _poll_task:
+            _poll_task.cancel()
+        if _zc:
+            if _browser:
+                _browser.cancel()
+            _zc.close()
+            print("[mDNS] Browser stopped")
+        if _transport:
+            await _transport.close()
+        for ble in _ble_peers:
+            try:
+                await ble.disconnect()
+            except Exception:
+                pass
+        if _serial_link:
+            try:
+                await _serial_link.disconnect()
+            except Exception:
+                pass
+
+    app = FastAPI(title="LoRaLink PC Control", lifespan=lifespan)
+
+    async def _handle_message(line: str, source: str) -> None:
+        """Unified handler for all incoming radio/serial traffic."""
+        if "AI_QUERY:" in line:
+            parts = line.split("AI_QUERY:", 1)
+            prompt = parts[1].strip() if len(parts) > 1 else ""
+            if not prompt:
+                return
+
+            print(f"[AI] Request from {source}: {prompt}")
+            state.ai_status = "querying"
+            await ws_mgr.broadcast({"type": "ai_status", "status": "querying", "prompt": prompt})
+            
+            # Fetch response from Ollama
+            response = await _ai_gateway.query_ai(prompt)
+            
+            state.ai_status = "idle"
+            print(f"[AI] Response: {response}")
+            await ws_mgr.broadcast({"type": "ai_status", "status": "idle", "response": response})
+            
+            # Dispatch back to mesh
+            if _transport:
+                # Use broadcast mode to ensure it reaches the requesting node
+                await _transport.send_command(f"ALL AI: {response}")
+
+    async def _msg_processor_task() -> None:
+        """Background loop to drain line queues from all sources."""
+        while True:
+            try:
+                # Drain Serial
+                if _serial_link:
+                    while not _serial_link.line_queue.empty():
+                        line = await _serial_link.line_queue.get()
+                        await _handle_message(line, "serial")
+                
+                # Drain Simulator
+                if _sim_bridge and _sim_bridge._running:
+                    while not _sim_bridge.line_queue.empty():
+                        line = await _sim_bridge.line_queue.get()
+                        await _handle_message(line, "sim")
+                
+            except Exception as e:
+                print(f"[processor] Error: {e}")
+            
+            await asyncio.sleep(0.1)
 
     def _effective_ip() -> Optional[str]:
         """Resolve the effective IP: active_ip (if set) overrides startup device_ip."""
@@ -828,70 +1220,6 @@ def build_app(
         except Exception as e:
             print(f"[BLE] Scan failed: {e} — BLE disabled")
 
-    @app.on_event("startup")
-    async def _startup() -> None:
-        nonlocal _ble_peers, _transport, _poller, _poll_task
-
-        # Initialize active IP to the startup device_ip
-        state.active_ip = device_ip
-
-        # Load persisted transport strategy
-        if SETTINGS_FILE.exists():
-            try:
-                saved = json.loads(SETTINGS_FILE.read_text())
-                if saved.get("transport_strategy") in _TRANSPORT_STRATEGIES:
-                    state.settings["transport_strategy"] = saved["transport_strategy"]
-                    print(
-                        f"[settings] Transport strategy: {state.settings['transport_strategy']}"
-                    )
-            except Exception:
-                pass
-
-        # HTTP transport + status poller start immediately — no waiting for BLE
-        _transport = TransportManager(state, device_ip, _ble_peers, _serial_link)
-        _poller = StatusPoller(state, ws_mgr, device_ip, _ble_peers)
-        _poll_task = asyncio.create_task(_poller.run())
-        port = int(os.environ.get("PORT", 8000))
-        print(f"[server] Listening at http://localhost:{port}")
-
-        # BLE scan deferred to background task — won't block first HTTP poll
-        if BLEAK and not no_ble:
-            asyncio.create_task(_ble_scan())
-
-        # mDNS discovery start
-        if ZEROCONF:
-            try:
-                nonlocal _zc, _browser
-                _zc = Zeroconf()
-                listener = LoRaLinkListener(node_reg, state.discovered_devices)
-                _browser = ServiceBrowser(_zc, "_http._tcp.local.", listener)
-                print("[mDNS] Browser started listening for _http._tcp.local.")
-            except Exception as e:
-                print(f"[mDNS] Failed to start: {e}")
-
-    @app.on_event("shutdown")
-    async def _shutdown() -> None:
-        if _poller:
-            _poller.stop()
-        if _poll_task:
-            _poll_task.cancel()
-        if _zc:
-            if _browser:
-                _browser.cancel()
-            _zc.close()
-            print("[mDNS] Browser stopped")
-        if _transport:
-            await _transport.close()
-        for ble in _ble_peers:
-            try:
-                await ble.disconnect()
-            except Exception:
-                pass
-        if _serial_link:
-            try:
-                await _serial_link.disconnect()
-            except Exception:
-                pass
 
     # ── Static files ──────────────────────────────────────────────────────
 
@@ -900,6 +1228,10 @@ def build_app(
     @app.get("/", response_class=FileResponse)
     async def _root() -> FileResponse:
         return FileResponse(STATIC_DIR / "index.html")
+
+    @app.get("/protodev", response_class=FileResponse)
+    async def _protodev() -> FileResponse:
+        return FileResponse(STATIC_DIR / "protodev.html")
 
     # ── WebSocket ─────────────────────────────────────────────────────────
 
@@ -932,12 +1264,26 @@ def build_app(
     @app.post("/api/cmd")
     async def _cmd(body: dict) -> PlainTextResponse:
         cmd = (body.get("cmd") or "").strip()
+        node_id = body.get("node_id")
+
         if not cmd:
             return PlainTextResponse("Missing cmd", status_code=400)
         if _transport is None:
             return PlainTextResponse("No transport available", status_code=503)
-        ok = await _transport.send_command(cmd)
+
+        ok = await _transport.send_command(cmd, node_id=node_id)
+        if ok and _poller:
+            _poller.trigger()
         return PlainTextResponse("OK" if ok else "ERR", status_code=200 if ok else 502)
+
+    @app.post("/api/transport/mode")
+    async def _set_tp_mode(body: dict) -> JSONResponse:
+        mode = body.get("mode", "J").upper()
+        if mode in ("J", "C", "K", "B"):
+            state.tp_mode = mode
+            print(f"[transport] Wire format set to: {mode}")
+            return JSONResponse({"ok": True, "mode": mode})
+        return JSONResponse({"ok": False, "error": "Invalid mode"}, status_code=400)
 
     # ── Transport status ──────────────────────────────────────────────────
 
@@ -1002,6 +1348,57 @@ def build_app(
         if _transport:
             await _transport.send_command("SCHED SAVE")
         return PlainTextResponse("OK")
+
+    # ── SMS / Magic Webhook ──────────────────────────────────────────────
+
+    @app.post("/webhook/twilio", response_class=PlainTextResponse)
+    async def _twilio_webhook(Body: str = Form(...), From: str = Form(...)) -> str:
+        """Handle incoming SMS from Twilio and route to mesh."""
+        print(f"[Magic] SMS from {From}: {Body}")
+        
+        reply = await _process_magic_sms(Body, From)
+        
+        if TWILIO:
+            twiml = MessagingResponse()
+            twiml.message(reply)
+            return str(twiml)
+        return reply
+
+    async def _process_magic_sms(text: str, sender: str) -> str:
+        """Parse natural language SMS into system commands."""
+        clean = text.strip().lower()
+        
+        # 1. Direct command matches
+        if "status" in clean:
+            s = state.status or {}
+            node = state.active_node or "Gateway"
+            bat = s.get("bat", "??")
+            return f"✨ LoRaLink Status:\nNode: {node}\nBat: {bat}V\nAll systems operational."
+
+        # 2. Simple on/off mapping
+        pin = None
+        if "led" in clean: pin = 35
+        elif "relay 2" in clean or "relay2" in clean: pin = 6
+        elif "relay 3" in clean or "relay3" in clean: pin = 7
+        
+        if pin:
+            val = "1" if "on" in clean or "activate" in clean else "0"
+            ok = await _transport.send_command(f"GPIO {pin} {val}")
+            return f"✅ Magic: Pin {pin} {'set to ' + val if ok else 'failed'}"
+
+        # 3. AI Intent Parsing (The 'Magic' fallback)
+        print(f"[Magic] Passing to AI for intent: {text}")
+        intent_prompt = f"Available pins: LED=35, RELAY2=6, RELAY3=7. Return only a system command (e.g. GPIO 35 1) for this request: '{text}'"
+        cmd = await _ai_gateway.query_ai(intent_prompt)
+        
+        if cmd and not cmd.startswith("AI_ERR"):
+            # Sanitize AI output
+            cmd = cmd.strip().upper()
+            if cmd.startswith("GPIO") or cmd.startswith("ALL") or cmd.startswith("REBOOT"):
+                ok = await _transport.send_command(cmd)
+                return f"✅ Magic Brain executed: {cmd}" if ok else f"❌ Command failed: {cmd}"
+        
+        return "⚠️ Magic didn't recognize that command. Try 'Status' or 'LED on'."
 
     # ── Transport settings ────────────────────────────────────────────────
 
@@ -1084,8 +1481,9 @@ def build_app(
                 base_ip = ".".join(local_ip.split(".")[:-1])
                 print(f"[discover] Local IP: {local_ip}, scanning {base_ip}.0/24...")
             except Exception:
-                base_ip = "172.16.0"
-                print(f"[discover] Could not detect local IP, falling back to {base_ip}.0/24")
+                # Still fallback, but better than nothing
+                base_ip = "192.168.1" 
+                print(f"[discover] Could not detect local IP, trying {base_ip}.0/24")
 
             async with aiohttp.ClientSession() as session:
                 tasks = []
@@ -1103,7 +1501,7 @@ def build_app(
             state.discovered_devices = found
             state.discovery_time = time.time()
 
-        async def _probe_device(session: aiohttp.ClientSession, ip: str) -> Optional[dict]:
+        async def _probe_device(session: Any, ip: str) -> Optional[dict]:
             """Probe a single IP and return device info if it's a LoRaLink device."""
             try:
                 async with session.get(
@@ -1192,7 +1590,7 @@ def build_app(
             return JSONResponse(
                 {"ok": False, "error": "name and address required"}, status_code=400
             )
-        if type_ not in ("wifi", "serial", "ble", "lora"):
+        if type_ not in ("wifi", "serial", "ble", "lora", "sim"):
             return JSONResponse(
                 {"ok": False, "error": f"Unknown type '{type_}'"}, status_code=400
             )
@@ -1204,6 +1602,55 @@ def build_app(
         ok = node_reg.remove(node_id)
         return JSONResponse({"ok": ok})
 
+    @app.get("/api/nodes/{node_id}/proxy/{path:path}")
+    async def _node_proxy(node_id: str, path: str) -> Response:
+        """Proxy requests to a node by ID, regardless of transport."""
+        node = node_reg.get(node_id)
+        if not node:
+            return PlainTextResponse("Node not found", status_code=404)
+        
+        if node.type in ("wifi", "lora") and node.address:
+            # Proxy to WiFi node
+            url = f"http://{{node.address}}/{{path}}"
+            try:
+                if not AIOHTTP or aiohttp is None:
+                    return PlainTextResponse("aiohttp not available", status_code=503)
+                
+                async with aiohttp.ClientSession() as session:
+                    timeout = aiohttp.ClientTimeout(total=3.0)
+                    async with session.get(url, timeout=timeout) as r:  # type: ignore
+                        content = await r.read()
+                        return Response(content=content, media_type=r.content_type)
+            except Exception as e:
+                return PlainTextResponse(f"Proxy error: {str(e)}", status_code=502)
+        
+        elif node.type == "serial":
+            # For Serial nodes, return a minimal status page since they don't have a web server
+            if path == "" or path == "index.html":
+                html = f"""
+                <html>
+                <body style="background:#050505;color:#00ff88;font-family:monospace;padding:20px;">
+                    <h3>Node: {node.name} (SERIAL)</h3>
+                    <p>Address: {node.address}</p>
+                    <hr border="0" style="border-top:1px solid #222">
+                    <div id="status">Polling serial status...</div>
+                    <script>
+                        setInterval(async () => {{
+                            try {{
+                                // For now, Serial status is pushed via WS, but we can fetch snapshot
+                                const r = await fetch('/api/nodes/{node_id}/snapshot');
+                                const d = await r.json();
+                                document.getElementById('status').innerText = JSON.stringify(d, null, 2);
+                            }} catch(e) {{}}
+                        }}, 2000);
+                    </script>
+                </body>
+                </html>
+                """
+                return HTMLResponse(html)
+        
+        return PlainTextResponse(f"Proxy not supported for {node.type} yet", status_code=501)
+
     @app.post("/api/nodes/{node_id}/connect")
     async def _nodes_connect(node_id: str) -> JSONResponse:
         nonlocal _serial_link
@@ -1213,6 +1660,7 @@ def build_app(
                 {"ok": False, "error": "Node not found"}, status_code=404
             )
         state.active_node = node.name
+        state.active_type = node.type
         print(f"[nodes] Active: {node.name} ({node.type}:{node.address})")
         # Route HTTP transport to this node's IP if it has one
         if node.type in ("wifi", "lora") and node.address:
@@ -1236,6 +1684,19 @@ def build_app(
                 state.serial_ok = False
             if _transport:
                 _transport._serial = _serial_link
+        
+        if node.type == "sim" and _sim_bridge:
+            if not _sim_bridge._running:
+                await _sim_bridge.start()
+            state.sim_running = True
+        elif _sim_bridge:
+            if _sim_bridge._running:
+                await _sim_bridge.stop()
+            state.sim_running = False
+            
+        if _poller:
+            _poller.trigger()
+
         return JSONResponse({"ok": True, "node": node.to_dict()})
 
     @app.get("/api/nodes/{node_id}/snapshot")
@@ -1453,15 +1914,52 @@ def build_app(
         data = await _proxy_get(_effective_ip(), "/api/registry")
         return JSONResponse(data or {})
 
+    @app.post("/api/simulator/toggle")
+    async def _sim_toggle() -> JSONResponse:
+        if not _sim_bridge:
+            return JSONResponse({"ok": False, "error": "Simulator not available"}, status_code=503)
+        if _sim_bridge._running:
+            await _sim_bridge.stop()
+            state.sim_running = False
+        else:
+            await _sim_bridge.start()
+            state.sim_running = True
+        return JSONResponse({"ok": True, "active": state.sim_running})
+
+    @app.get("/api/protodev/plugins")
+    async def _proto_plugins() -> JSONResponse:
+        if state.sim_running and _sim_bridge:
+            return JSONResponse({"plugins": _sim_bridge.get_status().get("plugins", [])})
+        data = await _proxy_get(_effective_ip(), "/api/plugins")
+        return JSONResponse(data or {"plugins": []})
+
+    @app.get("/api/protodev/hal")
+    async def _proto_hal() -> JSONResponse:
+        if state.sim_running and _sim_bridge:
+            return JSONResponse({"pins": _sim_bridge.get_status().get("pins", [])})
+        data = await _proxy_get(_effective_ip(), "/api/hardware/map")
+        return JSONResponse(data or {"pins": []})
+
+    @app.post("/api/protodev/cmd")
+    async def _proto_cmd(body: dict) -> JSONResponse:
+        cmd = body.get("cmd", "").strip()
+        if state.sim_running and _sim_bridge:
+            ok = await _sim_bridge.send_command(cmd)
+            return JSONResponse({"ok": ok, "resp": "Sim CMD sent" if ok else "Sim CMD Failed"})
+        ok = await _proxy_post(_effective_ip(), "/api/cmd", body)
+        return JSONResponse({"ok": ok, "resp": "Hardware CMD sent" if ok else "Hardware CMD Failed"})
+
     @app.get("/api/device/files/read")
-    async def _device_file_read(path: str) -> PlainTextResponse:
+    async def _device_file_read(path: str) -> Response:
         if not device_ip:
             return PlainTextResponse("No device IP", status_code=503)
+        if not AIOHTTP or aiohttp is None:
+            return PlainTextResponse("aiohttp not available", status_code=503)
         try:
             async with aiohttp.ClientSession() as s:
                 async with s.get(f"http://{device_ip}/api/files/read?path={path}") as r:
-                    content = await r.text()
-                    return PlainTextResponse(content, status_code=r.status)
+                    content = await r.read()
+                    return Response(content=content, media_type=r.content_type, status_code=r.status)
         except Exception as e:
             return PlainTextResponse(str(e), status_code=500)
 
@@ -1533,7 +2031,8 @@ def main() -> None:
     print(
         f"  BLE        : {'disabled (--no-ble)' if args.no_ble else 'enabled (background scan)'}"
     )
-    print(f"  Serving at : http://localhost:{port}")
+    host = os.environ.get("HOST", "0.0.0.0")
+    print(f"  Serving at : http://{host}:{port}")
     print()
 
     app = build_app(
@@ -1542,7 +2041,7 @@ def main() -> None:
         device_name2=args.device2,
         no_ble=args.no_ble,
     )
-    uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
+    uvicorn.run(app, host=host, port=port, log_level="warning")
 
 
 if __name__ == "__main__":

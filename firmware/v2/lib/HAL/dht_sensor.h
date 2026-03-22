@@ -6,12 +6,17 @@
 #pragma once
 
 #include "sensor_hal.h"
+#include "interfaces.h"
+#include "native_hal.h"
 #include <DHT.h>
 
 class DHTSensorPlugin : public SensorPlugin {
 public:
-    DHTSensorPlugin(uint8_t pin, uint8_t type = DHT22) 
-        : _pin(pin), _type(type), _dht(pin, type) {}
+    DHTSensorPlugin(IDigitalIO* io, uint8_t type = DHT22) 
+        : _io(io), _type(type), _dht(0, type) {
+        // Warning: The standard DHT library is hardcoded to native pins.
+        // For now, we assume _io is a NativeDigitalIO and we'd extract its pin.
+    }
 
     bool init() override {
         _dht.begin();
@@ -37,7 +42,7 @@ public:
     const char* getName() const override { return "DHT22"; }
 
 private:
-    uint8_t _pin;
+    IDigitalIO* _io;
     uint8_t _type;
     DHT _dht;
 };

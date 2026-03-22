@@ -9,6 +9,7 @@
 #pragma once
 
 #include "board_config.h"
+#include "interfaces.h"
 #include <stdint.h>
 
 // ============================================================================
@@ -132,8 +133,8 @@ private:
   uint8_t _enabled = 0xFF;                  // Enabled channels bitmask
   uint32_t _stateChangeCount = 0;           // Diagnostic counter
 
-  // GPIO mapping (from board_config.h)
-  static const uint8_t _relayPins[8];
+  // Interface instances
+  IDigitalIO* _relays[8] = {nullptr};
 
   // Private helper to apply GPIO change
   void _applyState(uint8_t newState);

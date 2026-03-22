@@ -9,6 +9,7 @@
  */
 
 #include <Arduino.h>
+#include "../lib/App/plugin_manager.h"
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <esp_heap_caps.h>
@@ -18,7 +19,9 @@
 #include "../lib/HAL/radio_hal.h"
 #include "../lib/HAL/relay_hal.h"
 #include "../lib/HAL/sensor_hal.h"
+#ifdef PIN_SENSOR_DHT
 #include "../lib/HAL/dht_sensor.h"
+#endif
 
 // Transport Layer
 #include "../lib/Transport/message_router.h"
@@ -40,6 +43,7 @@
 #include "../lib/App/command_manager.h"
 #include "../lib/App/schedule_manager.h"
 #include "../lib/App/gps_manager.h"
+#include "../lib/App/status_builder.h"
 
 // Bench Mode (optional, compile-time selectable)
 #ifdef BENCH_MODE
@@ -147,7 +151,14 @@ void controlTask(void* param) {
     }
 
     // Collect telemetry
-    uint16_t tempC_x10 = 2500;          // Placeholder: 25.0°C
+    uint16_t tempC_x10 = 2500;  // Default
+    auto sensorReadings = sensorHAL.readAll();
+    for (const auto& r : sensorReadings) {
+        if (r.type == SensorType::TEMPERATURE) {
+            tempC_x10 = static_cast<uint16_t>(r.value * 10.0f);
+            break;
+        }
+    }
     uint16_t voltageV_x100 = static_cast<uint16_t>(PowerManager::getBatteryVoltage() * 100.0f);
     uint8_t relayState = relayHAL.getState();
     int8_t rssi = loraTransport.getSignalStrength();
@@ -160,7 +171,7 @@ void controlTask(void* param) {
       static const char* const kModeNames[] = {"NORMAL", "CONSERVE", "CRITICAL"};
       OLEDManager::setBatteryVoltage(PowerManager::getBatteryVoltage(),
                                      kModeNames[static_cast<uint8_t>(PowerManager::getMode())]);
-      OLEDManager::setLoRaSignal(rssi, 0);  // TODO: add SNR from LoRa
+      OLEDManager::setLoRaSignal(rssi, loraTransport.getLastSNR());
       OLEDManager::setRelayStatus(relayState > 0);
       OLEDManager::setTemperature(tempC_x10 / 10.0f);
       OLEDManager::setPeerCount(meshCoordinator.getNeighborCount());
@@ -168,6 +179,20 @@ void controlTask(void* param) {
       OLEDManager::setFreeHeap(esp_get_free_heap_size());
       OLEDManager::setDeviceName(NVSManager::getNodeID("Node").c_str());
       OLEDManager::setVersion(FIRMWARE_VERSION);
+      
+      // Update interface status
+      OLEDManager::setTransportStatus(
+        WiFi.status() == WL_CONNECTED,
+        BLETransport::isConnected(),
+        #ifdef ENABLE_MQTT_TRANSPORT
+          MQTTTransport::instance()->isConnected(),
+        #else
+          false,
+        #endif
+        loraTransport.isReady()
+      );
+
+      OLEDManager::setIP(WiFi.localIP().toString().c_str());
 
       GPSManager::GPSData gpsData = GPSManager::getData();
       OLEDManager::setGPS(gpsData.lat, gpsData.lon, gpsData.satellites, gpsData.hasFix);
@@ -248,6 +273,9 @@ void controlTask(void* param) {
 
     // Update GNSS tracking
     GPSManager::update();
+
+    // Poll all generic plugins
+    pluginManager.pollAll();
 
     vTaskDelay(pdMS_TO_TICKS(500));  // 500ms control loop period
   }
@@ -359,12 +387,6 @@ void setup() {
   // Record boot timestamp
   g_bootTimestamp = millis();
 
-  Serial.println("\n\n=== LoRaLink v2 Boot ===");
-  Serial.printf("Version: %s\n", FIRMWARE_VERSION);
-  Serial.printf("Role: %s\n", DEVICE_ROLE);
-  Serial.printf("Radio: %s\n", RADIO_MODEL);
-  Serial.printf("PSRAM: %s\n", HAS_PSRAM_STR);
-
   // Step 1: Initialize NVS (Persistent Storage)
   // ========================================================================
   Serial.println("\n[1/7] Initializing NVS persistence layer...");
@@ -386,11 +408,6 @@ void setup() {
   snprintf(mac_buf, sizeof(mac_buf), "[%02X:%02X]", mac_raw[4], mac_raw[5]);
   OLEDManager::setMAC(mac_buf);
 
-  // Set diagnostics in OLED
-  OLEDManager::setDiagnostics(NVSConfig::getBootCount(), NVSConfig::getResetReason().c_str());
-  OLEDManager::setVersion(FIRMWARE_VERSION);
-  OLEDManager::addLog("System Initializing");
-
   // ========================================================================
   // Step 2: Initialize Power Manager (Battery Voltage Monitoring)
   // ========================================================================
@@ -411,7 +428,7 @@ void setup() {
   // Enable external power rail (VEXT) — powers OLED and peripherals on Heltec boards.
   // Must happen before Wire.begin() / OLED init or the display has no power.
   PowerManager::enableVEXT();
-  delay(50);  // Allow rail to stabilize
+  delay(100);  // Allow rail to stabilize
 
   Serial.println("  ✓ Power manager initialized");
 
@@ -427,6 +444,13 @@ void setup() {
     Serial.println("  ✓ OLED display initialized");
   }
 
+  // Set initial identity info (must be after init() or it gets wiped by defaults)
+  OLEDManager::setMAC(mac_buf);
+  OLEDManager::setVersion(FIRMWARE_VERSION);
+  OLEDManager::setDeviceName(NVSManager::getNodeID("Node").c_str());
+  OLEDManager::setDiagnostics(NVSConfig::getBootCount(), NVSConfig::getResetReason().c_str());
+  OLEDManager::addLog("System Initialized");
+
   delay(BOOT_SAFE_DELAY_STAGGER_MS);
 
   // ========================================================================
@@ -441,14 +465,22 @@ void setup() {
 
   relayHAL.init();
   
+  // Step 4: Initialize Plugins & Sensors
+  // ========================================================================
+  Serial.println("[4/8] Initializing plugins & sensors...");
+  
   // Initialize Sensors
   #ifdef PIN_SENSOR_DHT
-    static DHTSensorPlugin dhtPlugin(PIN_SENSOR_DHT);
+    static NativeDigitalIO dhtIO(PIN_SENSOR_DHT);
+    static DHTSensorPlugin dhtPlugin(&dhtIO);
     sensorHAL.registerPlugin(&dhtPlugin);
   #endif
   sensorHAL.init();
 
-  Serial.println("  ✓ HAL initialized");
+  // Initialize all generic plugins
+  pluginManager.initAll();
+
+  Serial.println("  ✓ Core HAL & Plugins initialized");
 
   // Get Node ID early for diagnostics and BLE
   std::string nodeIDStr = NVSManager::getNodeID("Node");
@@ -649,11 +681,10 @@ void loop() {
   uint32_t now = millis();
 
   if (now - lastStatus > 10000) {
-    Serial.printf("[STATUS] Uptime: %u s, Neighbors: %u, Relayed: %u\n",
-                  (unsigned int)((now - g_bootTimestamp) / 1000),
-                  meshCoordinator.getNeighborCount(),
-                  meshCoordinator.getRelayCount());
-
+    // Periodic JSON status output (every ~10 seconds) for Web App / PC serial bridge
+    Serial.print("[JSON_STATUS] ");
+    Serial.println(StatusBuilder::buildStatusString().c_str());
+    
     lastStatus = now;
   }
 }

@@ -32,6 +32,7 @@ echo =====================================================
 echo LoRaLink Stack is starting!
 echo Dashboard: http://localhost:8000
 echo Website:   http://localhost:8010
+echo Magic App: http://localhost:8500
 echo =====================================================
 echo.
 :: Only pause if the script was launched manually (explaining why wait)

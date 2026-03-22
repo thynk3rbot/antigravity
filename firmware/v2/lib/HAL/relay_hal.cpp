@@ -5,14 +5,15 @@
 
 #include "relay_hal.h"
 #include "mcp_hal.h"
+#include "native_hal.h"
 #include <Arduino.h>
 #include <cstring>
 
 // Static instance
 RelayHAL& relayHAL = RelayHAL::getInstance();
 
-// Static relay pin mapping
-const uint8_t RelayHAL::_relayPins[8] = {
+// Internal pin mapping (from board_config.h)
+static const uint8_t g_relayPins[8] = {
   RELAY_CH0, RELAY_CH1, RELAY_CH2, RELAY_CH3,
   RELAY_CH4, RELAY_CH5, RELAY_CH6, RELAY_CH7
 };
@@ -31,30 +32,39 @@ RelayHAL& RelayHAL::getInstance() {
 // ============================================================================
 
 void RelayHAL::init() {
-  // Set all relay pins as OUTPUT
-  // Note: On V3/V4 (SX1262), GPIO 12/13 are tied to LORA_RESET/LORA_BUSY.
-  // board_config.h sets RELAY_CHx = 255 (sentinel) to prevent GPIO conflicts.
-  // The check 'if (pin < 255)' skips these reserved pins.
+  uint8_t initialized = 0;
   uint8_t skipped = 0;
+
   for (int i = 0; i < MAX_RELAY_CHANNELS; i++) {
-    uint8_t pin = _relayPins[i];
-    if (MCPHAL::isVirtual(pin)) {
-      mcpHAL.pinMode(pin, OUTPUT);
-      mcpHAL.digitalWrite(pin, LOW);
-    } else if (pin < 255) {
-      pinMode(pin, OUTPUT);
-      digitalWrite(pin, LOW);  // Start all OFF (active-LOW)
+    uint8_t pin = g_relayPins[i];
+    
+    // Clean up previous instance if any (though init should only be called once)
+    if (_relays[i]) {
+        delete _relays[i];
+        _relays[i] = nullptr;
+    }
+
+    if (pin < 255) {
+      if (MCPHAL::isVirtual(pin)) {
+        _relays[i] = new MCPDigitalIO(pin);
+      } else {
+        _relays[i] = new NativeDigitalIO(pin);
+      }
+      
+      _relays[i]->mode(OUTPUT);
+      _relays[i]->write(LOW); // Start all OFF
+      initialized++;
     } else {
       skipped++;
     }
   }
 
   _state = 0x00;
-  _enabled = 0xFF;  // All enabled
+  _enabled = 0xFF;
   _stateChangeCount = 0;
 
-  Serial.printf("[RelayHAL] Initialized %d relay channels (%d skipped - reserved pins)\n",
-                MAX_RELAY_CHANNELS, skipped);
+  Serial.printf("[RelayHAL] Initialized %d relay channels (%d skipped)\n",
+                initialized, skipped);
 }
 
 // ============================================================================
@@ -71,7 +81,7 @@ void RelayHAL::setState(uint8_t mask) {
   _stateChangeCount++;
 
   Serial.printf("[RelayHAL] State changed to 0x%02X (change #%lu)\n",
-                _state, _stateChangeCount);
+                _state, (unsigned long)_stateChangeCount);
 }
 
 uint8_t RelayHAL::getState() const {
@@ -104,7 +114,8 @@ void RelayHAL::setChannel(uint8_t channel, bool on) {
   _applyState(_state);
   _stateChangeCount++;
 
-  Serial.printf("[RelayHAL] Channel %d -> %s\n", channel, on ? "ON" : "OFF");
+  Serial.printf("[RelayHAL] Channel %d -> %s (change #%lu)\n", 
+                channel, on ? "ON" : "OFF", (unsigned long)_stateChangeCount);
 }
 
 bool RelayHAL::getChannel(uint8_t channel) const {
@@ -158,7 +169,7 @@ const char* RelayHAL::getDiagnostics() const {
   static char buffer[128];
   snprintf(buffer, sizeof(buffer),
            "Relays: %d ON, %d total (0x%02X) - %lu changes",
-           getActiveCount(), MAX_RELAY_CHANNELS, _state, _stateChangeCount);
+           getActiveCount(), MAX_RELAY_CHANNELS, _state, (unsigned long)_stateChangeCount);
   return buffer;
 }
 
@@ -168,15 +179,9 @@ const char* RelayHAL::getDiagnostics() const {
 
 void RelayHAL::_applyState(uint8_t newState) {
   for (int i = 0; i < MAX_RELAY_CHANNELS; i++) {
-    uint8_t pin = _relayPins[i];
-    // Skip pins with sentinel value 255 (reserved pins on V3/V4 SX1262 boards)
-    if (MCPHAL::isVirtual(pin)) {
+    if (_relays[i]) {
       bool shouldBeOn = (newState & (1 << i)) != 0;
-      mcpHAL.digitalWrite(pin, shouldBeOn ? HIGH : LOW);
-    } else if (pin < 255) {
-      bool shouldBeOn = (newState & (1 << i)) != 0;
-      // Relays are typically active-LOW, but this depends on hardware
-      digitalWrite(pin, shouldBeOn ? HIGH : LOW);
+      _relays[i]->write(shouldBeOn);
     }
   }
 }

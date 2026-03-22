@@ -24,6 +24,9 @@ if %errorlevel% neq 0 (
 echo Launching MQTT Broker (EMQX Docker - Ports 1883 / 8083)...
 start "LoRaLink MQTT Broker" cmd /c "%~dp0Start_MQTT_Server.bat"
 echo.
+echo Launching RAG Router (Port 8200)...
+start "LoRaLink RAG Router" cmd /c "%~dp0Start_RAG_Router.bat"
+echo.
 echo Launching Documentation Server (Port 8001)...
 start "LoRaLink Docs Server" cmd /c "%~dp0Start_Docs_Server.bat"
 echo.
@@ -36,6 +39,9 @@ echo.
 echo Launching Local AI Workstation (Port 3000)...
 start "AI Workstation" cmd /c "%~dp0Start_AI_Workstation.bat"
 echo.
+echo Launching Magic Control Interface (Port 8500)...
+start "Magic Control" cmd /c "cd %~dp0magic && python bridge.py"
+echo.
 echo All services launched in separate windows!
 echo.
 echo   MQTT Broker:    localhost:1883  (TCP)
@@ -43,8 +49,10 @@ echo   MQTT WebSocket: localhost:8083
 echo   EMQX Dashboard: http://localhost:18083  (admin / public)
 echo   Docs:           http://localhost:8001
 echo   Controller:     http://localhost:8000
+echo   RAG Router:     http://localhost:8200
 echo   Website:        http://localhost:8010
 echo   AI WebUI:       http://localhost:3000
+echo   Magic Control:  http://localhost:8500
 echo.
 echo You can now close this supervisor window.
 pause

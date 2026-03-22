@@ -13,6 +13,23 @@
 
 #pragma once
 
+// Provide default definitions for IntelliSense/Linter if build flags are missing.
+// This prevents #error directives from cluttering the IDE while still enforcing
+// them during real builds via PlatformIO.
+#if defined(__INTELLISENSE__) || defined(__clang__)
+  #ifndef ROLE_HUB
+    #ifndef ROLE_NODE
+      #define ROLE_HUB
+    #endif
+  #endif
+  #ifndef RADIO_SX1276
+    #ifndef RADIO_SX1262
+      #define RADIO_SX1276
+      #define ARDUINO_HELTEC_WIFI_LORA_32
+    #endif
+  #endif
+#endif
+
 // ============================================================================
 // Build Flag Validation (Compile-Time Checks)
 // ============================================================================
@@ -174,9 +191,6 @@
   #define BAT_ADC_PIN 1
   #define BAT_ADC_UNIT 1         // ADC1
   #define BAT_ADC_CHANNEL ADC1_CHANNEL_0
-  #define BAT_ADC_PIN 1
-  #define BAT_ADC_UNIT 1         // ADC1
-  #define BAT_ADC_CHANNEL ADC1_CHANNEL_0
   #define BAT_ADC_CTRL 37        // V4 requires GPIO 37 HIGH for battery sense
 #endif
 
@@ -290,6 +304,7 @@
 
 #define DEBUG_ENABLED           1
 #define DEBUG_SERIAL            Serial
+#define SERIAL_BAUD             115200
 
 // ============================================================================
 // Compile-Time Info (for serial output)

@@ -57,6 +57,9 @@
             <div class="nav-item" data-module="spectrum" title="Spectrum Analyzer">
                 <i class="fas fa-wave-square"></i>
             </div>
+            <div class="nav-item" data-module="prototype" title="Prototype Hub">
+                <i class="fas fa-flask"></i>
+            </div>
         </nav>
 
         <section class="module-view">
@@ -100,6 +103,10 @@
                         <div class="link-badge" id="link-ble">BLE</div>
                         <div class="link-badge" id="link-serial">SERIAL</div>
                         <div class="link-badge active" id="link-mqtt">MQTT</div>
+                        <div class="ai-indicator" title="Local AI Workstation Status">
+                            <span id="ai-pulse" class="ai-pulse idle"></span>
+                            <span class="badge-label">AI</span>
+                        </div>
                     </div>
                 </div>
             </header>
@@ -185,14 +192,48 @@
 
                 <!-- ── Module: Spectrum ────────────────────────────────────── -->
                 <div id="mod-spectrum" class="module-container">
-                    <div class="panel h-full">
-                        <div class="panel-title">RF Spectrum Analyzer (902-928 MHz)</div>
-                        <div class="spectrum-container p-24" style="text-align:center;">
-                            <canvas id="spectrum-canvas" width="800" height="400" style="background:#000; border:1px solid var(--accent-blue); max-width:100%;"></canvas>
-                            <div class="mt-16 flex-row-sb" style="max-width: 800px; margin: 0 auto;">
-                                <div class="label">Center: 915.0 MHz</div>
-                                <div class="label">Span: 26.0 MHz</div>
-                                <div class="label">Peak: -92 dBm</div>
+                    <!-- ... existing spectrum content ... -->
+                </div>
+
+                <!-- ── Module: Prototype Hub ────────────────────────────────── -->
+                <div id="mod-prototype" class="module-container">
+                    <div class="prototype-layout">
+                        <!-- Left: Plugin Registry -->
+                        <div class="proto-sidebar">
+                            <div class="panel">
+                                <div class="panel-title">Plugin Registry</div>
+                                <div id="plugin-list" class="plugin-registry p-16">
+                                    <div class="list-empty">Scanning for plugins...</div>
+                                </div>
+                                <div class="p-8 border-top">
+                                    <button class="btn btn-sm btn-full" onclick="refreshPlugins()"><i class="fas fa-sync"></i> Refresh Registry</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Center: IO Matrix -->
+                        <div class="proto-main">
+                            <div class="panel">
+                                <div class="panel-title">Hardware IO Matrix</div>
+                                <div id="io-matrix" class="io-matrix p-16">
+                                    <!-- Pins will be generated here -->
+                                </div>
+                                <div class="p-8 border-top flex-row-sb">
+                                    <span class="label">Auto-Refresh: <span class="text-accent">Active</span></span>
+                                    <button class="btn btn-sm" onclick="toggleSimMode()">Toggle Sim Mode</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Right: Console -->
+                        <div class="proto-console">
+                            <div class="panel">
+                                <div class="panel-title">HAL Event Stream</div>
+                                <div id="hal-console" class="hal-console p-8"></div>
+                                <div class="cmd-bar p-8 border-top">
+                                    <input type="text" id="proto-cmd-input" class="cmd-input" placeholder="HAL CMD..." onkeydown="if(event.key==='Enter') sendHalCommand()">
+                                    <button class="btn btn-sm" onclick="sendHalCommand()">RUN</button>
+                                </div>
                             </div>
                         </div>
                     </div>

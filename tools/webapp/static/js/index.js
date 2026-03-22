@@ -48,13 +48,15 @@ function switchModule(module) {
         scheduler: "IO Task Scheduler",
         files: "Filesystem Browser",
         admin: "System Admin",
-        spectrum: "RF Spectrum Analysis"
+        spectrum: "RF Spectrum Analysis",
+        prototype: "Prototype Hub & Simulation"
     };
     document.getElementById('view-title').textContent = titles[module] || "LoRaLink";
 
     if (module === 'mesh') loadDiscovery();
     if (module === 'mesh' && !_mqttClient) initMqtt();
     if (module === 'spectrum') initSpectrum();
+    if (module === 'prototype') startPrototypeUpdates(); else stopPrototypeUpdates();
 }
 
 function initWebSocket() {
@@ -89,6 +91,8 @@ function handleMessage(data) {
         updateNodeSelector(data.nodes);
     } else if (data.type === 'mqtt_raw') {
         processMqttMessage(data.topic, data.payload);
+    } else if (data.type === 'ai_status') {
+        updateAiStatus(data);
     }
 }
 
@@ -142,6 +146,19 @@ function logTrace(msg) {
     line.innerHTML = `<span style="color:var(--text-dim)">[${new Date().toLocaleTimeString()}]</span> ${msg}`;
     el.prepend(line);
     if (el.childNodes.length > 50) el.removeChild(el.lastChild);
+}
+
+function updateAiStatus(data) {
+    const el = document.getElementById('ai-pulse');
+    if (el) {
+        el.className = `ai-pulse ${data.status}`;
+        el.title = `AI Status: ${data.status.toUpperCase()}`;
+    }
+    if (data.status === 'querying') {
+        logTrace(`<span style="color:var(--accent-purple)">[AI] Processing prompt: "${data.prompt}"...</span>`);
+    } else if (data.status === 'idle' && data.response) {
+        logTrace(`<span style="color:var(--accent-purple)">[AI] Response: ${data.response}</span>`);
+    }
 }
 
 // ── Hardware Metadata (Legacy Port) ──────────────────────────────────────────
@@ -759,4 +776,119 @@ async function deleteFile(name) {
         await fetch(`/api/files/delete?path=/${name}`, { method: "DELETE" });
         loadFiles();
     } catch(e) { logTrace("!! Delete failed: " + e.message); }
+}
+// ── Module: Prototype Hub ───────────────────────────────────
+
+let _protoUpdateInterval = null;
+
+function startPrototypeUpdates() {
+    refreshPlugins();
+    loadIoMatrix();
+    if (_protoUpdateInterval) clearInterval(_protoUpdateInterval);
+    _protoUpdateInterval = setInterval(() => {
+        if (_currentModule === 'prototype') loadIoMatrix();
+    }, 2000);
+}
+
+function stopPrototypeUpdates() {
+    if (_protoUpdateInterval) clearInterval(_protoUpdateInterval);
+    _protoUpdateInterval = null;
+}
+
+async function refreshPlugins() {
+    try {
+        const res = await fetch('/api/protodev/plugins');
+        const data = await res.json();
+        renderPluginList(data.plugins || []);
+    } catch (e) {
+        console.warn("Plugin refresh failed", e);
+    }
+}
+
+function renderPluginList(plugins) {
+    const el = document.getElementById('plugin-list');
+    if (!el) return;
+    if (plugins.length === 0) {
+        el.innerHTML = '<div class="list-empty">No plugins detected.</div>';
+        return;
+    }
+    el.innerHTML = plugins.map(p => `
+        <div class="suit-card-mini active mb-8">
+            <div class="flex-row-sb">
+                <span class="mg-label"><i class="fas ${p.icon || 'fa-plug'}"></i> ${p.name}</span>
+                <span class="ind-badge ${p.status === 'RUNNING' ? 'active' : ''}">${p.status}</span>
+            </div>
+            <div class="mg-value" style="font-size: 10px; margin-top: 4px;">PINS: ${p.pins ? p.pins.join(', ') : 'NONE'}</div>
+        </div>
+    `).join('');
+}
+
+async function loadIoMatrix() {
+    try {
+        const res = await fetch('/api/protodev/hal');
+        const data = await res.json();
+        renderIoMatrix(data.pins || []);
+    } catch (e) {
+        console.warn("HAL map failed", e);
+    }
+}
+
+function renderIoMatrix(pins) {
+    const el = document.getElementById('io-matrix');
+    if (!el) return;
+    if (pins.length === 0) {
+        // Fallback to generating some default pins for visualization if empty
+        const mockPins = [];
+        for(let i=0; i<32; i++) mockPins.push({id: i, mode: 'IN', val: 0});
+        pins = mockPins;
+    }
+    el.innerHTML = pins.map(p => `
+        <div class="io-pin-box ${p.val ? 'high' : 'low'}" title="GPIO ${p.id} (${p.mode})">
+            <div class="pin-id">${p.id}</div>
+            <div class="pin-mode">${p.mode}</div>
+        </div>
+    `).join('');
+}
+
+async function toggleSimMode() {
+    try {
+        const res = await fetch('/api/simulator/toggle', { method: 'POST' });
+        const data = await res.json();
+        logTrace(`Simulator: ${data.active ? 'STARTED' : 'STOPPED'}`);
+        // Visual indicator in Prototype Hub
+        document.querySelector('[data-module="prototype"]').classList.toggle('sim-active', data.active);
+    } catch (e) {
+        logTrace("! Simulator toggle failed");
+    }
+}
+
+async function sendHalCommand() {
+    const inp = document.getElementById('proto-cmd-input');
+    const cmd = inp.value.trim();
+    if (!cmd) return;
+    inp.value = '';
+    
+    // Log in HAL console
+    const consoleEl = document.getElementById('hal-console');
+    const line = document.createElement('div');
+    line.className = 'hal-log-line';
+    line.innerHTML = `<span class="text-accent">></span> ${cmd}`;
+    consoleEl.prepend(line);
+
+    try {
+        const res = await fetch('/api/protodev/cmd', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ cmd })
+        });
+        const data = await res.json();
+        if (data.resp) {
+            const respLine = document.createElement('div');
+            respLine.className = 'hal-log-line';
+            respLine.innerHTML = `<span class="text-dim"><</span> ${data.resp}`;
+            consoleEl.prepend(respLine);
+        }
+    } catch (e) {
+        console.warn("HAL command failed", e);
+    }
 }

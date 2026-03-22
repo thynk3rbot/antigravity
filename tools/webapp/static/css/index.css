@@ -600,3 +600,50 @@ body {
 .suit-card-mini.active::after {
   background: var(--green-ok);
 }
+
+/* ── AI Indicator ────────────────────────────────────────────── */
+.ai-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(112, 0, 255, 0.1);
+  padding: 4px 10px;
+  border-radius: 20px;
+  border: 1px solid rgba(112, 0, 255, 0.2);
+  margin-left: 8px;
+}
+
+.ai-pulse {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--text-dim);
+  transition: all 0.3s;
+}
+
+.ai-pulse.idle {
+  background: var(--text-dim);
+  box-shadow: none;
+}
+
+.ai-pulse.querying {
+  background: var(--accent-purple);
+  box-shadow: 0 0 10px var(--accent-purple);
+  animation: ai-glow 1.5s infinite alternate;
+}
+
+.ai-pulse.error {
+  background: var(--red-err);
+  box-shadow: 0 0 10px var(--red-err);
+}
+
+@keyframes ai-glow {
+  from { opacity: 0.5; transform: scale(0.9); }
+  to { opacity: 1; transform: scale(1.1); }
+}
+
+.badge-label {
+  font-size: 10px;
+  font-weight: 900;
+  color: var(--text-dim);
+}

@@ -80,7 +80,7 @@ bool RadioHAL::_initSX1276() {
 }
 
 bool RadioHAL::_initSX1262() {
-  #ifdef RADIO_SX1262
+#ifdef RADIO_SX1262
   // Initialize SPI module
   _spiModule = new Module(LORA_CS, LORA_DIO1, LORA_RESET, LORA_BUSY);
   if (!_spiModule) {
@@ -107,11 +107,11 @@ bool RadioHAL::_initSX1262() {
   _radio->setCRC(true);
 
   // Set TX power (max 22 dBm for SX1262 on V3, 28 dBm on V4)
-  #ifdef BOARD_HAS_PSRAM
+#ifdef BOARD_HAS_PSRAM
   _radio->setOutputPower(28);  // V4
-  #else
+#else
   _radio->setOutputPower(22);  // V3
-  #endif
+#endif
 
   // Start RX
   _radio->startReceive();
@@ -119,7 +119,9 @@ bool RadioHAL::_initSX1262() {
   _initialized = true;
   Serial.println("[RadioHAL] SX1262 initialized");
   return true;
-  #endif
+#else
+  return false;
+#endif
 }
 
 // ============================================================================

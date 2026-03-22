@@ -8,6 +8,7 @@
 #include <stdint.h>
 
 // Discovery timing
+#define BOOT_SILENCE_MS       5000UL    // Listen for 5s before first ping
 #define DISCOVERY_BURST_MS    300000UL  // 5 minutes of fast heartbeats on boot
 #define DISCOVERY_INTERVAL_S  20UL      // 20s interval during discovery seeking
 #define USB_HEART_BEAT_S      60UL      // 60s interval when on USB power

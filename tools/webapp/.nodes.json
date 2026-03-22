@@ -4,48 +4,89 @@
     "name": "Peer1",
     "type": "wifi",
     "address": "172.16.0.27",
-    "active": false
+    "active": true,
+    "online": true,
+    "last_seen": 1774136035.387126
   },
   {
     "id": "290d1db2-19d0-4510-8c40-4654df48ada3",
     "name": "Peer2",
     "type": "wifi",
     "address": "172.16.0.26",
-    "active": false
+    "active": false,
+    "online": true,
+    "last_seen": 1774136035.387126
   },
   {
     "id": "56c35099-2c1e-4bed-86e5-5ea936e1e62d",
     "name": "PEER3V4",
     "type": "wifi",
     "address": "10.0.0.45",
-    "active": false
+    "active": false,
+    "online": true,
+    "last_seen": 1774136035.387126
   },
   {
     "id": "15190217-6b71-4c6b-9fbb-1b2d9669ec29",
     "name": "PEER4V4",
     "type": "wifi",
     "address": "10.0.0.117",
-    "active": false
+    "active": false,
+    "online": true,
+    "last_seen": 1774136035.387126
   },
   {
     "id": "66df0fdb-bfed-49a3-bd12-8ed84a226e44",
     "name": "PEER5V2",
     "type": "ble",
     "address": "PEER5V2",
-    "active": false
+    "active": false,
+    "online": true,
+    "last_seen": 1774136035.387126
   },
   {
     "id": "70000000-0000-0000-0000-000000000007",
     "name": "Node-7-V4",
     "type": "serial",
     "address": "COM7",
-    "active": false
+    "active": false,
+    "online": true,
+    "last_seen": 1774136035.387126
   },
   {
     "id": "80000000-0000-0000-0000-000000000008",
     "name": "Node-8-V4",
     "type": "serial",
     "address": "COM8",
-    "active": true
+    "active": false,
+    "online": true,
+    "last_seen": 1774136035.387126
+  },
+  {
+    "id": "400a137d-21fc-4b4e-8739-e6fb976a99d9",
+    "name": "loralink-PEER4V4",
+    "type": "wifi",
+    "address": "172.16.0.29",
+    "active": false,
+    "online": false,
+    "last_seen": 1774204587.2411482
+  },
+  {
+    "id": "f776be50-0249-44a9-b262-493c45d1b196",
+    "name": "loralink-Peer3V4",
+    "type": "wifi",
+    "address": "172.16.0.28",
+    "active": false,
+    "online": false,
+    "last_seen": 1774204577.6547391
+  },
+  {
+    "id": "3e332a4a-e193-4368-a9ce-37c56565229d",
+    "name": "loralink-Node",
+    "type": "wifi",
+    "address": "172.16.0.42",
+    "active": false,
+    "online": true,
+    "last_seen": 1774213153.9173672
   }
 ]

@@ -21,6 +21,7 @@
 
 #include <ArduinoJson.h>
 #include <string>
+#include <vector>
 
 /**
  * @class StatusBuilder
@@ -50,7 +51,6 @@ public:
      */
     static std::string buildStatusString();
 
-private:
     // Helper methods for each status section
     // These are called by buildStatus() to populate the document
 
@@ -93,7 +93,6 @@ private:
      * @brief Add GPS info (latitude, longitude, altitude, satellites, fix_type)
      */
     static void addGPSInfo(JsonDocument& doc);
-
     /**
      * @brief Add transport status object (wifi, ble, mqtt, lora booleans)
      */
@@ -109,11 +108,22 @@ private:
      */
     static void addTelemetry(JsonDocument& doc);
 
-    /**
+     /**
      * @brief Add system info (uptime, boot_count, heap, last_update, etc.)
      */
     static void addSystemInfo(JsonDocument& doc);
 
+    /**
+     * @brief Add list of registered plugins
+     */
+    static void addPluginList(JsonDocument& doc);
+
+    /**
+     * @brief Add hardware I/O map
+     */
+    static void addHardwareMap(JsonDocument& doc);
+
+private:
     // Static state for historical data
     static int8_t rssiHistory[5];           ///< Last 5 LoRa RSSI readings
     static uint8_t rssiHistoryIndex;        ///< Current position in history

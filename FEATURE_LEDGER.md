@@ -57,6 +57,12 @@ firmware from project origin, maintained from a build perspective.
 
 ## 3. Projected Builds (Roadmap)
 
+### v0.2.2 - March 2026 (Fleet Identity & Parity)
+- PHYSICAL IDENTITY: OLED Page 1 now displays user-set Node Name and Firmware Version.
+- BOOT REORDER: Fixed initialization race condition to ensure identity persistence on OLED.
+- REGISTRY SYNC: Synchronized webapp `.nodes.json` with physical COM port availability.
+- RAW FLASH STABILITY: Locked deployments to `--no-stub` 115200 baud for Heltec V4 S3 modules.
+
 ### v0.2.0 - Target: Late March 2026
 - Wake-on-Radio (CAD): Pulse-based low power radio RX.
 - Branded Subdomain Routing: DNS migration for permanent cloud hooks.

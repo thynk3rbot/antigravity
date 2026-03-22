@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prototype Management | Antigravity Unified HAL</title>
+    <link rel="stylesheet" href="/static/css/index.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --neon-blue: #00f2ff;
+            --neon-green: #39ff14;
+            --glass-bg: rgba(15, 15, 20, 0.8);
+            --glass-border: rgba(255, 255, 255, 0.1);
+        }
+
+        body.proto-dev-bg {
+            background: radial-gradient(circle at top right, #0a0a12, #050505);
+            min-height: 100vh;
+            color: #e0e0e0;
+            overflow-x: hidden;
+        }
+
+        .proto-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        .proto-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 40px;
+            padding: 20px;
+            background: var(--glass-bg);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--glass-border);
+            border-radius: 16px;
+        }
+
+        .proto-title h1 {
+            font-size: 2rem;
+            background: linear-gradient(90deg, var(--neon-blue), var(--neon-green));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin: 0;
+            letter-spacing: 2px;
+        }
+
+        .proto-title p {
+            color: #888;
+            margin: 5px 0 0 0;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+        }
+
+        .grid-layout {
+            display: grid;
+            grid-template-columns: 1fr 350px;
+            gap: 24px;
+        }
+
+        .card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            padding: 24px;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            border-color: rgba(0, 242, 255, 0.3);
+        }
+
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            padding-bottom: 10px;
+        }
+
+        .section-header h3 {
+            font-size: 1.1rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--neon-blue);
+        }
+
+        /* Plugin Hub Styling */
+        .plugin-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 16px;
+        }
+
+        .plugin-card {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.05);
+            border-radius: 12px;
+            padding: 16px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .plugin-icon {
+            font-size: 1.5rem;
+            width: 48px;
+            height: 48px;
+            background: rgba(0, 242, 255, 0.1);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--neon-blue);
+        }
+
+        .plugin-info h4 {
+            margin: 0;
+            font-size: 1rem;
+        }
+
+        .plugin-info span {
+            font-size: 0.8rem;
+            color: #666;
+        }
+
+        .status-badge {
+            font-size: 0.7rem;
+            padding: 2px 8px;
+            border-radius: 100px;
+            background: rgba(255,255,255,0.1);
+            margin-left: auto;
+        }
+
+        .status-badge.online { background: rgba(57, 255, 20, 0.2); color: var(--neon-green); }
+
+        /* IO Matrix */
+        .io-matrix {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            gap: 8px;
+        }
+
+        .io-pin {
+            aspect-ratio: 1;
+            background: rgba(255,255,255,0.02);
+            border: 1px solid rgba(255,255,255,0.05);
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .io-pin:hover {
+            background: rgba(0, 242, 255, 0.15);
+            border-color: var(--neon-blue);
+        }
+
+        .io-pin span { font-size: 0.7rem; color: #555; }
+        .io-pin strong { font-size: 0.9rem; }
+        .io-pin.active { color: var(--neon-green); border-color: var(--neon-green); }
+
+        /* Console */
+        .console {
+            background: #000;
+            border-radius: 12px;
+            padding: 15px;
+            font-family: 'JetBrains Mono', 'Fira Code', monospace;
+            font-size: 0.85rem;
+            height: 400px;
+            overflow-y: auto;
+            border: 1px solid #222;
+        }
+
+        .console-line { margin-bottom: 4px; border-left: 2px solid transparent; padding-left: 8px; }
+        .console-line.info { border-left-color: var(--neon-blue); color: #88cfff; }
+        .console-line.warn { border-left-color: #ffcc00; color: #ffe680; }
+        .console-line.err { border-left-color: #ff4444; color: #ff9999; }
+        .console-line.cmd { color: var(--neon-green); opacity: 0.8; }
+
+        .btn-proto {
+            background: linear-gradient(135deg, #00d2ff 0%, #3a7bd5 100%);
+            border: none;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-transform: uppercase;
+            font-size: 0.8rem;
+            letter-spacing: 1px;
+        }
+
+        .btn-proto:hover {
+            box-shadow: 0 0 15px rgba(0, 210, 255, 0.5);
+            transform: scale(1.02);
+        }
+
+        .nav-back {
+            color: #888;
+            text-decoration: none;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+
+        .nav-back:hover { color: var(--neon-blue); }
+
+    </style>
+</head>
+<body class="proto-dev-bg">
+    <div class="proto-container">
+        <a href="/static/cockpit.html" class="nav-back">
+            <i class="fas fa-arrow-left"></i> BACK TO COCKPIT
+        </a>
+
+        <header class="proto-header">
+            <div class="proto-title">
+                <h1>PROTOTYPE HUB</h1>
+                <p>Unified Plugin & Hardware Management</p>
+            </div>
+            <div class="header-status">
+                <button class="btn-proto" onclick="rescanPlugins()">RESCAN BUS</button>
+            </div>
+        </header>
+
+        <div class="grid-layout">
+            <div class="left-col">
+                <!-- Plugin Hub -->
+                <div class="card mb-24">
+                    <div class="section-header">
+                        <h3>Plugin Registry</h3>
+                        <span id="plugin-count">0 Plugins Active</span>
+                    </div>
+                    <div class="plugin-list" id="plugin-grid">
+                        <div class="list-empty">Scanning for plugin drivers...</div>
+                    </div>
+                </div>
+
+                <!-- Hardware Matrix -->
+                <div class="card">
+                    <div class="section-header">
+                        <h3>Hardware IO Matrix</h3>
+                        <div class="flex-gap-8">
+                            <span class="status-badge">Native: 32</span>
+                            <span class="status-badge">Virtual: 16</span>
+                        </div>
+                    </div>
+                    <div class="io-matrix" id="io-matrix">
+                        <!-- Pins generated by JS -->
+                    </div>
+                </div>
+            </div>
+
+            <div class="right-col">
+                <!-- Device Info -->
+                <div class="card mb-24">
+                    <div class="section-header">
+                        <h3>Device Identity</h3>
+                    </div>
+                    <div class="device-stats">
+                        <div class="flex-row-sb mb-8">
+                            <span>FW VERSION</span>
+                            <strong class="mono" id="proto-fw-ver">V2.5.0-ALPHA</strong>
+                        </div>
+                        <div class="flex-row-sb mb-8">
+                            <span>UPTIME</span>
+                            <strong class="mono" id="proto-uptime">--</strong>
+                        </div>
+                        <div class="flex-row-sb mb-8">
+                            <span>HAL MODEL</span>
+                            <strong class="mono">Unified (v1)</strong>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Real-time Console -->
+                <div class="card">
+                    <div class="section-header">
+                        <h3>HAL Event Stream</h3>
+                    </div>
+                    <div class="console" id="proto-console">
+                        <div class="console-line info">[SYS] Prototype Management service started.</div>
+                        <div class="console-line info">[HAL] Initializing polymorphic I/O drivers...</div>
+                    </div>
+                    <div class="mt-16">
+                        <input type="text" id="proto-cmd" class="cmd-input" placeholder="RAW HAL CMD..." style="width:100%" onkeydown="if(event.key==='Enter') sendProtoCmd()">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function loadPlugins() {
+            try {
+                const r = await fetch('/api/protodev/plugins');
+                const data = await r.json();
+                const grid = document.getElementById('plugin-grid');
+                grid.innerHTML = '';
+
+                if (!data.plugins || data.plugins.length === 0) {
+                    grid.innerHTML = '<div class="list-empty">No plugins detected. Check firmware build.</div>';
+                    return;
+                }
+
+                data.plugins.forEach(p => {
+                    const card = document.createElement('div');
+                    card.className = 'plugin-card';
+                    card.innerHTML = `
+                        <div class="plugin-icon"><i class="${p.icon || 'fas fa-plug'}"></i></div>
+                        <div class="plugin-info">
+                            <h4>${p.name}</h4>
+                            <span>Pin: ${p.pin} | Polling: ${p.polling || 'N/A'}</span>
+                        </div>
+                        <div class="status-badge online">${p.status || 'READY'}</div>
+                    `;
+                    grid.appendChild(card);
+                });
+                document.getElementById('plugin-count').innerText = `${data.plugins.length} Plugins Active`;
+            } catch (e) {
+                console.error("Failed to load plugins:", e);
+            }
+        }
+
+        function generateIOMatrix() {
+            const matrix = document.getElementById('io-matrix');
+            matrix.innerHTML = '';
+            for (let i = 0; i < 48; i++) {
+                const pin = document.createElement('div');
+                pin.className = 'io-pin';
+                const isVirtual = i >= 32;
+                pin.innerHTML = `
+                    <span>${isVirtual ? 'V' : ''}${i % 32}</span>
+                    <strong>${Math.random() > 0.8 ? 'HI' : 'LO'}</strong>
+                `;
+                if (Math.random() > 0.8) pin.classList.add('active');
+                matrix.appendChild(pin);
+            }
+        }
+
+        async function rescanPlugins() {
+            logToConsole("Scanning unified plugin bus...", "info");
+            await loadPlugins();
+            logToConsole("Bus scan complete. Drivers re-mounted.", "info");
+        }
+
+        function logToConsole(msg, type = 'info') {
+            const console = document.getElementById('proto-console');
+            const line = document.createElement('div');
+            line.className = `console-line ${type}`;
+            const time = new Date().toLocaleTimeString([], {hour12: false});
+            line.innerText = `[${time}] ${msg}`;
+            console.appendChild(line);
+            console.scrollTop = console.scrollHeight;
+        }
+
+        function sendProtoCmd() {
+            const input = document.getElementById('proto-cmd');
+            const cmd = input.value;
+            if (!cmd) return;
+            logToConsole(`> ${cmd}`, "cmd");
+            input.value = '';
+            // TODO: Post to /api/cmd
+        }
+
+        // Init
+        window.onload = () => {
+            loadPlugins();
+            generateIOMatrix();
+            
+            // Mock dynamic updates
+            setInterval(() => {
+                const pins = document.querySelectorAll('.io-pin');
+                const idx = Math.floor(Math.random() * pins.length);
+                const pin = pins[idx];
+                const strong = pin.querySelector('strong');
+                const newVal = Math.random() > 0.5 ? 'HI' : 'LO';
+                strong.innerText = newVal;
+                if (newVal === 'HI') pin.classList.add('active');
+                else pin.classList.remove('active');
+            }, 500);
+        };
+    </script>
+</body>
+</html>

@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Magic | Control Surface</title>
+    <link rel="stylesheet" href="index.css">
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" href="favicon.ico">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div id="app">
+        <header>
+            <div class="logo">
+                <span class="magic-star">✨</span>
+                <h1>MAGIC</h1>
+            </div>
+            <div id="system-status" class="status-indicator">
+                <span class="dot pulse"></span>
+                <span class="text">System Ready</span>
+            </div>
+        </header>
+
+        <main id="chat-container">
+            <div id="messages">
+                <div class="message bot">
+                    <div class="bubble glass">
+                        Hello. I am Magic. What can I do for your system today?
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <footer>
+            <div class="input-wrapper glass">
+                <input type="text" id="chat-input" placeholder="Say 'Magic, turn on pin 5'..." autocomplete="off">
+                <button id="send-btn">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" />
+                    </svg>
+                </button>
+            </div>
+        </footer>
+
+        <!-- Progress Overlay for Commands -->
+        <div id="magic-overlay" class="hidden">
+            <div class="magic-spinner"></div>
+            <p>Processing Magic...</p>
+        </div>
+    </div>
+    <script src="index.js"></script>
+</body>
+</html>
