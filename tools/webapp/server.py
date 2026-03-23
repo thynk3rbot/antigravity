@@ -688,10 +688,50 @@ class SerialHub:
                             node = self.registry.add(p.device, "serial", p.device, online=True)
                             self._known_ports.add(p.device)
                             
+                            # Fire-and-forget probe for hardware version
+                            asyncio.create_task(self._probe_node(p.device, node))
+                            
                 await asyncio.sleep(5)
             except Exception as e:
                 print(f"[SerialHub] Error: {e}")
                 await asyncio.sleep(10)
+
+    async def _probe_node(self, port: str, node: NodeConfig):
+        """Temporary connect to probe hardware version and node ID."""
+        link = SerialLink(port)
+        try:
+            await link.connect()
+            # Wait for any boot text or send STATUS
+            await link.send_command("STATUS")
+            
+            # Brief wait for response
+            start_time = time.time()
+            while time.time() - start_time < 3:
+                if not link.line_queue.empty():
+                    line = await link.line_queue.get()
+                    # Look for hardware signature in status or boot log
+                    # Example: "HV: V4" or part of status JSON
+                    if '"hw":"' in line:
+                        import json
+                        try:
+                            data = json.loads(line)
+                            hw = data.get("hw", "Unknown")
+                            node.hardware = hw
+                            self.registry._save()
+                            print(f"[SerialHub] Probed {port}: Hardware={hw}")
+                            break
+                        except: pass
+                    elif "LoRaLink V" in line:
+                        # Fallback for boot strings
+                        if "V4" in line: node.hardware = "V4"
+                        elif "V3" in line: node.hardware = "V3"
+                        elif "V2" in line: node.hardware = "V2"
+                        self.registry._save()
+                        break
+                await asyncio.sleep(0.1)
+            await link.disconnect()
+        except Exception as e:
+            print(f"[SerialHub] Probe failed for {port}: {e}")
 
 
 # ════════════════════════════════════════════════════════════════════════════
