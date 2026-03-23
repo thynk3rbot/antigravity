@@ -149,12 +149,17 @@ static void displayPage5() {
 
 static void displayPage6() {
     display.clearDisplay();
-    drawHeader("Diagnostics");
+    drawHeader("Diag");
     display.setCursor(0, 14);
-    display.printf("Boot Count: %u\n", g_cached.bootCount);
-    display.printf("Reset: %s\n", g_cached.resetReason);
-    display.printf("Uptime: %u min", g_cached.uptimeMs / 60000);
+    display.printf("Up: %u min\n", g_cached.uptimeMs / 60000);
+    display.printf("Boot: %u\n", g_cached.bootCount);
+    display.printf("Heap: %u KB\n", g_cached.freeHeapBytes / 1024);
+    
+#ifdef ARDUINO_HELTEC_WIFI_LORA_32_V4
     drawFooter(6);
+#else
+    drawFooter(5);
+#endif
     display.display();
 }
 
@@ -283,11 +288,10 @@ void OLEDManager::update() {
                 case 3: displayPage4(); break;
                 case 4: 
 #ifdef ARDUINO_HELTEC_WIFI_LORA_32_V4
-                    displayPage5(); // GPS
+                    displayPage5(); break;
 #else
-                    displayPage6(); // Diagnostics (skip GPS)
+                    displayPage6(); break; // On V3, page 4/5 is Diag
 #endif
-                    break;
                 case 5: displayPage6(); break;
                 default: g_currentPage = 0; break;
             }

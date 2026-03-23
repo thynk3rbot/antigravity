@@ -449,32 +449,21 @@ void setup() {
   // ========================================================================
   Serial.println("\n[1/7] Initializing UI layer...");
 
-  // Initialize I2C and Display
+  // Initialize Power & UI prerequisites
+  PowerManager::init();
+  PowerManager::enableVEXT();
+  vTaskDelay(pdMS_TO_TICKS(50)); // Rail stabilization
+
   if (OLEDManager::getInstance().init()) {
     OLEDManager::getInstance().showSplash(FIRMWARE_VERSION, DEVICE_ROLE);
+    Serial.println("  ✓ OLED/Power initialized");
+  } else {
+    Serial.println("  ! OLED init failed (non-fatal)");
   }
 
   // Initialize Product Engine & Sniffer mode configurations
   ProductManager::getInstance().init();
   ProbeManager::getInstance().init();
-
-  NVSManager::printInfo();  // Debug output
-
-  NVSManager::printInfo();  // Debug output
-
-  // ========================================================================
-  // Step 1: Initialize Power & OLED (Prerequisites for Boot Visuals)
-  // ========================================================================
-  Serial.println("[1/8] Initializing Power & UI...");
-  PowerManager::init();
-  PowerManager::enableVEXT();
-  vTaskDelay(pdMS_TO_TICKS(10)); // Stabilize rail
-  
-  if (!OLEDManager::getInstance().init()) {
-    Serial.println("  ! OLED init failed (non-fatal)");
-  } else {
-    Serial.println("  ✓ OLED/Power initialized");
-  }
 
   // Identity Extraction
   uint8_t mac_raw[6];
@@ -584,9 +573,10 @@ void setup() {
     if (WiFiTransport::init(wifiSSID, wifiPass, mdnsHostname)) {
       Serial.println("  ✓ WiFi transport initialized (connecting...)");
 
-      // Initialize HTTP API server
+      // Initialize HTTP API server (only if connected or AP started)
       if (HttpAPI::init()) {
         Serial.println("  ✓ HTTP API server started on port 80");
+        OLEDManager::getInstance().setIP(WiFi.localIP().toString().c_str());
       } else {
         Serial.println("  ! HTTP API server failed to start (non-fatal)");
       }
