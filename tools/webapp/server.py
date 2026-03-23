@@ -280,6 +280,12 @@ class NodeRegistry:
                 existing.address = address
                 changed = True
             
+            # Update name if it's currently a placeholder or UUID
+            if name and name != "Unknown" and (existing.name == existing.id or existing.name.startswith("COM")):
+                print(f"[nodes] Promoting node {existing.id} name: {existing.name} -> {name}")
+                existing.name = name
+                changed = True
+            
             # Update hardware/mac if we just learned them
             if hardware and hardware != "Unknown":
                 existing.hardware = hardware
@@ -723,8 +729,11 @@ class SerialHub:
                         # We also check the hardware ID for better precision
                         desc = (p.description or "").upper()
                         hwid = (p.hwid or "").upper()
-                        is_loralink = any(sig in desc for sig in ["CP210", "USB SERIAL", "CH340", "ESP32"]) or \
-                                      any(vid in hwid for vid in ["303A", "10C4", "1A86"])
+                        
+                        is_loralink = (
+                            any(sig in desc for sig in ["CP210", "USB SERIAL", "CH340", "ESP32", "BLUETOOTH"]) or \
+                            any(vid in hwid for vid in ["303A", "10C4", "1A86", "BTHENUM"])
+                        )
                         
                         if is_loralink:
                             print(f"[SerialHub] New LoRaLink port detected: {p.device} ({p.description})")
@@ -813,20 +822,25 @@ class TransportManager:
             # Stale connection in cache? Clean it up
             del self._serial_cache[port]
 
-        # Cooldown check: don't retry a failing port for 10 seconds
+        # Cooldown check: don't retry a failing port for 30 seconds
         last_fail = self._serial_failures.get(port, 0)
-        if time.time() - last_fail < 10:
+        if time.time() - last_fail < 30:
             return None
 
-        print(f"[Transport] Opening dynamic serial link to {port}...")
+        # Only print opening log if we're tracing or it's new
+        if port not in self._serial_failures:
+            print(f"[Transport] Opening dynamic serial link to {port}...")
+        
         link = SerialLink(port)
         try:
             # Short timeout for initial connect to prevent API hang
             await asyncio.wait_for(link.connect(), timeout=3.0)
             self._serial_cache[port] = link
+            self._serial_failures.pop(port, None) # Clear failure
             return link
         except Exception as e:
-            print(f"[Transport] Failed to open dynamic serial {port}: {e}")
+            if time.time() - last_fail > 60: # Only print periodically
+                print(f"[Transport] Port {port} skipped: {str(e)[:40]}")
             self._serial_failures[port] = time.time()
             return None
 
@@ -849,6 +863,14 @@ class TransportManager:
                      elif target_type in ("wifi", "http"):
                          target_ip = node.address
                          target_type = "http"
+                         
+             # Mesh Routing Injection: If the target node is NOT the active directly-connected gateway
+             # and the user hasn't manually prefixed the command, prepend the devicename so the 
+             # gateway firmware can forward it according to the 3-hop mesh rules.
+             if node_id != self.state.active_node and node_id not in ("ALL",):
+                 # Don't double-prefix if already prefixed
+                 if not cmd.startswith(f"{node_id} "):
+                     cmd = f"{node_id} {cmd}"
 
         transport = await self.pick_transport(cmd, target_type=target_type)
         wire_cmd = self._serialize_command(cmd, transport)
@@ -972,7 +994,8 @@ class StatusPoller:
         device_ip: Optional[str],
         peers: list,  # list[BLELink] — 0, 1, or 2 peers
         node_reg: Any = None,
-        sim_bridge: Any = None
+        sim_bridge: Any = None,
+        transport: Any = None
     ) -> None:
         self.state = state
         self.ws_manager = ws_manager
@@ -982,6 +1005,7 @@ class StatusPoller:
         self._running = False
         self.registry = node_reg
         self._sim: Any = sim_bridge
+        self._transport = transport
         self._trigger = asyncio.Event()
 
     def trigger(self) -> None:
@@ -1072,6 +1096,17 @@ class StatusPoller:
                                 **result,
                             }
                         )
+
+            # 3. Serial poll (Discovery for all nodes, fallback for active)
+            if self.registry and self._transport:
+                for node in self.registry.list():
+                    if node.type == "serial" and node.address:
+                        # Poll nodes that are placeholders or missing MACs
+                        if node.name == node.id or node.name.startswith("COM") or node.mac == "Unknown":
+                            await self._transport.send_command("STATUS", node_id=node.address)
+                        elif node.id == self.state.active_node:
+                            # Also poll the active node even if named
+                            await self._transport.send_command("STATUS", node_id=node.address)
 
             await asyncio.sleep(self.INTERVAL)
 
@@ -1264,7 +1299,7 @@ def build_app(
 
         # HTTP transport + status poller start immediately
         _transport = TransportManager(state, device_ip, _ble_peers, _serial_link, _sim_bridge, node_reg)
-        _poller = StatusPoller(state, ws_mgr, device_ip, _ble_peers, node_reg, _sim_bridge)
+        _poller = StatusPoller(state, ws_mgr, device_ip, _ble_peers, node_reg, _sim_bridge, _transport)
         _poll_task = asyncio.create_task(_poller.run())
         
         # Start unified message processor
@@ -1329,13 +1364,57 @@ def build_app(
 
     app = FastAPI(title="LoRaLink PC Control", lifespan=lifespan)
 
-    async def _handle_message(line: str, source: str) -> None:
+    async def _handle_message(line_raw: str, source: str) -> None:
         """Unified handler for all incoming radio/serial traffic."""
+        line = line_raw.strip()
         if not line: return
         
         # Broadcast raw line to UI immediately
         await ws_mgr.broadcast({"type": "serial_log", "text": line, "source": source})
 
+        # --- JSON Status Handling ---
+        is_json = False
+        json_data = None
+        
+        if "[JSON_STATUS]" in line:
+            try:
+                raw = line.split("[JSON_STATUS]", 1)[1].strip()
+                json_data = json.loads(raw)
+                is_json = True
+            except Exception: pass
+        elif line.startswith("{") and line.endswith("}"):
+            try:
+                json_data = json.loads(line)
+                is_json = True
+            except Exception: pass
+
+        if is_json and json_data:
+            # Update live state from serial/mesh JSON status
+            state.status = json_data
+            state.last_update = time.time()
+            
+            # Update registry with learned MAC/Hardware
+            mac = json_data.get("mac", "Unknown")
+            hw = json_data.get("hw", "Unknown")
+            node_id = json_data.get("id", source)
+            
+            if node_reg:
+                # Upsert based on Source (COM port) or MAC
+                type_ = "serial" if (source.startswith("COM") or source == "serial") else "wifi"
+                node_reg.add(node_id, type_, source, online=True, hardware=hw, mac=mac)
+            
+            # Broadcast updated status to UI to populate the dashboard dashboard
+            await ws_mgr.broadcast({
+                "type": "status",
+                "peer": "A",
+                "transport": state.active_type or "serial",
+                "active_node": state.active_node,
+                "http_ok": state.http_ok,
+                **json_data
+            })
+            return
+
+        # AI Mesh Handling
         if "AI_QUERY:" in line:
             parts = line.split("AI_QUERY:", 1)
             prompt = parts[1].strip() if len(parts) > 1 else ""
@@ -1366,7 +1445,8 @@ def build_app(
                 if _serial_link:
                     while not _serial_link.line_queue.empty():
                         line = await _serial_link.line_queue.get()
-                        await _handle_message(line, "serial")
+                        port_id = getattr(_serial_link, "_port", "serial")
+                        await _handle_message(line, port_id)
                 
                 # Drain All Serial Links in Cache (Multi-node support)
                 if _transport and hasattr(_transport, "_serial_cache"):
@@ -1596,7 +1676,7 @@ def build_app(
                 nodes.append({
                     "id": node.id,
                     "mac": node.mac,
-                    "name": node.id,
+                    "name": node.name,
                     "type": node.type,
                     "address": node.address,
                     "online": node.online,
@@ -1625,7 +1705,7 @@ def build_app(
         if _transport:
              await _transport.send_command("STATUS", node_id=node_id)
 
-        return JSONResponse({"ok": True, "node": {"id": node.id, "name": node.id}})
+        return JSONResponse({"ok": True, "node": {"id": node.id, "name": node.name}})
 
     @app.post("/api/fleet/reset")
     async def _fleet_reset(body: dict) -> JSONResponse:

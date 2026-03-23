@@ -84,8 +84,20 @@
   #define LORA_FREQ_MHZ 915.0    // ISM band
   #define LORA_BW_KHZ   125.0    // Bandwidth
 
+#elif defined(ARDUINO_HELTEC_WIFI_LORA_32_V4)
+  // Heltec V4: SX1262 pinout (Updated for V4 hardware)
+  #define LORA_MOSI     10
+  #define LORA_MISO     11
+  #define LORA_SCLK     9
+  #define LORA_CS       7
+  #define LORA_RESET    5
+  #define LORA_DIO1     6
+  #define LORA_BUSY     4
+  #define LORA_FREQ_MHZ 915.0
+  #define LORA_BW_KHZ   125.0
+
 #elif defined(RADIO_SX1262)
-  // Heltec V3/V4: SX1262 pinout
+  // Heltec V3: SX1262 pinout (Standard V3)
   #define LORA_MOSI     10
   #define LORA_MISO     11
   #define LORA_SCLK     9

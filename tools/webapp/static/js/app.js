@@ -60,7 +60,7 @@ function wsConnect() {
         if (data.type === 'status') {
             onStatusUpdate(data);
         } else if (data.type === 'log' || data.type === 'serial_log') {
-            logTerminal(data.msg || data.text || data.line, data.type === 'serial_log' ? 'rx' : 'info');
+            logTerminal(data.msg || data.text || data.line, data.type === 'serial_log' ? 'rx' : 'info', data.source);
         } else if (data.type === 'ai_status') {
             updateAiUI(data);
         }
@@ -216,7 +216,7 @@ function handleTerminalKey(ev) {
     }
 }
 
-function logTerminal(msg, type = 'info') {
+function logTerminal(msg, type = 'info', source = null) {
     const log = document.getElementById("terminal-log");
     if (!log) return;
     const ts = new Date().toLocaleTimeString();
@@ -228,10 +228,12 @@ function logTerminal(msg, type = 'info') {
     if (type === 'tx') { pfx = ">>"; cls = "src-tx"; }
     else if (type === 'err') { pfx = "!!"; cls = "src-err"; }
     
-    div.innerHTML = `<span class="ts">${ts}</span><span class="${cls}">${pfx}</span> ${escHtml(msg)}`;
+    let srcHtml = source ? `<span style="color:var(--text-dim); margin-right:4px;">[${escHtml(source)}]</span>` : "";
+    
+    div.innerHTML = `<span class="ts">${ts}</span> ${srcHtml} <span class="${cls}">${pfx}</span> ${escHtml(msg)}`;
     log.appendChild(div);
     log.scrollTop = log.scrollHeight;
-    while (log.children.length > 100) log.removeChild(log.firstChild);
+    while (log.children.length > 200) log.removeChild(log.firstChild);
 }
 
 // ── Mesh Table ─────────────────────────────────────────────────────────────

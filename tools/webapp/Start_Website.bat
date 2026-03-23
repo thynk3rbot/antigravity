@@ -10,7 +10,7 @@ echo Leave this window open to keep the server running.
 echo To access the website, go to http://localhost:8010 in your browser.
 echo.
 cd /d "%~dp0\..\website"
-py server.py
+python server.py
 if errorlevel 1 (
     color 0C
     echo.

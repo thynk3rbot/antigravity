@@ -10,7 +10,7 @@ echo Leave this window open to keep the server running.
 echo To access the documentation, go to http://localhost:8001 in your browser.
 echo.
 cd /d "%~dp0\..\.."
-py -m http.server 8001 -d docs
+python -m http.server 8001 -d docs
 if errorlevel 1 (
     color 0C
     echo.

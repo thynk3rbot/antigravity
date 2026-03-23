@@ -16,6 +16,7 @@
 #include "wifi_transport.h"
 #include <Arduino.h>
 #include "../App/nvs_config.h"
+#include "../App/nvs_manager.h"
 
 // ============================================================================
 // Static Member Initialisation
@@ -275,7 +276,7 @@ void WiFiTransport::_startMDNS() {
     MDNS.addServiceTxt("http", "tcp", "type", "loralink-gateway");
     MDNS.addServiceTxt("http", "tcp", "ver", "v2.0.0");
     
-    MDNS.addServiceTxt("http", "tcp", "hw", HW_VERSION);
+    MDNS.addServiceTxt("http", "tcp", "hw", NVSManager::getHardwareVersion("V3").c_str());
     MDNS.addServiceTxt("http", "tcp", "mac", WiFi.macAddress().c_str());
 
     _mdnsStarted = true;
