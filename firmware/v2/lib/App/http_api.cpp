@@ -53,15 +53,15 @@ bool HttpAPI::init() {
   // Register route handlers
   server->on("/", HTTP_GET, handleRoot);
   server->on("/api/status", HTTP_GET, handleStatus);
-  server->on("/api/relay", HTTP_POST, handleRelay);
-  server->on("/api/command", HTTP_POST, handleCommand);
+  server->on("/api/relay", HTTP_POST, [](AsyncWebServerRequest *request){}, NULL, handleBody);
+  server->on("/api/command", HTTP_POST, [](AsyncWebServerRequest *request){}, NULL, handleBody);
   server->on("/api/ota", HTTP_GET, handleOTACheck);
-  server->on("/api/ota/update", HTTP_POST, handleOTAUpdate);
+  server->on("/api/ota/update", HTTP_POST, [](AsyncWebServerRequest *request){}, NULL, _handleOTAUpdateBody);
 
   // Product Management (V1 Parity)
   server->on("/api/products/list", HTTP_GET, handleListProducts);
   server->on("/api/products/load", HTTP_POST, handleLoadProduct);
-  server->on("/api/products/save", HTTP_POST, handleSaveProduct);
+  server->on("/api/products/save", HTTP_POST, [](AsyncWebServerRequest *request){}, NULL, handleBody);
 
   // Sniffer Control (Marauder Integration)
   server->on("/api/probe/sniff", HTTP_POST, [](AsyncWebServerRequest *request){
@@ -93,16 +93,6 @@ bool HttpAPI::init() {
   // Start server
   server->begin();
   running = true;
-
-  // Initialize mDNS
-  String mdnsName = "loralink-" + String(NVSConfig::getNodeId());
-  mdnsName.toLowerCase();
-  if (MDNS.begin(mdnsName.c_str())) {
-      MDNS.addService("http", "tcp", 80);
-      MDNS.addServiceTxt("http", "tcp", "id", NVSConfig::getNodeId());
-      MDNS.addServiceTxt("http", "tcp", "hw", String(NVSConfig::getHardwareVariant()));
-      Serial.printf("[HttpAPI] mDNS started: http://%s.local\n", mdnsName.c_str());
-  }
 
   Serial.printf("[HttpAPI] HTTP API server started on port %u\n", port);
   Serial.println("[HttpAPI] Routes: GET / GET /api/status POST /api/relay POST /api/command");
@@ -214,8 +204,16 @@ void HttpAPI::handleRelay(AsyncWebServerRequest* request) {
   }
 
   // Parse JSON body
-  String body = request->arg("plain");
-  DynamicJsonDocument doc(256);
+  if (request->_tempObject == nullptr) {
+      request->send(400, "application/json", "{\"error\":\"empty body\"}");
+      return;
+  }
+  String* bodyPtr = (String*)request->_tempObject;
+  String body = *bodyPtr;
+  delete bodyPtr;
+  request->_tempObject = nullptr;
+
+  DynamicJsonDocument doc(512);
   DeserializationError error = deserializeJson(doc, body);
 
   if (error) {
@@ -235,7 +233,7 @@ void HttpAPI::handleRelay(AsyncWebServerRequest* request) {
 
   // Extract parameters
   const char* action = doc["action"];
-  uint32_t durationMs = doc["duration_ms"] | 0;
+  // durationMs handled inside CommandManager via RELAY command args if needed
 
   if (!action || (strcmp(action, "ON") != 0 && strcmp(action, "OFF") != 0)) {
     DynamicJsonDocument errDoc(256);
@@ -285,8 +283,16 @@ void HttpAPI::handleCommand(AsyncWebServerRequest* request) {
   }
 
   // Parse JSON
-  String body = request->arg("plain");
-  DynamicJsonDocument doc(512);
+  if (request->_tempObject == nullptr) {
+    request->send(400, "application/json", "{\"status\":\"ERROR\",\"message\":\"Empty body\"}");
+    return;
+  }
+  String* bodyPtr = (String*)request->_tempObject;
+  String body = *bodyPtr;
+  delete bodyPtr;
+  request->_tempObject = nullptr;
+
+  DynamicJsonDocument doc(1024);
   DeserializationError error = deserializeJson(doc, body);
 
   if (error) {
@@ -422,11 +428,18 @@ void HttpAPI::handleLoadProduct(AsyncWebServerRequest* request) {
 }
 
 void HttpAPI::handleSaveProduct(AsyncWebServerRequest* request) {
-    if (!request->hasParam("json", true)) {
+    String json;
+    if (request->_tempObject) {
+        String* bodyPtr = (String*)request->_tempObject;
+        json = *bodyPtr;
+        delete bodyPtr;
+        request->_tempObject = nullptr;
+    } else if (request->hasParam("json", true)) {
+        json = request->getParam("json", true)->value();
+    } else {
         request->send(400, "application/json", "{\"ok\":false,\"error\":\"Missing json\"}");
         return;
     }
-    String json = request->getParam("json", true)->value();
     
     // Extract name from JSON
     StaticJsonDocument<1024> doc;
@@ -458,4 +471,17 @@ void onWsEvent(AsyncWebSocket * server, AsyncWebSocketClient * client, AwsEventT
   } else if (type == WS_EVT_DISCONNECT) {
     Serial.printf("[HttpAPI] WS Client disconnected\n");
   }
+}
+
+void HttpAPI::handleBody(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
+  if (index == 0) {
+    request->_tempObject = new String();
+  }
+  if (request->_tempObject) {
+    ((String*)request->_tempObject)->concat((char*)data, len);
+  }
+}
+
+void HttpAPI::_handleOTAUpdateBody(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
+  // OTA update body handling (future implementation)
 }

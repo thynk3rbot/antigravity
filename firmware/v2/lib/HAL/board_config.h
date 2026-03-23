@@ -197,9 +197,8 @@
   #define BAT_ADC_PIN 34
   #define BAT_ADC_UNIT 1         // ADC1
   #define BAT_ADC_CHANNEL ADC1_CHANNEL_6
-#elif defined(ARDUINO_HELTEC_WIFI_LORA_32_V3)
-  // Heltec V3 (ESP32-S3): Battery voltage on GPIO 1 (ADC1_CH0)
-  // NOTE: GPIO 34 does not exist on ESP32-S3; battery sense is GPIO 1
+#elif defined(ARDUINO_HELTEC_WIFI_LORA_32_V3) || defined(ARDUINO_HELTEC_WIFI_LORA_32_V4)
+  // Heltec V3/V4 (ESP32-S3): Battery voltage on GPIO 1 (ADC1_CH0)
   #define BAT_ADC_PIN 1
   #define BAT_ADC_UNIT 1         // ADC1
   #define BAT_ADC_CHANNEL ADC1_CHANNEL_0

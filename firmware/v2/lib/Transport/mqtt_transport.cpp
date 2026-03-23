@@ -305,9 +305,14 @@ void MQTTTransport::_subscribe() {
     String deviceCmd = _commandTopic();
     _mqttClient.subscribe(deviceCmd.c_str());
     _mqttClient.subscribe("loralink/broadcast/command");
+    
+    // NutriCalc Integration (Phase 16 Consolidation)
+    _mqttClient.subscribe("nutricalc/pump/#");
+    _mqttClient.subscribe("nutricalc/dose");
 
     Serial.printf("[MQTT] Subscribed: %s\n", deviceCmd.c_str());
     Serial.println("[MQTT] Subscribed: loralink/broadcast/command");
+    Serial.println("[MQTT] Subscribed: nutricalc/pump/#, nutricalc/dose");
 }
 
 // ============================================================================
@@ -330,12 +335,18 @@ void MQTTTransport::_mqttCallback(char* topic, byte* payload,
 
     Serial.printf("[MQTT] RX [%s]: %s\n", topic, payloadStr.c_str());
 
-    // Dispatch to command callback if topic is a command topic
+    // Dispatch to command callback if topic is a command topic or NutriCalc topic
     String deviceCmd = _instance->_commandTopic();
     if (topicStr == deviceCmd ||
-        topicStr == "loralink/broadcast/command") {
+        topicStr == "loralink/broadcast/command" ||
+        topicStr.startsWith("nutricalc/")) {
         if (_instance->_commandCallback) {
-            _instance->_commandCallback(payloadStr);
+            // Include topic in the command string for NutriCalc commands
+            if (topicStr.startsWith("nutricalc/")) {
+                _instance->_commandCallback(topicStr + "|" + payloadStr);
+            } else {
+                _instance->_commandCallback(payloadStr);
+            }
         }
     }
 }

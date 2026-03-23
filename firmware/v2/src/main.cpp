@@ -366,8 +366,9 @@ void onMessageReceived(TransportType transportType,
     case PacketType::TELEMETRY: {
       // Received telemetry from another peer
       Serial.printf("[TELEMETRY] From Peer %u: Temp=%.1f°C, V=%.2fV, Relays=0x%02X\n",
-                    pkt->payload.telemetry.tempC_x10 / 10.0f,
-                    pkt->payload.telemetry.voltageV_x100 / 100.0f,
+                    pkt->header.src,
+                    (float)pkt->payload.telemetry.tempC_x10 / 10.0f,
+                    (float)pkt->payload.telemetry.voltageV_x100 / 100.0f,
                     pkt->payload.telemetry.relayState);
       break;
     }
@@ -402,65 +403,62 @@ void setup() {
   while (!Serial && (millis() - startWait < 3000)) {
     vTaskDelay(pdMS_TO_TICKS(10));
   }
-  
-  // ========================================================================
-  // CRITICAL: V1 Parity - Boot Stabilization Delay
-  // Prevents brownout when high-power radios start simultaneously with USB rail
-  // ========================================================================
-  Serial.println("\n[BOOT] Stabilizing rails (5s delay)...");
-  MCPManager::setupPin(PIN_LED, OUTPUT);
-  for(int i=0; i<10; i++) {
-    MCPManager::writePin(PIN_LED, !MCPManager::readPin(PIN_LED));
-    vTaskDelay(pdMS_TO_TICKS(10));
-  }
-  MCPManager::writePin(PIN_LED, LOW);
-
-  // ========================================================================
-  // CRITICAL: V1 Parity - Hardware Recovery Window (PRG Button)
-  // Hold PRG button during first 5 seconds to wipe NVS and stay in factory mode
-  // ========================================================================
-  if (MCPManager::getInstance().readPin(GPIO_PRG_BTN) == LOW) {
-    Serial.println("[RECOVERY] PRG Button held! Performing factory reset...");
-    // Future: NVSManager::wipe()
-    vTaskDelay(pdMS_TO_TICKS(10)); 
-  }
-  
-  Serial.println("\n=== LoRaLink v2 Boot ===");
-  Serial.printf("Version: %s\n", FIRMWARE_VERSION);
-  Serial.printf("Role: %s\n", DEVICE_ROLE);
-  Serial.printf("Radio: %s\n", RADIO_MODEL);
-  Serial.printf("PSRAM: %s\n", HAS_PSRAM_STR);
 
   // Record boot timestamp
   g_bootTimestamp = millis();
 
-  // Step 1: Initialize ID Methodology, Filesystem & NVS
-  // ========================================================================
-  Serial.println("\n[1/7] Initializing Technical ID, FS & NVS layer...");
-
+  // 2. Initialize Core Hardware Managers (Prerequisites for everything else)
+  Serial.println("[CHECK] Initializing I2C...");
+  Wire.begin(I2C_SDA, I2C_SCL, I2C_FREQ_HZ);
+  
+  Serial.println("[CHECK] Initializing LittleFS...");
   if (!LittleFS.begin(true)) {
-    Serial.println("WARNING: LittleFS mount failed - dynamic plugins disabled");
+    Serial.println("WARNING: LittleFS mount failed");
   }
 
+  Serial.println("[CHECK] Initializing NVS...");
   if (!NVSManager::init()) {
-    Serial.println("WARNING: NVS init failed - using defaults");
+    Serial.println("WARNING: NVS init failed");
   }
+  NVSConfig::begin();
+
+  Serial.println("[CHECK] Initializing MCP...");
+  MCPManager::getInstance().init();
+
+  // ========================================================================
+  // CRITICAL: V1 Parity - Boot Stabilization 
+  // ========================================================================
+  Serial.println("[BOOT] Device initialized.");
+
+  // ========================================================================
+  // CRITICAL: V1 Parity - Hardware Recovery Window (PRG Button)
+  // ========================================================================
+  if (MCPManager::getInstance().readPin(GPIO_PRG_BTN) == LOW) {
+    Serial.println("[RECOVERY] PRG Button held!");
+  }
+  
+  Serial.println("\n=== LoRaLink v2 Boot ===");
+  Serial.printf("Version: %s\n", FIRMWARE_VERSION);
+  Serial.printf("Board: %s / Radio: %s\n", HW_VERSION, RADIO_MODEL);
+  Serial.printf("Free Heap: %u bytes\n", esp_get_free_heap_size());
+
+  // Record boot timestamp
+  g_bootTimestamp = millis();
+
+  // Step 1: Initialize Display & Basic UI
+  // ========================================================================
+  Serial.println("\n[1/7] Initializing UI layer...");
 
   // Initialize I2C and Display
   if (OLEDManager::getInstance().init()) {
     OLEDManager::getInstance().showSplash(FIRMWARE_VERSION, DEVICE_ROLE);
   }
 
-  // Restore V1 Parity: Initialize MCP23017 I/O Expander
-  MCPManager::getInstance().init();
-
-  // Restore V1 Parity: Initialize MCP23017 I/O Expander & Product Engine
-  MCPManager::getInstance().init();
+  // Initialize Product Engine & Sniffer mode configurations
   ProductManager::getInstance().init();
   ProbeManager::getInstance().init();
 
-  // Initialize NVSConfig for boot diagnostics and Arduino-style prefs
-  NVSConfig::begin();
+  NVSManager::printInfo();  // Debug output
 
   NVSManager::printInfo();  // Debug output
 
@@ -560,8 +558,20 @@ void setup() {
       Serial.println("  ! BLE transport failed to start");
   } else {
       Serial.println("  ✓ BLE transport initialized");
+      
+      // Wire RX to CommandManager
+      BLETransport::setRxCallback([](const String& data) {
+          Serial.printf("[BLE] Command received: '%s'\n", data.c_str());
+          CommandManager::process(data, [](const String& resp) {
+              BLETransport::sendStringStatic(resp);
+          });
+      });
+      OLEDManager::getInstance().addLog("BLE Ready");
   }
   OLEDManager::getInstance().drawBootProgress("BLE Mesh", 75);
+
+  // CRITICAL: Stagger memory-heavy transports to prevent heap exhaustion
+  vTaskDelay(pdMS_TO_TICKS(2000)); 
 
   // Optional WiFi Transport (graceful fallback if connection fails)
   std::string wifiSSID = NVSManager::getWiFiSSID();
@@ -608,20 +618,7 @@ void setup() {
     relayHAL.setState(mask);
   });
 
-  // Optional BLE Transport — RX wired to CommandManager
-  if (!BLETransport::initStatic()) {
-    Serial.println("  ! BLE transport init failed (non-fatal)");
-  } else {
-    Serial.printf("  ✓ BLE transport initialized (%s)\n", nodeIDStr.c_str());
-    BLETransport::setRxCallback([](const String& data) {
-      Serial.printf("[BLE] Command received: '%s'\n", data.c_str());
-      CommandManager::process(data, [](const String& resp) {
-        BLETransport::sendStringStatic(resp);
-        Serial.printf("[BLE] Response sent: %u bytes\n", resp.length());
-      });
-    });
-    OLEDManager::getInstance().addLog("BLE Ready");
-  }
+  // Optional BLE Transport (Legacy block removed, consolidated above)
 
   // Optional MQTT Transport (Hub only, requires WiFi and broker configured)
   #ifdef ENABLE_MQTT_TRANSPORT

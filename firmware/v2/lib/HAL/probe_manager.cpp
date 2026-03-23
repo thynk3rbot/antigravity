@@ -19,10 +19,28 @@ void ProbeManager::setSniffing(bool enabled) {
     _sniffing = enabled;
     
     if (_sniffing) {
+        // Start WiFi Sniffing
         esp_wifi_set_promiscuous(true);
         esp_wifi_set_promiscuous_rx_cb(&ProbeManager::wifiSnifferCallback);
+        
+        // Start BLE Scanning
+        if (!_bleScan) {
+            NimBLEDevice::init("");
+            _bleScan = NimBLEDevice::getScan();
+            _bleScan->setAdvertisedDeviceCallbacks(&_bleCallbacks);
+            _bleScan->setActiveScan(true);
+            _bleScan->setInterval(100);
+            _bleScan->setWindow(99);
+        }
+        _bleScan->start(0, nullptr, false);
     } else {
+        // Stop WiFi Sniffing
         esp_wifi_set_promiscuous(false);
+        
+        // Stop BLE Scanning
+        if (_bleScan) {
+            _bleScan->stop();
+        }
     }
 }
 
@@ -60,6 +78,19 @@ void ProbeManager::wifiSnifferCallback(void* buf, wifi_promiscuous_pkt_type_t ty
     ProbeManager::getInstance().processPacket(buf, type);
 }
 
+void ProbeManager::ScanCallbacks::onResult(NimBLEAdvertisedDevice* advertisedDevice) {
+    DetectedDevice dev;
+    NimBLEAddress addr = advertisedDevice->getAddress();
+    memcpy(dev.mac, addr.getNative(), 6);
+    dev.rssi = advertisedDevice->getRSSI();
+    dev.lastSeen = millis();
+    dev.isSTA = false;
+    dev.isBLE = true;
+    dev.ssid = advertisedDevice->getName();
+    
+    ProbeManager::getInstance().updateRegistry(dev);
+}
+
 void ProbeManager::processPacket(void* buf, wifi_promiscuous_pkt_type_t type) {
     if (type != WIFI_PKT_MGMT) return;
     
@@ -79,6 +110,7 @@ void ProbeManager::processPacket(void* buf, wifi_promiscuous_pkt_type_t type) {
     dev.rssi = pkt->rx_ctrl.rssi;
     dev.lastSeen = millis();
     dev.isSTA = isProbe;
+    dev.isBLE = false;
     
     if (isBeacon) {
         // Tagged params start at offset 36
@@ -92,10 +124,14 @@ void ProbeManager::processPacket(void* buf, wifi_promiscuous_pkt_type_t type) {
         }
     }
     
+    updateRegistry(dev);
+}
+
+void ProbeManager::updateRegistry(const DetectedDevice& dev) {
     // Add or update in registry
     bool found = false;
     for (auto& existing : _devices) {
-        if (memcmp(existing.mac, dev.mac, 6) == 0) {
+        if (existing.isBLE == dev.isBLE && memcmp(existing.mac, dev.mac, 6) == 0) {
             existing.rssi = dev.rssi;
             existing.lastSeen = dev.lastSeen;
             if (!dev.ssid.empty()) existing.ssid = dev.ssid;

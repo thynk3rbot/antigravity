@@ -120,6 +120,11 @@ void ProductManager::_applyPins(const JsonArray& pins) {
         String mode = p["mode"] | "output";
         if (pinNum < 0) continue;
 
+        if (_isPinProtected(pinNum)) {
+            Serial.printf("[ProductManager] REJECTED protected pin: %d\n", pinNum);
+            continue;
+        }
+
         pinMode(pinNum, (mode == "input") ? INPUT : OUTPUT);
         if (mode == "output" && p.containsKey("default")) {
             digitalWrite(pinNum, p["default"].as<int>());
@@ -138,4 +143,25 @@ void ProductManager::_applySchedules(const JsonArray& schedules) {
         if (id.isEmpty() || pin < 0) continue;
         ScheduleManager::addTask(id, type, pin, interval, duration, "PRODUCT");
     }
+}
+
+bool ProductManager::_isPinProtected(int pin) {
+    if (pin < 0) return true;
+    if (pin >= MCP_PIN_BASE) return false; // MCP pins are external expansion
+
+    // Forbidden ESP32 Native Pins (Based on board_config.h)
+    static const int protectedPins[] = {
+        LORA_MOSI, LORA_MISO, LORA_SCLK, LORA_CS, LORA_RESET, LORA_DIO1,
+#ifdef LORA_BUSY
+        LORA_BUSY,
+#endif
+        I2C_SDA, I2C_SCL, OLED_RESET_PIN,
+        BAT_ADC_PIN, GPIO_VEXT, BUTTON_PIN,
+        SERIAL_RX, SERIAL_TX
+    };
+
+    for (int p : protectedPins) {
+        if (p >= 0 && pin == p) return true;
+    }
+    return false;
 }

@@ -9,6 +9,7 @@
 #include "nvs_manager.h"
 #include "product_manager.h"
 #include <ArduinoJson.h>
+#include "../HAL/mcp_manager.h"
 
 // ---------------------------------------------------------------------------
 // Static member definitions
@@ -118,6 +119,20 @@ void CommandManager::process(const String& input, ResponseCallback responseCallb
         response = _handleListProducts();
     } else if (cmd == "LOAD") {
         response = _handleLoadProduct(args);
+    } else if (cmd == "SETKEY") {
+        response = _handleSetKey(args);
+    } else if (cmd == "GPIO") {
+        response = _handleGPIO(args);
+    } else if (cmd == "READ") {
+        response = _handleReadPin(args);
+    } else if (cmd == "NODES") {
+        response = _handleNodes();
+    } else if (cmd == "REPEATER") {
+        response = _handleRepeater(args);
+    } else if (cmd == "SLEEP") {
+        response = _handleSleep(args);
+    } else if (cmd.startsWith("NUTRIC")) {
+        response = _handleNutriCalc(input);
     } else {
         response = "{\"ok\":false,\"error\":\"Unknown command: " + cmd + "\"}";
     }
@@ -490,4 +505,125 @@ String CommandManager::_handleLoadProduct(const String& args) {
         return "{\"ok\":true,\"msg\":\"Loaded product: " + name + "\"}";
     }
     return "{\"ok\":false,\"error\":\"Failed to load product: " + name + "\"}";
+}
+String CommandManager::_handleNutriCalc(const String& input) {
+    // Expected input format: "nutricalc/pump/1|{...json...}" or "nutricalc/dose|{...json...}"
+    int pipeIdx = input.indexOf('|');
+    if (pipeIdx < 0) return "{\"ok\":false,\"error\":\"Invalid NutriCalc format\"}";
+
+    String topic = input.substring(0, pipeIdx);
+    String payload = input.substring(pipeIdx + 1);
+
+    StaticJsonDocument<512> doc;
+    DeserializationError error = deserializeJson(doc, payload);
+    if (error) return "{\"ok\":false,\"error\":\"JSON parse failed\"}";
+
+    if (topic.startsWith("nutricalc/pump/")) {
+        int pumpId = topic.substring(15).toInt();
+        float grams = doc["grams"] | 0.0f;
+        float ml = doc["ml"] | 0.0f;
+        
+        // Calibration: 1ml = 1000ms (assumed for generic peristaltic pump, should be adjustable)
+        unsigned long durationMs = (unsigned long)(ml * 1000.0f);
+        if (durationMs == 0 && grams > 0) {
+            durationMs = (unsigned long)(grams * 1200.0f); // Fallback for grams
+        }
+
+        if (durationMs > 0) {
+            int pin = -1;
+            // Mapping from INTEGRATION.md
+            if (pumpId == 1) pin = 33; // PIN_RELAY_12V_2 (from loralink legacy)
+            else if (pumpId == 2) pin = 25; // PIN_RELAY_12V_3
+            else if (pumpId == 3) pin = 100; // MCP_PIN_0
+            
+            if (pin != -1) {
+                ScheduleManager::addTask("Pump" + String(pumpId), "PULSE", pin, 0, durationMs / 1000, "NUTRI");
+                return "{\"ok\":true,\"pump\":" + String(pumpId) + ",\"duration_ms\":" + String(durationMs) + "}";
+            }
+        }
+    }
+
+    return "{\"ok\":true,\"msg\":\"NutriCalc command received\"}";
+}
+
+String CommandManager::_handleSetKey(const String& args) {
+    String key = args;
+    key.trim();
+    if (key.length() != 32) return "{\"ok\":false,\"error\":\"Key must be 32 hex chars\"}";
+    
+    // In V2, we use NVSManager for raw bytes if needed, but NVSConfig handles strings
+    if (NVSConfig::setCryptoKey(key)) {
+        return "{\"ok\":true,\"msg\":\"AES Key Updated. Reboot required.\"}";
+    }
+    return "{\"ok\":false,\"error\":\"Save failed\"}";
+}
+
+String CommandManager::_handleGPIO(const String& args) {
+    int space = args.indexOf(' ');
+    if (space <= 0) return "{\"ok\":false,\"error\":\"Usage: GPIO <pin> <0|1>\"}";
+    
+    int pin = args.substring(0, space).toInt();
+    int val = args.substring(space+1).toInt();
+    
+    if (MCPManager::isMcpPin(pin)) {
+        MCPManager::setupPin(pin, OUTPUT);
+        MCPManager::writePin(pin, val == 1);
+    } else {
+        pinMode(pin, OUTPUT);
+        digitalWrite(pin, val == 1);
+    }
+    return "{\"ok\":true,\"pin\":" + String(pin) + ",\"val\":" + String(val) + "}";
+}
+
+String CommandManager::_handleReadPin(const String& args) {
+    int pin = args.toInt();
+    bool val = false;
+    if (MCPManager::isMcpPin(pin)) {
+        val = MCPManager::readPin(pin);
+    } else {
+        pinMode(pin, INPUT);
+        val = digitalRead(pin);
+    }
+    return "{\"ok\":true,\"pin\":" + String(pin) + ",\"val\":" + String(val ? 1 : 0) + "}";
+}
+
+String CommandManager::_handleNodes() {
+    // This requires access to the Mesh registry, which is currently in DataManager (Legacy)
+    // or MessageRouter (V2). For now, return a placeholder until V2 Mesh registry is finalized.
+    return "{\"ok\":true,\"msg\":\"Mesh node list not yet ported to V2 registry\"}";
+}
+
+String CommandManager::_handleRepeater(const String& args) {
+    String a = args; a.trim(); a.toUpperCase();
+    bool enable = (a == "ON" || a == "1");
+    // NVSConfig::setRepeater(enable); // Needs implementation in NVSConfig
+    return "{\"ok\":true,\"repeater\":" + String(enable ? "true" : "false") + "}";
+}
+
+String CommandManager::_handleSleep(const String& args) {
+    float hours = args.toFloat();
+    if (hours <= 0) hours = 1.0f; // Default 1 hour
+
+    // Guards from legacy
+    float bat = _lastStatus.batVoltage;
+    bool isPowered = (bat < 0.1f || bat > 4.25f);
+    
+    if (isPowered) {
+        return "{\"ok\":false,\"error\":\"Sleep blocked: USB/Mains power detected\"}";
+    }
+
+    // Check if PC attached (based on last status/activity - simplified for now)
+    // In v2, we can check if the last status update was recent or if the webapp is discoverying
+    
+    Serial.printf("[CMD] Deep sleep for %.2f hours initiated...\n", hours);
+    
+    // Convert hours to microseconds
+    uint64_t sleepUs = (uint64_t)(hours * 3600.0f * 1000000.0f);
+    esp_sleep_enable_timer_wakeup(sleepUs);
+    
+    // Give time for response to be sent
+    vTaskDelay(pdMS_TO_TICKS(500));
+    esp_deep_sleep_start();
+    
+    return "{\"ok\":true,\"msg\":\"Entering deep sleep\"}";
 }

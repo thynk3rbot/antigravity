@@ -3,10 +3,12 @@
 
 #include <Arduino.h>
 #include <esp_wifi.h>
+#include <NimBLEDevice.h>
+#include <NimBLEScan.h>
+#include <NimBLEAdvertisedDevice.h>
 #include <cstdint>
 #include <string>
 #include <vector>
-#include <string>
 
 /**
  * @struct DetectedDevice
@@ -16,8 +18,9 @@ struct DetectedDevice {
   uint8_t mac[6];
   int8_t rssi;
   uint32_t lastSeen;
-  std::string ssid; // Only for APs (beacons)
+  std::string ssid; // For Wi-Fi APs or BLE names
   bool isSTA;       // True if station (probe req), false if AP (beacon)
+  bool isBLE;       // True if discovered via BLE scanning
   
   std::string getMacStr() const {
     char buf[18];
@@ -27,6 +30,7 @@ struct DetectedDevice {
   }
 
   bool operator<(const DetectedDevice& other) const {
+    if (isBLE != other.isBLE) return isBLE < other.isBLE;
     for (int i = 0; i < 6; i++) {
         if (mac[i] < other.mac[i]) return true;
         if (mac[i] > other.mac[i]) return false;
@@ -68,6 +72,14 @@ private:
   ProbeManager() : _sniffing(false), _autoHop(false), _lastHopTime(0), _currentChannel(1) {}
   ~ProbeManager() {}
 
+  // BLE Scanning Support
+  class ScanCallbacks : public NimBLEAdvertisedDeviceCallbacks {
+  public:
+    void onResult(NimBLEAdvertisedDevice* advertisedDevice) override;
+  };
+  ScanCallbacks _bleCallbacks;
+  NimBLEScan* _bleScan = nullptr;
+
   // Forbidden patterns
   ProbeManager(const ProbeManager&) = delete;
   ProbeManager& operator=(const ProbeManager&) = delete;
@@ -75,6 +87,7 @@ private:
   // Internal Callbacks
   static void wifiSnifferCallback(void* buf, wifi_promiscuous_pkt_type_t type);
   void processPacket(void* buf, wifi_promiscuous_pkt_type_t type);
+  void updateRegistry(const DetectedDevice& dev);
 
   bool _sniffing;
   bool _autoHop;

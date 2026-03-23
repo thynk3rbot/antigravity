@@ -42,6 +42,8 @@ private:
     void _applyPins(const JsonArray& pins);
     void _applySchedules(const JsonArray& schedules);
     void _applyAlerts(const JsonArray& alerts);
+
+    bool _isPinProtected(int pin);
 };
 
 #endif // PRODUCT_MANAGER_H
