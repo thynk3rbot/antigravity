@@ -1402,8 +1402,27 @@ def build_app(
                 # Upsert based on Source (COM port) or MAC
                 type_ = "serial" if (source.startswith("COM") or source == "serial") else "wifi"
                 node_reg.add(node_id, type_, source, online=True, hardware=hw, mac=mac)
+                
+                # Normalize V2 firmware 'peers' to V1 'mesh'
+                if "peers" in json_data and "mesh" not in json_data:
+                    json_data["mesh"] = json_data.pop("peers")
+                    for p in json_data["mesh"]:
+                        if "hop" in p: p["hops"] = p.pop("hop")
+                        if "last_seen" in p: p["ago"] = p.pop("last_seen")
+                
+                # Rewrite Mesh IDs to human-readable names before broadcasting
+                if "mesh" in json_data:
+                    for peer in json_data["mesh"]:
+                        p_id = peer.get("id")
+                        if p_id:
+                            # Try exact ID or MAC match
+                            for known in node_reg.list():
+                                if known.id == p_id or known.mac == p_id:
+                                    if known.name and known.name != "Unknown" and not known.name.startswith("COM") and known.name != known.id:
+                                        peer["id"] = known.name
+                                    break
             
-            # Broadcast updated status to UI to populate the dashboard dashboard
+            # Broadcast updated status to UI to populate the dashboard
             await ws_mgr.broadcast({
                 "type": "status",
                 "peer": "A",

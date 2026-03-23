@@ -43,5 +43,5 @@ To support these use cases, the mDNS TXT record schema is extended:
 - [ ] **Dynamic mDNS**: Update TXT records in real-time when state changes.
 
 ### Phase 3: Bulk Command Infrastructure
-- [ ] **Targeted Multicast**: Send commands to a list of MAC addresses via the server's transport multiplexer.
-- [ ] **Fleet OTA**: Sequential flashing of the entire registry with progress tracking.
+- [x] **Targeted Multicast**: Send commands to specific sub-swarms via the server's transport multiplexer. The PC WebApp natively proxies commands by prefixing remote Node IDs to dynamically leverage the firmware's 4-hop greedy mesh routing.
+- [x] **Fleet OTA Parity**: Seamless sequential OTA flashing is now fully configured across all active hardware revisions (V2, V3, V4) natively integrated into PlatformIO.
