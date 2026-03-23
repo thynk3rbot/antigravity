@@ -83,12 +83,8 @@ function onStatusUpdate(d) {
     lastStatus = d;
     renderDashboard(d);
     
-    // Update active node state if backend switched
-    if (d.id && d.id !== _activeNodeId) {
-        _activeNodeId = d.id;
-        // Optionally reload nodes to update sidebar active class
-    }
-
+    // Only update active node UI elements, don't hijack _activeNodeId
+    // _activeNodeId should only be changed by connectToNode() clicks
     if (d.lat && d.lon) updateMapUI(d);
 }
 

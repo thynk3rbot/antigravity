@@ -198,12 +198,13 @@ _TRANSPORT_STRATEGIES = [
 class NodeConfig:
     id: str
     name: str
-    type: str  # "wifi" | "serial" | "ble" | "lora"
-    address: str  # IP, COM port, BLE prefix, or gateway node name
+    type: str  # wifi, serial, ble, lora
+    address: str
+    hardware: str = "Unknown"
+    mac: str = "Unknown"
     active: bool = False
     online: bool = True
-    hardware: str = "Unknown"  # "V2" | "V3" | "V4"
-    last_seen: float = field(default_factory=time.time)
+    last_seen: float = 0.0
 
     def to_dict(self) -> dict:
         return {
@@ -214,6 +215,7 @@ class NodeConfig:
             "active": self.active,
             "online": self.online,
             "hardware": self.hardware,
+            "mac": self.mac,
             "last_seen": self.last_seen,
         }
 
@@ -227,6 +229,7 @@ class NodeConfig:
             active=d.get("active", False),
             online=d.get("online", True),
             hardware=d.get("hardware", "Unknown"),
+            mac=d.get("mac", "Unknown"),
             last_seen=d.get("last_seen", time.time()),
         )
 
@@ -255,42 +258,51 @@ class NodeRegistry:
     def list(self) -> list[NodeConfig]:
         return list(self._nodes)
 
-    def add(self, name: str, type_: str, address: str, online: bool = True, hardware: str = "Unknown") -> NodeConfig:
-        # Upsert logic: if name + type exists, update the address and online status
-        existing = next((n for n in self._nodes if n.name == name and n.type == type_), None)
+    def add(self, name: str, type_: str, address: str, online: bool = True, hardware: str = "Unknown", mac: str = "Unknown") -> NodeConfig:
+        # Upsert logic: Priority 1 - MAC (Globally Unique)
+        existing = None
+        if mac and mac != "Unknown":
+            existing = next((n for n in self._nodes if n.mac == mac), None)
+            
+        # Priority 2 - Serial Port (COMx is stable for this machine)
+        if not existing and type_ == "serial":
+            existing = next((n for n in self._nodes if n.address == address and n.type == "serial"), None)
+            
+        # Priority 3 - WiFi Address (IP-based lookup for transient WiFi discovery before MAC/NID probe)
+        if not existing and type_ == "wifi":
+            existing = next((n for n in self._nodes if n.address == address and n.type == "wifi"), None)
+            
         if existing:
             changed = False
+            # Update address if it changed (DHCP rotation)
             if existing.address != address:
-                print(f"[nodes] Updating {name} address: {existing.address} -> {address}")
+                print(f"[nodes] Updating {existing.name} (MAC:{existing.mac}) address: {existing.address} -> {address}")
                 existing.address = address
                 changed = True
-            if existing.online != online:
-                existing.online = online
-                changed = True
-            # Update timestamp and hardware version if available
-            existing.last_seen = time.time()
-            existing.online = True
+            
+            # Update hardware/mac if we just learned them
             if hardware and hardware != "Unknown":
                 existing.hardware = hardware
-            changed = True # Mark as changed if any of the above happened
-
+            if mac and mac != "Unknown":
+                existing.mac = mac
+            
+            existing.last_seen = time.time()
+            existing.online = True
             if changed:
                 self._save()
             return existing
 
-        # New node
-        node = NodeConfig(
-            id=str(uuid.uuid4()), 
-            name=name, 
-            type=type_, 
-            address=address, 
-            online=online,
-            hardware=hardware,
+        # New Node
+        nid = str(uuid.uuid4())
+        new_node = NodeConfig(
+            id=nid, name=name, type=type_, address=address, 
+            hardware=hardware, mac=mac, online=online,
             last_seen=time.time() if online else 0
         )
-        self._nodes.append(node)
+        self._nodes.append(new_node)
         self._save()
-        return node
+        print(f"[nodes] Registered new node: {name} (MAC:{mac})")
+        return new_node
 
     def add_node(self, id: str, name: str, type: str, address: str, hardware: str = "Unknown") -> None:
         for n in self._nodes:
@@ -312,6 +324,19 @@ class NodeRegistry:
             print(f"[nodes] Node {name} went OFFLINE")
             self._save()
 
+    def mark_all_offline(self) -> None:
+        """Called on startup to ensure we only show what's actually reachable."""
+        for n in self._nodes:
+            n.online = False
+        self._save()
+
+    def prune(self) -> int:
+        """Remove any node currently marked offline."""
+        count = len(self._nodes)
+        self._nodes = [n for n in self._nodes if n.online]
+        self._save()
+        return count - len(self._nodes)
+
     def remove(self, node_id: str) -> bool:
         before = len(self._nodes)
         self._nodes = [n for n in self._nodes if n.id != node_id]
@@ -330,8 +355,8 @@ class NodeRegistry:
         return target
 
     def get(self, node_id: str) -> Optional[NodeConfig]:
-        """Get a node by ID without changing active state."""
-        return next((n for n in self._nodes if n.id == node_id), None)
+        """Get a node by ID, MAC, or address without changing active state."""
+        return next((n for n in self._nodes if n.id == node_id or n.mac == node_id or n.address == node_id), None)
 
     def active_node(self) -> Optional[NodeConfig]:
         return next((n for n in self._nodes if n.active), None)
@@ -544,24 +569,32 @@ class LoRaLinkListener(ServiceListener):
                 val = info.properties.get(key.encode() if isinstance(key, str) else key)
                 return val.decode("utf-8") if val else default
 
+            # Filter to ONLY LoRaLink devices
+            dev_type = get_prop("type", "unknown")
+            if dev_type != "loralink-gateway":
+                return
+
             node_id = get_prop("id") or name.split(".")[0]
             
             # Automatically register/update in persistent registry
-            nid = node_id
-            addr = ip
-            hw = (info.properties.get(b"hw") or b"Unknown").decode()
-            self.registry.add_node(nid, nid, "wifi", addr, hardware=hw)
+            hw = get_prop("hw", "Unknown")
+            mac = get_prop("mac", "Unknown")
+            
+            # Use MAC as stable identity
+            self.registry.add(node_id, "wifi", ip, online=True, hardware=hw, mac=mac)
             
             # Update transient list for backward compat / immediate UI response
             if not any(d["address"] == ip for d in self.discovered):
                 self.discovered.append({
                     "name": node_id,
+                    "id": mac if mac != "Unknown" else node_id,
                     "address": ip,
                     "type": get_prop("type", "gateway"),
                     "ver": get_prop("ver", "v2.0.0"),
+                    "mac": mac,
                     "last_seen": time.time()
                 })
-                print(f"[mDNS] Found: {node_id} at {ip}")
+                print(f"[mDNS] Found: {node_id} (MAC:{mac}) at {ip}")
 
     def update_service(self, zc: Zeroconf, type_: str, name: str) -> None:
         pass
@@ -680,13 +713,23 @@ class SerialHub:
                     import serial.tools.list_ports
                     ports = serial.tools.list_ports.comports()
                     for p in ports:
+                        if p.device in self._known_ports:
+                            continue
+                            
+                        # Mark as known immediately to prevent spam
+                        self._known_ports.add(p.device)
+                        
                         # Filter for Heltec USB-to-UART bridges or generic USB Serial (ESP32-S3 direct)
-                        is_loralink = any(sig in p.description for sig in ["CP210", "USB Serial", "CH340"])
-                        if is_loralink and p.device not in self._known_ports:
-                            print(f"[SerialHub] New port detected: {p.device}")
+                        # We also check the hardware ID for better precision
+                        desc = (p.description or "").upper()
+                        hwid = (p.hwid or "").upper()
+                        is_loralink = any(sig in desc for sig in ["CP210", "USB SERIAL", "CH340", "ESP32"]) or \
+                                      any(vid in hwid for vid in ["303A", "10C4", "1A86"])
+                        
+                        if is_loralink:
+                            print(f"[SerialHub] New LoRaLink port detected: {p.device} ({p.description})")
                             # Auto-add to registry if not already there
                             node = self.registry.add(p.device, "serial", p.device, online=True)
-                            self._known_ports.add(p.device)
                             
                             # Fire-and-forget probe for hardware version
                             asyncio.create_task(self._probe_node(p.device, node))
@@ -711,14 +754,17 @@ class SerialHub:
                     line = await link.line_queue.get()
                     # Look for hardware signature in status or boot log
                     # Example: "HV: V4" or part of status JSON
-                    if '"hw":"' in line:
+                    if '"hw":"' in line or '"mac":"' in line:
                         import json
                         try:
                             data = json.loads(line)
                             hw = data.get("hw", "Unknown")
+                            mac = data.get("mac", "Unknown")
                             node.hardware = hw
+                            if mac != "Unknown":
+                                node.mac = mac
                             self.registry._save()
-                            print(f"[SerialHub] Probed {port}: Hardware={hw}")
+                            print(f"[SerialHub] Probed {port}: Hardware={hw}, MAC={mac}")
                             break
                         except: pass
                     elif "LoRaLink V" in line:
@@ -735,18 +781,15 @@ class SerialHub:
 
 
 # ════════════════════════════════════════════════════════════════════════════
-# 3. TransportManager — hybrid HTTP + BLE command routing
-# ════════════════════════════════════════════════════════════════════════════
-
-
 class TransportManager:
     def __init__(
         self,
         state: DeviceState,
         device_ip: Optional[str],
-        peers: list,  # list[BLELink] — 0, 1, or 2 peers
+        peers: list,
         serial_link: Any = None,
-        sim_bridge: Any = None
+        sim_bridge: Any = None,
+        registry: Any = None
     ) -> None:
         self.state = state
         self.device_ip = device_ip
@@ -755,35 +798,66 @@ class TransportManager:
         self._round_counter: int = 0
         self._serial: Any = serial_link
         self._sim: Any = sim_bridge
-
-    # ── Public send ──────────────────────────────────────────────────────────
+        self.registry = registry
+        self._serial_cache: dict[str, Any] = {}
+        if serial_link and hasattr(serial_link, "_port"):
+            self._serial_cache[serial_link._port] = serial_link
 
     async def send_command(self, cmd: str, node_id: Optional[str] = None) -> bool:
-        transport = await self.pick_transport(cmd)
-        
-        # Translate command based on tp_mode
-        wire_cmd = cmd
-        if self.state.tp_mode == "J":
-            wire_cmd = json.dumps({"cmd": cmd})
-        elif self.state.tp_mode == "C":
-            # Very basic CSV translation: space to comma
-            wire_cmd = ",".join(cmd.split())
-        elif self.state.tp_mode == "K":
-            # KV: CMD=name ARGS=rest
-            parts = cmd.split(None, 1)
-            c = parts[0]
-            a = parts[1] if len(parts) > 1 else ""
-            wire_cmd = f"CMD={c} ARGS={a}"
+        # 1. Resolve target metadata (port, IP, type) from registry if node_id provided
+        target_type = None
+        target_ip = None
+        target_port = None
+        if node_id:
+             if node_id.startswith(("COM", "/dev/")):
+                 target_port = node_id
+                 target_type = "serial"
+             elif self.registry:
+                 node = self.registry.get(node_id)
+                 if node:
+                     target_type = node.type
+                     if target_type == "serial":
+                         target_port = node.address
+                     elif target_type in ("wifi", "http"):
+                         target_ip = node.address
+                         target_type = "http"
+
+             if target_type == "serial" and target_port:
+                 if target_port not in self._serial_cache:
+                     print(f"[Transport] Opening dynamic serial link to {target_port}...")
+                     new_link = SerialLink(target_port)
+                     try:
+                         await new_link.connect()
+                         self._serial_cache[target_port] = new_link
+                     except Exception as e:
+                         print(f"[Transport] Failed to open dynamic serial {target_port}: {e}")
+                         return False
+                 
+                 self._serial = self._serial_cache[target_port]
+                 self.state.serial_port = target_port
+                 self.state.serial_ok = True
+
+        transport = await self.pick_transport(cmd, target_type=target_type)
+        wire_cmd = self._serialize_command(cmd, transport)
         
         if transport == "sim":
             return await self._sim.send_command(wire_cmd)
         if transport == "serial":
-            ok = await self._send_serial(wire_cmd)
+            if not wire_cmd.endswith("\n"):
+                wire_cmd += "\n"
+            
+            link = self._serial
+            if node_id and node_id in self._serial_cache:
+                link = self._serial_cache[node_id]
+            
+            if not link or not link.is_connected:
+                return False
+            ok = await link.send_command(wire_cmd)
             self.state.serial_ok = ok
             self.state.transport = "serial" if ok else "disconnected"
             return ok
         if transport == "http":
-            ok = await self._send_http(cmd)
+            ok = await self._send_http(cmd, ip=target_ip if node_id else None)
             if ok:
                 self.state.http_failures = 0
                 self.state.http_ok = True
@@ -791,94 +865,63 @@ class TransportManager:
                 return True
             self.state.http_failures += 1
             self.state.http_ok = False
-        # BLE path (fallback or primary) — broadcasts to all connected peers
         ok = await self._send_ble(cmd)
         self.state.ble_ok = ok
-        self.state.ble1_ok = len(self._peers) > 0 and self._peers[0].is_connected
-        self.state.ble2_ok = len(self._peers) > 1 and self._peers[1].is_connected
         self.state.transport = "ble" if ok else "disconnected"
         return ok
 
-    async def pick_transport(self, cmd: str) -> str:
-        """Dispatch to the saved transport strategy (persisted in .settings.json)."""
+    def _serialize_command(self, cmd: str, transport: str) -> str:
+        """Normalize to format-on-the-wire based on tp_mode and transport."""
+        # For Serial, we often want raw text regardless of other settings unless forced
+        if transport == "serial" and self.state.tp_mode == "B":
+            return cmd
+            
+        if self.state.tp_mode == "J":
+            parts = cmd.split(None, 1)
+            c = parts[0]
+            a = parts[1] if len(parts) > 1 else ""
+            return json.dumps({"cmd": c, "args": a})
+        elif self.state.tp_mode == "C":
+            return ",".join(cmd.split())
+        elif self.state.tp_mode == "K":
+            parts = cmd.split(None, 1)
+            c = parts[0]
+            a = parts[1] if len(parts) > 1 else ""
+            return f"CMD={c} ARGS={a}"
+        return cmd
+
+    async def pick_transport(self, cmd: str, target_type: Optional[str] = None) -> str:
         if self.state.sim_running and self._sim:
             return "sim"
-            
         strategy = self.state.settings.get("transport_strategy", "http_first")
         _ip = self.state.active_ip or self.device_ip
         http_ok = bool(_ip and AIOHTTP)
+        if target_type:
+            if target_type == "serial" and self.state.serial_ok: return "serial"
+            if target_type == "http" and http_ok: return "http"
+            if target_type == "ble": return "ble"
+        if strategy == "ble_only": return "ble"
+        if self.state.active_type == "serial" and self.state.serial_ok: return "serial"
+        if http_ok and self.state.http_failures < 3: return "http"
+        return "ble"
 
-        if strategy == "ble_only":
-            # Always BLE — ignores HTTP entirely
-            return "ble"
-
-        # NEW: Prefer Serial if explicitly selected/active and connected
-        if self.state.active_type == "serial" and self.state.serial_ok:
-            return "serial"
-
-        elif strategy == "readwrite_split":
-            # STATUS / MESH queries → HTTP; mutating commands → BLE
-            read_prefixes = ("STATUS", "SCHED LIST", "MESH", "LOG")
-            is_read = any(cmd.upper().startswith(p) for p in read_prefixes)
-            if is_read:
-                return "http" if http_ok else ("serial" if self.state.serial_ok else "ble")
-            return "ble"
-
-        elif strategy == "immediate_fallback":
-            # HTTP only when there is a perfect track record (zero failures)
-            if http_ok and self.state.http_failures == 0:
-                return "http"
-            return "serial" if self.state.serial_ok else "ble"
-
-        elif strategy == "roundrobin":
-            # Alternate between HTTP and BLE on every command
-            self._round_counter += 1
-            if self._round_counter % 2 == 0:
-                return "http" if http_ok else ("serial" if self.state.serial_ok else "ble")
-            return "ble"
-
-        elif strategy == "serial_only":
-            return "serial"
-
-        else:  # http_first (default)
-            # HTTP while reachable; fall back to Serial (then BLE) after 3 consecutive failures
-            if http_ok and self.state.http_failures < 3:
-                return "http"
-            if self.state.serial_ok:
-                return "serial"
-            return "ble"
-
-    # ── Private transports ───────────────────────────────────────────────────
-
-    async def _send_http(self, cmd: str) -> bool:
-        ip = self.state.active_ip or self.device_ip
-        if not AIOHTTP or not ip:
-            return False
+    async def _send_http(self, cmd: str, ip: Optional[str] = None) -> bool:
+        ip = ip or self.state.active_ip or self.device_ip
+        if not AIOHTTP or not ip: return False
         try:
             session = await self._get_session()
-            async with session.post(
-                f"http://{ip}/api/cmd",
-                data={"cmd": cmd},
-                timeout=aiohttp.ClientTimeout(total=3.0),
-            ) as r:
+            async with session.post(f"http://{ip}/api/cmd", data={"cmd": cmd}, timeout=aiohttp.ClientTimeout(total=3.0)) as r:
                 return r.status == 200
-        except Exception:
-            return False
+        except Exception: return False
 
     async def _send_ble(self, cmd: str) -> bool:
-        """Broadcast command to all connected BLE peers; returns True if any succeeded."""
-        if not BLEAK or not self._peers:
-            return False
-        results = await asyncio.gather(
-            *[p.send_command(cmd) for p in self._peers if p.is_connected],
-            return_exceptions=True,
-        )
-        return any(r is True for r in results)
-
-    async def _send_serial(self, cmd: str) -> bool:
-        if not self._serial or not self._serial.is_connected:
-            return False
-        return await self._serial.send_command(cmd)
+        if not self._peers: return False
+        try:
+            for ble in self._peers:
+                if ble.is_connected:
+                    await ble.send_command(cmd)
+            return True
+        except Exception: return False
 
     async def _get_session(self) -> Any:
         if self._session is None or self._session.closed:
@@ -888,6 +931,8 @@ class TransportManager:
     async def close(self) -> None:
         if self._session and not self._session.closed:
             await self._session.close()
+
+
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -913,7 +958,7 @@ class StatusPoller:
         self._peers = peers
         self._session: Any = None
         self._running = False
-        self._node_reg = node_reg
+        self.registry = node_reg
         self._sim: Any = sim_bridge
         self._trigger = asyncio.Event()
 
@@ -921,6 +966,7 @@ class StatusPoller:
         self._trigger.set()
 
     async def run(self) -> None:
+        """Main loop: Poll active device status periodically."""
         self._running = True
         while self._running:
             # Wait for interval OR trigger
@@ -930,27 +976,42 @@ class StatusPoller:
             except asyncio.TimeoutError:
                 pass
 
-            if self.state.sim_running and self._sim:
-                status = self._sim.get_status()
-                if status:
-                    self.state.status = status
-                    self.state.last_update = time.time()
-                    self.state.transport = "sim"
-                    await self.ws_manager.broadcast({
-                        "type": "status",
-                        "peer": "SIM",
-                        "transport": "sim",
-                        "active_node": self.state.active_node,
-                        "http_ok": True,
-                        "ble_ok": False,
-                        "serial_ok": False,
-                        **status,
-                    })
-                await asyncio.sleep(self.INTERVAL)
-                continue
-
-            # HTTP poll (primary — returns full status JSON)
+            status = None
+            
+            # 1. HTTP poll
             status = await self._poll_http()
+            
+            # 2. Simulator fallback
+            if self.state.sim_running and self._sim:
+                s = await self._sim.get_status()
+                if s: 
+                    status = s
+                    status["_via"] = "sim"
+                    self.state.transport = "sim"
+
+            if status:
+                self.state.status = status
+                self.state.last_update = time.time()
+                await self.ws_manager.broadcast(
+                    {
+                        "type": "status",
+                        "peer": "A",
+                        "transport": self.state.transport,
+                        "active_node": self.state.active_node,
+                        "http_ok": self.state.http_ok,
+                        "ble_ok": self.state.ble_ok,
+                        **status,
+                    }
+                )
+            
+            # 1. HTTP poll
+            status = await self._poll_http()
+            
+            # 2. Simulator fallback
+            if not status and self._sim and self._sim._running:
+                status = await self._sim.get_status()
+                if status: status["_via"] = "sim"
+
             if status:
                 self.state.status = status
                 self.state.last_update = time.time()
@@ -1146,6 +1207,9 @@ def build_app(
             except Exception:
                 pass
 
+        # Mark current registry as offline on startup; discovery will toggle back to online
+        node_reg.mark_all_offline()
+        
         # Restore active node from registry on startup
         an = node_reg.active_node()
         if an:
@@ -1177,7 +1241,7 @@ def build_app(
             _sim_bridge = SimulatorBridge(f"py -u {test_script}")
 
         # HTTP transport + status poller start immediately
-        _transport = TransportManager(state, device_ip, _ble_peers, _serial_link, _sim_bridge)
+        _transport = TransportManager(state, device_ip, _ble_peers, _serial_link, _sim_bridge, node_reg)
         _poller = StatusPoller(state, ws_mgr, device_ip, _ble_peers, node_reg, _sim_bridge)
         _poll_task = asyncio.create_task(_poller.run())
         
@@ -1245,6 +1309,11 @@ def build_app(
 
     async def _handle_message(line: str, source: str) -> None:
         """Unified handler for all incoming radio/serial traffic."""
+        if not line: return
+        
+        # Broadcast raw line to UI immediately
+        await ws_mgr.broadcast({"type": "serial_log", "text": line, "source": source})
+
         if "AI_QUERY:" in line:
             parts = line.split("AI_QUERY:", 1)
             prompt = parts[1].strip() if len(parts) > 1 else ""
@@ -1271,12 +1340,19 @@ def build_app(
         """Background loop to drain line queues from all sources."""
         while True:
             try:
-                # Drain Serial
+                # Drain Main Serial
                 if _serial_link:
                     while not _serial_link.line_queue.empty():
                         line = await _serial_link.line_queue.get()
                         await _handle_message(line, "serial")
                 
+                # Drain All Serial Links in Cache (Multi-node support)
+                if _transport and hasattr(_transport, "_serial_cache"):
+                    for port, link in _transport._serial_cache.items():
+                        while not link.line_queue.empty():
+                            line = await link.line_queue.get()
+                            await _handle_message(line, port)
+
                 # Drain Simulator
                 if _sim_bridge and _sim_bridge._running:
                     while not _sim_bridge.line_queue.empty():
@@ -1464,21 +1540,61 @@ def build_app(
         return PlainTextResponse("OK")
 
     # ── Fleet Operations ──────────────────────────────────────────────────
-    
+    # ── Node Registry / Fleet ─────────────────────────────────────────────
+
+    @app.get("/api/nodes")
+    async def _nodes_get() -> JSONResponse:
+        nodes = []
+        if node_reg:
+            for node in node_reg.list():
+                nodes.append({
+                    "id": node.id,
+                    "mac": node.mac,
+                    "name": node.id,
+                    "type": node.type,
+                    "address": node.address,
+                    "online": node.online,
+                    "active": (node.id == state.active_node or node.address == state.serial_port)
+                })
+        return JSONResponse({"nodes": nodes})
+
+    @app.post("/api/nodes/{node_id}/connect")
+    async def _node_connect(node_id: str) -> JSONResponse:
+        if not node_reg:
+            return JSONResponse({"ok": False, "error": "No registry"}, status_code=500)
+        
+        node = node_reg.get(node_id)
+        if not node:
+            return JSONResponse({"ok": False, "error": f"Node {node_id} not found"}, status_code=404)
+        
+        state.active_node = node.id
+        if node.type == "serial":
+            state.serial_port = node.address
+            state.active_type = "serial"
+        elif node.type in ("wifi", "http"):
+            state.active_ip = node.address
+            state.active_type = "http"
+        
+        # Reset and prime transport if needed
+        if _transport:
+             await _transport.send_command("STATUS", node_id=node_id)
+
+        return JSONResponse({"ok": True, "node": {"id": node.id, "name": node.id}})
+
     @app.post("/api/fleet/reset")
-    async def _fleet_reset(node_ids: Optional[list[str]] = None) -> JSONResponse:
+    async def _fleet_reset(body: dict) -> JSONResponse:
         """Trigger factory reset on targeted or all nodes."""
+        node_ids = body.get("node_ids")
         if not node_ids:
-            # Broadcast to all
-            await _transport.send_command("FACTORY_RESET")
+            if _transport:
+                await _transport.send_command("FACTORY_RESET")
             return JSONResponse({"ok": True, "msg": "Broadcast factory reset sent to all nodes"})
         
         results = []
-        for nid in node_ids:
-            # Use FORWARD cmd to target specific mesh nodes
-            ok = await _transport.send_command(f"FORWARD {nid} FACTORY_RESET")
-            results.append({"node": nid, "ok": ok})
-        
+        if _transport:
+            for nid in node_ids:
+                ok = await _transport.send_command(f"FORWARD {nid} FACTORY_RESET")
+                results.append({"node": nid, "ok": ok})
         return JSONResponse({"ok": True, "results": results})
 
     @app.post("/api/fleet/flash")
@@ -1731,6 +1847,11 @@ def build_app(
         return JSONResponse({"ok": True, "node": node.to_dict()})
 
     # ── Node registry ─────────────────────────────────────────────────────
+
+    @app.post("/api/nodes/prune")
+    async def _nodes_prune() -> JSONResponse:
+        count = node_reg.prune()
+        return JSONResponse({"ok": True, "pruned": count})
 
     @app.get("/api/nodes")
     async def _nodes_list() -> JSONResponse:

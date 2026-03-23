@@ -58,6 +58,15 @@
   #endif
 #endif
 
+// Hardware Identification
+#if defined(ARDUINO_HELTEC_WIFI_LORA_32_V4)
+  #define HW_VERSION "V4"
+#elif defined(ARDUINO_HELTEC_WIFI_LORA_32_V3)
+  #define HW_VERSION "V3"
+#else
+  #define HW_VERSION "V2"
+#endif
+
 // ============================================================================
 // LoRa Radio SPI Interface Pins
 // ============================================================================
@@ -234,6 +243,11 @@
 #define SERIAL_BAUD   115200
 #define SERIAL_RX     3         // RX pin (hardware)
 #define SERIAL_TX     1         // TX pin (hardware)
+#ifdef ARDUINO_HELTEC_WIFI_LORA_32
+  #define PIN_LED     25        // Heltec V2 Onboard LED
+#else
+  #define PIN_LED     35        // Heltec V3/V4 Onboard LED
+#endif
 
 // ============================================================================
 // Conditional: Hub-Only Features

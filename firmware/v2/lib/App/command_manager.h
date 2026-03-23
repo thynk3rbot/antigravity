@@ -22,6 +22,8 @@ public:
     struct StatusData {
         String nodeId;
         String version;
+        String hw;
+        String mac;
         String ipAddr;
         float batVoltage;
         uint8_t batPercent;

@@ -20,7 +20,13 @@ CommandManager::StatusData    CommandManager::_lastStatus    = {};
 // ---------------------------------------------------------------------------
 
 void CommandManager::begin() {
-    // Nothing to initialise for now — NVSConfig::begin() is called by main.
+#if defined(PIN_LED) || defined(LED_BUILTIN)
+    #ifndef PIN_LED
+        #define PIN_LED LED_BUILTIN
+    #endif
+    pinMode(PIN_LED, OUTPUT);
+    digitalWrite(PIN_LED, LOW);
+#endif
 }
 
 void CommandManager::setRelayCallback(RelayCallback cb) {
@@ -141,6 +147,8 @@ String CommandManager::_handleStatus() {
     String json = "{";
     json += "\"node_id\":\""    + s.nodeId      + "\",";
     json += "\"version\":\""    + s.version     + "\",";
+    json += "\"hw\":\""         + s.hw          + "\",";
+    json += "\"mac\":\""        + s.mac         + "\",";
     json += "\"ip\":\""         + s.ipAddr      + "\",";
     json += "\"bat_v\":"        + String(s.batVoltage, 2) + ",";
     json += "\"bat_pct\":"      + String(s.batPercent)    + ",";
@@ -228,11 +236,15 @@ String CommandManager::_handleSetWifi(const String& args) {
 }
 
 String CommandManager::_handleBlink() {
-#ifdef LED_BUILTIN
+#if defined(PIN_LED) || defined(LED_BUILTIN)
+    #ifndef PIN_LED
+        #define PIN_LED LED_BUILTIN
+    #endif
+    pinMode(PIN_LED, OUTPUT);
     for (int i = 0; i < 3; i++) {
-        digitalWrite(LED_BUILTIN, HIGH);
+        digitalWrite(PIN_LED, HIGH);
         delay(200);
-        digitalWrite(LED_BUILTIN, LOW);
+        digitalWrite(PIN_LED, LOW);
         delay(200);
     }
 #endif
