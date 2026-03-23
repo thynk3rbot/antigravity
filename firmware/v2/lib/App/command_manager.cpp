@@ -7,6 +7,7 @@
 #include "../Transport/message_router.h"
 #include "control_packet.h"
 #include "nvs_manager.h"
+#include "product_manager.h"
 #include <ArduinoJson.h>
 
 // ---------------------------------------------------------------------------
@@ -113,6 +114,10 @@ void CommandManager::process(const String& input, ResponseCallback responseCallb
         response = _handleAsk(args);
     } else if (cmd == "FACTORY_RESET") {
         response = _handleFactoryReset();
+    } else if (cmd == "LIST") {
+        response = _handleListProducts();
+    } else if (cmd == "LOAD") {
+        response = _handleLoadProduct(args);
     } else {
         response = "{\"ok\":false,\"error\":\"Unknown command: " + cmd + "\"}";
     }
@@ -274,6 +279,8 @@ String CommandManager::_handleHelp() {
     help += "  FORWARD <id> <cmd>              - Forward command to mesh node\n";
     help += "  GPS [ON|OFF]                    - Power or status of GNSS\n";
     help += "  ASK <prompt>                    - Send query to Local AI Workstation\n";
+    help += "  LIST                            - List stored Peripheral Products (.json)\n";
+    help += "  LOAD <name>                     - Load a specific Product profile\n";
     help += "  FACTORY_RESET                   - Clear all settings and reboot\n";
     help += "  HELP                            - Show this help message";
     return help;
@@ -461,10 +468,26 @@ String CommandManager::_handleSched(const String& args) {
 String CommandManager::_handleGetConfig() {
     String json = "{";
     json += "\"node_id\":\""   + NVSConfig::getNodeId()      + "\",";
+    json += "\"active_prod\":\"" + ProductManager::getInstance().getActiveProduct() + "\",";
     json += "\"wifi_ssid\":\"" + NVSConfig::getWifiSSID()    + "\",";
     json += "\"power_mode\":"  + String(NVSConfig::getPowerMode()) + ",";
     json += "\"relay1\":"      + String(NVSConfig::getRelayState(1) ? "true" : "false") + ",";
     json += "\"relay2\":"      + String(NVSConfig::getRelayState(2) ? "true" : "false");
     json += "}";
     return json;
+}
+
+String CommandManager::_handleListProducts() {
+    return ProductManager::getInstance().listProducts();
+}
+
+String CommandManager::_handleLoadProduct(const String& args) {
+    String name = args;
+    name.trim();
+    if (name.length() == 0) return "{\"ok\":false,\"error\":\"Usage: LOAD <product_name>\"}";
+    
+    if (ProductManager::getInstance().loadProduct(name)) {
+        return "{\"ok\":true,\"msg\":\"Loaded product: " + name + "\"}";
+    }
+    return "{\"ok\":false,\"error\":\"Failed to load product: " + name + "\"}";
 }

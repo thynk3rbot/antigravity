@@ -227,6 +227,25 @@ bool MQTTTransport::publishResponse(const String& jsonPayload) {
     return ok;
 }
 
+bool MQTTTransport::publishNodeStatus(uint8_t nodeId, bool isOnline) {
+    if (!_mqttClient.connected()) return false;
+
+    String topic = "loralink/status/" + String(nodeId);
+    String payload = isOnline ? "ONLINE" : "OFFLINE";
+    bool ok = _mqttClient.publish(topic.c_str(),
+                                  (const uint8_t*)payload.c_str(),
+                                  payload.length(),
+                                  true /* retained */);
+    if (ok) {
+        Serial.printf("[MQTT] Node %u status published → %s (%s)\n",
+                      nodeId, topic.c_str(), payload.c_str());
+    } else {
+        Serial.printf("[MQTT] ERROR: Failed to publish node status to %s\n",
+                      topic.c_str());
+    }
+    return ok;
+}
+
 // ============================================================================
 // MQTT-specific API — command callback
 // ============================================================================
@@ -252,17 +271,23 @@ bool MQTTTransport::_connect() {
     _mqttClient.setCallback(_mqttCallback);
 
     bool connected = false;
+    String statusTopic = _statusTopic();
     if (_config.username.length() > 0) {
         connected = _mqttClient.connect(_config.clientId.c_str(),
                                         _config.username.c_str(),
-                                        _config.password.c_str());
+                                        _config.password.c_str(),
+                                        statusTopic.c_str(),
+                                        1, true, "OFFLINE");
     } else {
-        connected = _mqttClient.connect(_config.clientId.c_str());
+        connected = _mqttClient.connect(_config.clientId.c_str(),
+                                        statusTopic.c_str(),
+                                        1, true, "OFFLINE");
     }
 
     if (connected) {
         Serial.printf("[MQTT] Connected to %s:%u\n",
                       _config.broker.c_str(), _config.port);
+        _mqttClient.publish(statusTopic.c_str(), "ONLINE", true);
         _subscribe();
     } else {
         Serial.printf("[MQTT] Connect failed (state=%d)\n",
@@ -320,15 +345,19 @@ void MQTTTransport::_mqttCallback(char* topic, byte* payload,
 // ============================================================================
 
 String MQTTTransport::_telemetryTopic() const {
-    return "loralink/" + _nodeId + "/telemetry";
+    return "loralink/telemetry/" + _nodeId;
 }
 
 String MQTTTransport::_commandTopic() const {
-    return "loralink/" + _nodeId + "/command";
+    return "loralink/cmd/" + _nodeId;
 }
 
 String MQTTTransport::_responseTopic() const {
-    return "loralink/" + _nodeId + "/response";
+    return "loralink/msg/" + _nodeId;
+}
+
+String MQTTTransport::_statusTopic() const {
+    return "loralink/status/" + _nodeId;
 }
 
 // ============================================================================

@@ -1,0 +1,77 @@
+<!DOCTYPE html><html><head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width,initial-scale=1'>
+<title>LoRaLink v2 Dashboard</title>
+<style>
+body{font-family:'Roboto Condensed',sans-serif;background:#050508;color:#c0c0cf;font-size:10px;margin:0;line-height:1.2;display:flex;justify-content:center}
+.wrap{width:100%;max-width:1400px;display:flex;flex-direction:column;min-height:100vh;background:#0b0b14;border-left:1px solid #1a1a2e;border-right:1px solid #1a1a2e}
+.hdr{display:flex;justify-content:space-between;background:#000;padding:2px 8px;border-bottom:1px solid #00d4ff33;align-items:center;height:24px}
+.hdr h1{font-size:11px;color:#00d4ff;margin:0;font-weight:900;text-transform:uppercase;letter-spacing:1px}
+.nav{display:flex;gap:2px}
+.nav a{color:#444;text-decoration:none;font-size:8px;padding:2px 4px;background:#111;border:1px solid #222;text-transform:uppercase;font-weight:700}
+.nav a:hover{color:#00d4ff;border-color:#00d4ff}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:4px;padding:4px}
+.card{background:rgba(20,20,35,0.8);border:1px solid #1a1a2e;border-left:2px solid #333;padding:4px 6px;border-radius:2px}
+.card.ok-border{border-left-color:#0f8}
+.lbl{font-size:7px;color:#5c5c7a;text-transform:uppercase;font-weight:900}
+.val{font-size:14px;font-weight:900;color:#fff}
+.ok{color:#0f8} .wt{color:#fa0} .er{color:#f44}
+.sect-hdr{padding:2px 8px;font-size:8px;color:#00d4ff;background:rgba(0,212,255,0.05);border-bottom:1px solid #00d4ff22;text-transform:uppercase;font-weight:900}
+.log{flex:1;min-height:100px;overflow-y:auto;background:#000;padding:4px;font-family:monospace;font-size:9px;border-top:1px solid #1a1a2e;color:#888}
+.m{padding:1px 0;border-bottom:1px solid #0a0a1f}
+.cmd{display:flex;padding:4px;gap:4px;background:#000;border-top:1px solid #1a1a2e}
+.cmd input{flex:1;background:#000;color:#00d4ff;border:1px solid #222;padding:2px 4px;font-size:10px;outline:none}
+.cmd button{background:#00d4ff;color:#000;border:none;padding:2px 8px;font-weight:900;cursor:pointer;font-size:9px}
+</style></head><body>
+<div class='wrap'>
+<div class='hdr'>
+  <h1>⚡ <span id='did'>Peer</span> <span id='fwv' style='color:#333;margin-left:8px'></span></h1>
+  <div class='nav'>
+    <a href='/products'>Products</a>
+    <a href='/config'>Config</a>
+  </div>
+</div>
+<div class='grid' id='cards'></div>
+<div class='sect-hdr'>Real-Time Stream</div>
+<div class='log' id='log'></div>
+<div class='cmd'>
+  <input id='ci' placeholder='CMD >' onkeydown="if(event.key==='Enter')send()">
+  <button onclick="send()">GO</button>
+</div>
+</div>
+<script>
+var ws;
+function connect() {
+  ws = new WebSocket('ws://' + location.hostname + '/ws');
+  ws.onmessage = (e) => {
+    var d = JSON.parse(e.data);
+    document.getElementById('did').textContent = d.id || 'Peer';
+    document.getElementById('fwv').textContent = d.version ? 'v' + d.version : '';
+    let c = '';
+    const items = [
+      {l:'BAT', v:d.bat, ok:parseFloat(d.bat)>3.5},
+      {l:'RSSI', v:d.lora_rssi, ok:true},
+      {l:'PEERS', v:d.peers?d.peers.length:0, ok:true},
+      {l:'UPTIME', v:d.uptime+'s', ok:true}
+    ];
+    items.forEach(i => {
+      c += `<div class="card ${i.ok?'ok-border':''}"><div class="lbl">${i.l}</div><div class="val">${i.v||'—'}</div></div>`;
+    });
+    document.getElementById('cards').innerHTML = c;
+    if(d.msg) {
+      let div = document.createElement('div');
+      div.className = 'm';
+      div.innerHTML = `<span style="color:#444">[${new Date().toLocaleTimeString()}]</span> ${d.msg}`;
+      let l = document.getElementById('log');
+      l.prepend(div);
+      if(l.childNodes.length > 50) l.lastChild.remove();
+    }
+  };
+  ws.onclose = () => setTimeout(connect, 2000);
+}
+connect();
+function send(){
+  var ci = document.getElementById('ci');
+  fetch('/api/command',{method:'POST',body:JSON.stringify({cmd:ci.value})});
+  ci.value='';
+}
+</script></body></html>

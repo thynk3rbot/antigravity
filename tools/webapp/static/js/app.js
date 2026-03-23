@@ -79,13 +79,19 @@ function wsConnect() {
 }
 
 // ── Status Updates ─────────────────────────────────────────────────────────
+let _pendingStatus = null;
 function onStatusUpdate(d) {
-    lastStatus = d;
-    renderDashboard(d);
-    
-    // Only update active node UI elements, don't hijack _activeNodeId
-    // _activeNodeId should only be changed by connectToNode() clicks
-    if (d.lat && d.lon) updateMapUI(d);
+    _pendingStatus = d;
+    // Throttle rendering to animation frames to prevent DOM thrashing
+    requestAnimationFrame(() => {
+        if (!_pendingStatus) return;
+        const data = _pendingStatus;
+        _pendingStatus = null;
+        
+        lastStatus = data;
+        renderDashboard(data);
+        if (data.lat && data.lon) updateMapUI(data);
+    });
 }
 
 function renderDashboard(d) {
@@ -244,15 +250,23 @@ function renderMeshTable(nodes) {
         tb.innerHTML = '<tr><td colspan="5" class="text-center text-dim p-4">Empty Swarm</td></tr>';
         return;
     }
-    tb.innerHTML = nodes.map(n => `
-        <tr>
-            <td class="text-bold text-accent">${n.id}</td>
-            <td style="color:${n.bat > 3.5 ? 'var(--ok)' : 'var(--warn)'}">${n.bat ? n.bat.toFixed(2) + "V" : "—"}</td>
-            <td>${n.rssi || "—"} dBm</td>
-            <td>${n.hops || "0"}</td>
-            <td class="text-dim">${n.ago ? n.ago + "s" : "now"}</td>
-        </tr>
-    `).join("");
+    tb.innerHTML = nodes.map(n => {
+        const id = n.id || n.nodeId || "Unknown";
+        const bat = parseFloat(n.bat) || 0;
+        const rssi = parseInt(n.rssi) || 0;
+        const hops = parseInt(n.hops) || 0;
+        const ago = n.ago !== undefined ? n.ago : (n.last_seen !== undefined ? n.last_seen : "—");
+
+        return `
+            <tr>
+                <td class="text-bold text-accent">${escHtml(id)}</td>
+                <td style="color:${bat > 3.5 ? 'var(--ok)' : (bat > 3.1 ? 'var(--warn)' : 'var(--err)')}">${bat ? bat.toFixed(2) + "V" : "—"}</td>
+                <td>${rssi ? rssi + " dBm" : "—"}</td>
+                <td>${hops}</td>
+                <td class="text-dim">${ago === "now" ? "now" : (typeof ago === 'number' ? ago + "s" : ago)}</td>
+            </tr>
+        `;
+    }).join("");
 }
 
 function updateAiUI(d) {

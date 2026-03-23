@@ -179,7 +179,7 @@ void DataManager::LoadSettings() {
 
   LOG_PRINTLN("INIT: Loading WiFi...");
   wifiSsid = p.getString("wifi_ssid", "spw1-5g");
-  wifiPass = p.getString("wifi_pass", "OPTMyxlpyx99!");
+  wifiPass = p.getString("wifi_pass", "REDACTED_WIFI_PASSWORD");
   
   if (wifiSsid.length() > 64) wifiSsid = wifiSsid.substring(0, 64);
   if (wifiPass.length() > 64) wifiPass = wifiPass.substring(0, 64);

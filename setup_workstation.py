@@ -95,8 +95,17 @@ def apply_system_env():
     run_command('setx OLLAMA_HOST "0.0.0.0"')
     print("\nNOTE: You may need to restart the Ollama service to apply the 0.0.0.0 binding.")
 
+def run_daily_sync():
+    print_step("Executing LoRaLink Daily Sync (Git/Build/Fleet)")
+    daily_sync_path = Path("tools/daily_sync.py").resolve()
+    if daily_sync_path.exists():
+        run_command(f"python {daily_sync_path}")
+    else:
+        print("Warning: tools/daily_sync.py not found. Skipping sync.")
+
 if __name__ == "__main__":
     print_step("Local AI Workstation Configuration Tool\n(GPU: RTX 3060 12GB)")
+    run_daily_sync()  # Sync code before bringing up services
     apply_system_env()
     check_ollama_running()
     pull_models()

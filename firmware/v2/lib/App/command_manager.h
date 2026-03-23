@@ -58,6 +58,8 @@ private:
     static String _handleAsk(const String& args);
     static String _handleForward(const String& args);
     static String _handleGPS(const String& args);
+    static String _handleListProducts();
+    static String _handleLoadProduct(const String& args);
 
     // Parse "CMD ARGS" -> cmd and args
     static void _parseCommand(const String& input, String& cmd, String& args);

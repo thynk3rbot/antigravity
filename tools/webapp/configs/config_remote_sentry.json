@@ -3,8 +3,8 @@
   "hardware_id": "Heltec ESP32 LoRa V3",
   "settings": {
     "dev_name": "SENTRY-ALPHA",
-    "wifi_ssid": "spw1-5g",
-    "wifi_pass": "OPTMyxlpyx99!",
+    "wifi_ssid": "REDACTED_SSID",
+    "wifi_pass": "REDACTED_WIFI_PASSWORD",
     "static_ip": "",
     "gateway": "",
     "subnet": "",

@@ -121,6 +121,7 @@ void MeshCoordinator::updateNeighbor(uint8_t nodeID, int8_t rssi,
     info.packetCount = 1;
 
     _neighbors[nodeID] = info;
+    if (_neighborCallback) _neighborCallback(nodeID, true);
     Serial.printf("[MeshCoordinator] New neighbor: Node %u (RSSI %d dBm, %u hops)\n",
                   nodeID, rssi, hopCount);
   }
@@ -138,6 +139,7 @@ void MeshCoordinator::forgetNeighbor(uint8_t nodeID) {
   auto it = _neighbors.find(nodeID);
   if (it != _neighbors.end()) {
     _neighbors.erase(it);
+    if (_neighborCallback) _neighborCallback(nodeID, false);
     Serial.printf("[MeshCoordinator] Forgot neighbor: Node %u\n", nodeID);
   }
 }

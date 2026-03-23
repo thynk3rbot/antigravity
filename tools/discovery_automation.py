@@ -35,13 +35,11 @@ async def discovery_and_reboot():
                         "name": dev['name'], "type": "wifi", "address": dev['ip']
                     })
             
-            # Check Serial for Peer2 (if on USB)
             for port in snapshot.get('serial', []):
-                # Typically we might need a handshake to confirm it's Peer2, 
-                # but for this automation we'll assume available ports are targets
+                # Only register if it matches our filtered list from backend
                 print(f"    [+] Registering Serial Peer on {port}")
                 await client.post(f"{BASE_URL}/api/discovery/register", json={
-                    "name": "Peer2-Serial", "type": "serial", "address": port
+                    "name": f"Peer-USB-{port.replace('COM','')}", "type": "serial", "address": port
                 })
         except Exception as e:
             print(f"[-] Discovery query failed: {e}")

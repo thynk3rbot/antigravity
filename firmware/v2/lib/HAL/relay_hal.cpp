@@ -38,21 +38,9 @@ void RelayHAL::init() {
   for (int i = 0; i < MAX_RELAY_CHANNELS; i++) {
     uint8_t pin = g_relayPins[i];
     
-    // Clean up previous instance if any (though init should only be called once)
-    if (_relays[i]) {
-        delete _relays[i];
-        _relays[i] = nullptr;
-    }
-
     if (pin < 255) {
-      if (MCPHAL::isVirtual(pin)) {
-        _relays[i] = new MCPDigitalIO(pin);
-      } else {
-        _relays[i] = new NativeDigitalIO(pin);
-      }
-      
-      _relays[i]->mode(OUTPUT);
-      _relays[i]->write(LOW); // Start all OFF
+      uPinMode(pin, OUTPUT);
+      uDigitalWrite(pin, LOW); // Start all OFF
       initialized++;
     } else {
       skipped++;
@@ -63,7 +51,7 @@ void RelayHAL::init() {
   _enabled = 0xFF;
   _stateChangeCount = 0;
 
-  Serial.printf("[RelayHAL] Initialized %d relay channels (%d skipped)\n",
+  Serial.printf("[RelayHAL] Initialized %d relay channels (%d skipped) via Universal Routing\n",
                 initialized, skipped);
 }
 
@@ -179,9 +167,10 @@ const char* RelayHAL::getDiagnostics() const {
 
 void RelayHAL::_applyState(uint8_t newState) {
   for (int i = 0; i < MAX_RELAY_CHANNELS; i++) {
-    if (_relays[i]) {
+    uint8_t pin = g_relayPins[i];
+    if (pin < 255) {
       bool shouldBeOn = (newState & (1 << i)) != 0;
-      _relays[i]->write(shouldBeOn);
+      uDigitalWrite(pin, shouldBeOn);
     }
   }
 }

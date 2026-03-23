@@ -118,6 +118,7 @@ function updateUI(status) {
             `;
         }
         renderGpioGrid(status.pins || []);
+        handleAutoWiring(status);
     }
 
     const updateLink = (id, ok) => {
@@ -398,6 +399,89 @@ function renderGpioGrid(pins) {
 
 function togglePin(pin) {
     sendCommand(`TOGGLE ${pin}`);
+}
+
+async function handleAutoWiring(status) {
+    const product = status.active_product;
+    if (!product) return;
+
+    const container = document.getElementById("plugin-controls-root");
+    if (!container) return;
+
+    // Only fetch if product changed or not loaded
+    if (container.getAttribute('data-active-plugin') === product) {
+        updatePluginStates(status);
+        return;
+    }
+
+    try {
+        const resp = await fetch(`/static/templates/${product}.json`);
+        if (!resp.ok) throw new Error("Template not found");
+        const template = await resp.json();
+        
+        container.setAttribute('data-active-plugin', product);
+        renderPluginUI(container, template);
+        updatePluginStates(status);
+    } catch (e) {
+        console.warn("[Auto-Wiring] Could not load template for " + product);
+    }
+}
+
+function renderPluginUI(container, template) {
+    container.innerHTML = `
+        <div class="card mt-24">
+            <div class="section-header">
+                <h3><i class="${template.icon}"></i> ${template.displayName}</h3>
+            </div>
+            <div class="plugin-widget-grid" id="plugin-widgets"></div>
+        </div>
+    `;
+    
+    const grid = document.getElementById("plugin-widgets");
+    template.widgets.forEach(w => {
+        const div = document.createElement("div");
+        div.className = "plugin-widget";
+        if (w.type === 'toggle') {
+            div.innerHTML = `
+                <div class="flex-row-sb">
+                    <span>${w.label}</span>
+                    <label class="switch">
+                        <input type="checkbox" id="plug-p${w.pin}" onchange="sendPluginCmd('${w.cmd}', this.checked)">
+                        <span class="slider round"></span>
+                    </label>
+                </div>
+            `;
+        } else if (w.type === 'indicator') {
+             div.innerHTML = `
+                <div class="flex-row-sb">
+                    <span>${w.label}</span>
+                    <div class="ind-dot" id="plug-p${w.pin}" style="background:#222"></div>
+                </div>
+            `;
+        }
+        grid.appendChild(div);
+    });
+}
+
+function updatePluginStates(status) {
+    const pins = status.pins || [];
+    pins.forEach(p => {
+        const el = document.getElementById(`plug-p${p.id}`);
+        if (!el) return;
+        
+        if (el.type === 'checkbox') {
+            el.checked = (p.val === 1);
+        } else {
+            // Indicator
+            el.style.background = (p.val === 1) ? 'var(--green-ok)' : '#222';
+            el.style.boxShadow = (p.val === 1) ? '0 0 8px var(--green-ok)' : 'none';
+        }
+    });
+}
+
+function sendPluginCmd(template, val) {
+    const cmd = template.replace('{val}', val ? '1' : '0');
+    sendCommand(cmd);
 }
 
 // ── Board Visualizer ─────────────────────────────────────────────────────────

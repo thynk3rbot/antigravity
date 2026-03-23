@@ -21,6 +21,7 @@ import argparse
 import asyncio
 import json
 import os
+import copy
 import sys
 import time
 from dataclasses import dataclass, field
@@ -575,9 +576,9 @@ class LoRaLinkListener(ServiceListener):
                 val = info.properties.get(key.encode() if isinstance(key, str) else key)
                 return val.decode("utf-8") if val else default
 
-            # Filter to ONLY LoRaLink devices
-            dev_type = get_prop("type", "unknown")
-            if dev_type != "loralink-gateway":
+            # Filter to LoRaLink-compatible devices
+            dev_type = get_prop("type", "unknown").lower()
+            if "loralink" not in dev_type and dev_type != "gateway":
                 return
 
             node_id = get_prop("id") or name.split(".")[0]
@@ -731,8 +732,8 @@ class SerialHub:
                         hwid = (p.hwid or "").upper()
                         
                         is_loralink = (
-                            any(sig in desc for sig in ["CP210", "USB SERIAL", "CH340", "ESP32", "BLUETOOTH"]) or \
-                            any(vid in hwid for vid in ["303A", "10C4", "1A86", "BTHENUM"])
+                            any(sig in desc for sig in ["CP210", "USB SERIAL", "CH340", "ESP32", "HELTEC"]) or \
+                            any(vid in hwid for vid in ["303A", "10C4", "1A86", "2341"])  # 2341 = Arduino
                         )
                         
                         if is_loralink:
@@ -1412,8 +1413,10 @@ def build_app(
                 
                 # Rewrite Mesh IDs to human-readable names before broadcasting
                 if "mesh" in json_data:
+                    # Create a copy for broadcast to prevent modification during iteration
+                    json_data = copy.deepcopy(json_data)
                     for peer in json_data["mesh"]:
-                        p_id = peer.get("id")
+                        p_id = peer.get("id") or peer.get("nodeId")
                         if p_id:
                             # Try exact ID or MAC match
                             for known in node_reg.list():
@@ -2149,8 +2152,20 @@ def build_app(
     async def _serial_ports() -> JSONResponse:
         if not PYSERIAL:
             return JSONResponse({"ports": [], "error": "pyserial not installed"})
-        ports = [p.device for p in serial.tools.list_ports.comports()]
-        return JSONResponse({"ports": ports})
+        
+        # Filter for typical ESP32/USB-Serial adapters to avoid dash clutter (e.g. bluetooth/system ports)
+        ports = []
+        for p in serial.tools.list_ports.comports():
+            desc = (p.description or "").lower()
+            hwid = (p.hwid or "").lower()
+            # Positive tokens for LoRaLink hardware
+            if any(t in desc or t in hwid for t in ["esp", "silicon", "cp21", "ch34", "usb-serial", "jlink"]):
+                ports.append(p.device)
+            # Exclude known-noisy system ports
+            elif "standard serial" not in desc and "bluetooth" not in desc and "pci" not in hwid:
+                ports.append(p.device)
+                
+        return JSONResponse({"ports": sorted(ports)})
 
     # ── Test sequences ────────────────────────────────────────────────────
 

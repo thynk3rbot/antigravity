@@ -14,6 +14,9 @@
 
 #pragma once
 
+#include <Arduino.h>
+#include <string>
+#include <cstdint>
 #include "interface.h"
 #include <PubSubClient.h>
 #include <WiFiClient.h>
@@ -125,6 +128,17 @@ public:
     bool publishResponse(const String& jsonPayload);
 
     /**
+     * @brief Publish ONLINE/OFFLINE status for an external Mesh Node
+     *
+     * Topic: loralink/status/{nodeId}
+     *
+     * @param nodeId Node ID
+     * @param isOnline True if node joined, false if it timed out
+     * @return true if broker accepted the publish
+     */
+    bool publishNodeStatus(uint8_t nodeId, bool isOnline);
+
+    /**
      * @brief Register callback invoked when a command arrives
      *
      * The callback receives the raw payload string from either
@@ -165,6 +179,7 @@ private:
     String _telemetryTopic() const;
     String _commandTopic() const;
     String _responseTopic() const;
+    String _statusTopic() const;
 
     // ========================================================================
     // Static callback (PubSubClient requires a plain function pointer)

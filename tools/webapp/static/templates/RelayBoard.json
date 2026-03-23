@@ -1,0 +1,25 @@
+{
+    "id": "RelayBoard",
+    "displayName": "8-Channel Industrial Relay Expansion",
+    "icon": "fas fa-toggle-on",
+    "widgets": [
+        {
+            "type": "toggle",
+            "label": "Main Flush Valve",
+            "pin": 100,
+            "cmd": "GPIO 100 {val}"
+        },
+        {
+            "type": "toggle",
+            "label": "Secondary Pump",
+            "pin": 101,
+            "cmd": "GPIO 101 {val}"
+        },
+        {
+            "type": "indicator",
+            "label": "External Fault Sense",
+            "pin": 102,
+            "color": "red"
+        }
+    ]
+}

@@ -1,0 +1,10 @@
+{
+  "name": "RelayBoard",
+  "pins": [
+    {"pin": 12, "mode": "output", "default": 0},
+    {"pin": 13, "mode": "output", "default": 0}
+  ],
+  "schedules": [
+    {"id": "DailyFlush", "type": "TOGGLE", "pin": 12, "interval": 86400, "duration": 30}
+  ]
+}

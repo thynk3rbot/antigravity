@@ -13,12 +13,17 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <esp_heap_caps.h>
+#include <LittleFS.h>
 
 // HAL Layer
 #include "../lib/HAL/board_config.h"
-#include "../lib/HAL/radio_hal.h"
+#include "../lib/HAL/mcp_manager.h"
 #include "../lib/HAL/relay_hal.h"
+#include "../lib/HAL/probe_manager.h"
 #include "../lib/HAL/sensor_hal.h"
+
+// App Logic
+#include "../lib/App/product_manager.h"
 #ifdef PIN_SENSOR_DHT
 #include "../lib/HAL/dht_sensor.h"
 #endif
@@ -52,10 +57,19 @@
 #endif
 
 // ============================================================================
+// Forward Declarations
+// ============================================================================
+void radioTask(void* param);
+void meshTask(void* param);
+void probeTask(void* param);
+
+// ============================================================================
 // Task Handles
 // ============================================================================
 
-TaskHandle_t radioTaskHandle = nullptr;
+TaskHandle_t meshTaskHandle = NULL;
+TaskHandle_t radioTaskHandle = NULL;
+TaskHandle_t probeTaskHandle = NULL; // New: Marauder Background Sniffing
 TaskHandle_t controlTaskHandle = nullptr;
 
 // ============================================================================
@@ -80,15 +94,16 @@ void radioTask(void* param) {
   uint8_t rxBuffer[256];
 
   while (1) {
-    // Poll message router (processes all registered transports)
-    messageRouter.process();
+    // Wait for ISR notification (max 100ms for other task service)
+    ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(100));
 
-    // Poll human-readable CLI transports (Serial and BLE)
+    // Service transport processing
+    messageRouter.process();
     serialTransport.poll();
     BLETransport::pollStatic();
 
-    // Also poll LoRa directly for any remaining packets
-    int len = loraTransport.recv(rxBuffer, sizeof(rxBuffer));  // Non-blocking
+    // Check for LoRa packets
+    int len = loraTransport.recv(rxBuffer, sizeof(rxBuffer));
     if (len > 0 && len >= (int)sizeof(ControlPacket)) {
       ControlPacket* pkt = (ControlPacket*)rxBuffer;
 
@@ -97,28 +112,21 @@ void radioTask(void* param) {
                     pkt->header.type, pkt->header.src, pkt->header.dest,
                     loraTransport.getSignalStrength());
 
-      // Update mesh topology (neighbor tracking)
+      // Update mesh topology
       meshCoordinator.updateNeighbor(pkt->header.src,
                                       loraTransport.getSignalStrength(),
-                                      1);  // Direct rx = 1 hop
+                                      1);
 
-      // Determine relay or consume
+      // Consume or Relay
       if (pkt->header.dest == g_ourNodeID || pkt->header.dest == 0xFF) {
-        // Packet is for us or broadcast - handled by main app logic
-        // (messageRouter will call registered handler)
+        // Handled by router callbacks
       } else if (meshCoordinator.shouldRelay(*pkt)) {
-        // Multi-hop relay needed
-        pkt->header.flags |= PKT_FLAG_IS_RELAY; // Mark as relayed
-        
-        // Forward via MessageRouter (will pick best transport or broadcast)
+        pkt->header.flags |= PKT_FLAG_IS_RELAY;
         messageRouter.broadcastPacket((uint8_t*)pkt, sizeof(ControlPacket));
-        
         Serial.printf("[RELAY] Forwarded packet from %u to %u\n",
                       pkt->header.src, pkt->header.dest);
       }
     }
-
-    vTaskDelay(pdMS_TO_TICKS(100));  // 100ms poll cycle
   }
 }
 
@@ -170,19 +178,19 @@ void controlTask(void* param) {
     if (now - lastOLEDUpdate >= OLED_UPDATE_INTERVAL_MS) {
       // Update cached values for OLED display
       static const char* const kModeNames[] = {"NORMAL", "CONSERVE", "CRITICAL"};
-      OLEDManager::setBatteryVoltage(PowerManager::getBatteryVoltage(),
+      OLEDManager::getInstance().setBatteryVoltage(PowerManager::getBatteryVoltage(),
                                      kModeNames[static_cast<uint8_t>(PowerManager::getMode())]);
-      OLEDManager::setLoRaSignal(rssi, loraTransport.getLastSNR());
-      OLEDManager::setRelayStatus(relayState > 0);
-      OLEDManager::setTemperature(tempC_x10 / 10.0f);
-      OLEDManager::setPeerCount(meshCoordinator.getNeighborCount());
-      OLEDManager::setUptime(now - g_bootTimestamp);
-      OLEDManager::setFreeHeap(esp_get_free_heap_size());
-      OLEDManager::setDeviceName(NVSManager::getNodeID("Node").c_str());
-      OLEDManager::setVersion(FIRMWARE_VERSION);
+      OLEDManager::getInstance().setLoRaSignal(rssi, loraTransport.getLastSNR());
+      OLEDManager::getInstance().setRelayStatus(relayState > 0);
+      OLEDManager::getInstance().setTemperature(tempC_x10 / 10.0f);
+      OLEDManager::getInstance().setPeerCount(meshCoordinator.getNeighborCount());
+      OLEDManager::getInstance().setUptime(now - g_bootTimestamp);
+      OLEDManager::getInstance().setFreeHeap(esp_get_free_heap_size());
+      OLEDManager::getInstance().setDeviceName(NVSManager::getNodeID("Node").c_str());
+      OLEDManager::getInstance().setVersion(FIRMWARE_VERSION);
       
-      OLEDManager::setIP(WiFi.localIP().toString().c_str());
-      OLEDManager::setTransportStatus(
+      OLEDManager::getInstance().setIP(WiFi.localIP().toString().c_str());
+      OLEDManager::getInstance().setTransportStatus(
         WiFi.status() == WL_CONNECTED,
         BLETransport::isConnected(),
         #ifdef ENABLE_MQTT_TRANSPORT
@@ -195,9 +203,9 @@ void controlTask(void* param) {
       );
 
       GPSManager::GPSData gpsData = GPSManager::getData();
-      OLEDManager::setGPS(gpsData.lat, gpsData.lon, gpsData.satellites, gpsData.hasFix);
+      OLEDManager::getInstance().setGPS(gpsData.lat, gpsData.lon, gpsData.satellites, gpsData.hasFix);
       // Refresh display
-      OLEDManager::update();
+      OLEDManager::getInstance().update();
       lastOLEDUpdate = now;
 
       // =====================================================================
@@ -265,8 +273,7 @@ void controlTask(void* param) {
       lastAgeOut = now;
     }
 
-    // Run periodic mesh activities (Discovery, Heartbeat)
-    meshCoordinator.poll();
+    // Age out stale mesh neighbors handled in MeshTask
 
     // Poll MQTT transport (handles connection, message receipt, telemetry publish)
     #ifdef ENABLE_MQTT_TRANSPORT
@@ -279,7 +286,27 @@ void controlTask(void* param) {
     // Poll all generic plugins
     pluginManager.pollAll();
 
-    vTaskDelay(pdMS_TO_TICKS(500));  // 500ms control loop period
+    vTaskDelay(pdMS_TO_TICKS(10));  // 100Hz loop
+  }
+}
+
+void probeTask(void *pvParameters) {
+  Serial.println("[Task] Probe/Marauder Background Task Started");
+  for (;;) {
+    ProbeManager::getInstance().service();
+    vTaskDelay(pdMS_TO_TICKS(10)); // 100Hz scanning/hopping pulse
+  }
+}
+
+/**
+ * @brief Mesh Topology Task
+ * Handles neighbor aging, discovery, and heartbeat logic.
+ */
+void meshTask(void *pvParameters) {
+  Serial.println("[Task] Mesh State Machine Started");
+  for (;;) {
+    meshCoordinator.poll();
+    vTaskDelay(pdMS_TO_TICKS(500)); // 2Hz topology pulse
   }
 }
 
@@ -339,7 +366,6 @@ void onMessageReceived(TransportType transportType,
     case PacketType::TELEMETRY: {
       // Received telemetry from another peer
       Serial.printf("[TELEMETRY] From Peer %u: Temp=%.1f°C, V=%.2fV, Relays=0x%02X\n",
-                    pkt->header.src,
                     pkt->payload.telemetry.tempC_x10 / 10.0f,
                     pkt->payload.telemetry.voltageV_x100 / 100.0f,
                     pkt->payload.telemetry.relayState);
@@ -374,11 +400,32 @@ void setup() {
   // Wait for Native USB Serial to connect (max 3 seconds)
   uint32_t startWait = millis();
   while (!Serial && (millis() - startWait < 3000)) {
-    delay(10);
+    vTaskDelay(pdMS_TO_TICKS(10));
   }
   
-  delay(500);
-  Serial.println("\n\n=== LoRaLink v2 Boot ===");
+  // ========================================================================
+  // CRITICAL: V1 Parity - Boot Stabilization Delay
+  // Prevents brownout when high-power radios start simultaneously with USB rail
+  // ========================================================================
+  Serial.println("\n[BOOT] Stabilizing rails (5s delay)...");
+  MCPManager::setupPin(PIN_LED, OUTPUT);
+  for(int i=0; i<10; i++) {
+    MCPManager::writePin(PIN_LED, !MCPManager::readPin(PIN_LED));
+    vTaskDelay(pdMS_TO_TICKS(10));
+  }
+  MCPManager::writePin(PIN_LED, LOW);
+
+  // ========================================================================
+  // CRITICAL: V1 Parity - Hardware Recovery Window (PRG Button)
+  // Hold PRG button during first 5 seconds to wipe NVS and stay in factory mode
+  // ========================================================================
+  if (MCPManager::getInstance().readPin(GPIO_PRG_BTN) == LOW) {
+    Serial.println("[RECOVERY] PRG Button held! Performing factory reset...");
+    // Future: NVSManager::wipe()
+    vTaskDelay(pdMS_TO_TICKS(10)); 
+  }
+  
+  Serial.println("\n=== LoRaLink v2 Boot ===");
   Serial.printf("Version: %s\n", FIRMWARE_VERSION);
   Serial.printf("Role: %s\n", DEVICE_ROLE);
   Serial.printf("Radio: %s\n", RADIO_MODEL);
@@ -387,14 +434,30 @@ void setup() {
   // Record boot timestamp
   g_bootTimestamp = millis();
 
-  // Step 1: Initialize NVS (Persistent Storage)
+  // Step 1: Initialize ID Methodology, Filesystem & NVS
   // ========================================================================
-  Serial.println("\n[1/7] Initializing NVS persistence layer...");
+  Serial.println("\n[1/7] Initializing Technical ID, FS & NVS layer...");
+
+  if (!LittleFS.begin(true)) {
+    Serial.println("WARNING: LittleFS mount failed - dynamic plugins disabled");
+  }
 
   if (!NVSManager::init()) {
     Serial.println("WARNING: NVS init failed - using defaults");
-    // Continue anyway, but config won't persist across reboots
   }
+
+  // Initialize I2C and Display
+  if (OLEDManager::getInstance().init()) {
+    OLEDManager::getInstance().showSplash(FIRMWARE_VERSION, DEVICE_ROLE);
+  }
+
+  // Restore V1 Parity: Initialize MCP23017 I/O Expander
+  MCPManager::getInstance().init();
+
+  // Restore V1 Parity: Initialize MCP23017 I/O Expander & Product Engine
+  MCPManager::getInstance().init();
+  ProductManager::getInstance().init();
+  ProbeManager::getInstance().init();
 
   // Initialize NVSConfig for boot diagnostics and Arduino-style prefs
   NVSConfig::begin();
@@ -407,9 +470,9 @@ void setup() {
   Serial.println("[1/8] Initializing Power & UI...");
   PowerManager::init();
   PowerManager::enableVEXT();
-  delay(100); // Stabilize rail
+  vTaskDelay(pdMS_TO_TICKS(10)); // Stabilize rail
   
-  if (!OLEDManager::init()) {
+  if (!OLEDManager::getInstance().init()) {
     Serial.println("  ! OLED init failed (non-fatal)");
   } else {
     Serial.println("  ✓ OLED/Power initialized");
@@ -421,22 +484,22 @@ void setup() {
   char mac_buf[8];
   snprintf(mac_buf, sizeof(mac_buf), "[%02X:%02X]", mac_raw[4], mac_raw[5]);
   
-  OLEDManager::setMAC(mac_buf);
-  OLEDManager::setVersion(FIRMWARE_VERSION);
-  OLEDManager::setDeviceName(NVSManager::getNodeID("Node").c_str());
-  OLEDManager::setDiagnostics(NVSConfig::getBootCount(), NVSConfig::getResetReason().c_str());
+  OLEDManager::getInstance().setMAC(mac_buf);
+  OLEDManager::getInstance().setVersion(FIRMWARE_VERSION);
+  OLEDManager::getInstance().setDeviceName(NVSManager::getNodeID("Node").c_str());
+  OLEDManager::getInstance().setDiagnostics(NVSConfig::getBootCount(), NVSConfig::getResetReason().c_str());
   
-  OLEDManager::drawBootProgress("SYSTEM START", 10);
-  delay(100);
+  OLEDManager::getInstance().drawBootProgress("SYSTEM START", 10);
+  vTaskDelay(pdMS_TO_TICKS(10));
 
   // Set initial identity info (must be after init() or it gets wiped by defaults)
-  OLEDManager::setMAC(mac_buf);
-  OLEDManager::setVersion(FIRMWARE_VERSION);
-  OLEDManager::setDeviceName(NVSManager::getNodeID("Node").c_str());
-  OLEDManager::setDiagnostics(NVSConfig::getBootCount(), NVSConfig::getResetReason().c_str());
-  OLEDManager::addLog("System Initialized");
+  OLEDManager::getInstance().setMAC(mac_buf);
+  OLEDManager::getInstance().setVersion(FIRMWARE_VERSION);
+  OLEDManager::getInstance().setDeviceName(NVSManager::getNodeID("Node").c_str());
+  OLEDManager::getInstance().setDiagnostics(NVSConfig::getBootCount(), NVSConfig::getResetReason().c_str());
+  OLEDManager::getInstance().addLog("System Initialized");
 
-  delay(BOOT_SAFE_DELAY_STAGGER_MS);
+  vTaskDelay(pdMS_TO_TICKS(10));
 
   // ========================================================================
   // Step 3: Initialize HAL (GPIO, SPI, etc.)
@@ -445,11 +508,11 @@ void setup() {
 
   if (!radioHAL.init()) {
     Serial.println("ERROR: Radio HAL init failed!");
-    while (1) delay(1000);
+    while (1) vTaskDelay(pdMS_TO_TICKS(10));
   }
 
   relayHAL.init();
-  OLEDManager::drawBootProgress("HAL Core", 45);
+  OLEDManager::getInstance().drawBootProgress("HAL Core", 45);
   
   // Step 4: Initialize Plugins & Sensors
   // ========================================================================
@@ -457,6 +520,7 @@ void setup() {
   
   // Initialize Sensors
   #ifdef PIN_SENSOR_DHT
+    uPinMode(PIN_SENSOR_DHT, INPUT); // Force use of universal mode
     static NativeDigitalIO dhtIO(PIN_SENSOR_DHT);
     static DHTSensorPlugin dhtPlugin(&dhtIO);
     sensorHAL.registerPlugin(&dhtPlugin);
@@ -472,7 +536,7 @@ void setup() {
   std::string nodeIDStr = NVSManager::getNodeID("Node");
   if (nodeIDStr.empty()) nodeIDStr = "Unknown";
 
-  OLEDManager::setDeviceName(nodeIDStr.c_str());
+  OLEDManager::getInstance().setDeviceName(nodeIDStr.c_str());
 
   // LoRa Transport
   if (!loraTransport.init()) {
@@ -487,9 +551,9 @@ void setup() {
       Serial.println("  ! Serial CLI init failed");
   } else {
       Serial.println("  ✓ Serial CLI initialized");
-      OLEDManager::addLog("Serial CLI Ready");
+      OLEDManager::getInstance().addLog("Serial CLI Ready");
   }
-  OLEDManager::drawBootProgress("SERIAL CLI", 60);
+  OLEDManager::getInstance().drawBootProgress("SERIAL CLI", 60);
 
   // BLE Transport (Always active)
   if (!BLETransport::initStatic()) {
@@ -497,7 +561,7 @@ void setup() {
   } else {
       Serial.println("  ✓ BLE transport initialized");
   }
-  OLEDManager::drawBootProgress("BLE Mesh", 75);
+  OLEDManager::getInstance().drawBootProgress("BLE Mesh", 75);
 
   // Optional WiFi Transport (graceful fallback if connection fails)
   std::string wifiSSID = NVSManager::getWiFiSSID();
@@ -531,7 +595,7 @@ void setup() {
       messageRouter.registerTransport(&espNowTransport);
       Serial.println("  ✓ ESP-NOW transport initialized");
   }
-  OLEDManager::drawBootProgress("TRANS PORTS", 90);
+  OLEDManager::getInstance().drawBootProgress("TRANS PORTS", 90);
 
   // Initialize Command Manager
   CommandManager::begin();
@@ -556,7 +620,7 @@ void setup() {
         Serial.printf("[BLE] Response sent: %u bytes\n", resp.length());
       });
     });
-    OLEDManager::addLog("BLE Ready");
+    OLEDManager::getInstance().addLog("BLE Ready");
   }
 
   // Optional MQTT Transport (Hub only, requires WiFi and broker configured)
@@ -587,6 +651,13 @@ void setup() {
 
   meshCoordinator.init();
   meshCoordinator.setOwnNodeID(g_ourNodeID);
+  meshCoordinator.setNeighborCallback([](uint8_t nodeId, bool isOnline) {
+    #ifdef ENABLE_MQTT_TRANSPORT
+      if (MQTTTransport::instance()->isConnected()) {
+        MQTTTransport::instance()->publishNodeStatus(nodeId, isOnline);
+      }
+    #endif
+  });
   Serial.println("  ✓ Mesh coordinator initialized");
 
   // Initialize GPIO scheduler (loads /schedule.json from LittleFS)
@@ -606,7 +677,7 @@ void setup() {
     if (!benchPassed) {
       Serial.println("\n⚠️  WARNING: Some bench tests failed!");
       Serial.println("    Review output above for details.");
-      delay(2000);
+      vTaskDelay(pdMS_TO_TICKS(10));
     }
     // Reinitialize hardware after bench tests (they may stress hardware)
     Serial.println("[6/8] Re-initializing hardware after bench mode...");
@@ -621,15 +692,13 @@ void setup() {
   // ========================================================================
   Serial.println("[7/8] Creating FreeRTOS tasks...");
 
-  xTaskCreatePinnedToCore(
-    radioTask,                           // Task function
-    "RadioRx",                           // Task name
-    4096,                                // Stack size (bytes)
-    nullptr,                             // Parameter
-    3,                                   // Priority (0-24, higher = more urgent)
-    &radioTaskHandle,
-    0                                    // Core (0 or 1)
-  );
+  // Start Radio/Mesh/Probe tasks
+  xTaskCreatePinnedToCore(radioTask, "RadioTask", 8192, NULL, 4, &radioTaskHandle, 1);
+  xTaskCreatePinnedToCore(meshTask, "MeshTask", 8192, NULL, 3, &meshTaskHandle, 1);
+  xTaskCreatePinnedToCore(probeTask, "ProbeTask", 4096, NULL, 2, &probeTaskHandle, 0); // Core 0 for radio-heavy
+
+  // Register radioTask for interrupts
+  RadioHAL::getInstance().setNotifyTask(radioTaskHandle);
 
   xTaskCreatePinnedToCore(
     controlTask,
@@ -648,12 +717,12 @@ void setup() {
   // ========================================================================
   Serial.println("[8/8] Boot complete!");
   Serial.printf("  Uptime: %lu ms\n", millis() - g_bootTimestamp);
-  OLEDManager::drawBootProgress("COMPLETE", 100);
-  delay(500);
+  OLEDManager::getInstance().drawBootProgress("COMPLETE", 100);
+  vTaskDelay(pdMS_TO_TICKS(10));
 
   // Print diagnostics
   PowerManager::printStatus();
-  OLEDManager::printStatus();
+  OLEDManager::getInstance().printStatus();
 
   Serial.println("[9/9] Entering main loop (FreeRTOS)...");
   Serial.println("===========================\n");
@@ -668,9 +737,11 @@ void setup() {
  * This function is called by the idle task and should yield frequently.
  */
 void loop() {
-  // FreeRTOS tasks handle everything
-  // Sleep to give other tasks CPU time
-  vTaskDelay(pdMS_TO_TICKS(1000));
+  // Drive OTA and WiFi reconnects (High frequency required during firmware upload)
+  WiFiTransport::service();
+
+  // Sleep minimally to give other tasks CPU time without starving OTA handling
+  vTaskDelay(pdMS_TO_TICKS(10));
 
   // Periodic status output (every ~10 seconds)
   static uint32_t lastStatus = 0;

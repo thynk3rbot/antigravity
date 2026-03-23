@@ -9,6 +9,21 @@
 // Static instance
 RadioHAL& radioHAL = RadioHAL::getInstance();
 
+// Static ISR members
+volatile bool RadioHAL::_receivedFlag = false;
+
+#if defined(RADIO_SX1276) || defined(RADIO_SX1262)
+void RadioHAL::setFlag() {
+  _receivedFlag = true;
+  RadioHAL& instance = RadioHAL::getInstance();
+  if (instance._notifyTask) {
+    BaseType_t higherPriorityTaskWoken = pdFALSE;
+    vTaskNotifyGiveFromISR(instance._notifyTask, &higherPriorityTaskWoken);
+    portYIELD_FROM_ISR(higherPriorityTaskWoken);
+  }
+}
+#endif
+
 // ============================================================================
 // Constructor & Singleton Implementation
 // ============================================================================
@@ -54,21 +69,17 @@ bool RadioHAL::_initSX1276() {
     return false;
   }
 
-  int state = _radio->begin(LORA_FREQ_MHZ);
+  int state = _radio->begin(LORA_FREQ_MHZ, 125.0, 10, 5, 0x12, 14, 8);
   if (state != RADIOLIB_ERR_NONE) {
     Serial.printf("[RadioHAL] SX1276 init failed: %d\n", state);
     return false;
   }
 
-  // Configure LoRa parameters
-  _radio->setBandwidth(LORA_BW_KHZ);
-  _radio->setSpreadingFactor(9);   // SF9 = good range/speed tradeoff
-  _radio->setCodingRate(7);         // CR 4/7
-  _radio->setPreambleLength(8);
-  _radio->setCRC(true);
+  // Set TX power (Match V1: 14 dBm)
+  _radio->setOutputPower(14);
 
-  // Set TX power (max 17 dBm for SX1276)
-  _radio->setOutputPower(17);
+  // Set interrupt callback
+  _radio->setPacketReceivedAction(setFlag);
 
   // Start RX
   _radio->startReceive();
@@ -93,25 +104,19 @@ bool RadioHAL::_initSX1262() {
     return false;
   }
 
-  int state = _radio->begin(LORA_FREQ_MHZ);
+  // SX126x: Freq, BW, SF, CR, Sync, Pwr, Preamble, Tcxo, LDO
+  // CRITICAL: Heltec V3/V4 MUST have 1.6V TCXO and LDO=false for stability.
+  int state = _radio->begin(LORA_FREQ_MHZ, 125.0, 10, 5, 0x12, 14, 8, 1.6f, false);
   if (state != RADIOLIB_ERR_NONE) {
     Serial.printf("[RadioHAL] SX1262 init failed: %d\n", state);
     return false;
   }
 
-  // Configure LoRa parameters
-  _radio->setBandwidth(LORA_BW_KHZ);
-  _radio->setSpreadingFactor(9);
-  _radio->setCodingRate(7);
-  _radio->setPreambleLength(8);
-  _radio->setCRC(true);
+  // Set TX power (Start at 14dBm, match V1 stability profile)
+  _radio->setOutputPower(14);
 
-  // Set TX power (max 22 dBm for SX1262 on V3, 28 dBm on V4)
-#ifdef BOARD_HAS_PSRAM
-  _radio->setOutputPower(28);  // V4
-#else
-  _radio->setOutputPower(22);  // V3
-#endif
+  // Set interrupt callback
+  _radio->setPacketReceivedAction(setFlag);
 
   // Start RX
   _radio->startReceive();
@@ -288,4 +293,8 @@ uint16_t RadioHAL::getLastTxDuration() const {
 
 uint32_t RadioHAL::getCumulativeTxTime() const {
   return _cumulativeTxMs / 1000;  // Convert to seconds
+}
+
+void RadioHAL::setNotifyTask(TaskHandle_t task) {
+  _notifyTask = task;
 }

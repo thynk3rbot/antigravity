@@ -14,6 +14,7 @@
 #include "mesh_config.h"
 #include <map>
 #include <stdint.h>
+#include <functional>
 
 // ============================================================================
 // Neighbor Information
@@ -107,6 +108,16 @@ public:
    * @brief Clear all neighbors
    */
   void clearNeighbors();
+
+  // ========================================================================
+  // Callbacks
+  // ========================================================================
+  
+  /**
+   * @brief Register callback invoked when a neighbor joins or leaves the mesh
+   */
+  using NeighborCallback = std::function<void(uint8_t, bool)>;
+  void setNeighborCallback(NeighborCallback cb) { _neighborCallback = cb; }
 
   // ========================================================================
   // Discovery & V1 Compatibility
@@ -263,6 +274,9 @@ private:
 
   // Helper: mark seq number as relayed
   void _markAsRelayed(uint8_t srcID, uint8_t seqNum);
+
+  // Status callback
+  NeighborCallback _neighborCallback;
 };
 
 // ============================================================================

@@ -21,6 +21,7 @@
 #include <WiFi.h>
 #include <ArduinoOTA.h>
 #include <ESPmDNS.h>
+#include <DNSServer.h>
 #include <functional>
 #include <string>
 #include <cstdint>
@@ -170,6 +171,8 @@ private:
 
     static bool     _otaStarted;
     static bool     _mdnsStarted;
+    static bool     _apActive;
+    static DNSServer _dnsServer;
     static uint32_t _lastReconnectAttempt;
     static uint8_t  _reconnectAttempts;
     static int      _lastError;
@@ -195,4 +198,9 @@ private:
      * @brief Register mDNS service
      */
     static void _startMDNS();
+
+    /**
+     * @brief Start Access Point for Captive Portal
+     */
+    static void _startAP();
 };

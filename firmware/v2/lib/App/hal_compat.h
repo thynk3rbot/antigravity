@@ -9,6 +9,14 @@
 
 #ifndef NATIVE_TEST
 #include <Arduino.h>
+#include "../HAL/mcp_manager.h"
+
+// --- Universal Pin Routing (V1 Parity) ---
+// Use these dedicated wrappers instead of native functions to support MCP23017 pins (100-227)
+#define uDigitalWrite(p, v) MCPManager::writePin(p, v)
+#define uDigitalRead(p)     MCPManager::readPin(p)
+#define uPinMode(p, m)      MCPManager::setupPin(p, m)
+
 #else
 #include <stdio.h>
 #include <chrono>

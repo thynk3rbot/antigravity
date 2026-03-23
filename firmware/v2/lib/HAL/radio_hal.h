@@ -181,7 +181,17 @@ public:
 
   static RadioHAL& getInstance();
 
+  /**
+   * @brief Set task to notify on packet reception
+   * @param task Task handle to notify
+   */
+  void setNotifyTask(TaskHandle_t task);
+
 private:
+  // Static ISR handler for RadioLib
+  #if defined(RADIO_SX1276) || defined(RADIO_SX1262)
+  static void setFlag();
+  #endif
   // Private constructor for singleton
   RadioHAL();
 
@@ -200,6 +210,8 @@ private:
   int8_t _lastSNR = 0;
   uint32_t _cumulativeTxMs = 0;
   uint16_t _lastTxDurationMs = 0;
+  TaskHandle_t _notifyTask = nullptr;
+  static volatile bool _receivedFlag;
 
   // RX buffer (local temporary)
   uint8_t _rxBuffer[256];

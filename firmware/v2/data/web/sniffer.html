@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sniffer App | LoRaLink</title>
+    <link rel="stylesheet" href="css/index.css">
+    <style>
+        .sniffer-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 20px;
+            padding: 20px;
+        }
+        .device-card {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 15px;
+            border-left: 4px solid var(--accent);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: transform 0.2s;
+        }
+        .device-card:hover { transform: scale(1.02); }
+        .mac { font-family: 'JetBrains Mono', monospace; font-weight: bold; }
+        .rssi { color: #4ade80; }
+        .type-badge {
+            background: rgba(var(--accent-rgb), 0.2);
+            color: var(--accent);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+        }
+    </style>
+</head>
+<body class="dark-mode">
+    <nav class="glass">
+        <div class="nav-content">
+            <span class="logo">LoRaLink Sniffer</span>
+            <div class="controls">
+                <button id="toggle-sniff" class="btn">Start Scanning</button>
+                <button id="toggle-hop" class="btn">Toggle Hopping</button>
+                <a href="index.html" class="btn btn-outline">Back</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="sniffer-grid">
+        <section class="glass card">
+            <h2>Detected Electronic Signatures</h2>
+            <div id="device-list">
+                <!-- Populated by JS -->
+                <p class="empty-state">No devices signature found. Start scanning to begin.</p>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        let sniffing = false;
+        let hopping = false;
+
+        async function updateData() {
+            try {
+                const res = await fetch('/api/status');
+                const data = await res.json();
+                renderDevices(data.detected_devices || []);
+            } catch (e) { console.error("Poll failed", e); }
+        }
+
+        function renderDevices(devices) {
+            const container = document.getElementById('device-list');
+            if (devices.length === 0) {
+                container.innerHTML = '<p class="empty-state">No signatures found.</p>';
+                return;
+            }
+
+            container.innerHTML = devices.map(d => `
+                <div class="device-card">
+                    <div>
+                        <div class="mac">${d.mac}</div>
+                        <div class="ssid">${d.ssid || '<span class="dim">Hidden/STA</span>'}</div>
+                    </div>
+                    <div style="text-align: right">
+                        <span class="type-badge">${d.type}</span>
+                        <div class="rssi">${d.rssi} dBm</div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        document.getElementById('toggle-sniff').onclick = async () => {
+            sniffing = !sniffing;
+            await fetch('/api/probe/sniff', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({enabled: sniffing})
+            });
+            document.getElementById('toggle-sniff').innerText = sniffing ? 'Stop Scanning' : 'Start Scanning';
+        };
+
+        setInterval(updateData, 2000);
+    </script>
+</body>
+</html>

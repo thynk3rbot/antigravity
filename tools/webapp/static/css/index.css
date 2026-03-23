@@ -34,7 +34,7 @@ body {
 
 /* ── Workspace Header ─────────────────────────────────────────── */
 .workspace-header {
-  height: 72px;
+  height: 56px;
   background: var(--glass);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
@@ -42,7 +42,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 24px;
+  padding: 0 16px;
   z-index: 1000;
   flex-shrink: 0;
 }
@@ -164,14 +164,14 @@ body {
 }
 
 .sidebar {
-  width: 72px;
+  width: 56px;
   background: var(--bg-panel);
   border-right: 1px solid var(--border-dim);
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 24px 0;
-  gap: 24px;
+  padding: 16px 0;
+  gap: 16px;
   z-index: 100;
   flex-shrink: 0;
 }
@@ -232,7 +232,7 @@ body {
 .view-content {
   flex: 1;
   overflow-y: auto;
-  padding: 24px 32px;
+  padding: 12px 16px;
 }
 
 .module-container {
@@ -250,62 +250,15 @@ body {
 /* ── Cockpit Layout ────────────────────────────────────────────── */
 .cockpit-layout {
   display: grid;
-  grid-template-columns: 300px 1fr 340px;
-  gap: 20px;
-  height: calc(100vh - 160px);
-}
-
-/* -- Tiny Gauging System -- */
-.mini-gauge {
-  background: var(--bg-card);
-  border: 1px solid var(--border-dim);
-  border-radius: 8px;
-  padding: 6px 12px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 120px;
-  transition: all 0.2s;
-  cursor: default;
-}
-
-.mini-gauge:hover {
-  border-color: var(--accent-blue);
-  background: rgba(0, 242, 255, 0.05);
-}
-
-.mini-gauge i {
-  font-size: 12px;
-  color: var(--accent-blue);
-  opacity: 0.7;
-}
-
-.mg-data {
-  display: flex;
-  flex-direction: column;
-}
-
-.mg-label {
-  font-size: 8px;
-  font-weight: 900;
-  color: var(--text-dim);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  line-height: 1;
-}
-
-.mg-value {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--text-main);
-  font-family: 'JetBrains Mono', monospace;
-  margin-top: 2px;
+  grid-template-columns: 260px 1fr 300px;
+  gap: 12px;
+  height: calc(100vh - 120px);
 }
 
 .cockpit-sidebar, .cockpit-main, .cockpit-trace {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 12px;
 }
 
 /* ── Stat Cards ────────────────────────────────────────────────── */

@@ -505,3 +505,39 @@ void NVSConfig::setResetReason(const String& reason) {
     prefs.putString(NVS_KEY_RESET_REASON, reason);
     prefs.end();
 }
+
+// ============================================================================
+// Hardware & Product Management
+// ============================================================================
+
+uint8_t NVSConfig::getHardwareVariant() {
+    Preferences prefs;
+    if (!prefs.begin(PREFERENCES_NAMESPACE, true)) return 4; // Default to V4
+    uint8_t var = prefs.getUChar(NVS_KEY_HW_VER, 4);
+    prefs.end();
+    return var;
+}
+
+bool NVSConfig::setHardwareVariant(uint8_t version) {
+    Preferences prefs;
+    if (!prefs.begin(PREFERENCES_NAMESPACE, false)) return false;
+    bool ok = prefs.putUChar(NVS_KEY_HW_VER, version);
+    prefs.end();
+    return ok;
+}
+
+String NVSConfig::getActiveProductName() {
+    Preferences prefs;
+    if (!prefs.begin(PREFERENCES_NAMESPACE, true)) return "";
+    String prod = prefs.getString(NVS_KEY_ACTIVE_PROD, "");
+    prefs.end();
+    return prod;
+}
+
+bool NVSConfig::setActiveProductName(const String& name) {
+    Preferences prefs;
+    if (!prefs.begin(PREFERENCES_NAMESPACE, false)) return false;
+    bool ok = prefs.putString(NVS_KEY_ACTIVE_PROD, name);
+    prefs.end();
+    return ok;
+}

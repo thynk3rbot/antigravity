@@ -40,6 +40,15 @@ build_log*.txt
 .agent/
 .agents/
 .claude/
+.env
+.env.*
+!.env.template
+
+# Configuration
+dev_config.json
+*.pid
+tools/webapp/configs/*.json
+tools/webapp/.nodes.json
 
 # Multi-agent coordination (lock files, audit trails)
 .locks/

@@ -1,24 +1,29 @@
-/**
- * @file http_api.cpp
- * @brief HTTP API server implementation
- */
-
+#include <Arduino.h>
+#include <string>
+#include <vector>
 #include "http_api.h"
-#include "nvs_manager.h"
+#include "nvs_config.h"
 #include "status_builder.h"
 #include "command_manager.h"
-#include <Arduino.h>
 #include <ESPAsyncWebServer.h>
 #include <ArduinoJson.h>
+#include <LittleFS.h>
+#include <ESPmDNS.h>
+#include "product_manager.h"
+#include "../HAL/probe_manager.h"
 
 // ============================================================================
 // Static Member Initialization
 // ============================================================================
 
 AsyncWebServer* HttpAPI::server = nullptr;
+AsyncWebSocket* HttpAPI::ws = nullptr;
 bool HttpAPI::running = false;
 uint16_t HttpAPI::port = 80;
 std::string HttpAPI::cachedStatus = "";
+
+// Forward declaration of internal help
+void onWsEvent(AsyncWebSocket * server, AsyncWebSocketClient * client, AwsEventType type, void * arg, uint8_t *data, size_t len);
 
 // ============================================================================
 // Public Methods
@@ -32,13 +37,18 @@ bool HttpAPI::init() {
     return false;
   }
 
-  // Create AsyncWebServer instance
+  // Create AsyncWebServer and WebSocket instances
   server = new AsyncWebServer(port);
+  ws = new AsyncWebSocket("/ws");
 
-  if (server == nullptr) {
-    Serial.println("[HttpAPI] ERROR: Failed to allocate AsyncWebServer");
+  if (server == nullptr || ws == nullptr) {
+    Serial.println("[HttpAPI] ERROR: Failed to allocate Server/WS");
     return false;
   }
+
+  // Register WebSocket event handler
+  ws->onEvent(onWsEvent);
+  server->addHandler(ws);
 
   // Register route handlers
   server->on("/", HTTP_GET, handleRoot);
@@ -48,12 +58,51 @@ bool HttpAPI::init() {
   server->on("/api/ota", HTTP_GET, handleOTACheck);
   server->on("/api/ota/update", HTTP_POST, handleOTAUpdate);
 
+  // Product Management (V1 Parity)
+  server->on("/api/products/list", HTTP_GET, handleListProducts);
+  server->on("/api/products/load", HTTP_POST, handleLoadProduct);
+  server->on("/api/products/save", HTTP_POST, handleSaveProduct);
+
+  // Sniffer Control (Marauder Integration)
+  server->on("/api/probe/sniff", HTTP_POST, [](AsyncWebServerRequest *request){
+    if (request->hasParam("enabled", true)) {
+      bool enable = request->getParam("enabled", true)->value() == "true";
+      ProbeManager::getInstance().setSniffing(enable);
+      request->send(200, "application/json", "{\"status\":\"ok\"}");
+    } else {
+      request->send(400, "application/json", "{\"error\":\"missing enabled\"}");
+    }
+  });
+
+  server->on("/api/probe/hop", HTTP_POST, [](AsyncWebServerRequest *request){
+    if (request->hasParam("enabled", true)) {
+      bool enable = request->getParam("enabled", true)->value() == "true";
+      ProbeManager::getInstance().setAutoHopping(enable);
+      request->send(200, "application/json", "{\"status\":\"ok\"}");
+    } else {
+      request->send(400, "application/json", "{\"error\":\"missing enabled\"}");
+    }
+  });
+
+  // Static files from LittleFS
+  server->serveStatic("/", LittleFS, "/web/").setDefaultFile("index.html");
+
   // 404 handler (must be last)
   server->onNotFound(handle404);
 
   // Start server
   server->begin();
   running = true;
+
+  // Initialize mDNS
+  String mdnsName = "loralink-" + String(NVSConfig::getNodeId());
+  mdnsName.toLowerCase();
+  if (MDNS.begin(mdnsName.c_str())) {
+      MDNS.addService("http", "tcp", 80);
+      MDNS.addServiceTxt("http", "tcp", "id", NVSConfig::getNodeId());
+      MDNS.addServiceTxt("http", "tcp", "hw", String(NVSConfig::getHardwareVariant()));
+      Serial.printf("[HttpAPI] mDNS started: http://%s.local\n", mdnsName.c_str());
+  }
 
   Serial.printf("[HttpAPI] HTTP API server started on port %u\n", port);
   Serial.println("[HttpAPI] Routes: GET / GET /api/status POST /api/relay POST /api/command");
@@ -64,6 +113,11 @@ bool HttpAPI::init() {
 void HttpAPI::shutdown() {
   if (server != nullptr) {
     server->end();
+    if (ws != nullptr) {
+      ws->closeAll();
+      delete ws;
+      ws = nullptr;
+    }
     delete server;
     server = nullptr;
     running = false;
@@ -77,6 +131,11 @@ bool HttpAPI::isRunning() {
 
 void HttpAPI::updateStatus(const std::string& jsonStatus) {
   cachedStatus = jsonStatus;
+  
+  // Broadcast to all connected WebSocket clients for "near realtime" updates
+  if (running && ws != nullptr && ws->count() > 0) {
+    ws->textAll(jsonStatus.c_str());
+  }
   Serial.printf("[HttpAPI] Status cache updated (%zu bytes)\n", jsonStatus.length());
 }
 
@@ -335,8 +394,68 @@ void HttpAPI::handle404(AsyncWebServerRequest* request) {
 }
 
 void HttpAPI::addCORSHeaders(AsyncWebServerRequest* request) {
-  // Add CORS headers to response
-  // Note: AsyncWebServer headers are added via response object, not request
-  // CORS can be added via response->addHeader() if needed
-  // For now, we handle it at the response level in each handler
+  // CORS is handled at the response level in each handler
+}
+
+// ============================================================================
+// Product Handlers
+// ============================================================================
+
+void HttpAPI::handleListProducts(AsyncWebServerRequest* request) {
+    String json = ProductManager::getInstance().listProducts();
+    AsyncWebServerResponse* response = request->beginResponse(200, "application/json", json);
+    response->addHeader("Access-Control-Allow-Origin", "*");
+    request->send(response);
+}
+
+void HttpAPI::handleLoadProduct(AsyncWebServerRequest* request) {
+    if (!request->hasParam("name", true)) {
+        request->send(400, "application/json", "{\"ok\":false,\"error\":\"Missing name parameter\"}");
+        return;
+    }
+    String name = request->getParam("name", true)->value();
+    if (ProductManager::getInstance().loadProduct(name)) {
+        request->send(200, "application/json", "{\"ok\":true}");
+    } else {
+        request->send(500, "application/json", "{\"ok\":false,\"error\":\"Load failed\"}");
+    }
+}
+
+void HttpAPI::handleSaveProduct(AsyncWebServerRequest* request) {
+    if (!request->hasParam("json", true)) {
+        request->send(400, "application/json", "{\"ok\":false,\"error\":\"Missing json\"}");
+        return;
+    }
+    String json = request->getParam("json", true)->value();
+    
+    // Extract name from JSON
+    StaticJsonDocument<1024> doc;
+    if (deserializeJson(doc, json) != DeserializationError::Ok) {
+        request->send(400, "application/json", "{\"ok\":false,\"error\":\"Invalid JSON\"}");
+        return;
+    }
+    
+    String name = doc["name"] | "default";
+    if (ProductManager::getInstance().saveProduct(name, json)) {
+        request->send(200, "application/json", "{\"ok\":true}");
+    } else {
+        request->send(500, "application/json", "{\"ok\":false,\"error\":\"Save failed\"}");
+    }
+}
+
+// ============================================================================
+// Internal WebSocket Event Handler
+// ============================================================================
+
+void onWsEvent(AsyncWebSocket * server, AsyncWebSocketClient * client, AwsEventType type, void * arg, uint8_t *data, size_t len) {
+  if (type == WS_EVT_CONNECT) {
+    Serial.printf("[HttpAPI] WS Client connected from %s\n", client->remoteIP().toString().c_str());
+    // Send current status immediately upon connection
+    std::string currentStatus = HttpAPI::getStatus();
+    if (!currentStatus.empty()) {
+      client->text(currentStatus.c_str());
+    }
+  } else if (type == WS_EVT_DISCONNECT) {
+    Serial.printf("[HttpAPI] WS Client disconnected\n");
+  }
 }

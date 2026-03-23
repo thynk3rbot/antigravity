@@ -1,17 +1,6 @@
 [
   {
-    "id": "c25cfcf7-05e9-41e7-bc50-29e1270de51f",
-    "name": "DeviceA",
-    "type": "serial",
-    "address": "COM16",
-    "active": true,
-    "online": true,
-    "hardware": "V4",
-    "mac": "44:1B:F6:6F:97:D4",
-    "last_seen": 1774276657.7964187
-  },
-  {
-    "id": "df963a80-1034-4d4e-b739-2e150e48f25d",
+    "id": "COM7",
     "name": "COM7",
     "type": "serial",
     "address": "COM7",
@@ -19,21 +8,10 @@
     "online": true,
     "hardware": "Unknown",
     "mac": "Unknown",
-    "last_seen": 1774276657.7946312
+    "last_seen": 1774287278.7888167
   },
   {
-    "id": "82a4542a-f884-41f3-9319-16be510518a7",
-    "name": "PEER4V4",
-    "type": "serial",
-    "address": "COM19",
-    "active": false,
-    "online": true,
-    "hardware": "V4",
-    "mac": "44:1B:F6:70:A4:B8",
-    "last_seen": 1774276657.7946312
-  },
-  {
-    "id": "a476cc2c-62e5-4ad6-a1ae-63e741bd0f81",
+    "id": "COM20",
     "name": "COM20",
     "type": "serial",
     "address": "COM20",
@@ -41,72 +19,28 @@
     "online": true,
     "hardware": "Unknown",
     "mac": "Unknown",
-    "last_seen": 1774276657.7979333
+    "last_seen": 1774287278.7903204
   },
   {
-    "id": "COM5",
-    "name": "COM5",
+    "id": "COM21",
+    "name": "COM21",
     "type": "serial",
-    "address": "COM5",
+    "address": "COM21",
     "active": false,
     "online": true,
     "hardware": "Unknown",
     "mac": "Unknown",
-    "last_seen": 1774276657.7946312
+    "last_seen": 1774287278.7903204
   },
   {
-    "id": "COM3",
-    "name": "COM3",
-    "type": "serial",
-    "address": "COM3",
+    "id": "10:51:DB:51:FC:C4",
+    "name": "Peer2V3",
+    "type": "wifi",
+    "address": "172.16.0.26",
     "active": false,
-    "online": true,
-    "hardware": "Unknown",
-    "mac": "Unknown",
-    "last_seen": 1774276657.7946312
-  },
-  {
-    "id": "COM6",
-    "name": "COM6",
-    "type": "serial",
-    "address": "COM6",
-    "active": false,
-    "online": true,
-    "hardware": "Unknown",
-    "mac": "Unknown",
-    "last_seen": 1774276657.7964187
-  },
-  {
-    "id": "COM10",
-    "name": "COM10",
-    "type": "serial",
-    "address": "COM10",
-    "active": false,
-    "online": true,
-    "hardware": "Unknown",
-    "mac": "Unknown",
-    "last_seen": 1774276657.7979333
-  },
-  {
-    "id": "COM4",
-    "name": "COM4",
-    "type": "serial",
-    "address": "COM4",
-    "active": false,
-    "online": true,
-    "hardware": "Unknown",
-    "mac": "Unknown",
-    "last_seen": 1774276657.798938
-  },
-  {
-    "id": "COM11",
-    "name": "COM11",
-    "type": "serial",
-    "address": "COM11",
-    "active": false,
-    "online": true,
-    "hardware": "Unknown",
-    "mac": "Unknown",
-    "last_seen": 1774276657.7999382
+    "online": false,
+    "hardware": "4",
+    "mac": "10:51:DB:51:FC:C4",
+    "last_seen": 1774286050.2656193
   }
 ]

@@ -9,7 +9,7 @@
 #define OLED_HEIGHT   64
 #define OLED_ADDRESS  0x3C
 
-// Singleton instance
+// Native display object
 static Adafruit_SSD1306 display(OLED_WIDTH, OLED_HEIGHT, &Wire, OLED_RESET_PIN);
 
 // Cached data for display
@@ -53,7 +53,9 @@ static uint32_t g_buttonPressTime = 0;
 
 static const uint32_t UPDATE_INTERVAL_MS = 500;
 static const uint32_t SLEEP_TIMEOUT_MS = 30000;
-static const uint32_t AUTO_ROTATE_MS = 5000;
+// Using BUTTON_DEBOUNCE_MS from board_config.h
+// Using OLED_AUTO_ROTATE_MS from board_config.h
+#define AUTO_ROTATE_MS OLED_AUTO_ROTATE_MS
 
 static void displayPage1();
 static void displayPage2();
@@ -69,7 +71,6 @@ static void displayPage6();
 static void drawHeader(const char* title) {
     display.setTextSize(1);
     display.setCursor(0, 0);
-    // Friendly Name in title
     display.printf("%s | %s", g_cached.deviceName, title);
     display.drawFastHLine(0, 10, 128, SSD1306_WHITE);
 }
@@ -179,8 +180,11 @@ static void IRAM_ATTR buttonISRHandler() {
 // Public API
 // ============================================================================
 
-bool OLEDManager::init() {
+OLEDManager::OLEDManager() {
     memset(&g_cached, 0, sizeof(g_cached));
+}
+
+bool OLEDManager::init() {
     Wire.begin(I2C_SDA, I2C_SCL, I2C_FREQ_HZ);
     if (OLED_RESET_PIN != -1) {
         pinMode(OLED_RESET_PIN, OUTPUT);
@@ -194,7 +198,18 @@ bool OLEDManager::init() {
     display.clearDisplay();
     display.setTextColor(SSD1306_WHITE);
     
-    // Resurface v1 Slash Screen
+    pinMode(BUTTON_PIN, INPUT_PULLUP);
+    attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), buttonISRHandler, CHANGE);
+    
+    g_lastUpdateTime = millis();
+    g_lastActivityTime = millis();
+    g_lastAutoRotateTime = millis();
+    g_displayOn = true;
+    return true;
+}
+
+void OLEDManager::showSplash(const char* ver, const char* role) {
+    display.clearDisplay();
     display.drawRect(0, 0, 128, 64, SSD1306_WHITE);
     display.drawFastHLine(0, 15, 128, SSD1306_WHITE);
     display.drawFastHLine(0, 48, 128, SSD1306_WHITE);
@@ -209,34 +224,20 @@ bool OLEDManager::init() {
     
     display.setTextSize(1);
     display.setCursor(5, 52);
-    display.print("Peer Mode v2.0");
+    display.printf("v%s | %s", ver, role);
     
     display.display();
-    
-    pinMode(BUTTON_PIN, INPUT_PULLUP);
-    attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), buttonISRHandler, CHANGE);
-    
-    g_lastUpdateTime = millis();
-    g_lastActivityTime = millis();
-    g_lastAutoRotateTime = millis();
-    g_displayOn = true;
-    return true;
 }
 
 void OLEDManager::drawBootProgress(const char* label, int percent) {
     if (!g_displayOn) return;
-    
-    // Redraw base splash frame if needed or just update progress area
-    display.fillRect(2, 49, 124, 14, SSD1306_BLACK); // Clear footer area
+    display.fillRect(2, 49, 124, 14, SSD1306_BLACK); 
     display.setTextSize(1);
     display.setCursor(5, 52);
     display.printf("%s.. %d%%", label, percent);
-    
-    // Draw progress bar
     int barWidth = (percent * 118) / 100;
     display.drawRect(5, 60, 118, 3, SSD1306_WHITE);
     display.fillRect(5, 60, barWidth, 3, SSD1306_WHITE);
-    
     display.display();
 }
 
@@ -283,13 +284,8 @@ void OLEDManager::setTransportStatus(bool wifi, bool ble, bool mqtt, bool lora) 
     g_cached.loraActive = lora;
 }
 
-// New signature for ESP-NOW support
 void OLEDManager::setTransportStatus(bool wifi, bool ble, bool mqtt, bool lora, bool espnow) {
-    g_cached.wifiActive = wifi;
-    g_cached.bleActive = ble;
-    g_cached.mqttActive = mqtt;
-    g_cached.loraActive = lora;
-    g_cached.espnowActive = espnow;
+    g_cached.wifiActive = wifi; g_cached.bleActive = ble; g_cached.mqttActive = mqtt; g_cached.loraActive = lora; g_cached.espnowActive = espnow;
 }
 
 void OLEDManager::setRelayStatus(bool relayOn) { g_cached.relayOn = relayOn; }
@@ -304,4 +300,3 @@ void OLEDManager::setDeviceName(const char* name) { if (name) strncpy(g_cached.d
 void OLEDManager::setVersion(const char* ver) { if (ver) strncpy(g_cached.version, ver, 11); }
 void OLEDManager::addLog(const char* msg) {}
 void OLEDManager::printStatus() {}
-OLEDManager::OLEDManager() {}

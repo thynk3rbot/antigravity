@@ -20,6 +20,7 @@
 #pragma once
 
 #include <ArduinoJson.h>
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -57,7 +58,7 @@ public:
     /**
      * @brief Add basic device info (id, hw, ver, ip, mac)
      */
-    static void addBasicInfo(JsonDocument& doc);
+    static void addBasicInfo(ArduinoJson::JsonDocument& doc);
 
     /**
      * @brief Add power/battery info (bat, bat_percentage, mode)
@@ -77,36 +78,36 @@ public:
     /**
      * @brief Add BLE info (ble_enabled, ble_device_name)
      */
-    static void addBLEInfo(JsonDocument& doc);
+    static void addBLEInfo(ArduinoJson::JsonDocument& doc);
 
     /**
      * @brief Add MQTT info (mqtt_connected, mqtt_broker)
      */
-    static void addMQTTInfo(JsonDocument& doc);
+    static void addMQTTInfo(ArduinoJson::JsonDocument& doc);
 
     /**
      * @brief Add peer list from mesh coordinator
      */
-    static void addPeerInfo(JsonDocument& doc);
+    static void addPeerInfo(ArduinoJson::JsonDocument& doc);
 
     /**
      * @brief Add GPS info (latitude, longitude, altitude, satellites, fix_type)
      */
-    static void addGPSInfo(JsonDocument& doc);
+    static void addGPSInfo(ArduinoJson::JsonDocument& doc);
     /**
      * @brief Add transport status object (wifi, ble, mqtt, lora booleans)
      */
-    static void addTransportStatus(JsonDocument& doc);
+    static void addTransportStatus(ArduinoJson::JsonDocument& doc);
 
     /**
      * @brief Add relay status (status, mode, last_toggled, on_duration_ms)
      */
-    static void addRelayInfo(JsonDocument& doc);
+    static void addRelayInfo(ArduinoJson::JsonDocument& doc);
 
     /**
      * @brief Add telemetry (temp_sensor, temp_c, humidity_percent, pressure_hpa)
      */
-    static void addTelemetry(JsonDocument& doc);
+    static void addTelemetry(ArduinoJson::JsonDocument& doc);
 
      /**
      * @brief Add system info (uptime, boot_count, heap, last_update, etc.)

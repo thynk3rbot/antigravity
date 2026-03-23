@@ -27,6 +27,8 @@ std::string WiFiTransport::_password              = "";
 std::string WiFiTransport::_hostname              = "loralink";
 bool        WiFiTransport::_otaStarted            = false;
 bool        WiFiTransport::_mdnsStarted           = false;
+bool        WiFiTransport::_apActive              = false;
+DNSServer   WiFiTransport::_dnsServer;
 uint32_t    WiFiTransport::_lastReconnectAttempt  = 0;
 uint8_t     WiFiTransport::_reconnectAttempts     = 0;
 int         WiFiTransport::_lastError             = 0;
@@ -58,9 +60,10 @@ bool WiFiTransport::init(const std::string& ssid,
         _startOTA();
         _startMDNS();
     } else {
-        Serial.printf("[WiFi] Not connected after %u ms — will retry in loop\n",
+        Serial.printf("[WiFi] Not connected after %u ms — starting Captive Portal (AP)\n",
                       WIFI_CONNECT_TIMEOUT_MS);
         _lastError = -4;  // timeout
+        _startAP();
     }
 
     _lastReconnectAttempt = millis();
@@ -71,6 +74,10 @@ void WiFiTransport::service() {
     // Drive OTA processing (must be called in every loop/task iteration)
     if (_otaStarted) {
         ArduinoOTA.handle();
+    }
+
+    if (_apActive) {
+        _dnsServer.processNextRequest();
     }
 
     // Reconnect if disconnected and enough time has elapsed
@@ -281,4 +288,19 @@ void WiFiTransport::_startMDNS() {
 
     _mdnsStarted = true;
     Serial.printf("[mDNS] Advertised as %s.local with TXT records\n", _hostname.c_str());
+}
+
+void WiFiTransport::_startAP() {
+    if (_apActive) return;
+
+    String apName = "Antigravity-" + String(NVSConfig::getNodeId());
+    WiFi.mode(WIFI_AP_STA); // keep STA open for scan/background tries
+    WiFi.softAP(apName.c_str());
+
+    // DNS Hijack: Redirect all queries to Local IP
+    _dnsServer.start(53, "*", WiFi.softAPIP());
+    
+    _apActive = true;
+    Serial.printf("[WiFi] Captive Portal active: SSID '%s' IP %s\n", 
+                  apName.c_str(), WiFi.softAPIP().toString().c_str());
 }

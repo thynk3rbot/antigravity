@@ -19,6 +19,8 @@
 #define NVS_KEY_STATIC_IP    "static_ip"
 #define NVS_KEY_GATEWAY      "gateway"
 #define NVS_KEY_SUBNET       "subnet"
+#define NVS_KEY_HW_VER       "hw_ver"
+#define NVS_KEY_ACTIVE_PROD   "active_prod"
 
 class NVSConfig {
 public:
@@ -68,6 +70,12 @@ public:
     static void incrementBootCount();
     static String getResetReason();
     static void setResetReason(const String& reason);
+
+    // Hardware & Product Management (V1 Parity)
+    static uint8_t getHardwareVariant();
+    static bool setHardwareVariant(uint8_t version);
+    static String getActiveProductName();
+    static bool setActiveProductName(const String& name);
 
 private:
     static bool _initialized;

@@ -240,6 +240,20 @@
 
 #define GPIO_PRG_BTN  0         // PRG button for factory reset (active-LOW)
 
+// ============================================================================
+// MCP23017 I2C GPIO Expander (Feature Parity Restoration)
+// ============================================================================
+#define MCP_PIN_BASE 100        // Native pins 0–99; MCP pins 100–227
+#define MCP_CHIP_PINS 16        // 16 GPIO per chip (GPA0–GPB7)
+#define MCP_MAX_CHIPS 8         // 8 addresses: 0x20–0x27
+#define MCP_CHIP_ADDR_BASE 0x20 // I2C base address (A0=A1=A2=GND)
+
+#ifdef ARDUINO_HELTEC_WIFI_LORA_32_V4
+  #define PIN_MCP_INT   -1      // Collides with GPS_TX on V4
+#else
+  #define PIN_MCP_INT   38      // Standard for V3/V2 baseboard
+#endif
+
 #ifdef RADIO_SX1262
   // Heltec V3/V4 (ESP32-S3): VEXT control on GPIO 36
   #define GPIO_VEXT     36

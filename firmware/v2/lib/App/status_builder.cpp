@@ -6,18 +6,23 @@
  * into a single v0.1.0-compatible JSON response for /api/status endpoint.
  */
 
+#include "../HAL/probe_manager.h"
 #include "status_builder.h"
+
+using namespace ArduinoJson;
 #include "power_manager.h"
 #include "nvs_manager.h"
 #include "http_api.h"
 #include "mesh_coordinator.h"
 #include "gps_manager.h"
+#include "../HAL/mcp_manager.h"
 #include "../Transport/wifi_transport.h"
 #include "../Transport/lora_transport.h"
 #include "../Transport/ble_transport.h"
 #ifdef ENABLE_MQTT_TRANSPORT
 #include "../Transport/mqtt_transport.h"
 #endif
+#include "product_manager.h"
 #include "../HAL/board_config.h"
 #include <Arduino.h>
 #include <esp_heap_caps.h>
@@ -69,7 +74,18 @@ std::string StatusBuilder::buildStatusString() {
 // Private Helper Methods
 // ============================================================================
 
-void StatusBuilder::addBasicInfo(JsonDocument& doc) {
+void StatusBuilder::addBasicInfo(ArduinoJson::JsonDocument& doc) {
+    // Add Detected Devices (Marauder Integration)
+    ArduinoJson::JsonArray devicesArr = doc.createNestedArray("detected_devices");
+    const auto& devices = ProbeManager::getInstance().getDetectedDevices();
+    for (const auto& d : devices) {
+        ArduinoJson::JsonObject devObj = devicesArr.createNestedObject();
+        devObj["mac"] = d.getMacStr();
+        devObj["rssi"] = d.rssi;
+        devObj["type"] = d.isSTA ? "STA" : "AP";
+        if (!d.ssid.empty()) devObj["ssid"] = d.ssid;
+    }
+
     // Device identity
     doc["id"] = String(NVSManager::getNodeID("Node").c_str());
     doc["hw_id"] = String(NVSManager::getHardwareID().c_str());
@@ -109,7 +125,7 @@ void StatusBuilder::addBasicInfo(JsonDocument& doc) {
     }
 }
 
-void StatusBuilder::addPowerInfo(JsonDocument& doc) {
+void StatusBuilder::addPowerInfo(ArduinoJson::JsonDocument& doc) {
     float batVoltage = PowerManager::getBatteryVoltage();
 
     // Battery voltage formatted as "X.XXV"
@@ -135,7 +151,7 @@ void StatusBuilder::addPowerInfo(JsonDocument& doc) {
     doc["mode"] = modeStr;
 }
 
-void StatusBuilder::addLoRaInfo(JsonDocument& doc) {
+void StatusBuilder::addLoRaInfo(ArduinoJson::JsonDocument& doc) {
     // Get current LoRa RSSI and SNR (from last received packet)
     int8_t loraRSSI = loraTransport.getSignalStrength();
 
@@ -151,13 +167,13 @@ void StatusBuilder::addLoRaInfo(JsonDocument& doc) {
     rssiHistoryIndex = (rssiHistoryIndex + 1) % 5;
 
     // Add RSSI history array
-    JsonArray rssiArr = doc.createNestedArray("rssi_history");
+    ArduinoJson::JsonArray rssiArr = doc.createNestedArray("rssi_history");
     for (int i = 0; i < 5; i++) {
         rssiArr.add(rssiHistory[i]);
     }
 }
 
-void StatusBuilder::addWiFiInfo(JsonDocument& doc) {
+void StatusBuilder::addWiFiInfo(ArduinoJson::JsonDocument& doc) {
     bool wifiConnected = WiFiTransport::isConnected();
     int8_t wifiRSSI = WiFiTransport::getWiFiSignalStrength();
 
@@ -165,7 +181,7 @@ void StatusBuilder::addWiFiInfo(JsonDocument& doc) {
     doc["wifi_connected"] = wifiConnected;
 }
 
-void StatusBuilder::addBLEInfo(JsonDocument& doc) {
+void StatusBuilder::addBLEInfo(ArduinoJson::JsonDocument& doc) {
     // Device name format: "GW-{NODEID}"
     std::string nodeID = NVSManager::getNodeID("Node");
     std::string bleDeviceName = "GW-" + nodeID;
@@ -174,7 +190,7 @@ void StatusBuilder::addBLEInfo(JsonDocument& doc) {
     doc["ble_connected"] = BLETransport::isConnected();
 }
 
-void StatusBuilder::addMQTTInfo(JsonDocument& doc) {
+void StatusBuilder::addMQTTInfo(ArduinoJson::JsonDocument& doc) {
     #ifdef ENABLE_MQTT_TRANSPORT
       doc["mqtt_connected"] = MQTTTransport::instance()->isConnected();
     #else
@@ -194,9 +210,9 @@ void StatusBuilder::addMQTTInfo(JsonDocument& doc) {
     }
 }
 
-void StatusBuilder::addGPSInfo(JsonDocument& doc) {
+void StatusBuilder::addGPSInfo(ArduinoJson::JsonDocument& doc) {
     GPSManager::GPSData gps = GPSManager::getData();
-    JsonObject obj = doc.createNestedObject("gps");
+    ArduinoJson::JsonObject obj = doc.createNestedObject("gps");
     obj["lat"] = gps.lat;
     obj["lon"] = gps.lon;
     obj["alt"] = gps.alt;
@@ -205,16 +221,16 @@ void StatusBuilder::addGPSInfo(JsonDocument& doc) {
     obj["age"] = gps.fixAge;
 }
 
-void StatusBuilder::addPeerInfo(JsonDocument& doc) {
+void StatusBuilder::addPeerInfo(ArduinoJson::JsonDocument& doc) {
     // Get peer list from MeshCoordinator
-    JsonArray peersArray = doc.createNestedArray("peers");
+    ArduinoJson::JsonArray peersArray = doc.createNestedArray("peers");
 
     // Get neighbors from MeshCoordinator
     const auto& neighbors = MeshCoordinator::instance().getNeighbors();
     
     for (const auto& pair : neighbors) {
         const NeighborInfo& neighbor = pair.second;
-        JsonObject peerObj = peersArray.createNestedObject();
+        ArduinoJson::JsonObject peerObj = peersArray.createNestedObject();
         
         char idStr[16];
         snprintf(idStr, sizeof(idStr), "Node%u", neighbor.nodeID);
@@ -227,8 +243,8 @@ void StatusBuilder::addPeerInfo(JsonDocument& doc) {
     }
 }
 
-void StatusBuilder::addTransportStatus(JsonDocument& doc) {
-    JsonObject transports = doc.createNestedObject("transports");
+void StatusBuilder::addTransportStatus(ArduinoJson::JsonDocument& doc) {
+    ArduinoJson::JsonObject transports = doc.createNestedObject("transports");
 
     transports["wifi"] = WiFiTransport::isConnected();
     transports["ble"] = BLETransport::isConnected();
@@ -240,8 +256,8 @@ void StatusBuilder::addTransportStatus(JsonDocument& doc) {
     transports["lora"] = true;  // LoRa is always available
 }
 
-void StatusBuilder::addRelayInfo(JsonDocument& doc) {
-    JsonObject relay = doc.createNestedObject("relay");
+void StatusBuilder::addRelayInfo(ArduinoJson::JsonDocument& doc) {
+    ArduinoJson::JsonObject relay = doc.createNestedObject("relay");
 
     // TODO: Integrate with RelayManager when available
     // For now, provide placeholder values
@@ -251,8 +267,8 @@ void StatusBuilder::addRelayInfo(JsonDocument& doc) {
     relay["on_duration_ms"] = 0;     // How long relay has been ON
 }
 
-void StatusBuilder::addTelemetry(JsonDocument& doc) {
-    JsonObject telemetry = doc.createNestedObject("telemetry");
+void StatusBuilder::addTelemetry(ArduinoJson::JsonDocument& doc) {
+    ArduinoJson::JsonObject telemetry = doc.createNestedObject("telemetry");
 
     // Temperature sensor status
     telemetry["temp_sensor"] = "enabled";  // TODO: Make configurable
@@ -267,7 +283,7 @@ void StatusBuilder::addTelemetry(JsonDocument& doc) {
     telemetry["pressure_hpa"] = 1013.25;  // TODO: Read from actual sensor
 }
 
-void StatusBuilder::addSystemInfo(JsonDocument& doc) {
+void StatusBuilder::addSystemInfo(ArduinoJson::JsonDocument& doc) {
     uint32_t now = millis();
 
     // Uptime in seconds
@@ -311,18 +327,25 @@ void StatusBuilder::addSystemInfo(JsonDocument& doc) {
     doc["crypto_enabled"] = true;
 
     // Schedule info
-    JsonObject schedule = doc.createNestedObject("schedule");
+    ArduinoJson::JsonObject schedule = doc.createNestedObject("schedule");
     schedule["enabled"] = false;  // TODO: Get from ScheduleManager
     schedule.createNestedArray("entries");
     // TODO: Populate with schedule entries from ScheduleManager
 }
 
-void StatusBuilder::addPluginList(JsonDocument& doc) {
-    JsonArray plugins = doc.createNestedArray("plugins");
-    // TODO: Get list from pluginManager
+void StatusBuilder::addPluginList(ArduinoJson::JsonDocument& doc) {
+    String prod = ProductManager::getInstance().getActiveProduct();
+    doc["active_product"] = prod;
+    
+    ArduinoJson::JsonArray plugins = doc.createNestedArray("plugins");
+    if (!prod.isEmpty()) {
+        ArduinoJson::JsonObject p = plugins.createNestedObject();
+        p["name"] = prod;
+        p["status"] = "ACTIVE";
+    }
 }
 
-void StatusBuilder::addHardwareMap(JsonDocument& doc) {
-    JsonObject map = doc.createNestedObject("hardware_map");
+void StatusBuilder::addHardwareMap(ArduinoJson::JsonDocument& doc) {
+    // ArduinoJson::JsonObject map = doc.createNestedObject("hardware_map");
     // TODO: Populate with actual GPIO mapping from board_config.h
 }

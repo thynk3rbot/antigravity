@@ -19,6 +19,8 @@
 // Forward declarations
 class AsyncWebServer;
 class AsyncWebServerRequest;
+class AsyncWebSocket;
+class AsyncWebSocketClient;
 
 /**
  * @class HttpAPI
@@ -127,6 +129,7 @@ private:
     // ========================================================================
 
     static AsyncWebServer* server;
+    static AsyncWebSocket* ws;
     static bool running;
     static uint16_t port;
     static std::string cachedStatus;
@@ -182,6 +185,13 @@ private:
      * Trigger OTA firmware update (future implementation)
      */
     static void handleOTAUpdate(AsyncWebServerRequest* request);
+
+    /**
+     * @brief Handlers for Product Management (V1 Parity)
+     */
+    static void handleListProducts(AsyncWebServerRequest* request);
+    static void handleLoadProduct(AsyncWebServerRequest* request);
+    static void handleSaveProduct(AsyncWebServerRequest* request);
 
     /**
      * @brief Handler for 404 Not Found

@@ -7,8 +7,8 @@ This document serves as the formal record for industrial deployment decisions an
 To ensure a premium, technically rigorous user experience across all hardware generations (V2, V3, V4), the following visual patterns are enforced:
 
 - **Restored Splash Screen**: All devices must maintain the "V1 Industrial" boot sequence, featuring a framed splash with "SYSTEM BOOT" and the core "LoRaLink" branding.
-- **Dynamic Boot Progress**: A real-time progress bar (e.g., `[Init Mesh.. 45%]`) is required throughout the `setup()` sequence to provide immediate hardware status feedback.
-- **Node Identification**: The `node_id` in status titles is replaced by the **Device Friendly Name**. If unassigned, a branded default (e.g., `LL-A4B8D1`) derived from the hardware MAC is used.
+- **Dynamic Boot Progress**: A real-time progress bar (e.g., `[Init Mesh.. 45%]`) is required throughout the `setup()` sequence.
+- **ID Methodology**: Nodes are identified by the **MAC-Suffix/Hardware ID** (e.g., `LL-A4B8D1`). Re-naming is strictly for the node-registry file in the WebApp; the firmware identity is bound to the hardware signature to prevent fleet-wide ID collisions.
 - **Branding**: "Any2Any" branding is suppressed in the current stable build to prioritize the primary LoRaLink identity.
 
 ## 2. Fleet-Wide Operations

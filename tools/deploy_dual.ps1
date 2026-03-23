@@ -1,6 +1,11 @@
 # LoRaLink Fleet Deployment Script
 Write-Host "--- Starting LoRaLink Fleet Deployment ---" -ForegroundColor Cyan
 
+# Gracefully terminate the WebApp backend to release all USB COM ports
+Write-Host "Releasing COM Ports..." -ForegroundColor DarkGray
+Get-WmiObject Win32_Process | Where-Object { $_.CommandLine -match "server\.py" } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+Start-Sleep -Seconds 1
+
 $pio = "$env:USERPROFILE\.platformio\penv\Scripts\pio.exe"
 
 # 1. Flash V3 units (IPs 26, 27)
