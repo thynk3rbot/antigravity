@@ -31,6 +31,7 @@
 #include "../lib/Transport/mqtt_transport.h"
 #include "../lib/Transport/serial_transport.h"
 #include "../lib/Transport/interface.h"
+#include "../lib/Transport/espnow_transport.h"
 
 // Application Layer
 #include "../lib/App/control_packet.h"
@@ -180,7 +181,7 @@ void controlTask(void* param) {
       OLEDManager::setDeviceName(NVSManager::getNodeID("Node").c_str());
       OLEDManager::setVersion(FIRMWARE_VERSION);
       
-      // Update interface status
+      OLEDManager::setIP(WiFi.localIP().toString().c_str());
       OLEDManager::setTransportStatus(
         WiFi.status() == WL_CONNECTED,
         BLETransport::isConnected(),
@@ -189,10 +190,9 @@ void controlTask(void* param) {
         #else
           false,
         #endif
-        loraTransport.isReady()
+        loraTransport.isReady(),
+        espNowTransport.isReady()
       );
-
-      OLEDManager::setIP(WiFi.localIP().toString().c_str());
 
       GPSManager::GPSData gpsData = GPSManager::getData();
       OLEDManager::setGPS(gpsData.lat, gpsData.lon, gpsData.satellites, gpsData.hasFix);
@@ -335,14 +335,12 @@ void onMessageReceived(TransportType transportType,
     }
 
     case PacketType::TELEMETRY: {
-      // Telemetry from remote node (usually consumed by Hub/server)
-      if (g_ourNodeID == 0) {  // If we're the Hub
-        Serial.printf("[TELEMETRY] Node %u: Temp=%.1f°C, V=%.2fV, Relays=0x%02X\n",
-                      pkt->header.src,
-                      pkt->payload.telemetry.tempC_x10 / 10.0f,
-                      pkt->payload.telemetry.voltageV_x100 / 100.0f,
-                      pkt->payload.telemetry.relayState);
-      }
+      // Received telemetry from another peer
+      Serial.printf("[TELEMETRY] From Peer %u: Temp=%.1f°C, V=%.2fV, Relays=0x%02X\n",
+                    pkt->header.src,
+                    pkt->payload.telemetry.tempC_x10 / 10.0f,
+                    pkt->payload.telemetry.voltageV_x100 / 100.0f,
+                    pkt->payload.telemetry.relayState);
       break;
     }
 
@@ -401,48 +399,33 @@ void setup() {
 
   NVSManager::printInfo();  // Debug output
 
-  // Extract MAC suffix for OLED identification
+  // ========================================================================
+  // Step 1: Initialize Power & OLED (Prerequisites for Boot Visuals)
+  // ========================================================================
+  Serial.println("[1/8] Initializing Power & UI...");
+  PowerManager::init();
+  PowerManager::enableVEXT();
+  delay(100); // Stabilize rail
+  
+  if (!OLEDManager::init()) {
+    Serial.println("  ! OLED init failed (non-fatal)");
+  } else {
+    Serial.println("  ✓ OLED/Power initialized");
+  }
+
+  // Identity Extraction
   uint8_t mac_raw[6];
   esp_efuse_mac_get_default(mac_raw);
   char mac_buf[8];
   snprintf(mac_buf, sizeof(mac_buf), "[%02X:%02X]", mac_raw[4], mac_raw[5]);
+  
   OLEDManager::setMAC(mac_buf);
-
-  // ========================================================================
-  // Step 2: Initialize Power Manager (Battery Voltage Monitoring)
-  // ========================================================================
-  Serial.println("[2/7] Initializing power manager...");
-
-  if (!PowerManager::init()) {
-    Serial.println("WARNING: Power manager init failed");
-    // Continue anyway, but battery monitoring will not work
-  }
-
-  PowerManager::onModeChange([](PowerMode mode) {
-    const char* modeNames[] = {"NORMAL", "CONSERVE", "CRITICAL"};
-    Serial.printf("[PowerMgr] Mode change: %s\n", modeNames[static_cast<uint8_t>(mode)]);
-    // Update OLED display when power mode changes
-    OLEDManager::update();
-  });
-
-  // Enable external power rail (VEXT) — powers OLED and peripherals on Heltec boards.
-  // Must happen before Wire.begin() / OLED init or the display has no power.
-  PowerManager::enableVEXT();
-  delay(100);  // Allow rail to stabilize
-
-  Serial.println("  ✓ Power manager initialized");
-
-  // ========================================================================
-  // Step 2.5: Initialize OLED Display
-  // ========================================================================
-  Serial.println("[2.5/7] Initializing OLED display...");
-
-  if (!OLEDManager::init()) {
-    Serial.println("WARNING: OLED init failed (non-fatal)");
-    // Continue anyway, device will work without display
-  } else {
-    Serial.println("  ✓ OLED display initialized");
-  }
+  OLEDManager::setVersion(FIRMWARE_VERSION);
+  OLEDManager::setDeviceName(NVSManager::getNodeID("Node").c_str());
+  OLEDManager::setDiagnostics(NVSConfig::getBootCount(), NVSConfig::getResetReason().c_str());
+  
+  OLEDManager::drawBootProgress("SYSTEM START", 10);
+  delay(100);
 
   // Set initial identity info (must be after init() or it gets wiped by defaults)
   OLEDManager::setMAC(mac_buf);
@@ -464,6 +447,7 @@ void setup() {
   }
 
   relayHAL.init();
+  OLEDManager::drawBootProgress("HAL Core", 45);
   
   // Step 4: Initialize Plugins & Sensors
   // ========================================================================
@@ -503,6 +487,7 @@ void setup() {
       Serial.println("  ✓ Serial CLI initialized");
       OLEDManager::addLog("Serial CLI Ready");
   }
+  OLEDManager::drawBootProgress("SERIAL CLI", 60);
 
   // BLE Transport (Always active)
   if (!BLETransport::initStatic()) {
@@ -510,6 +495,7 @@ void setup() {
   } else {
       Serial.println("  ✓ BLE transport initialized");
   }
+  OLEDManager::drawBootProgress("BLE Mesh", 75);
 
   // Optional WiFi Transport (graceful fallback if connection fails)
   std::string wifiSSID = NVSManager::getWiFiSSID();
@@ -534,6 +520,16 @@ void setup() {
   } else {
     Serial.println("  ! WiFi credentials not configured, skipping WiFi");
   }
+
+  // Step 4.5: ESP-NOW Transport
+  Serial.println("[4.5/8] Initializing ESP-NOW...");
+  if (!espNowTransport.init()) {
+      Serial.println("  ! ESP-NOW transport failed to start");
+  } else {
+      messageRouter.registerTransport(&espNowTransport);
+      Serial.println("  ✓ ESP-NOW transport initialized");
+  }
+  OLEDManager::drawBootProgress("TRANS PORTS", 90);
 
   // Initialize Command Manager
   CommandManager::begin();
@@ -580,13 +576,9 @@ void setup() {
   // ========================================================================
   Serial.println("[5/8] Initializing application...");
 
-  #ifdef ROLE_HUB
-    g_ourNodeID = 0;
-    Serial.println("  ✓ Hub mode");
-  #else
-    g_ourNodeID = 1;  // TODO: Read from NVS or config
-    Serial.println("  ✓ Node mode");
-  #endif
+  // Default Node ID for all Peers
+  g_ourNodeID = 1; 
+  Serial.println("  ✓ Peer mode initialized");
 
   // Initialize GNSS (V4 support)
   GPSManager::init();
@@ -654,6 +646,8 @@ void setup() {
   // ========================================================================
   Serial.println("[8/8] Boot complete!");
   Serial.printf("  Uptime: %lu ms\n", millis() - g_bootTimestamp);
+  OLEDManager::drawBootProgress("COMPLETE", 100);
+  delay(500);
 
   // Print diagnostics
   PowerManager::printStatus();

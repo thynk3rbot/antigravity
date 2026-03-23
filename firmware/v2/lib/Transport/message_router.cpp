@@ -95,6 +95,10 @@ void MessageRouter::_processTransportRx(TransportInterface* transport) {
       _messageHandler(transport->getType(), _rxBuffer, len);
     }
   } else if (len < 0) {
+    // Suppress RX timeout logging (normal polling behavior)
+    if (len == -2 || len == -3) {
+      return;
+    }
     _droppedPackets++;
     Serial.printf("[MessageRouter] Error from %s: %d\n",
                   transport->getName(), len);

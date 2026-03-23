@@ -64,7 +64,6 @@ except ImportError:
 # Twilio — for SMS integration
 try:
     from twilio.twiml.messaging_response import MessagingResponse
-    from fastapi import Form
     TWILIO = True
 except ImportError:
     TWILIO = False
@@ -96,7 +95,7 @@ except ImportError:
 
 # ── FastAPI / WebSocket ──────────────────────────────────────────────────────
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Form
 from fastapi.responses import (
     FileResponse,
     HTMLResponse,
@@ -203,6 +202,7 @@ class NodeConfig:
     address: str  # IP, COM port, BLE prefix, or gateway node name
     active: bool = False
     online: bool = True
+    hardware: str = "Unknown"  # "V2" | "V3" | "V4"
     last_seen: float = field(default_factory=time.time)
 
     def to_dict(self) -> dict:
@@ -213,6 +213,7 @@ class NodeConfig:
             "address": self.address,
             "active": self.active,
             "online": self.online,
+            "hardware": self.hardware,
             "last_seen": self.last_seen,
         }
 
@@ -225,6 +226,7 @@ class NodeConfig:
             address=d["address"],
             active=d.get("active", False),
             online=d.get("online", True),
+            hardware=d.get("hardware", "Unknown"),
             last_seen=d.get("last_seen", time.time()),
         )
 
@@ -253,7 +255,7 @@ class NodeRegistry:
     def list(self) -> list[NodeConfig]:
         return list(self._nodes)
 
-    def add(self, name: str, type_: str, address: str, online: bool = True) -> NodeConfig:
+    def add(self, name: str, type_: str, address: str, online: bool = True, hardware: str = "Unknown") -> NodeConfig:
         # Upsert logic: if name + type exists, update the address and online status
         existing = next((n for n in self._nodes if n.name == name and n.type == type_), None)
         if existing:
@@ -265,9 +267,13 @@ class NodeRegistry:
             if existing.online != online:
                 existing.online = online
                 changed = True
-            if online:
-                existing.last_seen = time.time()
-                changed = True
+            # Update timestamp and hardware version if available
+            existing.last_seen = time.time()
+            existing.online = True
+            if hardware and hardware != "Unknown":
+                existing.hardware = hardware
+            changed = True # Mark as changed if any of the above happened
+
             if changed:
                 self._save()
             return existing
@@ -279,11 +285,25 @@ class NodeRegistry:
             type=type_, 
             address=address, 
             online=online,
+            hardware=hardware,
             last_seen=time.time() if online else 0
         )
         self._nodes.append(node)
         self._save()
         return node
+
+    def add_node(self, id: str, name: str, type: str, address: str, hardware: str = "Unknown") -> None:
+        for n in self._nodes:
+            if n.id == id:
+                n.online = True
+                n.last_seen = time.time()
+                if hardware != "Unknown":
+                    n.hardware = hardware
+                self._save()
+                return
+        
+        self._nodes.append(NodeConfig(id=id, name=name, type=type, address=address, hardware=hardware))
+        self._save()
 
     def mark_offline(self, name: str, type_: str) -> None:
         target = next((n for n in self._nodes if n.name == name and n.type == type_), None)
@@ -527,7 +547,10 @@ class LoRaLinkListener(ServiceListener):
             node_id = get_prop("id") or name.split(".")[0]
             
             # Automatically register/update in persistent registry
-            self.registry.add(node_id, "wifi", ip, online=True)
+            nid = node_id
+            addr = ip
+            hw = (info.properties.get(b"hw") or b"Unknown").decode()
+            self.registry.add_node(nid, nid, "wifi", addr, hardware=hw)
             
             # Update transient list for backward compat / immediate UI response
             if not any(d["address"] == ip for d in self.discovered):
@@ -630,6 +653,45 @@ class SerialLink:
     @property
     def device_name(self) -> str:
         return self._port
+
+class SerialHub:
+    """Background monitor that scans for NEW serial ports and adds them to registry."""
+    def __init__(self, registry: NodeRegistry, poller: 'StatusPoller') -> None:
+        self.registry = registry
+        self.poller = poller
+        self._running = False
+        self._known_ports = set()
+        self._task = None
+
+    async def start(self):
+        self._running = True
+        self._task = asyncio.create_task(self._run())
+        print("[SerialHub] Started discovery & monitor")
+
+    def stop(self):
+        self._running = False
+        if self._task:
+            self._task.cancel()
+
+    async def _run(self):
+        while self._running:
+            try:
+                if PYSERIAL:
+                    import serial.tools.list_ports
+                    ports = serial.tools.list_ports.comports()
+                    for p in ports:
+                        # Filter for Heltec USB-to-UART bridges or generic USB Serial (ESP32-S3 direct)
+                        is_loralink = any(sig in p.description for sig in ["CP210", "USB Serial", "CH340"])
+                        if is_loralink and p.device not in self._known_ports:
+                            print(f"[SerialHub] New port detected: {p.device}")
+                            # Auto-add to registry if not already there
+                            node = self.registry.add(p.device, "serial", p.device, online=True)
+                            self._known_ports.add(p.device)
+                            
+                await asyncio.sleep(5)
+            except Exception as e:
+                print(f"[SerialHub] Error: {e}")
+                await asyncio.sleep(10)
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -1017,6 +1079,7 @@ def build_app(
     # Singletons populated at startup
     _ble_peers: list = []  # up to 2 BLELink instances
     _transport: Optional[TransportManager] = None
+    _serial_hub: Optional[SerialHub] = None
     _poller: Optional[StatusPoller] = None
     _poll_task: Optional[asyncio.Task] = None
     _zc: Optional[Zeroconf] = None
@@ -1027,7 +1090,7 @@ def build_app(
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        nonlocal _ble_peers, _transport, _poller, _poll_task, _serial_link, _processor_task, _zc, _browser, _sim_bridge
+        nonlocal _ble_peers, _transport, _poller, _poll_task, _serial_link, _processor_task, _zc, _browser, _sim_bridge, _serial_hub
         
         # --- STARTUP ---
         # Initialize active IP to the startup device_ip
@@ -1081,6 +1144,17 @@ def build_app(
         # Start unified message processor
         _processor_task = asyncio.create_task(_msg_processor_task())
         
+        # Start Serial Discovery Hub
+        _serial_hub = SerialHub(node_reg, _poller)
+        await _serial_hub.start()
+        
+        # Ensure the command-line device is in the registry and marked active
+        if device_name and device_name.startswith("COM"):
+            node_reg.add(device_name, "serial", device_name, online=True)
+            state.active_node = device_name
+            state.active_type = "serial"
+            state.serial_port = device_name
+
         port = int(os.environ.get("PORT", 8000))
         print(f"[server] Listening at http://localhost:{port}")
 
@@ -1348,6 +1422,47 @@ def build_app(
         if _transport:
             await _transport.send_command("SCHED SAVE")
         return PlainTextResponse("OK")
+
+    # ── Fleet Operations ──────────────────────────────────────────────────
+    
+    @app.post("/api/fleet/reset")
+    async def _fleet_reset(node_ids: Optional[list[str]] = None) -> JSONResponse:
+        """Trigger factory reset on targeted or all nodes."""
+        if not node_ids:
+            # Broadcast to all
+            await _transport.send_command("FACTORY_RESET")
+            return JSONResponse({"ok": True, "msg": "Broadcast factory reset sent to all nodes"})
+        
+        results = []
+        for nid in node_ids:
+            # Use FORWARD cmd to target specific mesh nodes
+            ok = await _transport.send_command(f"FORWARD {nid} FACTORY_RESET")
+            results.append({"node": nid, "ok": ok})
+        
+        return JSONResponse({"ok": True, "results": results})
+
+    @app.post("/api/fleet/flash")
+    async def _fleet_flash(env: str, ports: list[str]) -> JSONResponse:
+        """Trigger pio flash for multiple serial ports in parallel."""
+        # Simple implementation: run in background tasks
+        async def _flash_task(port: str, target_env: str):
+            cmd = f"python -m platformio run --target upload --environment {target_env} --upload-port {port}"
+            print(f"[Fleet] Flashing {port} with {target_env}...")
+            proc = await asyncio.create_subprocess_shell(
+                cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            stdout, stderr = await proc.communicate()
+            if proc.returncode == 0:
+                print(f"[Fleet] Successfully flashed {port}")
+            else:
+                print(f"[Fleet] Failed flashing {port}: {stderr.decode()}")
+
+        for p in ports:
+            asyncio.create_task(_flash_task(p, env))
+        
+        return JSONResponse({"ok": True, "msg": f"Flash tasks started for {len(ports)} devices"})
 
     # ── SMS / Magic Webhook ──────────────────────────────────────────────
 

@@ -4,8 +4,9 @@
     "name": "Peer1",
     "type": "wifi",
     "address": "172.16.0.27",
-    "active": true,
+    "active": false,
     "online": true,
+    "hardware": "Unknown",
     "last_seen": 1774136035.387126
   },
   {
@@ -15,6 +16,7 @@
     "address": "172.16.0.26",
     "active": false,
     "online": true,
+    "hardware": "Unknown",
     "last_seen": 1774136035.387126
   },
   {
@@ -24,6 +26,7 @@
     "address": "10.0.0.45",
     "active": false,
     "online": true,
+    "hardware": "Unknown",
     "last_seen": 1774136035.387126
   },
   {
@@ -33,6 +36,7 @@
     "address": "10.0.0.117",
     "active": false,
     "online": true,
+    "hardware": "Unknown",
     "last_seen": 1774136035.387126
   },
   {
@@ -42,6 +46,7 @@
     "address": "PEER5V2",
     "active": false,
     "online": true,
+    "hardware": "Unknown",
     "last_seen": 1774136035.387126
   },
   {
@@ -49,8 +54,9 @@
     "name": "Node-7-V4",
     "type": "serial",
     "address": "COM7",
-    "active": false,
+    "active": true,
     "online": true,
+    "hardware": "Unknown",
     "last_seen": 1774136035.387126
   },
   {
@@ -60,6 +66,7 @@
     "address": "COM8",
     "active": false,
     "online": true,
+    "hardware": "Unknown",
     "last_seen": 1774136035.387126
   },
   {
@@ -69,6 +76,7 @@
     "address": "172.16.0.29",
     "active": false,
     "online": false,
+    "hardware": "Unknown",
     "last_seen": 1774204587.2411482
   },
   {
@@ -78,6 +86,7 @@
     "address": "172.16.0.28",
     "active": false,
     "online": false,
+    "hardware": "Unknown",
     "last_seen": 1774204577.6547391
   },
   {
@@ -87,6 +96,67 @@
     "address": "172.16.0.42",
     "active": false,
     "online": true,
+    "hardware": "Unknown",
     "last_seen": 1774213153.9173672
+  },
+  {
+    "id": "85efa4a1-628b-4912-9c3d-648e94d7a38d",
+    "name": "HP OfficeJet Pro 8020 series [EB4CE6]",
+    "type": "wifi",
+    "address": "172.16.0.47",
+    "active": false,
+    "online": true,
+    "hardware": "Unknown",
+    "last_seen": 1774246937.7625086
+  },
+  {
+    "id": "HP OfficeJet Pro 8020 series [EB4CE6]",
+    "name": "HP OfficeJet Pro 8020 series [EB4CE6]",
+    "type": "wifi",
+    "address": "172.16.0.47",
+    "active": false,
+    "online": true,
+    "hardware": "Unknown",
+    "last_seen": 1774247967.8021367
+  },
+  {
+    "id": "44d9397b-dc29-4614-a1a9-3e28881f83f9",
+    "name": "COM16",
+    "type": "serial",
+    "address": "COM16",
+    "active": false,
+    "online": true,
+    "hardware": "Unknown",
+    "last_seen": 1774247967.3832273
+  },
+  {
+    "id": "38edb98a-e7bd-419a-866a-ad83115f7531",
+    "name": "COM7",
+    "type": "serial",
+    "address": "COM7",
+    "active": false,
+    "online": true,
+    "hardware": "Unknown",
+    "last_seen": 1774247967.3791478
+  },
+  {
+    "id": "3ec92244-5f63-4456-a193-6e085759b520",
+    "name": "COM19",
+    "type": "serial",
+    "address": "COM19",
+    "active": false,
+    "online": true,
+    "hardware": "Unknown",
+    "last_seen": 1774247967.3822284
+  },
+  {
+    "id": "6d0db83d-0131-4b83-a593-f54c5b5cb1bc",
+    "name": "COM20",
+    "type": "serial",
+    "address": "COM20",
+    "active": false,
+    "online": true,
+    "hardware": "Unknown",
+    "last_seen": 1774247967.3832273
   }
 ]

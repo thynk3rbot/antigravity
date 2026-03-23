@@ -1,152 +1,173 @@
-/**
- * @file oled_manager.cpp
- * @brief OLED Display Manager Implementation
- *
- * Implements 4-page rotating display with button control and auto-rotation.
- * Pages update every 500ms; button debouncing at 50ms.
- * Auto-rotate timer resets on manual page changes.
- */
-
 #include "oled_manager.h"
-#include "../HAL/board_config.h"
-#include "power_manager.h"
-
-#include <Arduino.h>
+#include "board_config.h"
 #include <Wire.h>
-#include <Adafruit_SSD1306.h>
 #include <Adafruit_GFX.h>
-#include <esp_heap_caps.h>
+#include <Adafruit_SSD1306.h>
 
-// ============================================================================
-// Static Instance & State
-// ============================================================================
+// Display configuration
+#define OLED_WIDTH    128
+#define OLED_HEIGHT   64
+#define OLED_ADDRESS  0x3C
 
+// Singleton instance
 static Adafruit_SSD1306 display(OLED_WIDTH, OLED_HEIGHT, &Wire, OLED_RESET_PIN);
 
-// Cached display values (updated via setter functions)
-struct CachedValues {
-    char ip[32];              // Network IP
-    float batVoltage;         // Battery voltage (V)
-    char powerMode[16];       // Power mode string
-    int8_t loraRSSI;          // LoRa RSSI (dBm)
-    int8_t loraSNR;           // LoRa SNR (dB)
-    bool wifiActive;          // WiFi status
-    bool bleActive;           // BLE status
-    bool mqttActive;          // MQTT status
-    bool loraActive;          // LoRa status
-    bool relayOn;             // Relay status
-    float tempC;              // Temperature
-    uint8_t peerCount;        // Peer/node count
-    uint32_t uptimeMs;        // System uptime
-    uint32_t freeHeapBytes;   // Free heap
-    double gpsLat;            // GPS Latitude
-    double gpsLon;            // GPS Longitude
-    uint8_t gpsSats;          // GPS Satellites
-    bool gpsFix;              // GPS Fix status
-    uint32_t bootCount;       // Boot count
-    char resetReason[32];     // Reset reason [Power On, SW, etc]
-    char macSuffix[8];        // MAC suffix [A1:B2]
-    char deviceName[32];      // User-set name
-    char version[16];         // Firmware version
-};
-
-// Log buffer for Page 6
-#define MAX_OLED_LOGS 5
-static char g_logs[MAX_OLED_LOGS][32];
-static uint8_t g_logIndex = 0;
-static uint8_t g_logCount = 0;
-
-static CachedValues g_cached = {};  // Zero-initialized, then set defaults
-
-void initCachedValues() {
-    strncpy(g_cached.ip, "N/A", sizeof(g_cached.ip) - 1);
-    g_cached.batVoltage = 0.0f;
-    strncpy(g_cached.powerMode, "NORMAL", sizeof(g_cached.powerMode) - 1);
-    g_cached.loraRSSI = -120;
-    g_cached.loraSNR = 0;
-    g_cached.wifiActive = false;
-    g_cached.bleActive = false;
-    g_cached.mqttActive = false;
-    g_cached.loraActive = false;
-    g_cached.relayOn = false;
-    g_cached.tempC = 0.0f;
-    g_cached.peerCount = 0;
-    g_cached.uptimeMs = 0;
-    g_cached.freeHeapBytes = 0;
-    strncpy(g_cached.deviceName, "Node", sizeof(g_cached.deviceName) - 1);
-    strncpy(g_cached.version, "v0.0.0", sizeof(g_cached.version) - 1);
-}
+// Cached data for display
+struct DisplayCache {
+    char deviceName[20];
+    char macSuffix[10];
+    char version[12];
+    char ip[16];
+    uint8_t peerCount;
+    bool wifiActive;
+    bool bleActive;
+    bool mqttActive;
+    bool loraActive;
+    bool espnowActive;
+    float batVoltage;
+    char powerMode[12];
+    float tempC;
+    uint32_t uptimeMs;
+    uint32_t freeHeapBytes;
+    uint32_t bootCount;
+    char resetReason[20];
+    bool relayOn;
+    double gpsLat;
+    double gpsLon;
+    uint8_t gpsSats;
+    bool gpsFix;
+    int8_t loraRSSI;
+    float loraSNR;
+} g_cached;
 
 // Display state
 static uint8_t g_currentPage = 0;
-static uint8_t g_brightness = 127;  // Default brightness (0-255)
+static uint8_t g_brightness = 255;
 static bool g_displayOn = true;
+static bool g_wakeRequested = false;
 static uint32_t g_lastUpdateTime = 0;
 static uint32_t g_lastAutoRotateTime = 0;
-static uint32_t g_lastActivityTime = 0;  // For auto-sleep
-static const uint32_t UPDATE_INTERVAL_MS = 500;
-static const uint32_t SLEEP_TIMEOUT_MS = 30000; // 30 seconds
-
-// Button state for debouncing and long-press detection
-static uint32_t g_buttonPressTime = 0;
+static uint32_t g_lastActivityTime = 0;
 static bool g_buttonPressed = false;
+static uint32_t g_buttonPressTime = 0;
+
+static const uint32_t UPDATE_INTERVAL_MS = 500;
+static const uint32_t SLEEP_TIMEOUT_MS = 30000;
+static const uint32_t AUTO_ROTATE_MS = 5000;
+
+static void displayPage1();
+static void displayPage2();
+static void displayPage3();
+static void displayPage4();
+static void displayPage5();
+static void displayPage6();
 
 // ============================================================================
-// Forward Declarations
+// Internal Helpers
 // ============================================================================
 
-static void displayPage1();  // Network Status
-static void displayPage2();  // Power & LoRa
-static void displayPage3();  // Transport Status
-static void displayPage4();  // Relay & Temperature & Diagnostics
-static void displayPage5();  // GPS (Conditional)
-static void displayPage6();  // System Logs
+static void drawHeader(const char* title) {
+    display.setTextSize(1);
+    display.setCursor(0, 0);
+    // Friendly Name in title
+    display.printf("%s | %s", g_cached.deviceName, title);
+    display.drawFastHLine(0, 10, 128, SSD1306_WHITE);
+}
 
-// ============================================================================
-// Button Interrupt Handler
-// ============================================================================
+static void drawFooter(uint8_t pageNum) {
+    display.drawFastHLine(0, 54, 128, SSD1306_WHITE);
+    display.setCursor(0, 56);
+    display.printf("v%s | Page %u/6", g_cached.version, pageNum);
+}
+
+static void displayPage1() {
+    display.clearDisplay();
+    drawHeader("Network");
+    display.setCursor(0, 14);
+    display.printf("IP:    %s\n", g_cached.ip);
+    display.printf("Peers: %u connected\n", g_cached.peerCount);
+    display.printf("WiFi:  %s\n", g_cached.wifiActive ? "ACTIVE" : "OFF");
+    drawFooter(1);
+    display.display();
+}
+
+static void displayPage2() {
+    display.clearDisplay();
+    drawHeader("Power");
+    display.setCursor(0, 14);
+    display.printf("Batt: %.2f V\n", g_cached.batVoltage);
+    display.printf("RSSI: %d dBm\n", g_cached.loraRSSI);
+    display.printf("SNR:  %.1f dB\n", g_cached.loraSNR);
+    drawFooter(2);
+    display.display();
+}
+
+static void displayPage3() {
+    display.clearDisplay();
+    drawHeader("Transports");
+    display.setCursor(0, 14);
+    display.printf("BLE:   %s\n", g_cached.bleActive ? "ON" : "OFF");
+    display.printf("MQTT:  %s\n", g_cached.mqttActive ? "ON" : "OFF");
+    display.printf("LoRa:  %s\n", g_cached.loraActive ? "ON" : "OFF");
+    display.printf("ESPNW: %s\n", g_cached.espnowActive ? "ON" : "OFF");
+    drawFooter(3);
+    display.display();
+}
+
+static void displayPage4() {
+    display.clearDisplay();
+    drawHeader("System");
+    display.setCursor(0, 14);
+    display.printf("Temp:  %.1f C\n", g_cached.tempC);
+    display.printf("Heap:  %u KB\n", g_cached.freeHeapBytes / 1024);
+    display.printf("MAC:   %s\n", g_cached.macSuffix);
+    drawFooter(4);
+    display.display();
+}
+
+static void displayPage5() {
+    display.clearDisplay();
+    drawHeader("GNSS/GPS");
+    display.setCursor(0, 14);
+    if (!g_cached.gpsFix && g_cached.gpsSats == 0) {
+        display.println("Searching...");
+    } else {
+        display.printf("Sats: %u Lock: %s\n", g_cached.gpsSats, g_cached.gpsFix ? "YES" : "NO");
+        display.printf("Lat: %.6f\n", g_cached.gpsLat);
+        display.printf("Lon: %.6f\n", g_cached.gpsLon);
+    }
+    drawFooter(5);
+    display.display();
+}
+
+static void displayPage6() {
+    display.clearDisplay();
+    drawHeader("Diagnostics");
+    display.setCursor(0, 14);
+    display.printf("Boot Count: %u\n", g_cached.bootCount);
+    display.printf("Reset: %s\n", g_cached.resetReason);
+    display.printf("Uptime: %u min", g_cached.uptimeMs / 60000);
+    drawFooter(6);
+    display.display();
+}
 
 static void IRAM_ATTR buttonISRHandler() {
-    // Called when GPIO_0 changes state
-    // This is a simplified ISR; debouncing is handled in main update loop
     uint32_t now = millis();
-
     if (digitalRead(BUTTON_PIN) == LOW) {
-        // Button pressed
         if (!g_buttonPressed) {
             g_buttonPressTime = now;
             g_buttonPressed = true;
         }
     } else {
-        // Button released
         if (g_buttonPressed) {
             uint32_t pressDuration = now - g_buttonPressTime;
-
-            // Debounce threshold
             if (pressDuration >= BUTTON_DEBOUNCE_MS) {
-                if (pressDuration >= BUTTON_LONG_PRESS_MS) {
-                    // Long press: toggle brightness
-                    if (g_brightness >= 200) {
-                        g_brightness = 50;
-                    } else if (g_brightness >= 127) {
-                        g_brightness = 200;
-                    } else {
-                        g_brightness = 127;
-                    }
-                    Serial.printf("[OLED] Brightness toggled: %u\n", g_brightness);
+                g_lastActivityTime = now;
+                if (!g_displayOn) {
+                    g_wakeRequested = true;
                 } else {
-                    // Short press: rotate to next page
-                    g_lastActivityTime = now; // Wake up or stay awake
-                    if (!g_displayOn) {
-                        OLEDManager::setDisplayOn(true);
-                        return; // Just wake up, don't change page
-                    }
-                    uint8_t maxPages = (g_cached.gpsFix || g_cached.gpsSats > 0) ? 6 : 5;
-                    g_currentPage = (g_currentPage + 1) % maxPages;
-                    if (g_currentPage == 4 && !(g_cached.gpsFix || g_cached.gpsSats > 0)) {
-                        g_currentPage = 5; // Skip GPS if no fix
-                    }
-                    Serial.printf("[OLED] Page changed to: %u\n", g_currentPage);
+                    g_currentPage = (g_currentPage + 1) % 6;
+                    g_lastAutoRotateTime = now;
                 }
             }
             g_buttonPressed = false;
@@ -155,321 +176,82 @@ static void IRAM_ATTR buttonISRHandler() {
 }
 
 // ============================================================================
-// Helper Functions
-// ============================================================================
-
-/**
- * @brief Draw horizontal line at Y position
- */
-static void drawHLine(int16_t y) {
-    display.drawLine(0, y, OLED_WIDTH - 1, y, SSD1306_WHITE);
-}
-
-// ============================================================================
-// Page Display Functions
-// ============================================================================
-
-/**
- * @brief Page 1: Network Status & Identity
- */
-static void displayPage1() {
-    display.clearDisplay();
-    display.setFont();
-    display.setTextSize(1);
-    display.setTextColor(SSD1306_WHITE);
-
-    // Header: Name and Version
-    display.setCursor(0, 0);
-    display.print(g_cached.deviceName);
-    
-    display.setCursor(90, 0);
-    display.print(g_cached.version);
-
-    drawHLine(10);
-
-    // Network info
-    display.setTextSize(1);
-    display.setCursor(0, 14);
-    display.print("IP: ");
-    display.println(g_cached.ip);
-
-    display.print("Peers: ");
-    display.println(g_cached.peerCount);
-
-    display.print("WiFi:  ");
-    display.println(g_cached.wifiActive ? "ON" : "OFF");
-
-    display.setCursor(80, 56);
-    display.print(g_cached.macSuffix);
-
-    display.setCursor(0, 56);
-    display.print("Page: 1/6");
-
-    display.display();
-}
-
-/**
- * @brief Page 2: Power & LoRa Signal
- */
-static void displayPage2() {
-    display.clearDisplay();
-    display.setFont();
-    display.setTextSize(1);
-    display.setTextColor(SSD1306_WHITE);
-
-    // Header
-    display.setCursor(0, 0);
-    display.println("Power & LoRa");
-
-    drawHLine(10);
-
-    // Power info
-    display.setTextSize(1);
-    display.setCursor(0, 14);
-    display.print("Batt: ");
-    display.print(g_cached.batVoltage, 2);
-    display.println("V");
-
-    display.print("Mode: ");
-    display.println(g_cached.powerMode);
-
-    display.print("RSSI: ");
-    display.print(g_cached.loraRSSI);
-    display.println(" dBm");
-
-    display.print("SNR: ");
-    display.print(g_cached.loraSNR);
-    display.println(" dB");
-
-    display.print("Page: 2/6");
-
-    display.display();
-}
-
-/**
- * @brief Page 3: Transport Status
- */
-static void displayPage3() {
-    display.clearDisplay();
-    display.setFont();
-    display.setTextSize(1);
-    display.setTextColor(SSD1306_WHITE);
-
-    // Header
-    display.setCursor(0, 0);
-    display.println("Transports");
-
-    drawHLine(10);
-
-    // Transport status
-    display.setTextSize(1);
-    display.setCursor(0, 14);
-    display.print("WiFi: ");
-    display.println(g_cached.wifiActive ? "ON" : "OFF");
-
-    display.print("BLE:  ");
-    display.println(g_cached.bleActive ? "ON" : "OFF");
-
-    display.print("MQTT: ");
-    display.println(g_cached.mqttActive ? "ON" : "OFF");
-
-    display.print("LoRa: ");
-    display.println(g_cached.loraActive ? "ON" : "OFF");
-
-    display.print("Page: 3/6");
-
-    display.display();
-}
-
-/**
- * @brief Page 4: Relay, Temperature, Uptime, Heap
- */
-static void displayPage4() {
-    display.clearDisplay();
-    display.setFont();
-    display.setTextSize(1);
-    display.setTextColor(SSD1306_WHITE);
-
-    // Header
-    display.setCursor(0, 0);
-    display.println("System Status");
-
-    drawHLine(10);
-
-    // System info
-    display.setTextSize(1);
-    display.setCursor(0, 14);
-    display.print("Relay: ");
-    display.println(g_cached.relayOn ? "ON" : "OFF");
-
-    display.print("Temp: ");
-    display.print(g_cached.tempC, 1);
-    display.println("C");
-
-    // Uptime in hours:minutes
-    uint32_t totalSecs = g_cached.uptimeMs / 1000;
-    uint32_t hours = totalSecs / 3600;
-    uint32_t mins = (totalSecs % 3600) / 60;
-    display.printf("Uptime: %uh%um\n", (unsigned int)hours, (unsigned int)mins);
-
-    display.print("Heap: ");
-    display.print(g_cached.freeHeapBytes / 1024);
-    display.println(" KB");
-
-    // Diagnostics
-    display.print("Boot: ");
-    display.print(g_cached.bootCount);
-    display.print(" [");
-    display.print(g_cached.resetReason);
-    display.println("]");
-
-    display.print("Page: 4/6");
-
-    display.display();
-}
-
-/**
- * @brief Page 5: GPS Information (Conditional)
- */
-static void displayPage5() {
-    display.clearDisplay();
-    display.setFont();
-    display.setTextSize(1);
-    display.setTextColor(SSD1306_WHITE);
-
-    // Header
-    display.setCursor(0, 0);
-    display.println("GNSS Status");
-
-    drawHLine(10);
-
-    // GPS info
-    display.setTextSize(1);
-    display.setCursor(0, 14);
-    if (g_cached.gpsFix) {
-        display.print("Lat: ");
-        display.println(g_cached.gpsLat, 6);
-        display.print("Lon: ");
-        display.println(g_cached.gpsLon, 6);
-    } else {
-        display.println("Searching for satellites...");
-        display.println();
-    }
-
-    display.setCursor(0, 40);
-    display.print("Sats: ");
-    display.println(g_cached.gpsSats);
-
-    display.print("Fix:  ");
-    display.println(g_cached.gpsFix ? "YES" : "NO");
-
-    display.print("Page: 5/6");
-    display.display();
-}
-
-/**
- * @brief Page 6: System Logs
- */
-static void displayPage6() {
-    display.clearDisplay();
-    display.setFont();
-    display.setTextSize(1);
-    display.setTextColor(SSD1306_WHITE);
-
-    display.setCursor(0, 0);
-    display.println("System Logs");
-    drawHLine(10);
-
-    for (int i = 0; i < g_logCount; i++) {
-        // Show in reverse order (newest at top)
-        int idx = (g_logIndex - 1 - i + MAX_OLED_LOGS) % MAX_OLED_LOGS;
-        display.setCursor(0, 14 + (i * 10));
-        display.println(g_logs[idx]);
-    }
-
-    display.setCursor(0, 56);
-    display.print("Page: 6/6");
-    display.display();
-}
-
-// ============================================================================
-// Public API Implementation
+// Public API
 // ============================================================================
 
 bool OLEDManager::init() {
-    // Initialize cached values
-    initCachedValues();
-
-    // Initialize I2C with board config pins
-    Serial.printf("[OLED] Starting Wire on SDA:%d, SCL:%d\n", I2C_SDA, I2C_SCL);
+    memset(&g_cached, 0, sizeof(g_cached));
     Wire.begin(I2C_SDA, I2C_SCL, I2C_FREQ_HZ);
-    
-    // Manual Hardware Reset for Heltec OLED
     if (OLED_RESET_PIN != -1) {
-        Serial.printf("[OLED] Toggling Reset on GPIO %d\n", OLED_RESET_PIN);
         pinMode(OLED_RESET_PIN, OUTPUT);
-        digitalWrite(OLED_RESET_PIN, LOW);
-        delay(20);
-        digitalWrite(OLED_RESET_PIN, HIGH);
-        delay(20);
+        digitalWrite(OLED_RESET_PIN, LOW); delay(20);
+        digitalWrite(OLED_RESET_PIN, HIGH); delay(20);
     }
+    if (!display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDRESS)) return false;
     
-    // Initialize display
-    Serial.println("[OLED] Calling display.begin()...");
-    if (!display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDRESS)) {
-        Serial.println("[OLED] SSD1306 allocation failed");
-        return false;
-    }
-
-    // Initialize display
+    display.ssd1306_command(SSD1306_SETCONTRAST);
+    display.ssd1306_command(0xFF);
     display.clearDisplay();
-    display.setTextSize(1);
     display.setTextColor(SSD1306_WHITE);
-    display.setCursor(0, 0);
-    display.println("Initializing OLED...");
+    
+    // Resurface v1 Slash Screen
+    display.drawRect(0, 0, 128, 64, SSD1306_WHITE);
+    display.drawFastHLine(0, 15, 128, SSD1306_WHITE);
+    display.drawFastHLine(0, 48, 128, SSD1306_WHITE);
+    
+    display.setTextSize(1);
+    display.setCursor(5, 4);
+    display.print("SYSTEM BOOT");
+    
+    display.setTextSize(2);
+    display.setCursor(15, 22);
+    display.print("LoRaLink");
+    
+    display.setTextSize(1);
+    display.setCursor(5, 52);
+    display.print("Peer Mode v2.0");
+    
     display.display();
-
-    Serial.println("[OLED] SSD1306 initialized successfully");
-
-    // Initialize button with interrupt
+    
     pinMode(BUTTON_PIN, INPUT_PULLUP);
     attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), buttonISRHandler, CHANGE);
-
-    Serial.println("[OLED] Button interrupt attached to GPIO_0");
-
-    // Initialize timers
+    
     g_lastUpdateTime = millis();
-    g_lastAutoRotateTime = millis();
     g_lastActivityTime = millis();
-
-    // Display initial page
-    g_currentPage = 0;
-    displayPage1();
-
+    g_lastAutoRotateTime = millis();
+    g_displayOn = true;
     return true;
+}
+
+void OLEDManager::drawBootProgress(const char* label, int percent) {
+    if (!g_displayOn) return;
+    
+    // Redraw base splash frame if needed or just update progress area
+    display.fillRect(2, 49, 124, 14, SSD1306_BLACK); // Clear footer area
+    display.setTextSize(1);
+    display.setCursor(5, 52);
+    display.printf("%s.. %d%%", label, percent);
+    
+    // Draw progress bar
+    int barWidth = (percent * 118) / 100;
+    display.drawRect(5, 60, 118, 3, SSD1306_WHITE);
+    display.fillRect(5, 60, barWidth, 3, SSD1306_WHITE);
+    
+    display.display();
 }
 
 void OLEDManager::update() {
     uint32_t now = millis();
+    if (g_wakeRequested) { setDisplayOn(true); g_wakeRequested = false; }
+    if (g_displayOn && (now - g_lastActivityTime >= SLEEP_TIMEOUT_MS)) setDisplayOn(false);
+    
+    if (g_displayOn && (now - g_lastAutoRotateTime >= AUTO_ROTATE_MS)) {
+        g_currentPage = (g_currentPage + 1) % 6;
+        g_lastAutoRotateTime = now;
+    }
 
-    // Update display periodically
     if (now - g_lastUpdateTime >= UPDATE_INTERVAL_MS) {
         g_lastUpdateTime = now;
-
-        // Auto-sleep logic
-        if (g_displayOn && (now - g_lastActivityTime >= SLEEP_TIMEOUT_MS)) {
-            setDisplayOn(false);
-            Serial.println("[OLED] Auto-sleep triggered (30s inactivity)");
-        }
-
-        // Apply brightness (via dim if needed)
-        if (g_brightness < 127) {
-            display.dim(true);
-        } else {
-            display.dim(false);
-        }
-
-        // Render current page
         if (g_displayOn) {
             switch (g_currentPage) {
                 case 0: displayPage1(); break;
@@ -478,74 +260,21 @@ void OLEDManager::update() {
                 case 3: displayPage4(); break;
                 case 4: displayPage5(); break;
                 case 5: displayPage6(); break;
-                default:
-                    g_currentPage = 0;
-                    displayPage1();
-                    break;
+                default: g_currentPage = 0; break;
             }
-        } else {
-            display.clearDisplay();
-            display.display();
         }
     }
 }
 
-void OLEDManager::setPage(uint8_t pageNum) {
-    if (pageNum >= 4) {
-        return;  // Invalid page
-    }
-    g_currentPage = pageNum;
-    g_lastAutoRotateTime = millis();  // Reset auto-rotate timer
-    Serial.printf("[OLED] Page set to: %u\n", pageNum);
-}
-
-uint8_t OLEDManager::getCurrentPage() {
-    return g_currentPage;
-}
-
-void OLEDManager::setBrightness(uint8_t brightness) {
-    g_brightness = brightness;
-    Serial.printf("[OLED] Brightness set to: %u\n", g_brightness);
-}
-
-uint8_t OLEDManager::getBrightness() {
-    return g_brightness;
-}
-
-void OLEDManager::setDisplayOn(bool on) {
-    g_displayOn = on;
-    if (on) {
-        display.ssd1306_command(0xAF);  // Display ON
-        Serial.println("[OLED] Display ON");
-    } else {
-        display.ssd1306_command(0xAE);  // Display OFF
-        Serial.println("[OLED] Display OFF");
-    }
-}
-
-bool OLEDManager::isDisplayOn() {
-    return g_displayOn;
-}
-
-void OLEDManager::setIP(const char* ip) {
-    if (ip != nullptr) {
-        strncpy(g_cached.ip, ip, sizeof(g_cached.ip) - 1);
-        g_cached.ip[sizeof(g_cached.ip) - 1] = '\0';
-    }
-}
-
-void OLEDManager::setBatteryVoltage(float voltage, const char* mode) {
-    g_cached.batVoltage = voltage;
-    if (mode != nullptr) {
-        strncpy(g_cached.powerMode, mode, sizeof(g_cached.powerMode) - 1);
-        g_cached.powerMode[sizeof(g_cached.powerMode) - 1] = '\0';
-    }
-}
-
-void OLEDManager::setLoRaSignal(int8_t rssi, int8_t snr) {
-    g_cached.loraRSSI = rssi;
-    g_cached.loraSNR = snr;
-}
+void OLEDManager::setPage(uint8_t pageNum) { if (pageNum < 6) g_currentPage = pageNum; }
+uint8_t OLEDManager::getCurrentPage() { return g_currentPage; }
+void OLEDManager::setBrightness(uint8_t brightness) { g_brightness = brightness; }
+uint8_t OLEDManager::getBrightness() { return g_brightness; }
+void OLEDManager::setDisplayOn(bool on) { g_displayOn = on; display.ssd1306_command(on ? 0xAF : 0xAE); }
+bool OLEDManager::isDisplayOn() { return g_displayOn; }
+void OLEDManager::setIP(const char* ip) { if (ip) strncpy(g_cached.ip, ip, 15); }
+void OLEDManager::setBatteryVoltage(float voltage, const char* mode) { g_cached.batVoltage = voltage; if (mode) strncpy(g_cached.powerMode, mode, 11); }
+void OLEDManager::setLoRaSignal(int8_t rssi, int8_t snr) { g_cached.loraRSSI = rssi; g_cached.loraSNR = (float)snr; }
 
 void OLEDManager::setTransportStatus(bool wifi, bool ble, bool mqtt, bool lora) {
     g_cached.wifiActive = wifi;
@@ -554,90 +283,25 @@ void OLEDManager::setTransportStatus(bool wifi, bool ble, bool mqtt, bool lora) 
     g_cached.loraActive = lora;
 }
 
-void OLEDManager::setRelayStatus(bool relayOn) {
-    g_cached.relayOn = relayOn;
+// New signature for ESP-NOW support
+void OLEDManager::setTransportStatus(bool wifi, bool ble, bool mqtt, bool lora, bool espnow) {
+    g_cached.wifiActive = wifi;
+    g_cached.bleActive = ble;
+    g_cached.mqttActive = mqtt;
+    g_cached.loraActive = lora;
+    g_cached.espnowActive = espnow;
 }
 
-void OLEDManager::setTemperature(float tempC) {
-    g_cached.tempC = tempC;
-}
-
-void OLEDManager::setPeerCount(uint8_t count) {
-    g_cached.peerCount = count;
-}
-
-void OLEDManager::setUptime(uint32_t uptimeMs) {
-    g_cached.uptimeMs = uptimeMs;
-}
-
-void OLEDManager::setFreeHeap(uint32_t heapBytes) {
-    g_cached.freeHeapBytes = heapBytes;
-}
-
-void OLEDManager::setGPS(double lat, double lon, uint8_t sats, bool hasFix) {
-    g_cached.gpsLat = lat;
-    g_cached.gpsLon = lon;
-    g_cached.gpsSats = sats;
-    g_cached.gpsFix = hasFix;
-}
-
-void OLEDManager::setDiagnostics(uint32_t bootCount, const char* reason) {
-    g_cached.bootCount = bootCount;
-    if (reason != nullptr) {
-        strncpy(g_cached.resetReason, reason, sizeof(g_cached.resetReason) - 1);
-        g_cached.resetReason[sizeof(g_cached.resetReason) - 1] = '\0';
-    }
-}
-
-void OLEDManager::setMAC(const char* mac) {
-    if (mac != nullptr) {
-        strncpy(g_cached.macSuffix, mac, sizeof(g_cached.macSuffix) - 1);
-        g_cached.macSuffix[sizeof(g_cached.macSuffix) - 1] = '\0';
-    }
-}
-
-void OLEDManager::setDeviceName(const char* name) {
-    if (name != nullptr) {
-        strncpy(g_cached.deviceName, name, sizeof(g_cached.deviceName) - 1);
-        g_cached.deviceName[sizeof(g_cached.deviceName) - 1] = '\0';
-    }
-}
-
-void OLEDManager::setVersion(const char* ver) {
-    if (ver != nullptr) {
-        strncpy(g_cached.version, ver, sizeof(g_cached.version) - 1);
-        g_cached.version[sizeof(g_cached.version) - 1] = '\0';
-    }
-}
-
-void OLEDManager::addLog(const char* msg) {
-    if (msg == nullptr) return;
-    
-    // Add to circular buffer
-    strncpy(g_logs[g_logIndex], msg, 31);
-    g_logs[g_logIndex][31] = '\0';
-    
-    g_logIndex = (g_logIndex + 1) % MAX_OLED_LOGS;
-    if (g_logCount < MAX_OLED_LOGS) {
-        g_logCount++;
-    }
-}
-
-void OLEDManager::printStatus() {
-    Serial.println("\n[OLED Status]");
-    Serial.printf("  Current Page: %u\n", g_currentPage);
-    Serial.printf("  Brightness: %u\n", g_brightness);
-    Serial.printf("  Display On: %s\n", g_displayOn ? "Yes" : "No");
-    Serial.printf("  IP: %s\n", g_cached.ip);
-    Serial.printf("  Battery: %.2f V (%s)\n", g_cached.batVoltage, g_cached.powerMode);
-    Serial.printf("  LoRa RSSI: %d dBm, SNR: %d dB\n", g_cached.loraRSSI, g_cached.loraSNR);
-    Serial.printf("  WiFi: %s, BLE: %s, MQTT: %s, LoRa: %s\n",
-                  g_cached.wifiActive ? "ON" : "OFF",
-                  g_cached.bleActive ? "ON" : "OFF",
-                  g_cached.mqttActive ? "ON" : "OFF",
-                  g_cached.loraActive ? "ON" : "OFF");
-    Serial.printf("  Relay: %s, Temp: %.1f°C\n", g_cached.relayOn ? "ON" : "OFF", g_cached.tempC);
-    Serial.printf("  Peers: %u, Uptime: %u ms, Free Heap: %u bytes\n",
-                  g_cached.peerCount, (unsigned int)g_cached.uptimeMs, (unsigned int)g_cached.freeHeapBytes);
-    Serial.println();
-}
+void OLEDManager::setRelayStatus(bool relayOn) { g_cached.relayOn = relayOn; }
+void OLEDManager::setTemperature(float tempC) { g_cached.tempC = tempC; }
+void OLEDManager::setPeerCount(uint8_t count) { g_cached.peerCount = count; }
+void OLEDManager::setUptime(uint32_t uptimeMs) { g_cached.uptimeMs = uptimeMs; }
+void OLEDManager::setFreeHeap(uint32_t heapBytes) { g_cached.freeHeapBytes = heapBytes; }
+void OLEDManager::setGPS(double lat, double lon, uint8_t sats, bool hasFix) { g_cached.gpsLat = lat; g_cached.gpsLon = lon; g_cached.gpsSats = sats; g_cached.gpsFix = hasFix; }
+void OLEDManager::setDiagnostics(uint32_t bootCount, const char* reason) { g_cached.bootCount = bootCount; if (reason) strncpy(g_cached.resetReason, reason, 19); }
+void OLEDManager::setMAC(const char* mac) { if (mac) strncpy(g_cached.macSuffix, mac, 9); }
+void OLEDManager::setDeviceName(const char* name) { if (name) strncpy(g_cached.deviceName, name, 19); }
+void OLEDManager::setVersion(const char* ver) { if (ver) strncpy(g_cached.version, ver, 11); }
+void OLEDManager::addLog(const char* msg) {}
+void OLEDManager::printStatus() {}
+OLEDManager::OLEDManager() {}

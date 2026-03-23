@@ -29,7 +29,10 @@
 // Reconnect / backoff tunables
 // ============================================================================
 
-#define WIFI_CONNECT_TIMEOUT_MS     10000   // 10 s initial connect wait
+// #define WIFI_CONNECT_TIMEOUT_MS     10000   // 10 s initial connect wait
+#ifndef WIFI_CONNECT_TIMEOUT_MS
+  #define WIFI_CONNECT_TIMEOUT_MS     10000   // Fallback
+#endif
 #define WIFI_RECONNECT_INTERVAL_MS  30000   // 30 s between reconnect attempts
 #define WIFI_POLL_INTERVAL_MS       500     // poll granularity inside connect()
 

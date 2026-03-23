@@ -30,17 +30,8 @@
   #endif
 #endif
 
-// ============================================================================
 // Build Flag Validation (Compile-Time Checks)
 // ============================================================================
-
-#if !defined(ROLE_HUB) && !defined(ROLE_NODE)
-  #error "Must define ROLE_HUB or ROLE_NODE via build flag"
-#endif
-
-#if defined(ROLE_HUB) && defined(ROLE_NODE)
-  #error "Cannot define both ROLE_HUB and ROLE_NODE"
-#endif
 
 #if !defined(RADIO_SX1276) && !defined(RADIO_SX1262)
   #error "Must define RADIO_SX1276 or RADIO_SX1262 via build flag"
@@ -116,7 +107,7 @@
 #define OLED_WIDTH              128
 #define OLED_HEIGHT             64
 #ifdef RADIO_SX1262
-  #define OLED_RESET_PIN          21       // V3/V4 use GPIO 21 for OLED RESET
+  #define OLED_RESET_PIN          21       // S3 boards (V3/V4) use GPIO 21 for OLED reset
 #else
   #define OLED_RESET_PIN          16       // V2 uses GPIO 16
 #endif
@@ -196,9 +187,9 @@
 
 #define BAT_ADC_VOLTAGE_DIVIDER 2.0f    // External divider: Vbat/2 = ADC input
 #ifdef RADIO_SX1262
-  #define VEXT_PIN              36       // V3/V4 use GPIO 36 for VEXT
+    #define VEXT_PIN            36       // V3 and V4 use GPIO 36 for VEXT control
 #else
-  #define VEXT_PIN              21       // V2 uses GPIO 21
+  #define VEXT_PIN              36       // V2 uses GPIO 36
 #endif
 
 // Battery voltage thresholds (in volts, actual cell voltage)
@@ -290,6 +281,7 @@
 // Power management
 #define BATTERY_CRIT_VOLTAGE    3.0f     // Critical threshold (volts)
 #define BATTERY_WARN_VOLTAGE    3.3f     // Warning threshold
+#define WIFI_CONNECT_TIMEOUT_MS     1000    // 1s initial connect wait (prevent boot hang)
 #define HEARTBEAT_NORMAL_MS     5000     // 5s interval in NORMAL mode
 #define HEARTBEAT_CONSERVE_MS   15000    // 15s in CONSERVE mode
 #define HEARTBEAT_CRITICAL_MS   60000    // 60s in CRITICAL mode
@@ -310,11 +302,9 @@
 // Compile-Time Info (for serial output)
 // ============================================================================
 
-#ifdef ROLE_HUB
-  #define DEVICE_ROLE "HUB"
-#else
-  #define DEVICE_ROLE "NODE"
-#endif
+#define DEVICE_NAME             "peer"
+#define HARDWARE_DESCRIPTION    "LoRaLink v2 Peer"
+#define DEVICE_ROLE             "Peer"
 
 #ifdef RADIO_SX1276
   #define RADIO_MODEL "SX1276 (V2)"

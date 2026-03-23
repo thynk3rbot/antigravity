@@ -274,6 +274,14 @@ void WiFiTransport::_startMDNS() {
     MDNS.addServiceTxt("http", "tcp", "id", _hostname.c_str());
     MDNS.addServiceTxt("http", "tcp", "type", "loralink-gateway");
     MDNS.addServiceTxt("http", "tcp", "ver", "v2.0.0");
+    
+#ifdef ARDUINO_HELTEC_WIFI_LORA_32_V4
+    MDNS.addServiceTxt("http", "tcp", "hw", "V4");
+#elif defined(ARDUINO_HELTEC_WIFI_LORA_32_V3)
+    MDNS.addServiceTxt("http", "tcp", "hw", "V3");
+#else
+    MDNS.addServiceTxt("http", "tcp", "hw", "V2");
+#endif
 
     _mdnsStarted = true;
     Serial.printf("[mDNS] Advertised as %s.local with TXT records\n", _hostname.c_str());

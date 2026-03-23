@@ -42,6 +42,7 @@ void PowerManager::begin() {
 
 bool PowerManager::init() {
     begin();
+    enableVEXT();  // Ensure peripherals like OLED are powered on boot
     return true;
 }
 
@@ -68,7 +69,7 @@ void PowerManager::disableVEXT() {
 float PowerManager::getBatteryVoltage() {
 #ifdef BAT_ADC_PIN
 #ifdef BAT_ADC_CTRL
-    digitalWrite(BAT_ADC_CTRL, HIGH);  // Enable voltage divider
+    digitalWrite(BAT_ADC_CTRL, LOW);  // Enable voltage divider (Active LOW on Heltec)
     delay(5);
 #endif
     // Average 5 readings for stability
@@ -77,10 +78,10 @@ float PowerManager::getBatteryVoltage() {
         sum += analogRead(BAT_ADC_PIN);
     }
 #ifdef BAT_ADC_CTRL
-    digitalWrite(BAT_ADC_CTRL, LOW);   // Disable voltage divider
+    digitalWrite(BAT_ADC_CTRL, HIGH);   // Disable voltage divider (Passive HIGH)
 #endif
     float reading = static_cast<float>(sum) / 5.0f;
-    float voltage = (reading / 4095.0f) * 3.3f * 2.0f; // V4 Standard Divider
+    float voltage = (reading / 4095.0f) * 3.3f * 2.0f; // V4/V3 Standard Divider (6.6V Full Scale)
     _lastVoltage = voltage;
     return voltage;
 #else

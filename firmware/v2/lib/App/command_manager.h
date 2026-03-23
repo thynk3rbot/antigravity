@@ -52,6 +52,7 @@ private:
     static String _handleSetName(const String& args);
     static String _handleSetIP(const String& args);
     static String _handleSched(const String& args);
+    static String _handleFactoryReset();
     static String _handleAsk(const String& args);
     static String _handleForward(const String& args);
     static String _handleGPS(const String& args);

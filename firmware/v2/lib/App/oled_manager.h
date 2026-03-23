@@ -44,6 +44,13 @@ public:
     static void update();
 
     /**
+     * @brief Draw a boot progress bar on the splash screen
+     * @param label Current status label
+     * @param percent 0-100 progress
+     */
+    static void drawBootProgress(const char* label, int percent);
+
+    /**
      * @brief Manually change to specific page (0-3)
      * @param pageNum Page number (0-3, others are ignored)
      * Resets the auto-rotate timer.
@@ -109,6 +116,11 @@ public:
      * @param lora LoRa enabled/connected
      */
     static void setTransportStatus(bool wifi, bool ble, bool mqtt, bool lora);
+
+    /**
+     * @brief Update cached transport status including ESP-NOW
+     */
+    static void setTransportStatus(bool wifi, bool ble, bool mqtt, bool lora, bool espnow);
 
     /**
      * @brief Update cached relay status

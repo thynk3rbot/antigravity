@@ -107,7 +107,7 @@ std::string NVSManager::getHardwareID() {
   uint8_t mac[6];
   esp_efuse_mac_get_default(mac);
   char buf[16];
-  snprintf(buf, sizeof(buf), "%02X%02X%02X", mac[3], mac[4], mac[5]);
+  snprintf(buf, sizeof(buf), "LL-%02X%02X%02X", mac[3], mac[4], mac[5]);
   return std::string(buf);
 }
 

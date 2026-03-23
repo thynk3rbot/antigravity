@@ -105,6 +105,8 @@ void CommandManager::process(const String& input, ResponseCallback responseCallb
         response = _handleGPS(args);
     } else if (cmd == "ASK") {
         response = _handleAsk(args);
+    } else if (cmd == "FACTORY_RESET") {
+        response = _handleFactoryReset();
     } else {
         response = "{\"ok\":false,\"error\":\"Unknown command: " + cmd + "\"}";
     }
@@ -260,6 +262,7 @@ String CommandManager::_handleHelp() {
     help += "  FORWARD <id> <cmd>              - Forward command to mesh node\n";
     help += "  GPS [ON|OFF]                    - Power or status of GNSS\n";
     help += "  ASK <prompt>                    - Send query to Local AI Workstation\n";
+    help += "  FACTORY_RESET                   - Clear all settings and reboot\n";
     help += "  HELP                            - Show this help message";
     return help;
 }
@@ -300,6 +303,15 @@ String CommandManager::_handleSetName(const String& args) {
         return "{\"ok\":true,\"node_id\":\"" + name + "\",\"msg\":\"Rebooting...\"}";
     }
     return "{\"ok\":false,\"error\":\"NVS Save Failed\"}";
+}
+
+String CommandManager::_handleFactoryReset() {
+    Serial.println("[CMD] Factory Reset initiated. Clearing NVS and Schedules...");
+    ScheduleManager::clearTasks();
+    NVSManager::clearAll();
+    delay(1000);
+    ESP.restart();
+    return "{\"ok\":true,\"msg\":\"Factory reset initialized. Rebooting...\"}";
 }
 
 String CommandManager::_handleSetIP(const String& args) {
