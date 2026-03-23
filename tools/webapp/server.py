@@ -847,8 +847,9 @@ class TransportManager:
                 wire_cmd += "\n"
             
             link = self._serial
-            if node_id and node_id in self._serial_cache:
-                link = self._serial_cache[node_id]
+            # Use target_port for cache lookup instead of node_id
+            if target_port and target_port in self._serial_cache:
+                link = self._serial_cache[target_port]
             
             if not link or not link.is_connected:
                 return False

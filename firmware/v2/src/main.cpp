@@ -206,6 +206,8 @@ void controlTask(void* param) {
       CommandManager::StatusData status;
       status.nodeId = NVSManager::getNodeID("Node").c_str();
       status.version = FIRMWARE_VERSION;
+      status.hw = HW_VERSION;
+      status.mac = WiFi.macAddress();
       status.ipAddr = WiFi.localIP().toString();
       status.batVoltage = PowerManager::getBatteryVoltage();
       status.batPercent = PowerManager::getBatteryPercent();

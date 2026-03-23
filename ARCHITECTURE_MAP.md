@@ -10,14 +10,15 @@ It is a working architecture index, not a substitute for reading source files.
 
 ## 1. Project Identity
 
-**LoRaLink-AnyToAny** is unified ESP32-S3 firmware focused on prioritized **any-to-any command routing** across multiple communications interfaces.
+**LoRaLink-AnyToAny** is unified firmware focused on prioritized **any-to-any command routing** across multiple communications interfaces.
 
 ### Current Supported Board
-- **Heltec WiFi LoRa 32 V3**
-- ESP32-S3
-- SX1262 915 MHz
+- **Heltec WiFi LoRa 32 V2 / V3 / V4**
+- ESP32-S3 (V3/V4) / ESP32 (V2)
+- SX1262 (V3/V4) / SX1276 (V2) 915 MHz
 - OLED over I2C
 - VEXT power control
+- **MAC-based Fleet Identity**: Unique hardware identification.
 
 ### Build / Flash
 - PlatformIO
@@ -28,12 +29,19 @@ It is a working architecture index, not a substitute for reading source files.
 
 ## 2. Core Architectural Style
 
-The firmware follows a **manager-based singleton architecture**.
+The firmware follows a **Library-centric, specialized manager architecture**.
+
+### Path Structure (v2)
+- `firmware/v2/lib/HAL/`: Hardware Abstraction Layer (Board-specific configs).
+- `firmware/v2/lib/Transport/`: Network and radio drivers (WiFi, LoRa, BLE, ESP-NOW).
+- `firmware/v2/lib/App/`: Business logic (CommandManager, StatusBuilder, NVS).
+- `firmware/v2/src/main.cpp`: System integration and task orchestration.
 
 ### Key Properties
-- Managers live in `src/managers/`
-- Managers use `getInstance()` static accessors
+- Components are decoupled into libraries for easier testing and board switching.
+- Managers use `getInstance()` or static initialization.
 - Cross-manager coordination is common
+- **Identity-First Registry**: All nodes are keyed by their WiFi MAC address.
 - Shared operational truth is centralized through manager interactions
 - Boot order matters
 - Runtime work is coordinated with scheduling rather than a heavy main loop
@@ -169,9 +177,7 @@ This is both a transport manager and a user/admin surface.
 ### Watch For
 - queue overflow
 - peer struct drift
-- changes requiring tool updates
-
----
+- changes requiring### Last Updated: 2026-03-23
 
 ## `MQTTManager`
 **Role:** Telemetry and external command bridge.
