@@ -293,7 +293,7 @@ class NodeRegistry:
             return existing
 
         # New Node
-        nid = str(uuid.uuid4())
+        nid = mac if mac and mac != "Unknown" else address
         new_node = NodeConfig(
             id=nid, name=name, type=type_, address=address, 
             hardware=hardware, mac=mac, online=online,
@@ -800,14 +800,42 @@ class TransportManager:
         self._sim: Any = sim_bridge
         self.registry = registry
         self._serial_cache: dict[str, Any] = {}
+        self._serial_failures: dict[str, float] = {}  # port -> timestamp
         if serial_link and hasattr(serial_link, "_port"):
             self._serial_cache[serial_link._port] = serial_link
 
+    async def _get_serial_link(self, port: str) -> Optional[Any]:
+        """Get or open a serial link with failure cooldown to prevent thrashing."""
+        if port in self._serial_cache:
+            link = self._serial_cache[port]
+            if link and link.is_connected:
+                return link
+            # Stale connection in cache? Clean it up
+            del self._serial_cache[port]
+
+        # Cooldown check: don't retry a failing port for 10 seconds
+        last_fail = self._serial_failures.get(port, 0)
+        if time.time() - last_fail < 10:
+            return None
+
+        print(f"[Transport] Opening dynamic serial link to {port}...")
+        link = SerialLink(port)
+        try:
+            # Short timeout for initial connect to prevent API hang
+            await asyncio.wait_for(link.connect(), timeout=3.0)
+            self._serial_cache[port] = link
+            return link
+        except Exception as e:
+            print(f"[Transport] Failed to open dynamic serial {port}: {e}")
+            self._serial_failures[port] = time.time()
+            return None
+
     async def send_command(self, cmd: str, node_id: Optional[str] = None) -> bool:
-        # 1. Resolve target metadata (port, IP, type) from registry if node_id provided
+        # 1. Resolve target metadata
         target_type = None
         target_ip = None
         target_port = None
+        
         if node_id:
              if node_id.startswith(("COM", "/dev/")):
                  target_port = node_id
@@ -822,41 +850,32 @@ class TransportManager:
                          target_ip = node.address
                          target_type = "http"
 
-             if target_type == "serial" and target_port:
-                 if target_port not in self._serial_cache:
-                     print(f"[Transport] Opening dynamic serial link to {target_port}...")
-                     new_link = SerialLink(target_port)
-                     try:
-                         await new_link.connect()
-                         self._serial_cache[target_port] = new_link
-                     except Exception as e:
-                         print(f"[Transport] Failed to open dynamic serial {target_port}: {e}")
-                         return False
-                 
-                 self._serial = self._serial_cache[target_port]
-                 self.state.serial_port = target_port
-                 self.state.serial_ok = True
-
         transport = await self.pick_transport(cmd, target_type=target_type)
         wire_cmd = self._serialize_command(cmd, transport)
         
         if transport == "sim":
             return await self._sim.send_command(wire_cmd)
+
         if transport == "serial":
             if not wire_cmd.endswith("\n"):
                 wire_cmd += "\n"
             
-            link = self._serial
-            # Use target_port for cache lookup instead of node_id
-            if target_port and target_port in self._serial_cache:
-                link = self._serial_cache[target_port]
+            # Resolve physical link
+            link = None
+            if target_port:
+                link = await self._get_serial_link(target_port)
+            else:
+                link = self._serial # Primary gateway fallback
             
             if not link or not link.is_connected:
                 return False
             ok = await link.send_command(wire_cmd)
-            self.state.serial_ok = ok
-            self.state.transport = "serial" if ok else "disconnected"
+            # Update state for UI feedback (only if it's the active/gateway link)
+            if link == self._serial or (target_port and target_port == self.state.serial_port):
+                self.state.serial_ok = ok
+                self.state.transport = "serial" if ok else "disconnected"
             return ok
+
         if transport == "http":
             ok = await self._send_http(cmd, ip=target_ip if node_id else None)
             if ok:
@@ -866,6 +885,8 @@ class TransportManager:
                 return True
             self.state.http_failures += 1
             self.state.http_ok = False
+            return False
+
         ok = await self._send_ble(cmd)
         self.state.ble_ok = ok
         self.state.transport = "ble" if ok else "disconnected"
@@ -1539,6 +1560,30 @@ def build_app(
         if _transport:
             await _transport.send_command("SCHED SAVE")
         return PlainTextResponse("OK")
+
+    @app.get("/api/boards/{board_id}")
+    async def _board_get(board_id: str) -> JSONResponse:
+        board_file = Path(__file__).parent / "boards" / f"{board_id}.json"
+        if not board_file.exists():
+            board_file = Path(__file__).parent.parent.parent / "data" / "boards" / f"{board_id}.json"
+        
+        if board_file.exists():
+            try:
+                data = json.loads(board_file.read_text())
+                return JSONResponse(data)
+            except Exception: pass
+        return JSONResponse({"error": "Board not found"}, status_code=404)
+
+    @app.get("/api/files")
+    @app.get("/api/files/list")
+    async def _files_list() -> JSONResponse:
+        # Proxy or local? Gateway usually proxies to device, but can show local configs
+        files = []
+        try:
+            for f in (Path(__file__).parent / "configs").glob("*.json"):
+                files.append({"name": f.name, "size": f.stat().st_size})
+        except Exception: pass
+        return JSONResponse({"ok": True, "files": files})
 
     # ── Fleet Operations ──────────────────────────────────────────────────
     # ── Node Registry / Fleet ─────────────────────────────────────────────

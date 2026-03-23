@@ -71,8 +71,8 @@ std::string StatusBuilder::buildStatusString() {
 
 void StatusBuilder::addBasicInfo(JsonDocument& doc) {
     // Device identity
-    doc["id"] = NVSManager::getNodeID("Node").c_str();
-    doc["hw_id"] = NVSManager::getHardwareID().c_str();
+    doc["id"] = String(NVSManager::getNodeID("Node").c_str());
+    doc["hw_id"] = String(NVSManager::getHardwareID().c_str());
 
     // Hardware version (detect from build flags)
     #ifdef ARDUINO_HELTEC_WIFI_LORA_32_V4
@@ -82,7 +82,7 @@ void StatusBuilder::addBasicInfo(JsonDocument& doc) {
     #elif defined(ARDUINO_HELTEC_WIFI_LORA_32)
         doc["hw"] = "V2";
     #else
-        doc["hw"] = NVSManager::getHardwareVersion("V3").c_str();
+        doc["hw"] = String(NVSManager::getHardwareVersion("V3").c_str());
     #endif
 
     // Firmware version (from build define)
@@ -94,7 +94,7 @@ void StatusBuilder::addBasicInfo(JsonDocument& doc) {
 
     // IP address (empty if not connected)
     std::string ip = WiFiTransport::getIP();
-    doc["ip"] = ip.empty() ? "" : ip.c_str();
+    doc["ip"] = ip.empty() ? "" : String(ip.c_str());
 
     // MAC address formatted as "XX:XX:XX:XX:XX:XX"
     uint8_t macAddr[6];
@@ -169,7 +169,7 @@ void StatusBuilder::addBLEInfo(JsonDocument& doc) {
     // Device name format: "GW-{NODEID}"
     std::string nodeID = NVSManager::getNodeID("Node");
     std::string bleDeviceName = "GW-" + nodeID;
-    doc["ble_device_name"] = bleDeviceName.c_str();
+    doc["ble_device_name"] = String(bleDeviceName.c_str());
     doc["ble_enabled"] = true; // BLE is always enabled in v2
     doc["ble_connected"] = BLETransport::isConnected();
 }
@@ -296,7 +296,7 @@ void StatusBuilder::addSystemInfo(JsonDocument& doc) {
     // TODO: Add to NVSManager
     std::string nodeID = NVSManager::getNodeID("Node");
     std::string friendlyName = nodeID + " (Kitchen)";  // Example
-    doc["friendly_name"] = friendlyName.c_str();
+    doc["friendly_name"] = String(friendlyName.c_str());
 
     // Location tag (optional, from NVS)
     doc["location"] = "Kitchen";  // TODO: Add to NVSManager

@@ -5,7 +5,7 @@
     "type": "serial",
     "address": "COM16",
     "active": true,
-    "online": true,
+    "online": false,
     "hardware": "Unknown",
     "mac": "Unknown",
     "last_seen": 1774250120.3769405
@@ -16,7 +16,7 @@
     "type": "serial",
     "address": "COM7",
     "active": false,
-    "online": true,
+    "online": false,
     "hardware": "Unknown",
     "mac": "Unknown",
     "last_seen": 1774250120.3769405
@@ -27,7 +27,7 @@
     "type": "serial",
     "address": "COM19",
     "active": false,
-    "online": true,
+    "online": false,
     "hardware": "Unknown",
     "mac": "Unknown",
     "last_seen": 1774250120.3769405
@@ -38,7 +38,7 @@
     "type": "serial",
     "address": "COM20",
     "active": false,
-    "online": true,
+    "online": false,
     "hardware": "Unknown",
     "mac": "Unknown",
     "last_seen": 1774250120.3769405
