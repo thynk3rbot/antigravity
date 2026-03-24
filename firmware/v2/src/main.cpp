@@ -43,7 +43,6 @@
 #include "../lib/App/control_packet.h"
 #include "../lib/App/mesh_coordinator.h"
 #include "../lib/App/nvs_manager.h"
-#include "../lib/App/nvs_config.h"
 #include "../lib/App/power_manager.h"
 #include "../lib/App/oled_manager.h"
 #include "../lib/App/http_api.h"
@@ -433,7 +432,6 @@ void setup() {
   if (!NVSManager::init()) {
     Serial.println("WARNING: NVS init failed");
   }
-  NVSConfig::begin();
 
   Serial.println("[CHECK] Initializing MCP...");
   MCPManager::getInstance().init();
@@ -494,7 +492,7 @@ void setup() {
   OLEDManager::getInstance().setMAC(mac_buf);
   OLEDManager::getInstance().setVersion(FIRMWARE_VERSION);
   OLEDManager::getInstance().setDeviceName(NVSManager::getNodeID("Node").c_str());
-  OLEDManager::getInstance().setDiagnostics(NVSConfig::getBootCount(), NVSConfig::getResetReason().c_str());
+  OLEDManager::getInstance().setDiagnostics(NVSManager::getBootCount(), NVSManager::getResetReason().c_str());
   OLEDManager::getInstance().addLog("System Initialized");
 
   vTaskDelay(pdMS_TO_TICKS(10));

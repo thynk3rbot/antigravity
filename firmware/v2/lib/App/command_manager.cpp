@@ -1,12 +1,11 @@
 #include "command_manager.h"
-#include "nvs_config.h"
+#include "nvs_manager.h"
 #include "schedule_manager.h"
 #include "gps_manager.h"
 #include <Arduino.h>
 #include <WiFi.h>
 #include "../Transport/message_router.h"
 #include "control_packet.h"
-#include "nvs_manager.h"
 #include "product_manager.h"
 #include <ArduinoJson.h>
 #include "plugin_manager.h"
@@ -230,7 +229,7 @@ String CommandManager::_handleRelay(const String& args) {
     }
 
     // Persist state to NVS
-    NVSConfig::setRelayState((uint8_t)relayNum, state);
+    NVSManager::setRelayState((uint8_t)relayNum, state);
 
     String json = "{\"ok\":true,\"relay\":";
     json += String(relayNum);
@@ -257,7 +256,7 @@ String CommandManager::_handleSetWifi(const String& args) {
         return "{\"ok\":false,\"error\":\"SSID cannot be empty\"}";
     }
 
-    bool ok = NVSConfig::setWifiCredentials(ssid, pass);
+    bool ok = NVSManager::setWiFiSSID(ssid.c_str()) && NVSManager::setWiFiPassword(pass.c_str());
     if (ok) {
         return "{\"ok\":true}";
     } else {
@@ -339,7 +338,7 @@ String CommandManager::_handleSetName(const String& args) {
     if (name.length() == 0) {
         return "{\"ok\":false,\"error\":\"Name cannot be empty\"}";
     }
-    bool ok = NVSConfig::setNodeId(name);
+    bool ok = NVSManager::setNodeID(name.c_str());
     if (ok) {
         Serial.printf("[CMD] Node name set to: %s. Rebooting...\n", name.c_str());
         delay(500);
@@ -367,7 +366,7 @@ String CommandManager::_handleSetIP(const String& args) {
     int space1 = a.indexOf(' ');
     if (space1 < 0) {
         if (a.length() == 0 || a == "CLEAR" || a == "DHCP") {
-            NVSConfig::setStaticIP("");
+            NVSManager::setStaticIP("");
             return "{\"ok\":true,\"msg\":\"Static IP cleared. DHCP will be used after reboot.\"}";
         }
         // Only one arg: just the IP
@@ -408,9 +407,9 @@ String CommandManager::_handleSetIP(const String& args) {
     if (gw.length() == 0) gw = "0.0.0.0";
     if (sn.length() == 0) sn = "255.255.255.0";
 
-    bool ok = NVSConfig::setStaticIP(ip) && 
-              NVSConfig::setGateway(gw) && 
-              NVSConfig::setSubnet(sn);
+    bool ok = NVSManager::setStaticIP(ip.c_str()) && 
+              NVSManager::setGateway(gw.c_str()) && 
+              NVSManager::setSubnet(sn.c_str());
 
     if (ok) {
         return "{\"ok\":true,\"msg\":\"Static IP set. Reboot required.\"}";
@@ -492,12 +491,12 @@ String CommandManager::_handleSched(const String& args) {
 
 String CommandManager::_handleGetConfig() {
     String json = "{";
-    json += "\"node_id\":\""   + NVSConfig::getNodeId()      + "\",";
+    json += "\"node_id\":\""   + String(NVSManager::getNodeID("Node").c_str())      + "\",";
     json += "\"active_prod\":\"" + ProductManager::getInstance().getActiveProduct() + "\",";
-    json += "\"wifi_ssid\":\"" + NVSConfig::getWifiSSID()    + "\",";
-    json += "\"power_mode\":"  + String(NVSConfig::getPowerMode()) + ",";
-    json += "\"relay1\":"      + String(NVSConfig::getRelayState(1) ? "true" : "false") + ",";
-    json += "\"relay2\":"      + String(NVSConfig::getRelayState(2) ? "true" : "false");
+    json += "\"wifi_ssid\":\"" + String(NVSManager::getWiFiSSID().c_str())    + "\",";
+    json += "\"power_mode\":"  + String(NVSManager::getPowerMode(0)) + ",";
+    json += "\"relay1\":"      + String(NVSManager::getRelayState(1) ? "true" : "false") + ",";
+    json += "\"relay2\":"      + String(NVSManager::getRelayState(2) ? "true" : "false");
     json += "}";
     return json;
 }
@@ -523,9 +522,11 @@ String CommandManager::_handleSetKey(const String& args) {
     key.trim();
     if (key.length() != 32) return "{\"ok\":false,\"error\":\"Key must be 32 hex chars\"}";
     
-    // In V2, we use NVSManager for raw bytes if needed, but NVSConfig handles strings
-    if (NVSConfig::setCryptoKey(key)) {
-        return "{\"ok\":true,\"msg\":\"AES Key Updated. Reboot required.\"}";
+    uint8_t rawKey[16];
+    if (Crypto::hexToBytes(key, rawKey, 16)) {
+        if (NVSManager::setCryptoKey(rawKey)) {
+            return "{\"ok\":true,\"msg\":\"AES Key Updated. Reboot required.\"}";
+        }
     }
     return "{\"ok\":false,\"error\":\"Save failed\"}";
 }
@@ -568,7 +569,7 @@ String CommandManager::_handleNodes() {
 String CommandManager::_handleRepeater(const String& args) {
     String a = args; a.trim(); a.toUpperCase();
     bool enable = (a == "ON" || a == "1");
-    // NVSConfig::setRepeater(enable); // Needs implementation in NVSConfig
+    // NVSManager::setRepeater(enable); // Needs implementation in NVSConfig
     return "{\"ok\":true,\"repeater\":" + String(enable ? "true" : "false") + "}";
 }
 

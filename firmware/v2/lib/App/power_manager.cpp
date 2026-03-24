@@ -1,6 +1,6 @@
 #include "power_manager.h"
 #include "../HAL/board_config.h"
-#include "nvs_config.h"
+#include "nvs_manager.h"
 
 // ============================================================================
 // Static member definitions
@@ -66,7 +66,7 @@ void PowerManager::begin() {
 #endif
 
     // Restore persisted power mode from NVS
-    uint8_t saved = NVSConfig::getPowerMode();
+    uint8_t saved = NVSManager::getPowerMode(0);
     if (saved <= static_cast<uint8_t>(PowerMode::CRITICAL)) {
         _mode = static_cast<PowerMode>(saved);
     } else {
@@ -162,7 +162,7 @@ PowerMode PowerManager::getMode() {
 
 void PowerManager::setMode(PowerMode mode) {
     _mode = mode;
-    NVSConfig::setPowerMode(static_cast<uint8_t>(mode));
+    NVSManager::setPowerMode(static_cast<uint8_t>(mode));
 }
 
 void PowerManager::autoUpdateMode() {
@@ -184,7 +184,7 @@ void PowerManager::autoUpdateMode() {
 
     if (newMode != _mode) {
         _mode = newMode;
-        NVSConfig::setPowerMode(static_cast<uint8_t>(_mode));
+        NVSManager::setPowerMode(static_cast<uint8_t>(_mode));
         if (_modeChangeCallback) {
             _modeChangeCallback(_mode);
         }

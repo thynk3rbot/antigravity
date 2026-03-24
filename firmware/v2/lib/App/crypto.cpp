@@ -14,7 +14,7 @@
  */
 
 #include "crypto.h"
-#include "nvs_config.h"
+#include "nvs_manager.h"
 #include <esp_random.h>
 
 // ============================================================================
@@ -30,21 +30,19 @@ bool                Crypto::_initialized   = false;
 // ============================================================================
 
 bool Crypto::begin(const String& hexKey) {
-    // Determine which hex key string to use
-    String keyStr = hexKey;
-    if (keyStr.isEmpty()) {
-        keyStr = NVSConfig::getCryptoKey();
-    }
-
-    // Fall back to a compile-time default if NVS returns nothing
-    if (keyStr.isEmpty()) {
-        keyStr = "0102030405060708090A0B0C0D0E0F10";
-    }
-
-    // Convert hex string -> 16 raw bytes
-    if (!hexToBytes(keyStr, _key, 16)) {
-        Serial.println("[Crypto] ERROR: invalid hex key string");
-        return false;
+    if (!hexKey.isEmpty()) {
+        if (!hexToBytes(hexKey, _key, 16)) {
+            Serial.println("[Crypto] ERROR: invalid hex key string provided");
+            return false;
+        }
+    } else {
+        // Try to load from NVS
+        if (!NVSManager::getCryptoKey(_key)) {
+            // Fall back to default
+            String defaultKey = "0102030405060708090A0B0C0D0E0F10";
+            hexToBytes(defaultKey, _key, 16);
+            Serial.println("[Crypto] Using default development key");
+        }
     }
 
     // Initialise (or re-initialise) the GCM context

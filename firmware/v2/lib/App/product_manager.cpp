@@ -1,5 +1,5 @@
 #include "product_manager.h"
-#include "nvs_config.h"
+#include "nvs_manager.h"
 using namespace ArduinoJson;
 #include "schedule_manager.h"
 #include "../HAL/mcp_manager.h"
@@ -25,8 +25,10 @@ void ProductManager::broadcastRegistry() {
     #endif
     
     // Mesh broadcast (Summary packet)
+    std::string idStr = NVSManager::getNodeID("1");
+    uint16_t id = (idStr == "Node" || idStr == "Hub") ? 1 : static_cast<uint16_t>(std::atoi(idStr.c_str()));
     ControlPacket reg = ControlPacket::makeTelemetry(
-      static_cast<uint16_t>(NVSConfig::getNodeId().toInt()), 0xFE, 0, 0, 0, 0 // 0xFE = Registry Event
+      id, 0xFE, 0, 0, 0, 0 // 0xFE = Registry Event
     );
     messageRouter.broadcastPacket((uint8_t*)&reg, sizeof(reg));
 }
@@ -69,11 +71,13 @@ bool ProductManager::loadProduct(const String& name) {
     // Alerts restoration planned for Phase 6 complement
 
     _activeProduct = name;
-    NVSConfig::setActiveProductName(name);
+    NVSManager::setActiveProductName(String(name).c_str());
     
     // Announce over Mesh
+    std::string idStr = NVSManager::getNodeID("1");
+    uint16_t id = (idStr == "Node" || idStr == "Hub") ? 1 : static_cast<uint16_t>(std::atoi(idStr.c_str()));
     ControlPacket announce = ControlPacket::makeTelemetry(
-      static_cast<uint16_t>(NVSConfig::getNodeId().toInt()), 0xFF, 0, 0, 0, 0
+      id, 0xFF, 0, 0, 0, 0
     );
     // Future: Add specific "Product Announce" type, for now use piggybacked telemetry
     messageRouter.broadcastPacket((uint8_t*)&announce, sizeof(announce));
@@ -89,7 +93,7 @@ bool ProductManager::loadProduct(const String& name) {
 }
 
 void ProductManager::restoreActiveProduct() {
-    String active = NVSConfig::getActiveProductName();
+    String active = String(NVSManager::getActiveProductName().c_str());
     if (!active.isEmpty()) {
         loadProduct(active);
     }

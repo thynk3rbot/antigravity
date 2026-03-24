@@ -178,37 +178,65 @@ public:
     static std::string getHardwareVersion(const std::string& defaultVal = "V3");
 
     // ========================================================================
+    // Static IP & Network Configuration
+    // ========================================================================
+    static std::string getStaticIP(const std::string& defaultVal = "");
+    static bool setStaticIP(const std::string& ip);
+    static std::string getGateway(const std::string& defaultVal = "");
+    static bool setGateway(const std::string& gw);
+    static std::string getSubnet(const std::string& defaultVal = "");
+    static bool setSubnet(const std::string& sn);
+
+    // ========================================================================
+    // Relay & Power Management
+    // ========================================================================
+    static bool getRelayState(uint8_t relayNum);
+    static bool setRelayState(uint8_t relayNum, bool state);
+    static uint8_t getPowerMode(uint8_t defaultVal = 0);
+    static bool setPowerMode(uint8_t mode);
+
+    // ========================================================================
+    // Product & Hardware Management
+    // ========================================================================
+    static uint8_t getHardwareVariant(uint8_t defaultVal = 4);
+    static bool setHardwareVariant(uint8_t version);
+    static std::string getActiveProductName(const std::string& defaultVal = "");
+    static bool setActiveProductName(const std::string& name);
+
+    // ========================================================================
+    // Diagnostics & Boot Tracking
+    // ========================================================================
+    static uint32_t getBootCount();
+    static void incrementBootCount();
+    static std::string getResetReason();
+    static void setResetReason(const std::string& reason);
+
+    // ========================================================================
     // Utility Operations
     // ========================================================================
-
-    /**
-     * @brief Clear all NVS data in "loralink" namespace
-     *
-     * Erases all stored configuration.
-     * Use with caution - this cannot be undone without reprogramming.
-     *
-     * @return true if cleared successfully, false on error
-     */
     static bool clearAll();
-
-    /**
-     * @brief Print all stored configuration to Serial for diagnostics
-     *
-     * Useful for debugging and verifying NVS contents.
-     * Outputs all stored values and their sizes.
-     */
     static void printInfo();
 
 private:
-    // NVS namespace for this application
     static constexpr const char* NVS_NAMESPACE = "loralink";
+    
+    // Authoritative Keys (Aligned with legacy NVSConfig for zero-data-loss)
+    static constexpr const char* KEY_NODE_ID     = "dev_name";
+    static constexpr const char* KEY_WIFI_SSID   = "wifi_ssid";
+    static constexpr const char* KEY_WIFI_PASS   = "wifi_pass";
+    static constexpr const char* KEY_CRYPTO_KEY  = "crypto_key";
+    static constexpr const char* KEY_RELAY1      = "relay1_state";
+    static constexpr const char* KEY_RELAY2      = "relay2_state";
+    static constexpr const char* KEY_POWER_MODE  = "power_mode";
+    static constexpr const char* KEY_MQTT_BROKER = "mqtt_broker";
+    static constexpr const char* KEY_MQTT_PORT   = "mqtt_port";
+    static constexpr const char* KEY_BOOT_COUNT  = "boot_count";
+    static constexpr const char* KEY_RESET_REASON = "reset_reason";
+    static constexpr const char* KEY_STATIC_IP   = "static_ip";
+    static constexpr const char* KEY_GATEWAY     = "gateway";
+    static constexpr const char* KEY_SUBNET      = "subnet";
+    static constexpr const char* KEY_HW_VAR      = "hw_ver";
+    static constexpr const char* KEY_ACTIVE_PROD = "active_prod";
 
-    /**
-     * @brief Internal helper to log errors with context
-     *
-     * @param operation Name of the operation (e.g., "setNodeID")
-     * @param key NVS key name
-     * @param err ESP error code
-     */
     static void logError(const char* operation, const char* key, int err);
 };

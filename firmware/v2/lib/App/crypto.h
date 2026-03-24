@@ -9,7 +9,7 @@
  * Matches the v0.1.0 wire format for fleet interoperability:
  *   [12-byte IV][ciphertext][16-byte GCM tag]
  *
- * Key is loaded from NVSConfig::getCryptoKey() (32-char hex string -> 16 bytes).
+ * Key is loaded from NVSManager::getCryptoKey() (32-char hex string -> 16 bytes).
  * A fresh random IV is generated per packet via esp_fill_random().
  */
 
@@ -18,7 +18,7 @@ public:
     /**
      * @brief Initialize with 16-byte AES key from a hex string.
      * @param hexKey  32-char hex string, e.g. "0102030405060708090A0B0C0D0E0F10"
-     *                Pass an empty String to load from NVSConfig::getCryptoKey().
+     *                Pass an empty String to load from NVSManager::getCryptoKey().
      * @return true on success, false if key is invalid or mbedTLS init fails.
      */
     static bool begin(const String& hexKey = "");

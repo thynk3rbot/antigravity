@@ -1,7 +1,7 @@
 # 🛰️ LoRaLink Agent Command Center
 
 > [!IMPORTANT]
-> **MULTI-AGENT PROTOCOL**: All agents must read this document at the start of a session and sign off in the `Handoff Log` at the end. Use the **Agent Discussion** section to coordinate on complex blockers.
+> **MULTI-AGENT PROTOCOL**: All agents must read this document and the [JOINT_RELEASE_STRATEGY.md](file:///C:/Users/spw1/Documents/Code/Antigravity/docs/JOINT_RELEASE_STRATEGY.md) at the start of a session. Use the **Agent Discussion** section to coordinate on complex blockers.
 
 ## 🏁 Mission Status
 **Current Baseline**: Firmware 0.4.0 (Stabilization & Phased Boot)

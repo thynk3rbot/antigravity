@@ -70,39 +70,6 @@ bool NVSManager::init() {
 // Device Identity
 // ============================================================================
 
-bool NVSManager::setNodeID(const std::string& id) {
-  if (id.length() > 16) {
-    Serial.println("[NVS] ERROR: Node ID too long (max 16 bytes)");
-    return false;
-  }
-
-  nvs_handle_t handle;
-  esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle);
-  if (err != ESP_OK) {
-    logError("setNodeID", "open", err);
-    return false;
-  }
-
-  err = nvs_set_str(handle, "dev_name", id.c_str());
-  if (err != ESP_OK) {
-    logError("setNodeID", "node_id", err);
-    nvs_close(handle);
-    return false;
-  }
-
-  err = nvs_commit(handle);
-  if (err != ESP_OK) {
-    logError("setNodeID", "commit", err);
-    nvs_close(handle);
-    return false;
-  }
-
-  nvs_close(handle);
-  Serial.printf("[NVS] Node ID set to: %s\n", id.c_str());
-  return true;
-}
-
-// Generate hardware ID from efuse MAC — deterministic, immutable
 std::string NVSManager::getHardwareID() {
   uint8_t mac[6];
   esp_efuse_mac_get_default(mac);
@@ -111,66 +78,51 @@ std::string NVSManager::getHardwareID() {
   return std::string(buf);
 }
 
-// Stale placeholder check — covers all known bad values from old firmware
-static bool isStaleNodeId(const std::string& id) {
-  if (id.empty()) return true;
-  // Case-insensitive comparison against known placeholders
-  std::string lower = id;
-  for (char& c : lower) c = (char)tolower((unsigned char)c);
-  return lower == "unknown" || lower == "node" || lower == "default" || lower == "unnamed" || lower == "unamed";
+bool NVSManager::setNodeID(const std::string& id) {
+  if (id.length() > 32) return false;
+  nvs_handle_t handle;
+  if (nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle) != ESP_OK) return false;
+  esp_err_t err = nvs_set_str(handle, KEY_NODE_ID, id.c_str());
+  if (err == ESP_OK) err = nvs_commit(handle);
+  nvs_close(handle);
+  return (err == ESP_OK);
 }
 
 std::string NVSManager::getNodeID(const std::string& defaultVal) {
   nvs_handle_t handle;
-  esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READONLY, &handle);
+  if (nvs_open(NVS_NAMESPACE, NVS_READONLY, &handle) != ESP_OK) return defaultVal;
+  size_t size = 0;
+  esp_err_t err = nvs_get_str(handle, KEY_NODE_ID, nullptr, &size);
   if (err != ESP_OK) {
-    // NVS open failed — generate from MAC and attempt to persist
-    logError("getNodeID", "open", err);
-    std::string generated = getHardwareID();
-    Serial.printf("[NVS] NVS unavailable, using generated ID: %s\n", generated.c_str());
-    setNodeID(generated);  // best-effort persist
-    return generated;
-  }
-
-  size_t required_size = 0;
-  err = nvs_get_str(handle, "dev_name", nullptr, &required_size);
-
-  if (err == ESP_ERR_NVS_NOT_FOUND) {
     nvs_close(handle);
-    std::string generated = getHardwareID();
-    Serial.printf("[NVS] Node ID not set, generated: %s\n", generated.c_str());
-    setNodeID(generated);
-    return generated;
+    return defaultVal;
   }
 
-  if (err != ESP_OK) {
-    logError("getNodeID", "size_query", err);
-    nvs_close(handle);
-    return getHardwareID();  // still usable even if can't persist
-  }
-
-  char* buf = new char[required_size];
-  err = nvs_get_str(handle, "dev_name", buf, &required_size);
-  nvs_close(handle);
-
-  if (err != ESP_OK) {
-    logError("getNodeID", "read", err);
-    delete[] buf;
-    return getHardwareID();
-  }
-
+  char* buf = new char[size];
+  nvs_get_str(handle, KEY_NODE_ID, buf, &size);
   std::string result(buf);
   delete[] buf;
-
-  if (isStaleNodeId(result)) {
-    std::string generated = getHardwareID();
-    Serial.printf("[NVS] Node ID was '%s', regenerated: %s\n",
-                  result.c_str(), generated.c_str());
-    setNodeID(generated);
-    return generated;
-  }
-
+  nvs_close(handle);
   return result;
+}
+
+// ============================================================================
+// Hardware Version Mapping (Legacy Compatibility)
+// ============================================================================
+
+bool NVSManager::setHardwareVersion(const std::string& hwver) {
+  // Map "V2" -> 2, "V3" -> 3, etc.
+  uint8_t val = 3;
+  if (hwver.find("2") != std::string::npos) val = 2;
+  else if (hwver.find("3") != std::string::npos) val = 3;
+  else if (hwver.find("4") != std::string::npos) val = 4;
+  return setHardwareVariant(val);
+}
+
+std::string NVSManager::getHardwareVersion(const std::string& defaultVal) {
+  uint8_t v = getHardwareVariant(0);
+  if (v == 0) return defaultVal;
+  return "V" + std::to_string(v);
 }
 
 // ============================================================================
@@ -178,429 +130,334 @@ std::string NVSManager::getNodeID(const std::string& defaultVal) {
 // ============================================================================
 
 bool NVSManager::setWiFiSSID(const std::string& ssid) {
-  if (ssid.length() > 32) {
-    Serial.println("[NVS] ERROR: WiFi SSID too long (max 32 bytes)");
-    return false;
-  }
-
   nvs_handle_t handle;
-  esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle);
-  if (err != ESP_OK) {
-    logError("setWiFiSSID", "open", err);
-    return false;
-  }
-
-  err = nvs_set_str(handle, "wifi_ssid", ssid.c_str());
-  if (err != ESP_OK) {
-    logError("setWiFiSSID", "wifi_ssid", err);
-    nvs_close(handle);
-    return false;
-  }
-
-  err = nvs_commit(handle);
-  if (err != ESP_OK) {
-    logError("setWiFiSSID", "commit", err);
-    nvs_close(handle);
-    return false;
-  }
-
+  if (nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle) != ESP_OK) return false;
+  esp_err_t err = nvs_set_str(handle, KEY_WIFI_SSID, ssid.c_str());
+  if (err == ESP_OK) err = nvs_commit(handle);
   nvs_close(handle);
-  Serial.printf("[NVS] WiFi SSID set to: %s\n", ssid.c_str());
-  return true;
+  return (err == ESP_OK);
 }
 
 std::string NVSManager::getWiFiSSID(const std::string& defaultVal) {
   nvs_handle_t handle;
-  esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READONLY, &handle);
-  if (err != ESP_OK) {
-    logError("getWiFiSSID", "open", err);
-    return defaultVal;
-  }
-
-  size_t required_size = 0;
-  err = nvs_get_str(handle, "wifi_ssid", nullptr, &required_size);
-
-  if (err == ESP_ERR_NVS_NOT_FOUND) {
+  if (nvs_open(NVS_NAMESPACE, NVS_READONLY, &handle) != ESP_OK) return defaultVal;
+  size_t size = 0;
+  if (nvs_get_str(handle, KEY_WIFI_SSID, nullptr, &size) != ESP_OK) {
     nvs_close(handle);
     return defaultVal;
   }
-
-  if (err != ESP_OK) {
-    logError("getWiFiSSID", "wifi_ssid", err);
-    nvs_close(handle);
-    return defaultVal;
-  }
-
-  char* buf = new char[required_size];
-  err = nvs_get_str(handle, "wifi_ssid", buf, &required_size);
-
-  nvs_close(handle);
-
-  if (err != ESP_OK) {
-    logError("getWiFiSSID", "wifi_ssid_read", err);
-    delete[] buf;
-    return defaultVal;
-  }
-
-  std::string result(buf);
+  char* buf = new char[size];
+  nvs_get_str(handle, KEY_WIFI_SSID, buf, &size);
+  std::string res(buf);
   delete[] buf;
-  return result;
+  nvs_close(handle);
+  return res;
 }
 
 bool NVSManager::setWiFiPassword(const std::string& pass) {
-  if (pass.length() > 64) {
-    Serial.println("[NVS] ERROR: WiFi password too long (max 64 bytes)");
-    return false;
-  }
-
   nvs_handle_t handle;
-  esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle);
-  if (err != ESP_OK) {
-    logError("setWiFiPassword", "open", err);
-    return false;
-  }
-
-  err = nvs_set_str(handle, "wifi_pass", pass.c_str());
-  if (err != ESP_OK) {
-    logError("setWiFiPassword", "wifi_pass", err);
-    nvs_close(handle);
-    return false;
-  }
-
-  err = nvs_commit(handle);
-  if (err != ESP_OK) {
-    logError("setWiFiPassword", "commit", err);
-    nvs_close(handle);
-    return false;
-  }
-
+  if (nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle) != ESP_OK) return false;
+  esp_err_t err = nvs_set_str(handle, KEY_WIFI_PASS, pass.c_str());
+  if (err == ESP_OK) err = nvs_commit(handle);
   nvs_close(handle);
-  Serial.println("[NVS] WiFi password set (hidden for security)");
-  return true;
+  return (err == ESP_OK);
 }
 
 std::string NVSManager::getWiFiPassword(const std::string& defaultVal) {
   nvs_handle_t handle;
-  esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READONLY, &handle);
-  if (err != ESP_OK) {
-    logError("getWiFiPassword", "open", err);
-    return defaultVal;
-  }
-
-  size_t required_size = 0;
-  err = nvs_get_str(handle, "wifi_pass", nullptr, &required_size);
-
-  if (err == ESP_ERR_NVS_NOT_FOUND) {
+  if (nvs_open(NVS_NAMESPACE, NVS_READONLY, &handle) != ESP_OK) return defaultVal;
+  size_t size = 0;
+  if (nvs_get_str(handle, KEY_WIFI_PASS, nullptr, &size) != ESP_OK) {
     nvs_close(handle);
     return defaultVal;
   }
-
-  if (err != ESP_OK) {
-    logError("getWiFiPassword", "wifi_pass", err);
-    nvs_close(handle);
-    return defaultVal;
-  }
-
-  char* buf = new char[required_size];
-  err = nvs_get_str(handle, "wifi_pass", buf, &required_size);
-
-  nvs_close(handle);
-
-  if (err != ESP_OK) {
-    logError("getWiFiPassword", "wifi_pass_read", err);
-    delete[] buf;
-    return defaultVal;
-  }
-
-  std::string result(buf);
+  char* buf = new char[size];
+  nvs_get_str(handle, KEY_WIFI_PASS, buf, &size);
+  std::string res(buf);
   delete[] buf;
-  return result;
+  nvs_close(handle);
+  return res;
 }
 
 // ============================================================================
-// Encryption Configuration
+// Network Configuration (Static IP)
+// ============================================================================
+
+std::string NVSManager::getStaticIP(const std::string& defaultVal) {
+  nvs_handle_t handle;
+  if (nvs_open(NVS_NAMESPACE, NVS_READONLY, &handle) != ESP_OK) return defaultVal;
+  size_t size = 0;
+  if (nvs_get_str(handle, KEY_STATIC_IP, nullptr, &size) != ESP_OK) {
+    nvs_close(handle);
+    return defaultVal;
+  }
+  char* buf = new char[size];
+  nvs_get_str(handle, KEY_STATIC_IP, buf, &size);
+  std::string res(buf);
+  delete[] buf;
+  nvs_close(handle);
+  return res;
+}
+
+bool NVSManager::setStaticIP(const std::string& ip) {
+  nvs_handle_t handle;
+  if (nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle) != ESP_OK) return false;
+  esp_err_t err = nvs_set_str(handle, KEY_STATIC_IP, ip.c_str());
+  if (err == ESP_OK) err = nvs_commit(handle);
+  nvs_close(handle);
+  return (err == ESP_OK);
+}
+
+std::string NVSManager::getGateway(const std::string& defaultVal) {
+  nvs_handle_t handle;
+  if (nvs_open(NVS_NAMESPACE, NVS_READONLY, &handle) != ESP_OK) return defaultVal;
+  size_t size = 0;
+  if (nvs_get_str(handle, KEY_GATEWAY, nullptr, &size) != ESP_OK) {
+    nvs_close(handle);
+    return defaultVal;
+  }
+  char* buf = new char[size];
+  nvs_get_str(handle, KEY_GATEWAY, buf, &size);
+  std::string res(buf);
+  delete[] buf;
+  nvs_close(handle);
+  return res;
+}
+
+bool NVSManager::setGateway(const std::string& gw) {
+  nvs_handle_t handle;
+  if (nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle) != ESP_OK) return false;
+  esp_err_t err = nvs_set_str(handle, KEY_GATEWAY, gw.c_str());
+  if (err == ESP_OK) err = nvs_commit(handle);
+  nvs_close(handle);
+  return (err == ESP_OK);
+}
+
+std::string NVSManager::getSubnet(const std::string& defaultVal) {
+  nvs_handle_t handle;
+  if (nvs_open(NVS_NAMESPACE, NVS_READONLY, &handle) != ESP_OK) return defaultVal;
+  size_t size = 0;
+  if (nvs_get_str(handle, KEY_SUBNET, nullptr, &size) != ESP_OK) {
+    nvs_close(handle);
+    return defaultVal;
+  }
+  char* buf = new char[size];
+  nvs_get_str(handle, KEY_SUBNET, buf, &size);
+  std::string res(buf);
+  delete[] buf;
+  nvs_close(handle);
+  return res;
+}
+
+bool NVSManager::setSubnet(const std::string& sn) {
+  nvs_handle_t handle;
+  if (nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle) != ESP_OK) return false;
+  esp_err_t err = nvs_set_str(handle, KEY_SUBNET, sn.c_str());
+  if (err == ESP_OK) err = nvs_commit(handle);
+  nvs_close(handle);
+  return (err == ESP_OK);
+}
+
+// ============================================================================
+// Encryption & MQTT
 // ============================================================================
 
 bool NVSManager::setCryptoKey(const uint8_t key[16]) {
-  if (key == nullptr) {
-    Serial.println("[NVS] ERROR: Crypto key pointer is null");
-    return false;
-  }
-
   nvs_handle_t handle;
-  esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle);
-  if (err != ESP_OK) {
-    logError("setCryptoKey", "open", err);
-    return false;
-  }
-
-  err = nvs_set_blob(handle, "crypto_key", (void*)key, 16);
-  if (err != ESP_OK) {
-    logError("setCryptoKey", "crypto_key", err);
-    nvs_close(handle);
-    return false;
-  }
-
-  err = nvs_commit(handle);
-  if (err != ESP_OK) {
-    logError("setCryptoKey", "commit", err);
-    nvs_close(handle);
-    return false;
-  }
-
+  if (nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle) != ESP_OK) return false;
+  esp_err_t err = nvs_set_blob(handle, KEY_CRYPTO_KEY, (void*)key, 16);
+  if (err == ESP_OK) err = nvs_commit(handle);
   nvs_close(handle);
-  Serial.println("[NVS] Crypto key set (16 bytes)");
-  return true;
+  return (err == ESP_OK);
 }
 
 bool NVSManager::getCryptoKey(uint8_t outKey[16]) {
-  if (outKey == nullptr) {
-    Serial.println("[NVS] ERROR: Output key buffer is null");
-    return false;
-  }
-
   nvs_handle_t handle;
-  esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READONLY, &handle);
-  if (err != ESP_OK) {
-    logError("getCryptoKey", "open", err);
-    return false;
-  }
-
-  size_t required_size = 16;
-  err = nvs_get_blob(handle, "crypto_key", outKey, &required_size);
-
+  if (nvs_open(NVS_NAMESPACE, NVS_READONLY, &handle) != ESP_OK) return false;
+  size_t size = 16;
+  esp_err_t err = nvs_get_blob(handle, KEY_CRYPTO_KEY, outKey, &size);
   nvs_close(handle);
-
-  if (err == ESP_ERR_NVS_NOT_FOUND) {
-    Serial.println("[NVS] Crypto key not set");
-    return false;
-  }
-
-  if (err != ESP_OK) {
-    logError("getCryptoKey", "crypto_key", err);
-    return false;
-  }
-
-  if (required_size != 16) {
-    Serial.printf("[NVS] WARNING: Crypto key size mismatch: %u bytes\n",
-                  required_size);
-    return false;
-  }
-
-  Serial.println("[NVS] Crypto key retrieved (16 bytes)");
-  return true;
+  return (err == ESP_OK && size == 16);
 }
-
-bool NVSManager::generateAndStoreCryptoKey() {
-  Serial.println("[NVS] Generating random AES-128 key...");
-
-  uint8_t key[16];
-  // Use ESP32 hardware RNG to generate random key
-  for (int i = 0; i < 16; i++) {
-    key[i] = (uint8_t)esp_random();
-  }
-
-  return setCryptoKey(key);
-}
-
-// ============================================================================
-// MQTT Configuration
-// ============================================================================
 
 bool NVSManager::setMQTTBroker(const std::string& broker) {
-  if (broker.length() > 64) {
-    Serial.println("[NVS] ERROR: MQTT broker address too long (max 64 bytes)");
-    return false;
-  }
-
   nvs_handle_t handle;
-  esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle);
-  if (err != ESP_OK) {
-    logError("setMQTTBroker", "open", err);
-    return false;
-  }
-
-  err = nvs_set_str(handle, "mqtt_broker", broker.c_str());
-  if (err != ESP_OK) {
-    logError("setMQTTBroker", "mqtt_broker", err);
-    nvs_close(handle);
-    return false;
-  }
-
-  err = nvs_commit(handle);
-  if (err != ESP_OK) {
-    logError("setMQTTBroker", "commit", err);
-    nvs_close(handle);
-    return false;
-  }
-
+  if (nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle) != ESP_OK) return false;
+  esp_err_t err = nvs_set_str(handle, KEY_MQTT_BROKER, broker.c_str());
+  if (err == ESP_OK) err = nvs_commit(handle);
   nvs_close(handle);
-  Serial.printf("[NVS] MQTT broker set to: %s\n", broker.c_str());
-  return true;
+  return (err == ESP_OK);
 }
 
 std::string NVSManager::getMQTTBroker(const std::string& defaultVal) {
   nvs_handle_t handle;
-  esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READONLY, &handle);
-  if (err != ESP_OK) {
-    logError("getMQTTBroker", "open", err);
-    return defaultVal;
-  }
-
-  size_t required_size = 0;
-  err = nvs_get_str(handle, "mqtt_broker", nullptr, &required_size);
-
-  if (err == ESP_ERR_NVS_NOT_FOUND) {
+  if (nvs_open(NVS_NAMESPACE, NVS_READONLY, &handle) != ESP_OK) return defaultVal;
+  size_t size = 0;
+  if (nvs_get_str(handle, KEY_MQTT_BROKER, nullptr, &size) != ESP_OK) {
     nvs_close(handle);
     return defaultVal;
   }
-
-  if (err != ESP_OK) {
-    logError("getMQTTBroker", "mqtt_broker", err);
-    nvs_close(handle);
-    return defaultVal;
-  }
-
-  char* buf = new char[required_size];
-  err = nvs_get_str(handle, "mqtt_broker", buf, &required_size);
-
-  nvs_close(handle);
-
-  if (err != ESP_OK) {
-    logError("getMQTTBroker", "mqtt_broker_read", err);
-    delete[] buf;
-    return defaultVal;
-  }
-
-  std::string result(buf);
+  char* buf = new char[size];
+  nvs_get_str(handle, KEY_MQTT_BROKER, buf, &size);
+  std::string res(buf);
   delete[] buf;
-  return result;
+  nvs_close(handle);
+  return res;
 }
 
 bool NVSManager::setMQTTPort(uint16_t port) {
   nvs_handle_t handle;
-  esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle);
-  if (err != ESP_OK) {
-    logError("setMQTTPort", "open", err);
-    return false;
-  }
-
-  err = nvs_set_u16(handle, "mqtt_port", port);
-  if (err != ESP_OK) {
-    logError("setMQTTPort", "mqtt_port", err);
-    nvs_close(handle);
-    return false;
-  }
-
-  err = nvs_commit(handle);
-  if (err != ESP_OK) {
-    logError("setMQTTPort", "commit", err);
-    nvs_close(handle);
-    return false;
-  }
-
+  if (nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle) != ESP_OK) return false;
+  esp_err_t err = nvs_set_u16(handle, KEY_MQTT_PORT, port);
+  if (err == ESP_OK) err = nvs_commit(handle);
   nvs_close(handle);
-  Serial.printf("[NVS] MQTT port set to: %u\n", port);
-  return true;
+  return (err == ESP_OK);
 }
 
 uint16_t NVSManager::getMQTTPort(uint16_t defaultVal) {
   nvs_handle_t handle;
-  esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READONLY, &handle);
-  if (err != ESP_OK) {
-    logError("getMQTTPort", "open", err);
-    return defaultVal;
-  }
-
+  if (nvs_open(NVS_NAMESPACE, NVS_READONLY, &handle) != ESP_OK) return defaultVal;
   uint16_t port = defaultVal;
-  err = nvs_get_u16(handle, "mqtt_port", &port);
-
+  nvs_get_u16(handle, KEY_MQTT_PORT, &port);
   nvs_close(handle);
-
-  if (err == ESP_ERR_NVS_NOT_FOUND) {
-    return defaultVal;
-  }
-
-  if (err != ESP_OK) {
-    logError("getMQTTPort", "mqtt_port", err);
-    return defaultVal;
-  }
-
   return port;
 }
 
 // ============================================================================
-// Hardware Version
+// Relay & Power Management
 // ============================================================================
 
-bool NVSManager::setHardwareVersion(const std::string& hwver) {
-  if (hwver.length() > 8) {
-    Serial.println("[NVS] ERROR: Hardware version too long (max 8 bytes)");
-    return false;
-  }
-
+bool NVSManager::getRelayState(uint8_t relayNum) {
+  const char* key = (relayNum == 1) ? KEY_RELAY1 : KEY_RELAY2;
   nvs_handle_t handle;
-  esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle);
-  if (err != ESP_OK) {
-    logError("setHardwareVersion", "open", err);
-    return false;
-  }
-
-  err = nvs_set_str(handle, "hw_version", hwver.c_str());
-  if (err != ESP_OK) {
-    logError("setHardwareVersion", "hw_version", err);
-    nvs_close(handle);
-    return false;
-  }
-
-  err = nvs_commit(handle);
-  if (err != ESP_OK) {
-    logError("setHardwareVersion", "commit", err);
-    nvs_close(handle);
-    return false;
-  }
-
+  if (nvs_open(NVS_NAMESPACE, NVS_READONLY, &handle) != ESP_OK) return false;
+  uint8_t state = 0;
+  nvs_get_u8(handle, key, &state);
   nvs_close(handle);
-  Serial.printf("[NVS] Hardware version set to: %s\n", hwver.c_str());
-  return true;
+  return (state == 1);
 }
 
-std::string NVSManager::getHardwareVersion(const std::string& defaultVal) {
+bool NVSManager::setRelayState(uint8_t relayNum, bool state) {
+  const char* key = (relayNum == 1) ? KEY_RELAY1 : KEY_RELAY2;
   nvs_handle_t handle;
-  esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READONLY, &handle);
-  if (err != ESP_OK) {
-    logError("getHardwareVersion", "open", err);
-    return defaultVal;
-  }
-
-  size_t required_size = 0;
-  err = nvs_get_str(handle, "hw_version", nullptr, &required_size);
-
-  if (err == ESP_ERR_NVS_NOT_FOUND) {
-    nvs_close(handle);
-    return defaultVal;
-  }
-
-  if (err != ESP_OK) {
-    logError("getHardwareVersion", "hw_version", err);
-    nvs_close(handle);
-    return defaultVal;
-  }
-
-  char* buf = new char[required_size];
-  err = nvs_get_str(handle, "hw_version", buf, &required_size);
-
+  if (nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle) != ESP_OK) return false;
+  esp_err_t err = nvs_set_u8(handle, key, state ? 1 : 0);
+  if (err == ESP_OK) err = nvs_commit(handle);
   nvs_close(handle);
+  return (err == ESP_OK);
+}
 
-  if (err != ESP_OK) {
-    logError("getHardwareVersion", "hw_version_read", err);
-    delete[] buf;
+uint8_t NVSManager::getPowerMode(uint8_t defaultVal) {
+  nvs_handle_t handle;
+  if (nvs_open(NVS_NAMESPACE, NVS_READONLY, &handle) != ESP_OK) return defaultVal;
+  uint8_t mode = defaultVal;
+  nvs_get_u8(handle, KEY_POWER_MODE, &mode);
+  nvs_close(handle);
+  return mode;
+}
+
+bool NVSManager::setPowerMode(uint8_t mode) {
+  nvs_handle_t handle;
+  if (nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle) != ESP_OK) return false;
+  esp_err_t err = nvs_set_u8(handle, KEY_POWER_MODE, mode);
+  if (err == ESP_OK) err = nvs_commit(handle);
+  nvs_close(handle);
+  return (err == ESP_OK);
+}
+
+// ============================================================================
+// Product & Hardware Management
+// ============================================================================
+
+uint8_t NVSManager::getHardwareVariant(uint8_t defaultVal) {
+  nvs_handle_t handle;
+  if (nvs_open(NVS_NAMESPACE, NVS_READONLY, &handle) != ESP_OK) return defaultVal;
+  uint8_t var = defaultVal;
+  nvs_get_u8(handle, KEY_HW_VAR, &var);
+  nvs_close(handle);
+  return var;
+}
+
+bool NVSManager::setHardwareVariant(uint8_t version) {
+  nvs_handle_t handle;
+  if (nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle) != ESP_OK) return false;
+  esp_err_t err = nvs_set_u8(handle, KEY_HW_VAR, version);
+  if (err == ESP_OK) err = nvs_commit(handle);
+  nvs_close(handle);
+  return (err == ESP_OK);
+}
+
+std::string NVSManager::getActiveProductName(const std::string& defaultVal) {
+  nvs_handle_t handle;
+  if (nvs_open(NVS_NAMESPACE, NVS_READONLY, &handle) != ESP_OK) return defaultVal;
+  size_t size = 0;
+  if (nvs_get_str(handle, KEY_ACTIVE_PROD, nullptr, &size) != ESP_OK) {
+    nvs_close(handle);
     return defaultVal;
   }
-
-  std::string result(buf);
+  char* buf = new char[size];
+  nvs_get_str(handle, KEY_ACTIVE_PROD, buf, &size);
+  std::string res(buf);
   delete[] buf;
-  return result;
+  nvs_close(handle);
+  return res;
+}
+
+bool NVSManager::setActiveProductName(const std::string& name) {
+  nvs_handle_t handle;
+  if (nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle) != ESP_OK) return false;
+  esp_err_t err = nvs_set_str(handle, KEY_ACTIVE_PROD, name.c_str());
+  if (err == ESP_OK) err = nvs_commit(handle);
+  nvs_close(handle);
+  return (err == ESP_OK);
+}
+
+// ============================================================================
+// Diagnostics & Boot Tracking
+// ============================================================================
+
+uint32_t NVSManager::getBootCount() {
+  nvs_handle_t handle;
+  if (nvs_open(NVS_NAMESPACE, NVS_READONLY, &handle) != ESP_OK) return 0;
+  uint32_t count = 0;
+  nvs_get_u32(handle, KEY_BOOT_COUNT, &count);
+  nvs_close(handle);
+  return count;
+}
+
+void NVSManager::incrementBootCount() {
+  uint32_t count = getBootCount();
+  nvs_handle_t handle;
+  if (nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle) == ESP_OK) {
+    nvs_set_u32(handle, KEY_BOOT_COUNT, count + 1);
+    nvs_commit(handle);
+    nvs_close(handle);
+  }
+}
+
+std::string NVSManager::getResetReason() {
+  nvs_handle_t handle;
+  if (nvs_open(NVS_NAMESPACE, NVS_READONLY, &handle) != ESP_OK) return "Unknown";
+  size_t size = 0;
+  if (nvs_get_str(handle, KEY_RESET_REASON, nullptr, &size) != ESP_OK) {
+    nvs_close(handle);
+    return "Unknown";
+  }
+  char* buf = new char[size];
+  nvs_get_str(handle, KEY_RESET_REASON, buf, &size);
+  std::string res(buf);
+  delete[] buf;
+  nvs_close(handle);
+  return res;
+}
+
+void NVSManager::setResetReason(const std::string& reason) {
+  nvs_handle_t handle;
+  if (nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle) == ESP_OK) {
+    nvs_set_str(handle, KEY_RESET_REASON, reason.c_str());
+    nvs_commit(handle);
+    nvs_close(handle);
+  }
 }
 
 // ============================================================================
@@ -608,56 +465,23 @@ std::string NVSManager::getHardwareVersion(const std::string& defaultVal) {
 // ============================================================================
 
 bool NVSManager::clearAll() {
-  Serial.println("[NVS] WARNING: Clearing all NVS data in 'loralink' namespace...");
-
   nvs_handle_t handle;
-  esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle);
-  if (err != ESP_OK) {
-    logError("clearAll", "open", err);
-    return false;
-  }
-
-  err = nvs_erase_all(handle);
-  if (err != ESP_OK) {
-    logError("clearAll", "erase_all", err);
-    nvs_close(handle);
-    return false;
-  }
-
-  err = nvs_commit(handle);
-  if (err != ESP_OK) {
-    logError("clearAll", "commit", err);
-    nvs_close(handle);
-    return false;
-  }
-
+  if (nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle) != ESP_OK) return false;
+  esp_err_t err = nvs_erase_all(handle);
+  if (err == ESP_OK) err = nvs_commit(handle);
   nvs_close(handle);
-  Serial.println("[NVS] All NVS data cleared");
-  return true;
+  return (err == ESP_OK);
 }
 
 void NVSManager::printInfo() {
-  Serial.println("\n========== NVS Configuration ==========");
-
+  Serial.println("\n========== NVS Configuration (Industrial) ==========");
   Serial.printf("  Node ID: %s\n", getNodeID("(not set)").c_str());
   Serial.printf("  WiFi SSID: %s\n", getWiFiSSID("(not set)").c_str());
-  Serial.printf("  WiFi Password: %s\n",
-                getWiFiPassword("(not set)").empty() ? "(not set)" : "(set)");
-
-  uint8_t key[16];
-  bool hasCrypto = getCryptoKey(key);
-  Serial.printf("  Crypto Key: %s\n", hasCrypto ? "(set, 16 bytes)" : "(not set)");
-
   Serial.printf("  MQTT Broker: %s\n", getMQTTBroker("(not set)").c_str());
-  Serial.printf("  MQTT Port: %u\n", getMQTTPort());
-  Serial.printf("  Hardware Version: %s\n", getHardwareVersion().c_str());
-
-  Serial.println("=======================================\n");
+  Serial.printf("  Hardware Var: %u\n", getHardwareVariant());
+  Serial.printf("  Boot Count: %u\n", getBootCount());
+  Serial.println("==================================================\n");
 }
-
-// ============================================================================
-// Private Helper Methods
-// ============================================================================
 
 void NVSManager::logError(const char* operation, const char* key, int err) {
   Serial.printf("[NVS] ERROR in %s (%s): esp_err_t=%d\n", operation, key, err);

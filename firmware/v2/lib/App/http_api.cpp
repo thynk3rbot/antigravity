@@ -2,7 +2,7 @@
 #include <string>
 #include <vector>
 #include "http_api.h"
-#include "nvs_config.h"
+#include "nvs_manager.h"
 #include "status_builder.h"
 #include "command_manager.h"
 #include <ESPAsyncWebServer.h>

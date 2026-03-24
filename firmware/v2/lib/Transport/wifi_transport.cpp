@@ -15,7 +15,6 @@
 
 #include "wifi_transport.h"
 #include <Arduino.h>
-#include "../App/nvs_config.h"
 #include "../App/nvs_manager.h"
 
 // ============================================================================
@@ -199,12 +198,12 @@ const char* WiFiTransport::getLastErrorString() const {
 
 bool WiFiTransport::_connect(uint32_t timeoutMs) {
     // Apply static IP if configured in NVS
-    String staticIP = NVSConfig::getStaticIP();
+    String staticIP = String(NVSManager::getStaticIP().c_str());
     if (staticIP.length() > 0) {
         IPAddress local_IP, gateway, subnet;
         if (local_IP.fromString(staticIP)) {
-            String gwStr = NVSConfig::getGateway();
-            String snStr = NVSConfig::getSubnet();
+            String gwStr = String(NVSManager::getGateway().c_str());
+            String snStr = String(NVSManager::getSubnet().c_str());
             
             if (gwStr.length() > 0 && subnet.fromString(snStr)) {
                 gateway.fromString(gwStr);
@@ -293,7 +292,7 @@ void WiFiTransport::_startMDNS() {
 void WiFiTransport::_startAP() {
     if (_apActive) return;
 
-    String apName = "Antigravity-" + String(NVSConfig::getNodeId());
+    String apName = "Antigravity-" + String(NVSManager::getNodeID("Node").c_str());
     WiFi.mode(WIFI_AP_STA); // keep STA open for scan/background tries
     WiFi.softAP(apName.c_str());
 
