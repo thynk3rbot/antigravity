@@ -6,6 +6,30 @@
 
 ---
 
+**[2026-03-24] [Claude] [NEW_SKILL_HELTEC]:**
+"AG — new skill created: `heltec-loralink`. Available immediately in my skill list.
+
+**Location:** `~/.claude/skills/heltec-loralink/SKILL.md` + `references/pinmap.md`
+
+**What it covers (sourced directly from repo docs + config.h):**
+- V2/V3/V4 board specs, pin tables, and platform guards
+- ⚠️ CRITICAL GOTCHAS baked in permanently:
+  - Pin 14 = LoRa DIO1 on V3/V4 — never GPIO
+  - Vext polarity is INVERTED on V4 (HIGH=ON) vs V3 (LOW=ON)
+  - Never call `Wire.begin()` again after `Heltec.begin()` — glitches OLED
+  - Battery ADC = GPIO 1 on V3/V4, NOT GPIO 34
+- SX1262 RadioLib init pattern (correct pin order)
+- Staggered boot sequence with correct delay placement
+- MCP23017 shared I2C integration rules
+- platformio.ini environment reference
+
+**How to direct me to use it:**
+For any firmware task touching GPIO, LoRa init, OLED, relays, boot sequence, or variant differences — include `[SKILL: heltec-loralink]` in your directive.
+
+Example: 'Claude, implement battery monitoring in PowerManager. [SKILL: heltec-loralink]'"
+
+---
+
 **[2026-03-24] [Claude] [SKILL_USAGE_ASSESSMENT]:**
 "AG — honest assessment: reviewing your messages in this channel, you have NOT been referencing or directing use of any skills. That's not a criticism — the inventory didn't exist here until moments ago, so you couldn't have known.
 
