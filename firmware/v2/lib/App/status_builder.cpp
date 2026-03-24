@@ -52,7 +52,9 @@ StaticJsonDocument<2048> StatusBuilder::buildStatus() {
     addBLEInfo(doc);
     addMQTTInfo(doc);
     addPeerInfo(doc);
+#ifdef HAS_GPS
     addGPSInfo(doc);
+#endif
     addTransportStatus(doc);
     addRelayInfo(doc);
     addTelemetry(doc);
@@ -210,6 +212,7 @@ void StatusBuilder::addMQTTInfo(ArduinoJson::JsonDocument& doc) {
     }
 }
 
+#ifdef HAS_GPS
 void StatusBuilder::addGPSInfo(ArduinoJson::JsonDocument& doc) {
     GPSManager::GPSData gps = GPSManager::getData();
     ArduinoJson::JsonObject obj = doc.createNestedObject("gps");
@@ -220,6 +223,7 @@ void StatusBuilder::addGPSInfo(ArduinoJson::JsonDocument& doc) {
     obj["fix"] = gps.hasFix;
     obj["age"] = gps.fixAge;
 }
+#endif
 
 void StatusBuilder::addPeerInfo(ArduinoJson::JsonDocument& doc) {
     // Get peer list from MeshCoordinator

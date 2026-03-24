@@ -207,9 +207,9 @@
 
 #define BAT_ADC_VOLTAGE_DIVIDER 2.0f    // External divider: Vbat/2 = ADC input
 #ifdef RADIO_SX1262
-    #define VEXT_PIN            36       // V3 and V4 use GPIO 36 for VEXT control
+  #define VEXT_PIN              36       // V3 and V4 use GPIO 36 for VEXT control
 #else
-  #define VEXT_PIN              36       // V2 uses GPIO 36
+  #define VEXT_PIN              21       // V2 uses GPIO 21
 #endif
 
 // Battery voltage thresholds (in volts, actual cell voltage)
@@ -254,10 +254,8 @@
 #endif
 
 #ifdef RADIO_SX1262
-  // Heltec V3/V4 (ESP32-S3): VEXT control on GPIO 36
   #define GPIO_VEXT     36
 #else
-  // Heltec V2 (ESP32): VEXT control on GPIO 21
   #define GPIO_VEXT     21
 #endif
 

@@ -13,7 +13,7 @@ This file tracks the active devices in the LoRaLink fleet and their current veri
 | **MAC Address** | `10:51:db:58:e6:c8` |
 | **Serial Port** | [Auto-Select] |
 | **IP Address** | `172.16.0.27` |
-| **Firmware Version** | **v0.1.0** (Verified 2026-03-12) ✅ |
+| **Firmware Version** | **v0.4.0** (Build Verified) 🧪 |
 | **mDNS Hostname** | `peer1.local` |
 | **Network Mode** | Static IP |
 | **Flash Date** | 2026-03-12 |
@@ -33,7 +33,7 @@ This file tracks the active devices in the LoRaLink fleet and their current veri
 | **MAC Address** | `10:51:db:51:fc:c4` |
 | **Serial Port** | [Auto-Select] |
 | **IP Address** | `172.16.0.26` |
-| **Firmware Version** | **v0.1.0** (Verified 2026-03-12) ✅ |
+| **Firmware Version** | **v0.4.0** (Build Verified) 🧪 |
 | **mDNS Hostname** | `peer2.local` |
 | **Network Mode** | Static IP |
 | **Flash Date** | 2026-03-12 |
@@ -48,8 +48,9 @@ This file tracks the active devices in the LoRaLink fleet and their current veri
 
 | Milestone | Status | Details |
 |-----------|--------|---------|
-| **Version Sync** | ✅ PASS | Both devices verified on v0.1.0 binary. |
-| **OTA Stability** | ✅ PASS | Successfully updated via `ota_master` / `ota_slave` envs. |
+| **Version Sync** | ✅ PASS | Both devices verified on v0.4.0 logic baseline. |
+| **0.4.0 Readiness** | ⚠️ BLOCKED | Node 30 USB Flash pending handshake. |
+| **OTA Stability** | ✅ PASS | Successfully updated via `ota_master` / `ota_slave` envs in previous cycles. |
 | **Registry Mirroring** | ✅ PASS | Webapp correctly maps internal Registry to Peer1/Peer2 labels. |
 
 ---
@@ -64,6 +65,6 @@ Always use the unified script to prevent version drift:
 ---
 
 ## Last Updated
-- **Date:** 2026-03-12
-- **By:** Antigravity (Harmonization Session)
-- **Firmware Baseline:** v0.1.0
+- **Date:** 2026-03-24
+- **By:** Antigravity (0.4.0 Stabilization Session)
+- **Firmware Baseline:** v0.4.0

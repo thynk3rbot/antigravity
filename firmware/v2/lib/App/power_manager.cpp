@@ -9,6 +9,35 @@
 PowerMode                        PowerManager::_mode                = PowerMode::NORMAL;
 float                            PowerManager::_lastVoltage         = 4.2f;
 PowerManager::PowerModeCallback  PowerManager::_modeChangeCallback  = nullptr;
+void*                            PowerManager::_vextTimer           = nullptr;
+uint8_t                          PowerManager::_vextPulseState       = 0; // 0 = IDLE, 1-3 = PULSING
+
+// ============================================================================
+// VEXT control timer callback
+// ============================================================================
+
+#include <freertos/FreeRTOS.h>
+#include <freertos/timers.h>
+
+void PowerManager::_vextTimerCallback(TimerHandle_t xTimer) {
+#ifdef VEXT_PIN
+    switch (_vextPulseState) {
+        case 1: // Just finished first LOW, move to HIGH
+            digitalWrite(VEXT_PIN, HIGH);
+            _vextPulseState = 2;
+            xTimerStart(xTimer, 0);
+            break;
+        case 2: // Just finished HIGH, move to final LOW
+            digitalWrite(VEXT_PIN, LOW);
+            _vextPulseState = 3;
+            xTimerStart(xTimer, 0);
+            break;
+        case 3: // Done
+            _vextPulseState = 0; // IDLE/STABLE
+            break;
+    }
+#endif
+}
 
 // ============================================================================
 // begin() / init()
@@ -22,6 +51,11 @@ void PowerManager::begin() {
     pinMode(VEXT_PIN, OUTPUT);
     digitalWrite(VEXT_PIN, HIGH);  // HIGH = off on Heltec boards (start disabled)
 #endif
+
+    // Create the pulse timer (non-blocking)
+    if (!_vextTimer) {
+        _vextTimer = xTimerCreate("VEXTPulse", pdMS_TO_TICKS(50), pdFALSE, nullptr, (TimerCallbackFunction_t)_vextTimerCallback);
+    }
 
 #ifdef BAT_ADC_PIN
     pinMode(BAT_ADC_PIN, INPUT);
@@ -50,9 +84,23 @@ bool PowerManager::init() {
 // VEXT control
 // ============================================================================
 
+bool PowerManager::isVEXTStable() {
+    return (_vextPulseState == 0);
+}
+
 void PowerManager::enableVEXT() {
 #ifdef VEXT_PIN
+#ifdef ARDUINO_HELTEC_WIFI_LORA_32
+    if (_vextPulseState != 0) return; // Already pulsing
+    
+    // Pulse VEXT for V2 display stability (Non-blocking Timer Pattern)
+    digitalWrite(VEXT_PIN, LOW);
+    _vextPulseState = 1;
+    if (_vextTimer) xTimerStart((TimerHandle_t)_vextTimer, 0);
+#else
     digitalWrite(VEXT_PIN, LOW);   // LOW = power ON on Heltec boards
+    _vextPulseState = 0; // Immediately stable
+#endif
 #endif
 }
 

@@ -21,6 +21,7 @@
 #include "../lib/HAL/relay_hal.h"
 #include "../lib/HAL/probe_manager.h"
 #include "../lib/HAL/sensor_hal.h"
+/* NutriCalc decoupled */
 
 // App Logic
 #include "../lib/App/product_manager.h"
@@ -202,8 +203,10 @@ void controlTask(void* param) {
         espNowTransport.isReady()
       );
 
+#ifdef HAS_GPS
       GPSManager::GPSData gpsData = GPSManager::getData();
       OLEDManager::getInstance().setGPS(gpsData.lat, gpsData.lon, gpsData.satellites, gpsData.hasFix);
+#endif
       // Refresh display
       OLEDManager::getInstance().update();
       lastOLEDUpdate = now;
@@ -280,8 +283,10 @@ void controlTask(void* param) {
       MQTTTransport::pollStatic();
     #endif
 
+#ifdef HAS_GPS
     // Update GNSS tracking
     GPSManager::update();
+#endif
 
     // Poll all generic plugins
     pluginManager.pollAll();
@@ -407,9 +412,17 @@ void setup() {
   // Record boot timestamp
   g_bootTimestamp = millis();
 
-  // 2. Initialize Core Hardware Managers (Prerequisites for everything else)
+  // 2. Initialize Power & Rails IMMEDIATELY (V2 requires this for I2C)
+  PowerManager::init();
+  PowerManager::enableVEXT();
+  vTaskDelay(pdMS_TO_TICKS(500)); // Phase 1: Power stabilization window
+  
   Serial.println("[CHECK] Initializing I2C...");
+#ifdef ARDUINO_HELTEC_WIFI_LORA_32
+  Wire.begin(I2C_SDA, I2C_SCL, 100000); // V2 uses 100K for better signal integrity on legacy bus
+#else
   Wire.begin(I2C_SDA, I2C_SCL, I2C_FREQ_HZ);
+#endif
   
   Serial.println("[CHECK] Initializing LittleFS...");
   if (!LittleFS.begin(true)) {
@@ -424,6 +437,7 @@ void setup() {
 
   Serial.println("[CHECK] Initializing MCP...");
   MCPManager::getInstance().init();
+  vTaskDelay(pdMS_TO_TICKS(200)); // Phase 2: Bus stabilization
 
   // ========================================================================
   // CRITICAL: V1 Parity - Boot Stabilization 
@@ -450,9 +464,7 @@ void setup() {
   Serial.println("\n[1/7] Initializing UI layer...");
 
   // Initialize Power & UI prerequisites
-  PowerManager::init();
-  PowerManager::enableVEXT();
-  vTaskDelay(pdMS_TO_TICKS(50)); // Rail stabilization
+  // PowerManager already initialized above
 
   if (OLEDManager::getInstance().init()) {
     OLEDManager::getInstance().showSplash(FIRMWARE_VERSION, DEVICE_ROLE);
@@ -465,21 +477,20 @@ void setup() {
   ProductManager::getInstance().init();
   ProbeManager::getInstance().init();
 
+  OLEDManager::getInstance().drawBootProgress("SYSTEM START", 10);
+
+  // Unify WiFi base initialization to prevent deadlocks in later transport setups
+  Serial.println("  -> Initializing Network Stack...");
+  WiFi.mode(WIFI_STA);
+  WiFi.disconnect(true);
+  vTaskDelay(pdMS_TO_TICKS(50));
+
   // Identity Extraction
   uint8_t mac_raw[6];
   esp_efuse_mac_get_default(mac_raw);
   char mac_buf[8];
   snprintf(mac_buf, sizeof(mac_buf), "[%02X:%02X]", mac_raw[4], mac_raw[5]);
-  
-  OLEDManager::getInstance().setMAC(mac_buf);
-  OLEDManager::getInstance().setVersion(FIRMWARE_VERSION);
-  OLEDManager::getInstance().setDeviceName(NVSManager::getNodeID("Node").c_str());
-  OLEDManager::getInstance().setDiagnostics(NVSConfig::getBootCount(), NVSConfig::getResetReason().c_str());
-  
-  OLEDManager::getInstance().drawBootProgress("SYSTEM START", 10);
-  vTaskDelay(pdMS_TO_TICKS(10));
 
-  // Set initial identity info (must be after init() or it gets wiped by defaults)
   OLEDManager::getInstance().setMAC(mac_buf);
   OLEDManager::getInstance().setVersion(FIRMWARE_VERSION);
   OLEDManager::getInstance().setDeviceName(NVSManager::getNodeID("Node").c_str());
@@ -497,6 +508,7 @@ void setup() {
     Serial.println("ERROR: Radio HAL init failed!");
     while (1) vTaskDelay(pdMS_TO_TICKS(10));
   }
+  vTaskDelay(pdMS_TO_TICKS(200)); // SPI settling time
 
   relayHAL.init();
   OLEDManager::getInstance().drawBootProgress("HAL Core", 45);
@@ -515,6 +527,7 @@ void setup() {
   sensorHAL.init();
 
   // Initialize all generic plugins
+  // NutriCalc removed from core build
   pluginManager.initAll();
 
   Serial.println("  ✓ Core HAL & Plugins initialized");
@@ -532,6 +545,8 @@ void setup() {
     messageRouter.registerTransport(&loraTransport);
     Serial.println("  ✓ LoRa transport initialized");
   }
+  vTaskDelay(pdMS_TO_TICKS(1000)); // Phase 3: LoRa settling delay (V1 parity)
+  OLEDManager::getInstance().drawBootProgress("LORA COMM", 50);
 
   // Serial CLI Transport (Always active on Native USB)
   if (!serialTransport.init()) {
@@ -543,6 +558,7 @@ void setup() {
   OLEDManager::getInstance().drawBootProgress("SERIAL CLI", 60);
 
   // BLE Transport (Always active)
+  vTaskDelay(pdMS_TO_TICKS(500)); 
   if (!BLETransport::initStatic()) {
       Serial.println("  ! BLE transport failed to start");
   } else {
@@ -557,9 +573,10 @@ void setup() {
       });
       OLEDManager::getInstance().addLog("BLE Ready");
   }
-  OLEDManager::getInstance().drawBootProgress("BLE Mesh", 75);
-
-  // CRITICAL: Stagger memory-heavy transports to prevent heap exhaustion
+  OLEDManager::getInstance().drawBootProgress("BLE MESH", 65);
+  
+  // Phase 4: USB Stabilization delay (V1 Parity: 5000ms was used in V1, using 2000ms for V2 modern core)
+  Serial.println("  -> Waiting for protocol stabilization...");
   vTaskDelay(pdMS_TO_TICKS(2000)); 
 
   // Optional WiFi Transport (graceful fallback if connection fails)
@@ -586,6 +603,7 @@ void setup() {
   } else {
     Serial.println("  ! WiFi credentials not configured, skipping WiFi");
   }
+  vTaskDelay(pdMS_TO_TICKS(500)); // Stagger between WiFi and ESP-NOW
 
   // Step 4.5: ESP-NOW Transport
   Serial.println("[4.5/8] Initializing ESP-NOW...");
@@ -633,8 +651,10 @@ void setup() {
   g_ourNodeID = 1; 
   Serial.println("  ✓ Peer mode initialized");
 
+#ifdef HAS_GPS
   // Initialize GNSS (V4 support)
   GPSManager::init();
+#endif
 
   meshCoordinator.init();
   meshCoordinator.setOwnNodeID(g_ourNodeID);

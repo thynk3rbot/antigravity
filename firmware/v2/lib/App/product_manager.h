@@ -40,6 +40,7 @@ private:
 
     // Apply JSON components
     void _applyPins(const JsonArray& pins);
+    void _applyPlugins(const JsonArray& plugins);
     void _applySchedules(const JsonArray& schedules);
     void _applyAlerts(const JsonArray& alerts);
 

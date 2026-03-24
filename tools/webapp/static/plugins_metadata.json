@@ -1,0 +1,23 @@
+{
+    "boards": [
+        { "id": "heltec_v2", "name": "Heltec WiFi LoRa 32 V2", "icon": "fas fa-microchip" },
+        { "id": "heltec_v3", "name": "Heltec WiFi LoRa 32 V3", "icon": "fas fa-microchip" },
+        { "id": "heltec_v4", "name": "Heltec Wireless Stick V4", "icon": "fas fa-microchip" }
+    ],
+    "plugins": [
+        {
+            "id": "NutriCalc",
+            "name": "NutriCalc (Industrial Dosing)",
+            "config": [
+                { "key": "pumps", "label": "Pump Pins (CSV)", "type": "text", "default": "13,12,14" }
+            ]
+        },
+        {
+            "id": "RelayBoard",
+            "name": "Generic Relay Expansion",
+            "config": [
+                { "key": "pins", "label": "Relay Pins (CSV)", "type": "text", "default": "4,5,6,7" }
+            ]
+        }
+    ]
+}

@@ -36,8 +36,7 @@ void ESPNowTransport::_onDataRecv(const uint8_t *mac_addr, const uint8_t *data, 
 bool ESPNowTransport::init() {
     if (_initialized) return true;
 
-    WiFi.mode(WIFI_STA);
-    WiFi.disconnect();
+    // WiFi.mode(WIFI_STA) should be called globally before this
 
     if (esp_now_init() != ESP_OK) {
         _lastError = -100;

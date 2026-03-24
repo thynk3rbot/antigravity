@@ -93,7 +93,9 @@ public:
     void setPeerCount(uint8_t count);
     void setUptime(uint32_t uptimeMs);
     void setFreeHeap(uint32_t heapBytes);
+#ifdef HAS_GPS
     void setGPS(double lat, double lon, uint8_t sats, bool hasFix);
+#endif
     void setDiagnostics(uint32_t bootCount, const char* reason);
     void setMAC(const char* mac);
     void setDeviceName(const char* name);
@@ -105,7 +107,24 @@ public:
      */
     void printStatus();
 
+public:
+    enum class InitState : uint8_t {
+        IDLE            = 0,
+        RESET_LOW       = 1,
+        RESET_HIGH      = 2,
+        WAIT_POWER      = 3,
+        START_I2C       = 4,
+        RUNNING         = 255
+    };
+
+    bool isReady() const { return _initState == InitState::RUNNING; }
+
 private:
+    static InitState _initState;
+    static uint32_t _stateStartTime;
+
+    static void _processInit();
+
     // Private constructor (singleton pattern)
     OLEDManager();
 };

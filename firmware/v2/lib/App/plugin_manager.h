@@ -7,6 +7,8 @@
 
 #include <stdint.h>
 #include <vector>
+#include <Arduino.h>
+#include <ArduinoJson.h>
 #include "hal_compat.h"
 
 /**
@@ -20,8 +22,14 @@ public:
     /** @brief Called during system setup() */
     virtual bool init() = 0;
 
+    /** @brief Configure plugin with custom hardware/logic parameters */
+    virtual void configure(JsonObjectConst config) {}
+
     /** @brief Called periodically in the controlTask loop */
     virtual void poll() = 0;
+
+    /** @brief Handle custom commands (for uncoupling industrial logic) */
+    virtual String handleCommand(const String& cmd, const String& args) { return ""; }
 
     /** @brief Unique name for the plugin (for logs/registry) */
     virtual const char* getName() const = 0;

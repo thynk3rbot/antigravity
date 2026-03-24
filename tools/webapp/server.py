@@ -578,7 +578,8 @@ class LoRaLinkListener(ServiceListener):
 
             # Filter to LoRaLink-compatible devices
             dev_type = get_prop("type", "unknown").lower()
-            if "loralink" not in dev_type and dev_type != "gateway":
+            is_loralink = "loralink" in dev_type or dev_type == "gateway" or "loralink" in name.lower()
+            if not is_loralink:
                 return
 
             node_id = get_prop("id") or name.split(".")[0]

@@ -21,6 +21,7 @@
 #include <PubSubClient.h>
 #include <WiFiClient.h>
 #include <functional>
+#include <map>
 
 // ============================================================================
 // MQTT Configuration
@@ -147,6 +148,12 @@ public:
     using CommandCallback = std::function<void(const String& cmd)>;
     void setCommandCallback(CommandCallback cb);
 
+    /**
+     * @brief Register a custom topic and callback (for plugins)
+     */
+    using TopicCallback = std::function<void(const String& topic, const String& payload)>;
+    void registerTopic(const String& topic, TopicCallback cb);
+
     /** @return true if currently connected to the broker */
     bool isConnected() const;
 
@@ -198,6 +205,7 @@ private:
     PubSubClient  _mqttClient;
     MQTTConfig    _config;
     CommandCallback _commandCallback;
+    std::map<String, TopicCallback> _topicRegistry;
 
     bool     _configured;           ///< true once a non-empty broker is known
     uint32_t _lastReconnectAttempt; ///< millis() timestamp of last attempt

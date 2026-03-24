@@ -1,0 +1,77 @@
+/* Plugins & Builder Styles */
+.builder-step {
+    animation: fadeIn 0.3s ease-in-out;
+}
+
+.board-select-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 15px;
+    margin-top: 20px;
+}
+
+.board-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: 0.3s;
+}
+
+.board-card:hover {
+    border-color: var(--accent);
+    transform: translateY(-3px);
+    background: rgba(0, 212, 255, 0.05);
+}
+
+.board-card.active {
+    border-color: var(--accent);
+    background: rgba(0, 212, 255, 0.1);
+    box-shadow: 0 0 15px rgba(0, 212, 255, 0.2);
+}
+
+.board-card i {
+    font-size: 2rem;
+    color: var(--accent);
+    margin-bottom: 10px;
+    display: block;
+}
+
+.plugin-selection-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.plugin-item {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 15px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+.plugin-item:hover {
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.plugin-item.active {
+    border-color: var(--ok);
+    background: rgba(0, 255, 136, 0.05);
+}
+
+.wiring-badge {
+    padding: 2px 6px;
+    background: var(--accent-dim);
+    color: var(--accent);
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: bold;
+    font-family: 'JetBrains Mono', monospace;
+}

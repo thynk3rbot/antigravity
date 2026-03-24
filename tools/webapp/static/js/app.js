@@ -48,6 +48,9 @@ function switchPage(name) {
         loadFiles();
         loadSchedule();
     }
+    if (name === "plugins") {
+        refreshPlugins();
+    }
 }
 
 // ── WebSocket ─────────────────────────────────────────────────────────────
@@ -90,6 +93,7 @@ function onStatusUpdate(d) {
         
         lastStatus = data;
         renderDashboard(data);
+        if (data.detected_devices) renderPresenceTable(data.detected_devices);
         if (data.lat && data.lon) updateMapUI(data);
     });
 }
@@ -269,6 +273,77 @@ function renderMeshTable(nodes) {
     }).join("");
 }
 
+// ── Presence (Marauder) ───────────────────────────────────────────────────
+function renderPresenceTable(devices) {
+    const tb = document.getElementById("presence-tbody");
+    if (!tb) return;
+    if (!devices.length) {
+        tb.innerHTML = '<tr><td colspan="5" class="text-center text-dim p-8">No devices detected in current scan.</td></tr>';
+        return;
+    }
+    tb.innerHTML = devices.map(d => {
+        const ago = d.lastSeen ? Math.round((Date.now() - d.lastSeen) / 1000) : "—";
+        return `
+            <tr>
+                <td class="font-mono text-accent">${escHtml(d.mac)}</td>
+                <td><span class="badge ${d.type === 'AP' ? 'ok' : 'secondary'}">${d.type}</span></td>
+                <td>${escHtml(d.ssid || d.details || "—")}</td>
+                <td style="color:${d.rssi > -70 ? 'var(--ok)' : (d.rssi > -90 ? 'var(--warn)' : 'var(--err)')}">${d.rssi} dBm</td>
+                <td class="text-dim">${ago}s ago</td>
+            </tr>
+        `;
+    }).join("");
+}
+
+async function toggleSniffer() {
+    const btn = document.getElementById("btn-sniff-toggle");
+    const currentlyOn = btn.textContent.includes("Stop");
+    const enable = !currentlyOn;
+    
+    try {
+        const r = await fetch("/api/probe/sniff", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: `enabled=${enable}`
+        });
+        if (r.ok) {
+            btn.textContent = enable ? "Stop Sniffer" : "Start Sniffer";
+            btn.classList.toggle("danger", enable);
+            logTerminal(`WiFi Sniffer ${enable ? 'ENABLED' : 'DISABLED'}`, 'info');
+        }
+    } catch (e) {
+        logTerminal(`Sniffer toggle failed: ${e.message}`, 'err');
+    }
+}
+
+async function toggleHopping() {
+    const btn = document.getElementById("btn-hop-toggle");
+    const currentlyOn = btn.classList.contains("ok");
+    const enable = !currentlyOn;
+
+    try {
+        const r = await fetch("/api/probe/hop", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: `enabled=${enable}`
+        });
+        if (r.ok) {
+            btn.classList.toggle("ok", enable);
+            btn.classList.toggle("secondary", !enable);
+            logTerminal(`Channel Hopping ${enable ? 'ENABLED' : 'DISABLED'}`, 'info');
+        }
+    } catch (e) {
+        logTerminal(`Hopping toggle failed: ${e.message}`, 'err');
+    }
+}
+
+async function clearSnifferRegistry() {
+    // Note: No backend endpoint for clearRegistry yet, but we can clear local UI
+    // and wait for next telemetry.
+    const tb = document.getElementById("presence-tbody");
+    if (tb) tb.innerHTML = '<tr><td colspan="5" class="text-center text-dim p-8">Registry cleared.</td></tr>';
+}
+
 function updateAiUI(d) {
     const statusEl = document.getElementById("ai-status");
     const promptEl = document.getElementById("ai-prompt");
@@ -361,4 +436,369 @@ async function loadFiles() {
             <div class="p-2 border-b border-dim text-xs font-mono">${f.name} (${f.size}B)</div>
         `).join("");
     }
+}
+
+// ── Plugin Registry ───────────────────────────────────────────────────────
+async function refreshPlugins() {
+    const grid = document.getElementById("plugin-grid");
+    if (!grid) return;
+    grid.innerHTML = '<div class="text-center text-dim p-8 col-span-full italic">Scanning node for products...</div>';
+    
+    try {
+        const r = await fetch("/api/files?prefix=/products/");
+        const d = await r.json();
+        const files = (d.files || []).filter(f => f.name.endsWith(".json"));
+        
+        if (!files.length) {
+            grid.innerHTML = '<div class="text-center text-dim p-8 col-span-full">No product profiles found in /products/</div>';
+            return;
+        }
+
+        grid.innerHTML = files.map(f => {
+            const name = f.name.replace(".json", "");
+            return `
+                <div class="card p-4 hover-lift">
+                    <div class="flex-row justify-between mb-2">
+                        <span class="text-accent font-bold uppercase text-xs">${escHtml(name)}</span>
+                        <span class="text-xxs text-dim">${f.size}B</span>
+                    </div>
+                    <div class="text-dim text-xs mb-4">Industrial hardware personality for ${escHtml(name)}.</div>
+                    <div class="flex-row gap-2">
+                        <button class="btn sm flex-1" onclick="applyPlugin('${escHtml(name)}')">Apply</button>
+                        <button class="btn sm secondary" onclick="editPlugin('${escHtml(name)}')"><i class="fas fa-edit"></i></button>
+                    </div>
+                </div>
+            `;
+        }).join("");
+    } catch (e) {
+        grid.innerHTML = `<div class="text-center text-err p-8 col-span-full">Failed to load registry: ${e.message}</div>`;
+    }
+}
+
+async function uploadPlugin() {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".json";
+    input.onchange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        const path = `/products/${file.name}`;
+        logTerminal(`Uploading ${file.name} to /products/...`, 'tx');
+        
+        const fd = new FormData();
+        fd.append("file", file);
+        fd.append("path", path);
+
+        try {
+            const r = await fetch("/api/upload", { method: "POST", body: fd });
+            if (r.ok) {
+                logTerminal(`Upload SUCCESS: ${file.name}`, 'ok');
+                refreshPlugins();
+            } else {
+                throw new Error(await r.text());
+            }
+        } catch (err) {
+            logTerminal(`Upload FAIL: ${err.message}`, 'err');
+        }
+    };
+    input.click();
+}
+
+async function applyPlugin(name) {
+    if (!confirm(`Apply [${name}] personality? This will reconfigure hardware pins.`)) return;
+    logTerminal(`Applying hardware personality: ${name}`, 'tx');
+    await sendTerminalCmd(`LOAD /products/${name}.json`);
+    setTimeout(() => {
+        logTerminal(`Plugin [${name}] applied.`, 'ok');
+        location.reload(); // Refresh to update telemetry with new pins
+    }, 1500);
+}
+
+// ── Product Configurator ───────────────────────────────────────────────────
+async function editPlugin(name) {
+    try {
+        const r = await fetch(`/api/files/read?path=/products/${name}.json`);
+        const d = await r.json();
+        
+        document.getElementById("product-filename").textContent = `/products/${name}.json`;
+        document.getElementById("product-json-editor").value = JSON.stringify(d, null, 4);
+        document.getElementById("product-modal").classList.add("open");
+    } catch (e) {
+        logTerminal("Failed to load manifest: " + e.message, 'err');
+    }
+}
+
+function closeProductModal() {
+    document.getElementById("product-modal").classList.remove("open");
+}
+
+async function saveProductManifest() {
+    const filename = document.getElementById("product-filename").textContent;
+    const json = document.getElementById("product-json-editor").value;
+    
+    try {
+        JSON.parse(json); // Validate
+    } catch (e) {
+        alert("Invalid JSON: " + e.message);
+        return;
+    }
+
+    const fd = new FormData();
+    fd.append("file", new Blob([json], { type: 'application/json' }), filename.split('/').pop());
+    fd.append("path", filename);
+
+    logTerminal(`Saving manifest to ${filename}...`, 'tx');
+    try {
+        const r = await fetch("/api/upload", { method: "POST", body: fd });
+        if (r.ok) {
+            logTerminal("Manifest saved. Rebooting node...", 'ok');
+            await sendTerminalCmd("REBOOT");
+            closeProductModal();
+        } else {
+            throw new Error(await r.text());
+        }
+    } catch (e) {
+        logTerminal("Save failed: " + e.message, 'err');
+    }
+}
+
+function sendDose(pump, ml) {
+    const cmd = `NUTRIC nutricalc/pump/${pump}|{"ml":${ml}}`;
+    logTerminal(`Dosing Pump ${pump}: ${ml}ml`, 'tx');
+    sendTerminalCmd(cmd);
+}
+
+// ── Auto-Wiring (Plugin UI Generation) ─────────────────────────────────────
+async function handleAutoWiring(status) {
+    const product = status.active_product;
+    if (!product) return;
+
+    const container = document.getElementById("plugin-controls-root");
+    if (!container) return;
+
+    if (container.getAttribute('data-active-plugin') === product) {
+        updatePluginStates(status);
+        return;
+    }
+
+    try {
+        const resp = await fetch(`/static/templates/${product}.json`);
+        if (!resp.ok) throw new Error("Template not found");
+        const template = await resp.json();
+        
+        container.setAttribute('data-active-plugin', product);
+        renderPluginUI(container, template);
+        updatePluginStates(status);
+    } catch (e) {
+        console.warn("[Auto-Wiring] Template load failed: " + product);
+    }
+}
+
+function renderPluginUI(container, template) {
+    container.innerHTML = `
+        <div class="panel">
+            <div class="panel-title"><i class="${template.icon}"></i> ${template.displayName}</div>
+            <div class="p-4" id="plugin-widgets" style="display:grid; grid-template-columns:1fr 1fr; gap:10px;"></div>
+        </div>
+    `;
+    
+    const grid = document.getElementById("plugin-widgets");
+    template.widgets.forEach(w => {
+        const div = document.createElement("div");
+        div.className = "card p-3";
+        if (w.type === 'toggle') {
+            div.innerHTML = `
+                <div class="flex-row-sb">
+                    <span class="text-xs font-bold">${w.label}</span>
+                    <button class="btn btn-xs" id="plug-p${w.pin}" onclick="sendPluginCmd('${w.cmd}', !this.classList.contains('ok'))">TOGGLE</button>
+                </div>
+            `;
+        } else if (w.type === 'indicator') {
+            div.innerHTML = `
+                <div class="flex-row-sb">
+                    <span class="text-xs">${w.label}</span>
+                    <div class="status-dot" id="plug-p${w.pin}" style="background:#555"></div>
+                </div>
+            `;
+        } else if (w.type === 'dose') {
+            div.innerHTML = `
+                <div class="flex-row-sb">
+                    <span class="text-xs font-bold">${w.label}</span>
+                    <div class="flex-row gap-2">
+                        <input type="number" id="dose-val-${w.pump}" value="5" class="input-styled sm text-xs" style="width:40px; height:24px; padding:0 4px">
+                        <button class="btn btn-xs" onclick="sendDose(${w.pump}, document.getElementById('dose-val-${w.pump}').value)">DOSE</button>
+                    </div>
+                </div>
+            `;
+        }
+        grid.appendChild(div);
+    });
+}
+
+function updatePluginStates(status) {
+    const pins = status.pins || [];
+    pins.forEach(p => {
+        const el = document.getElementById(`plug-p${p.n || p.p}`);
+        if (!el) return;
+        
+        const hi = Boolean(parseInt(p.v));
+        if (el.tagName === 'BUTTON') {
+            el.classList.toggle("ok", hi);
+            el.classList.toggle("secondary", !hi);
+        } else {
+            el.style.background = hi ? 'var(--ok)' : '#555';
+            el.style.boxShadow = hi ? '0 0 8px var(--ok)' : 'none';
+        }
+    });
+}
+
+function sendPluginCmd(template, val) {
+    const cmd = template.replace('{val}', val ? '1' : '0');
+    sendTerminalCmd(cmd);
+}
+
+// ── Visual Builder Logic ───────────────────────────────────────────────────
+let builderState = { step: 1, metadata: null, selections: { board: '', plugins: [], config: {} } };
+
+async function startVisualBuilder() {
+    try {
+        const r = await fetch('/static/plugins_metadata.json');
+        builderState.metadata = await r.json();
+        builderState.step = 1;
+        renderBuilderStep();
+        document.getElementById("builder-modal").classList.add("open");
+    } catch (e) {
+        logTerminal("Failed to load builder metadata: " + e.message, 'err');
+    }
+}
+
+function closeBuilderModal() {
+    document.getElementById("builder-modal").classList.remove("open");
+}
+
+function renderBuilderStep() {
+    const container = document.getElementById("builder-steps-container");
+    const nextBtn = document.getElementById("btn-builder-next");
+    
+    if (builderState.step === 1) {
+        nextBtn.textContent = "Next (Select Plugins)";
+        container.innerHTML = `
+            <p class="text-xs text-dim mb-4">Step 1: Select your hardware base board.</p>
+            <div class="grid grid-cols-1 gap-2">
+                ${builderState.metadata.boards.map(b => `
+                    <div class="node-pill ${builderState.selections.board === b.id ? 'active' : ''}" onclick="selectBoard('${b.id}')">
+                        <i class="${b.icon}"></i>
+                        <span class="flex-1">${b.name}</span>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+    } else if (builderState.step === 2) {
+        nextBtn.textContent = "Next (Configure)";
+        container.innerHTML = `
+            <p class="text-xs text-dim mb-4">Step 2: select plugins to include.</p>
+            <div class="grid grid-cols-1 gap-2">
+                ${builderState.metadata.plugins.map(p => `
+                    <div class="node-pill ${builderState.selections.plugins.includes(p.id) ? 'active' : ''}" onclick="togglePluginSelection('${p.id}')">
+                        <i class="fas fa-plug"></i>
+                        <span class="flex-1">${p.name}</span>
+                        <input type="checkbox" ${builderState.selections.plugins.includes(p.id) ? 'checked' : ''} style="pointer-events:none">
+                    </div>
+                `).join('')}
+            </div>
+        `;
+    } else if (builderState.step === 3) {
+        nextBtn.textContent = "DEPLOY PERSONALITY";
+        container.innerHTML = `
+            <p class="text-xs text-dim mb-4">Step 3: Configure plugin parameters.</p>
+            <div class="flex-col gap-4">
+                ${builderState.selections.plugins.map(pluginId => {
+                    const p = builderState.metadata.plugins.find(x => x.id === pluginId);
+                    return `
+                        <div class="panel p-3">
+                            <div class="text-xs text-accent mb-2 uppercase font-bold">${p.id}</div>
+                            ${p.config.map(c => `
+                                <div class="mb-2">
+                                    <label class="text-xs text-dim block mb-1">${c.label}</label>
+                                    <input type="text" class="input-styled w-full text-xs" 
+                                        id="cfg-${p.id}-${c.key}" value="${builderState.selections.config[p.id]?.[c.key] || c.default}">
+                                </div>
+                            `).join('')}
+                        </div>
+                    `;
+                }).join('')}
+                <div class="mb-2">
+                    <label class="text-xs text-dim block mb-1">Product Name (Target Filename)</label>
+                    <input type="text" class="input-styled w-full text-xs" id="cfg-filename" value="CustomDevice">
+                </div>
+            </div>
+        `;
+    }
+}
+
+function selectBoard(id) {
+    builderState.selections.board = id;
+    renderBuilderStep();
+}
+
+function togglePluginSelection(id) {
+    const idx = builderState.selections.plugins.indexOf(id);
+    if (idx > -1) builderState.selections.plugins.splice(idx, 1);
+    else builderState.selections.plugins.push(id);
+    renderBuilderStep();
+}
+
+async function builderNextStep() {
+    if (builderState.step === 1) {
+        if (!builderState.selections.board) { alert("Please select a board"); return; }
+        builderState.step = 2;
+    } else if (builderState.step === 2) {
+        builderState.step = 3;
+    } else if (builderState.step === 3) {
+        await finishBuilder();
+        return;
+    }
+    renderBuilderStep();
+}
+
+async function finishBuilder() {
+    const manifest = {
+        id: document.getElementById("cfg-filename").value || "CustomDevice",
+        board: builderState.selections.board,
+        plugins: []
+    };
+
+    builderState.selections.plugins.forEach(pluginId => {
+        const p = builderState.metadata.plugins.find(x => x.id === pluginId);
+        const pluginCfg = { type: pluginId };
+        p.config.forEach(c => {
+            const val = document.getElementById(`cfg-${pluginId}-${c.key}`).value;
+            // Try to parse CSV into array if default was CSV
+            if (c.default.includes(',')) {
+                pluginCfg[c.key] = val.split(',').map(v => parseInt(v.trim()));
+            } else {
+                pluginCfg[c.key] = val;
+            }
+        });
+        manifest.plugins.push(pluginCfg);
+    });
+
+    // Switch to raw editor to show what we built before saving
+    closeBuilderModal();
+    
+    // Show a Wiring Summary before opening the JSON editor
+    let wiringSummary = `PROVISIONING SUMMARY for ${manifest.id}:\n\n`;
+    manifest.plugins.forEach(p => {
+        wiringSummary += `Plugin: ${p.type}\n`;
+        for (const [key, val] of Object.entries(p)) {
+            if (key !== 'type') wiringSummary += `  - ${key}: ${val}\n`;
+        }
+    });
+    
+    alert(wiringSummary + "\nOpening JSON Editor for final review.");
+
+    document.getElementById("product-filename").textContent = `/products/${manifest.id}.json`;
+    document.getElementById("product-json-editor").value = JSON.stringify(manifest, null, 4);
+    document.getElementById("product-modal").classList.add("open");
 }

@@ -43,10 +43,18 @@ public:
     static void onModeChange(PowerModeCallback cb); // Register callback for mode transitions
     static void printStatus();                      // Print status to Serial
 
+    // Non-blocking state check
+    static bool isVEXTStable();
+
 private:
     static PowerMode _mode;
     static float _lastVoltage;
     static PowerModeCallback _modeChangeCallback;
+    
+    // Non-blocking pulse state machine
+    static void* _vextTimer;
+    static uint8_t _vextPulseState;
+    static void _vextTimerCallback(void* xTimer);
 
     // Voltage thresholds (User requested V1 parity)
     static constexpr float VOLT_NORMAL   = 3.80f;  // Above this = NORMAL

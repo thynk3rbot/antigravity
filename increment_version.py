@@ -5,14 +5,21 @@ import os
 def increment_version(source, target, env):
     ini_path = os.path.join(env.get("PROJECT_DIR"), "platformio.ini")
     if not os.path.exists(ini_path):
-        print(f"Error: {ini_path} not found")
+        print(f"[VERSION] Error: {ini_path} not found")
         return
 
     with open(ini_path, "r") as f:
         content = f.read()
 
+    # Check the VERSION_AUTO_INCREMENT flag
+    # If flag is missing or set to false/0, skip auto-increment
+    auto_flag = re.search(r'VERSION_AUTO_INCREMENT\s*=\s*(true|1)', content, re.IGNORECASE)
+    if not auto_flag:
+        print("[VERSION] Auto-increment DISABLED (fleet mode). Version unchanged.")
+        return
+
     # Match -D FIRMWARE_VERSION=\"x.y.z\"
-    pattern = r'(-D FIRMWARE_VERSION=\\?\"v?)(\d+\.\d+\.)(\d+)(\\?\")'
+    pattern = r'(-D FIRMWARE_VERSION=\\?")([\d]+\.[\d]+\.)([\d]+)(\\?")'
     match = re.search(pattern, content)
 
     if match:
@@ -29,9 +36,9 @@ def increment_version(source, target, env):
         with open(ini_path, "w") as f:
             f.write(new_content)
 
-        print(f"Auto-incremented version to: {base}{new_patch}")
+        print(f"[VERSION] Auto-incremented to: {base}{new_patch}")
     else:
-        print("Warning: Could not find FIRMWARE_VERSION pattern in platformio.ini")
+        print("[VERSION] Warning: Could not find FIRMWARE_VERSION pattern in platformio.ini")
 
 # Register to run before upload
 env.AddPreAction("upload", increment_version)

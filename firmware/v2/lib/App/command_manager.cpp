@@ -9,6 +9,7 @@
 #include "nvs_manager.h"
 #include "product_manager.h"
 #include <ArduinoJson.h>
+#include "plugin_manager.h"
 #include "../HAL/mcp_manager.h"
 
 // ---------------------------------------------------------------------------
@@ -131,10 +132,19 @@ void CommandManager::process(const String& input, ResponseCallback responseCallb
         response = _handleRepeater(args);
     } else if (cmd == "SLEEP") {
         response = _handleSleep(args);
-    } else if (cmd.startsWith("NUTRIC")) {
-        response = _handleNutriCalc(input);
     } else {
-        response = "{\"ok\":false,\"error\":\"Unknown command: " + cmd + "\"}";
+        // Delegate to plugins
+        for (auto* plugin : PluginManager::getInstance().getPlugins()) {
+            String pluginResponse = plugin->handleCommand(cmd, args);
+            if (pluginResponse.length() > 0) {
+                response = pluginResponse;
+                break;
+            }
+        }
+        
+        if (response.length() == 0) {
+            response = "{\"ok\":false,\"error\":\"Unknown command: " + cmd + "\"}";
+        }
     }
 
     if (responseCallback) {
@@ -506,45 +516,7 @@ String CommandManager::_handleLoadProduct(const String& args) {
     }
     return "{\"ok\":false,\"error\":\"Failed to load product: " + name + "\"}";
 }
-String CommandManager::_handleNutriCalc(const String& input) {
-    // Expected input format: "nutricalc/pump/1|{...json...}" or "nutricalc/dose|{...json...}"
-    int pipeIdx = input.indexOf('|');
-    if (pipeIdx < 0) return "{\"ok\":false,\"error\":\"Invalid NutriCalc format\"}";
-
-    String topic = input.substring(0, pipeIdx);
-    String payload = input.substring(pipeIdx + 1);
-
-    StaticJsonDocument<512> doc;
-    DeserializationError error = deserializeJson(doc, payload);
-    if (error) return "{\"ok\":false,\"error\":\"JSON parse failed\"}";
-
-    if (topic.startsWith("nutricalc/pump/")) {
-        int pumpId = topic.substring(15).toInt();
-        float grams = doc["grams"] | 0.0f;
-        float ml = doc["ml"] | 0.0f;
-        
-        // Calibration: 1ml = 1000ms (assumed for generic peristaltic pump, should be adjustable)
-        unsigned long durationMs = (unsigned long)(ml * 1000.0f);
-        if (durationMs == 0 && grams > 0) {
-            durationMs = (unsigned long)(grams * 1200.0f); // Fallback for grams
-        }
-
-        if (durationMs > 0) {
-            int pin = -1;
-            // Mapping from INTEGRATION.md
-            if (pumpId == 1) pin = 33; // PIN_RELAY_12V_2 (from loralink legacy)
-            else if (pumpId == 2) pin = 25; // PIN_RELAY_12V_3
-            else if (pumpId == 3) pin = 100; // MCP_PIN_0
-            
-            if (pin != -1) {
-                ScheduleManager::addTask("Pump" + String(pumpId), "PULSE", pin, 0, durationMs / 1000, "NUTRI");
-                return "{\"ok\":true,\"pump\":" + String(pumpId) + ",\"duration_ms\":" + String(durationMs) + "}";
-            }
-        }
-    }
-
-    return "{\"ok\":true,\"msg\":\"NutriCalc command received\"}";
-}
+// Project-specific handlers removed (NutriCalc decoupled)
 
 String CommandManager::_handleSetKey(const String& args) {
     String key = args;

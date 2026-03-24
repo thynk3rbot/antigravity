@@ -32,10 +32,12 @@ struct DisplayCache {
     uint32_t bootCount;
     char resetReason[20];
     bool relayOn;
+#ifdef HAS_GPS
     double gpsLat;
     double gpsLon;
     uint8_t gpsSats;
     bool gpsFix;
+#endif
     int8_t loraRSSI;
     float loraSNR;
 } g_cached;
@@ -48,8 +50,6 @@ static bool g_wakeRequested = false;
 static uint32_t g_lastUpdateTime = 0;
 static uint32_t g_lastAutoRotateTime = 0;
 static uint32_t g_lastActivityTime = 0;
-static bool g_buttonPressed = false;
-static uint32_t g_buttonPressTime = 0;
 
 static const uint32_t UPDATE_INTERVAL_MS = 500;
 static const uint32_t SLEEP_TIMEOUT_MS = 30000;
@@ -79,7 +79,7 @@ static void drawFooter(uint8_t pageNum) {
     display.drawFastHLine(0, 54, 128, SSD1306_WHITE);
     display.setCursor(0, 56);
     display.printf("v%s | Page %u/%u", g_cached.version, pageNum, 
-#ifdef ARDUINO_HELTEC_WIFI_LORA_32_V4
+#ifdef HAS_GPS
         6
 #else
         5
@@ -132,6 +132,7 @@ static void displayPage4() {
     display.display();
 }
 
+#ifdef HAS_GPS
 static void displayPage5() {
     display.clearDisplay();
     drawHeader("GNSS/GPS");
@@ -146,6 +147,7 @@ static void displayPage5() {
     drawFooter(5);
     display.display();
 }
+#endif
 
 static void displayPage6() {
     display.clearDisplay();
@@ -155,7 +157,7 @@ static void displayPage6() {
     display.printf("Boot: %u\n", g_cached.bootCount);
     display.printf("Heap: %u KB\n", g_cached.freeHeapBytes / 1024);
     
-#ifdef ARDUINO_HELTEC_WIFI_LORA_32_V4
+#ifdef HAS_GPS
     drawFooter(6);
 #else
     drawFooter(5);
@@ -163,35 +165,16 @@ static void displayPage6() {
     display.display();
 }
 
-static void handleButton() {
+// Interrupt handler for button (Debounced via update loop)
+static volatile bool g_buttonHandled = true;
+static volatile uint32_t g_lastInterruptTime = 0;
+
+static void IRAM_ATTR buttonISR() {
     uint32_t now = millis();
-    if (digitalRead(BUTTON_PIN) == LOW) {
-        if (!g_buttonPressed) {
-            g_buttonPressTime = now;
-            g_buttonPressed = true;
-        }
-    } else {
-        if (g_buttonPressed) {
-            uint32_t pressDuration = now - g_buttonPressTime;
-            if (pressDuration >= BUTTON_DEBOUNCE_MS) {
-                g_lastActivityTime = now;
-                if (!g_displayOn) {
-                    g_wakeRequested = true;
-                } else {
-                    // Manual Rotation
-#ifdef ARDUINO_HELTEC_WIFI_LORA_32_V4
-                    g_currentPage = (g_currentPage + 1) % 6;
-#else
-                    // V3: 0,1,2,3 -> 5. 5 -> 0.
-                    if (g_currentPage >= 5) g_currentPage = 0;
-                    else if (g_currentPage == 3) g_currentPage = 5; // Skip Page 4 (GPS)
-                    else g_currentPage++;
-#endif
-                    g_lastAutoRotateTime = now;
-                }
-            }
-            g_buttonPressed = false;
-        }
+    if (now - g_lastInterruptTime > 200) { // 200ms debounce
+        g_wakeRequested = true;
+        g_buttonHandled = false;
+        g_lastInterruptTime = now;
     }
 }
 
@@ -199,31 +182,84 @@ static void handleButton() {
 // Public API
 // ============================================================================
 
+OLEDManager::InitState OLEDManager::_initState = OLEDManager::InitState::IDLE;
+uint32_t OLEDManager::_stateStartTime = 0;
+
 OLEDManager::OLEDManager() {
     memset(&g_cached, 0, sizeof(g_cached));
 }
 
 bool OLEDManager::init() {
-    Wire.begin(I2C_SDA, I2C_SCL, I2C_FREQ_HZ);
+    _initState = InitState::RESET_LOW;
+    _stateStartTime = millis();
+    
     if (OLED_RESET_PIN != -1) {
         pinMode(OLED_RESET_PIN, OUTPUT);
-        digitalWrite(OLED_RESET_PIN, LOW); delay(20);
-        digitalWrite(OLED_RESET_PIN, HIGH); delay(20);
+        digitalWrite(OLED_RESET_PIN, LOW);
     }
-    if (!display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDRESS)) return false;
-    
-    display.ssd1306_command(SSD1306_SETCONTRAST);
-    display.ssd1306_command(0xFF);
-    display.clearDisplay();
-    display.setTextColor(SSD1306_WHITE);
     
     pinMode(BUTTON_PIN, INPUT_PULLUP);
+    attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), buttonISR, FALLING);
     
     g_lastUpdateTime = millis();
     g_lastActivityTime = millis();
     g_lastAutoRotateTime = millis();
     g_displayOn = true;
     return true;
+}
+
+#include "power_manager.h"
+
+void OLEDManager::_processInit() {
+    uint32_t now = millis();
+    
+    switch (_initState) {
+        case InitState::RESET_LOW:
+            if (now - _stateStartTime >= 50) { // Increased to 50ms for V2 stability
+                if (OLED_RESET_PIN != -1) digitalWrite(OLED_RESET_PIN, HIGH);
+                _stateStartTime = now;
+                _initState = InitState::RESET_HIGH;
+            }
+            break;
+            
+        case InitState::RESET_HIGH:
+            if (now - _stateStartTime >= 20) {
+                _initState = InitState::WAIT_POWER;
+            }
+            break;
+            
+        case InitState::WAIT_POWER:
+            if (PowerManager::isVEXTStable()) {
+                _initState = InitState::START_I2C;
+            }
+            break;
+            
+        case InitState::START_I2C:
+            Wire.begin(I2C_SDA, I2C_SCL); // Explicitly start Wire with board-specific pins
+            if (display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDRESS)) {
+                display.ssd1306_command(SSD1306_SETCONTRAST);
+#ifdef ARDUINO_HELTEC_WIFI_LORA_32
+                display.ssd1306_command(0xFF);
+                display.ssd1306_command(SSD1306_SETPRECHARGE);
+                display.ssd1306_command(0x22); 
+                display.ssd1306_command(SSD1306_SETVCOMDETECT);
+                display.ssd1306_command(0x20); 
+#else
+                display.ssd1306_command(0xCF);
+#endif
+                display.clearDisplay();
+                display.setTextColor(SSD1306_WHITE);
+                _initState = InitState::RUNNING;
+            } else {
+                // Retry I2C after 100ms
+                _stateStartTime = now;
+                _initState = InitState::WAIT_POWER; 
+            }
+            break;
+            
+        default:
+            break;
+    }
 }
 
 void OLEDManager::showSplash(const char* ver, const char* role) {
@@ -260,20 +296,38 @@ void OLEDManager::drawBootProgress(const char* label, int percent) {
 }
 
 void OLEDManager::update() {
+    if (_initState != InitState::RUNNING) {
+        _processInit();
+        if (_initState != InitState::RUNNING) return; // Wait for setup to finish
+    }
+
     uint32_t now = millis();
     if (g_wakeRequested) { setDisplayOn(true); g_wakeRequested = false; }
     if (g_displayOn && (now - g_lastActivityTime >= SLEEP_TIMEOUT_MS)) setDisplayOn(false);
 
-    handleButton(); // Use polling instead of ISR for stability on S3
+    // Handle button press detected by ISR
+    if (!g_buttonHandled) {
+        g_buttonHandled = true;
+        g_lastActivityTime = now;
+        if (!g_displayOn) {
+            setDisplayOn(true);
+        } else {
+            // Manual Rotation
+#ifdef HAS_GPS
+            g_currentPage = (g_currentPage + 1) % 6;
+#else
+            g_currentPage = (g_currentPage + 1) % 5;
+#endif
+            g_lastAutoRotateTime = now;
+        }
+    }
 
     if (g_displayOn && (AUTO_ROTATE_MS > 0) && (now - g_lastAutoRotateTime >= AUTO_ROTATE_MS)) {
         // Auto Rotation
-#ifdef ARDUINO_HELTEC_WIFI_LORA_32_V4
+#ifdef HAS_GPS
         g_currentPage = (g_currentPage + 1) % 6;
 #else
-        if (g_currentPage >= 5) g_currentPage = 0;
-        else if (g_currentPage == 3) g_currentPage = 5;
-        else g_currentPage++;
+        g_currentPage = (g_currentPage + 1) % 5;
 #endif
         g_lastAutoRotateTime = now;
     }
@@ -287,10 +341,10 @@ void OLEDManager::update() {
                 case 2: displayPage3(); break;
                 case 3: displayPage4(); break;
                 case 4: 
-#ifdef ARDUINO_HELTEC_WIFI_LORA_32_V4
+#ifdef HAS_GPS
                     displayPage5(); break;
 #else
-                    displayPage6(); break; // On V3, page 4/5 is Diag
+                    displayPage6(); break; 
 #endif
                 case 5: displayPage6(); break;
                 default: g_currentPage = 0; break;
@@ -325,7 +379,9 @@ void OLEDManager::setTemperature(float tempC) { g_cached.tempC = tempC; }
 void OLEDManager::setPeerCount(uint8_t count) { g_cached.peerCount = count; }
 void OLEDManager::setUptime(uint32_t uptimeMs) { g_cached.uptimeMs = uptimeMs; }
 void OLEDManager::setFreeHeap(uint32_t heapBytes) { g_cached.freeHeapBytes = heapBytes; }
+#ifdef HAS_GPS
 void OLEDManager::setGPS(double lat, double lon, uint8_t sats, bool hasFix) { g_cached.gpsLat = lat; g_cached.gpsLon = lon; g_cached.gpsSats = sats; g_cached.gpsFix = hasFix; }
+#endif
 void OLEDManager::setDiagnostics(uint32_t bootCount, const char* reason) { g_cached.bootCount = bootCount; if (reason) strncpy(g_cached.resetReason, reason, 19); }
 void OLEDManager::setMAC(const char* mac) { if (mac) strncpy(g_cached.macSuffix, mac, 9); }
 void OLEDManager::setDeviceName(const char* name) { if (name) strncpy(g_cached.deviceName, name, 19); }

@@ -1,0 +1,25 @@
+{
+    "id": "NutriCalc",
+    "displayName": "NutriCalc Industrial Feeding",
+    "icon": "fas fa-flask",
+    "widgets": [
+        {
+            "type": "dose",
+            "label": "Pump 1 (Dose)",
+            "pump": 1,
+            "cmd": "NUTRIC nutricalc/pump/1 {\"ml\":{val}}"
+        },
+        {
+            "type": "dose",
+            "label": "Pump 2 (Dose)",
+            "pump": 2,
+            "cmd": "NUTRIC nutricalc/pump/2 {\"ml\":{val}}"
+        },
+        {
+            "type": "dose",
+            "label": "Pump 3 (Dose)",
+            "pump": 3,
+            "cmd": "NUTRIC nutricalc/pump/3 {\"ml\":{val}}"
+        }
+    ]
+}

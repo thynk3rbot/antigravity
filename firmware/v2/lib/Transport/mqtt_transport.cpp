@@ -254,6 +254,13 @@ void MQTTTransport::setCommandCallback(CommandCallback cb) {
     _commandCallback = cb;
 }
 
+void MQTTTransport::registerTopic(const String& topic, TopicCallback cb) {
+    _topicRegistry[topic] = cb;
+    if (_mqttClient.connected()) {
+        _mqttClient.subscribe(topic.c_str());
+    }
+}
+
 // ============================================================================
 // Internal — _connect
 // ============================================================================
@@ -306,13 +313,16 @@ void MQTTTransport::_subscribe() {
     _mqttClient.subscribe(deviceCmd.c_str());
     _mqttClient.subscribe("loralink/broadcast/command");
     
-    // NutriCalc Integration (Phase 16 Consolidation)
-    _mqttClient.subscribe("nutricalc/pump/#");
-    _mqttClient.subscribe("nutricalc/dose");
+    // Subscribe to all plugin-registered topics
+    for (auto const& [topic, cb] : _topicRegistry) {
+        _mqttClient.subscribe(topic.c_str());
+    }
 
     Serial.printf("[MQTT] Subscribed: %s\n", deviceCmd.c_str());
     Serial.println("[MQTT] Subscribed: loralink/broadcast/command");
-    Serial.println("[MQTT] Subscribed: nutricalc/pump/#, nutricalc/dose");
+    if (!_topicRegistry.empty()) {
+        Serial.printf("[MQTT] Subscribed to %u plugin topics\n", _topicRegistry.size());
+    }
 }
 
 // ============================================================================
@@ -335,18 +345,27 @@ void MQTTTransport::_mqttCallback(char* topic, byte* payload,
 
     Serial.printf("[MQTT] RX [%s]: %s\n", topic, payloadStr.c_str());
 
-    // Dispatch to command callback if topic is a command topic or NutriCalc topic
+    // 1. Dispatch to plugins via registry
+    for (auto const& [pattern, cb] : _instance->_topicRegistry) {
+        bool match = false;
+        if (pattern.endsWith("#")) {
+            String prefix = pattern.substring(0, pattern.length() - 1);
+            if (topicStr.startsWith(prefix)) match = true;
+        } else {
+            if (topicStr == pattern) match = true;
+        }
+        
+        if (match && cb) {
+            cb(topicStr, payloadStr);
+            return; // Handled by plugin
+        }
+    }
+
+    // 2. Fallback to default command handling (LoRaLink convention)
     String deviceCmd = _instance->_commandTopic();
-    if (topicStr == deviceCmd ||
-        topicStr == "loralink/broadcast/command" ||
-        topicStr.startsWith("nutricalc/")) {
+    if (topicStr == deviceCmd || topicStr == "loralink/broadcast/command") {
         if (_instance->_commandCallback) {
-            // Include topic in the command string for NutriCalc commands
-            if (topicStr.startsWith("nutricalc/")) {
-                _instance->_commandCallback(topicStr + "|" + payloadStr);
-            } else {
-                _instance->_commandCallback(payloadStr);
-            }
+            _instance->_commandCallback(payloadStr);
         }
     }
 }

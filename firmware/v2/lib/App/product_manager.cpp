@@ -5,6 +5,7 @@ using namespace ArduinoJson;
 #include "../HAL/mcp_manager.h"
 #include "../Transport/message_router.h"
 #include "../Transport/mqtt_transport.h"
+#include "plugin_manager.h"
 #include "control_packet.h"
 #include <LittleFS.h>
 
@@ -63,6 +64,7 @@ bool ProductManager::loadProduct(const String& name) {
     if (deserializeJson(doc, json) != DeserializationError::Ok) return false;
 
     if (doc["pins"].is<JsonArray>()) _applyPins(doc["pins"]);
+    if (doc["plugins"].is<JsonArray>()) _applyPlugins(doc["plugins"]);
     if (doc["schedules"].is<JsonArray>()) _applySchedules(doc["schedules"]);
     // Alerts restoration planned for Phase 6 complement
 
@@ -125,8 +127,13 @@ void ProductManager::_applyPins(const JsonArray& pins) {
             continue;
         }
 
-        pinMode(pinNum, (mode == "input") ? INPUT : OUTPUT);
-        if (mode == "output" && p.containsKey("default")) {
+        uint8_t m = INPUT;
+        if (mode == "input_pullup") m = INPUT_PULLUP;
+        else if (mode == "input_pulldown") m = INPUT_PULLDOWN;
+        else if (mode == "output") m = OUTPUT;
+
+        pinMode(pinNum, m);
+        if (m == OUTPUT && p.containsKey("default")) {
             digitalWrite(pinNum, p["default"].as<int>());
         }
     }
@@ -142,6 +149,22 @@ void ProductManager::_applySchedules(const JsonArray& schedules) {
 
         if (id.isEmpty() || pin < 0) continue;
         ScheduleManager::addTask(id, type, pin, interval, duration, "PRODUCT");
+    }
+}
+
+void ProductManager::_applyPlugins(const JsonArray& plugins) {
+    for (JsonObjectConst p : plugins) {
+        String type = p["type"] | "";
+        if (type.isEmpty()) continue;
+
+        // Find and configure matching plugins
+        for (auto plugin : PluginManager::getInstance().getPlugins()) {
+            if (String(plugin->getName()) == type) {
+                Serial.printf("[ProductManager] Configuring plugin: %s\n", plugin->getName());
+                plugin->configure(p["config"]);
+                plugin->init(); // Re-init with new config if needed
+            }
+        }
     }
 }
 

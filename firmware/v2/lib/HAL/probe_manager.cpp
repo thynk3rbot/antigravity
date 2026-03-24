@@ -6,10 +6,7 @@
 // Initialize static members if any (none currently besides singleton)
 
 bool ProbeManager::init() {
-    // Wi-Fi must be in STA mode for promiscuous mode to work correctly on ESP32
-    WiFi.mode(WIFI_STA);
-    WiFi.disconnect();
-    
+    // Wi-Fi is initialized in main.cpp to prevent deadlocks
     // We don't start sniffing by default to save power/cpu until requested
     return true;
 }
