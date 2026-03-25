@@ -70,6 +70,7 @@ Managers that check the registry before init:
 
 Always-on (required for basic operation):
 - NVSManager, PowerManager, WiFiManager, LoRaManager, CommandManager, MessageRouter
+- **ScheduleManager** — core control mechanism, not optional. V1's TaskScheduler precision is battle-tested and required for industrial timing (irrigation valves, relay sequencing). Treat as infrastructure, not a feature toggle.
 
 ### Firmware: Provisioning Endpoint
 
