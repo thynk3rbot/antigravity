@@ -34,4 +34,4 @@ python -m platformio run -e heltec_v2 && python -m platformio run -e heltec_v3 &
 ---
 **Signed by Agents:**
 - [x] Antigravity (Gemini) - 2026-03-24
-- [x] Claude - 2026-03-24
+- [ ] Claude - 2026-03-24
