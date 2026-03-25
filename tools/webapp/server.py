@@ -173,6 +173,28 @@ try:
 except ImportError:
     SIMULATOR_AVAILABLE = False
 
+# ── Daemon client — communicates with LoRaLink PC Daemon on :8001 ─────────────
+try:
+    from tools.webapp.daemon_client import DaemonClient
+    DAEMON_CLIENT_AVAILABLE = True
+except ImportError:
+    try:
+        # Fallback for when running directly from tools/webapp/
+        from daemon_client import DaemonClient  # type: ignore
+        DAEMON_CLIENT_AVAILABLE = True
+    except ImportError:
+        DAEMON_CLIENT_AVAILABLE = False
+        class DaemonClient:  # type: ignore
+            """Stub when daemon_client.py is not importable."""
+            def __init__(self, *args, **kwargs): pass
+            async def connect(self): pass
+            async def disconnect(self): pass
+            async def health(self) -> bool: return False
+            async def list_nodes(self) -> list: return []
+            async def send_command(self, *args, **kwargs) -> bool: return False
+            async def get_messages(self, *args, **kwargs) -> list: return []
+        print("WARNING: daemon_client not available — daemon integration disabled")
+
 
 STATIC_DIR = Path(__file__).parent / "static"
 SETTINGS_FILE = Path(__file__).parent / ".settings.json"
@@ -1009,6 +1031,7 @@ class StatusPoller:
         self._sim: Any = sim_bridge
         self._transport = transport
         self._trigger = asyncio.Event()
+        self._daemon_client: Any = None  # Set by build_app after construction
 
     def trigger(self) -> None:
         self._trigger.set()
@@ -1109,6 +1132,21 @@ class StatusPoller:
                         elif node.id == self.state.active_node:
                             # Also poll the active node even if named
                             await self._transport.send_command("STATUS", node_id=node.address)
+
+            # 4. Daemon node list — broadcast to WebSocket clients
+            try:
+                daemon_nodes = await self._daemon_client.list_nodes() if self._daemon_client else []
+                await self.ws_manager.broadcast({
+                    "type": "daemon_nodes",
+                    "daemon_nodes": daemon_nodes,
+                    "daemon_connected": len(daemon_nodes) >= 0,  # True if call succeeded
+                })
+            except Exception:
+                await self.ws_manager.broadcast({
+                    "type": "daemon_nodes",
+                    "daemon_nodes": [],
+                    "daemon_connected": False,
+                })
 
             await asyncio.sleep(self.INTERVAL)
 
@@ -1247,14 +1285,18 @@ def build_app(
     _sim_bridge: Optional[Any] = None
     _ai_gateway = AIGateway()
     _processor_task: Optional[asyncio.Task] = None
+    _daemon_client = DaemonClient()  # Connects to http://localhost:8001 by default
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        nonlocal _ble_peers, _transport, _poller, _poll_task, _serial_link, _processor_task, _zc, _browser, _sim_bridge, _serial_hub
-        
+        nonlocal _ble_peers, _transport, _poller, _poll_task, _serial_link, _processor_task, _zc, _browser, _sim_bridge, _serial_hub, _daemon_client
+
         # --- STARTUP ---
         # Initialize active IP to the startup device_ip
         state.active_ip = device_ip
+
+        # Connect daemon client
+        await _daemon_client.connect()
 
         # Load persisted transport strategy
         if SETTINGS_FILE.exists():
@@ -1302,6 +1344,7 @@ def build_app(
         # HTTP transport + status poller start immediately
         _transport = TransportManager(state, device_ip, _ble_peers, _serial_link, _sim_bridge, node_reg)
         _poller = StatusPoller(state, ws_mgr, device_ip, _ble_peers, node_reg, _sim_bridge, _transport)
+        _poller._daemon_client = _daemon_client
         _poll_task = asyncio.create_task(_poller.run())
         
         # Start unified message processor
@@ -1363,6 +1406,9 @@ def build_app(
                 await _serial_link.disconnect()
             except Exception:
                 pass
+
+        # Disconnect daemon client
+        await _daemon_client.disconnect()
 
     app = FastAPI(title="LoRaLink PC Control", lifespan=lifespan)
 
@@ -1590,6 +1636,38 @@ def build_app(
         if ok and _poller:
             _poller.trigger()
         return PlainTextResponse("OK" if ok else "ERR", status_code=200 if ok else 502)
+
+    @app.post("/api/test/transform")
+    async def _test_transform(body: dict) -> JSONResponse:
+        """Trace a command's transformation from string to wire format to firmware parse."""
+        cmd = (body.get("cmd") or "").strip()
+        node_id = body.get("node_id")
+
+        if not cmd:
+            return JSONResponse({"ok": False, "error": "Missing cmd"}, status_code=400)
+        if _transport is None:
+            return JSONResponse({"ok": False, "error": "No transport available"}, status_code=503)
+
+        # 1. Capture local transformation
+        transport_name = await _transport.pick_transport(cmd)
+        wire_cmd = _transport._serialize_command(cmd, transport_name)
+        
+        # 2. Wrap in TRANSFORM for firmware-side verification
+        transform_query = f"TRANSFORM {wire_cmd}"
+        
+        ok = await _transport.send_command(transform_query, node_id=node_id)
+        if ok and _poller:
+            _poller.trigger()
+            
+        return JSONResponse({
+            "ok": ok,
+            "local_trace": {
+                "original": cmd,
+                "transport": transport_name,
+                "tp_mode": state.tp_mode,
+                "wire_format": wire_cmd
+            }
+        })
 
     @app.post("/api/transport/mode")
     async def _set_tp_mode(body: dict) -> JSONResponse:
@@ -2399,6 +2477,19 @@ def build_app(
                     return Response(content=content, media_type=r.content_type, status_code=r.status)
         except Exception as e:
             return PlainTextResponse(str(e), status_code=500)
+
+    # ── Daemon proxy endpoints ────────────────────────────────────────────────
+
+    @app.get("/api/daemon/nodes")
+    async def get_daemon_nodes():
+        """Fetch node list from daemon — used by WebSocket broadcast."""
+        return await _daemon_client.list_nodes()
+
+    @app.get("/api/daemon/health")
+    async def get_daemon_health():
+        """Check if daemon is reachable."""
+        is_healthy = await _daemon_client.health()
+        return {"daemon_connected": is_healthy}
 
     return app
 
