@@ -211,14 +211,52 @@ async function togglePin(name, pinNum) {
 
 async function sendTerminalCmd(cmd) {
     if (!cmd) return;
-    try {
-        await fetch("/api/cmd", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ cmd, node_id: _activeNodeId }),
-        });
-    } catch (e) {
-        logTerminal(`CMD Error: ${e.message}`, 'err');
+
+    // Parse optional target prefix: "node-alpha GPIO 5 HIGH" or "ALL RELAY 1 ON"
+    let target = _activeNodeId;
+    let actualCmd = cmd.trim();
+
+    const parts = actualCmd.split(/\s+/);
+    if (parts.length > 1) {
+        const potentialTarget = parts[0];
+        const knownIds = _daemonNodes.map(n => n.id);
+        if (potentialTarget === 'ALL' || knownIds.includes(potentialTarget)) {
+            target = potentialTarget;
+            actualCmd = parts.slice(1).join(' ');
+        }
+    }
+
+    if (target === 'ALL') {
+        // Fan out to all daemon nodes in parallel
+        const targets = _daemonNodes.length ? _daemonNodes : [];
+        if (!targets.length) {
+            logTerminal('[ALL] No daemon nodes registered', 'warn');
+            return;
+        }
+        logTerminal(`[ALL → ${targets.length} nodes] ${actualCmd}`, 'tx');
+        await Promise.all(targets.map(n =>
+            fetch("/api/cmd", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ cmd: actualCmd, node_id: n.id })
+            }).then(r => r.text()).then(result => {
+                logTerminal(`  [${n.id}] ← ${result}`, result === 'OK' ? 'rx' : 'err');
+            }).catch(e => {
+                logTerminal(`  [${n.id}] ✗ ${e.message}`, 'err');
+            })
+        ));
+    } else {
+        try {
+            const r = await fetch("/api/cmd", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ cmd: actualCmd, node_id: target }),
+            });
+            const text = await r.text();
+            if (!r.ok) logTerminal(`CMD Error: ${text}`, 'err');
+        } catch (e) {
+            logTerminal(`CMD Error: ${e.message}`, 'err');
+        }
     }
 }
 

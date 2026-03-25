@@ -1637,6 +1637,22 @@ def build_app(
             try:
                 daemon_nodes = await _daemon_client.list_nodes()
                 daemon_ids = {n.get("id") for n in daemon_nodes}
+
+                # ALL = broadcast to every daemon-registered node in parallel
+                if node_id == "ALL":
+                    import asyncio as _asyncio
+                    results = await _asyncio.gather(
+                        *[_daemon_client.send_command(n.get("id"), cmd) for n in daemon_nodes],
+                        return_exceptions=True
+                    )
+                    ok_count = sum(1 for r in results if r is True)
+                    if _poller:
+                        _poller.trigger()
+                    return PlainTextResponse(
+                        f"ALL:{ok_count}/{len(daemon_nodes)}",
+                        status_code=200
+                    )
+
                 if node_id in daemon_ids:
                     ok = await _daemon_client.send_command(node_id, cmd)
                     if _poller:
