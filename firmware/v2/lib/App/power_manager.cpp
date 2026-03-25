@@ -76,6 +76,15 @@ void PowerManager::begin() {
 
 bool PowerManager::init() {
     begin();
+    // Prime the ADC reading so isPowered() works immediately
+    _lastVoltage = getBatteryVoltage();
+    // If USB powered, override any persisted CRITICAL/CONSERVE mode
+    if (isPowered() && _mode != PowerMode::NORMAL) {
+        Serial.printf("[Power] USB detected (%.2fV) — overriding %s → NORMAL\n",
+                      _lastVoltage, _mode == PowerMode::CRITICAL ? "CRITICAL" : "CONSERVE");
+        _mode = PowerMode::NORMAL;
+        NVSManager::setPowerMode(static_cast<uint8_t>(PowerMode::NORMAL));
+    }
     enableVEXT();  // Ensure peripherals like OLED are powered on boot
     return true;
 }
