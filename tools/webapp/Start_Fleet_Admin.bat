@@ -5,24 +5,21 @@ echo =======================================================
 echo          LoRaLink Fleet Administrator
 echo =======================================================
 echo.
-echo Starting Daemon (port 8001) and Webapp (port 8000)...
+echo Starting services...
 echo Fleet Admin UI: http://localhost:8000
-echo Daemon API:     http://localhost:8001
+echo Daemon API:     http://localhost:8001/docs
 echo.
+
+:: Run from repo root so module paths resolve
 cd /d "%~dp0\.."
 
-:: Start daemon in background window
-start "LoRaLink Daemon :8001" cmd /k "python -m tools.daemon.daemon --config tools/daemon/daemon.config.json"
+:: Start daemon in minimized window
+start "LoRaLink Daemon :8001" /min cmd /k "python -m tools.daemon.daemon"
 
-:: Brief pause to let daemon initialize
-timeout /t 2 /nobreak >nul
+:: Start webapp in minimized window
+start "LoRaLink Webapp :8000" /min cmd /k "cd tools\webapp && python server.py"
 
-:: Start webapp in this window
-cd /d "%~dp0"
-python server.py
-if errorlevel 1 (
-    color 0C
-    echo.
-    echo [ERROR] Failed to start the Fleet Administrator server.
-    pause
-)
+:: Wait for services to start, then launch tray icon
+timeout /t 3 /nobreak >nul
+echo Launching system tray icon...
+pythonw -m tools.daemon.tray
