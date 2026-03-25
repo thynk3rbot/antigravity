@@ -33,49 +33,52 @@ POLL_INTERVAL = 5  # seconds
 # Icon dimensions
 ICON_SIZE = 64
 
-# Brand colors
-COLOR_BG      = (15, 20, 30)      # dark background
-COLOR_GREEN   = (0, 212, 100)     # daemon healthy
-COLOR_YELLOW  = (255, 180, 0)     # degraded
-COLOR_RED     = (220, 50, 50)     # daemon down
-COLOR_WHITE   = (220, 220, 220)
-COLOR_ACCENT  = (0, 180, 220)     # LoRaLink cyan
+# Status dot colors
+COLOR_GREEN  = (0, 212, 100)
+COLOR_YELLOW = (255, 180, 0)
+COLOR_RED    = (220, 50, 50)
+COLOR_BLACK  = (0, 0, 0)
+
+# Paths to look for the brand icon
+_HERE = Path(__file__).parent
+ICON_PATHS = [
+    _HERE.parent / "webapp" / "static" / "media" / "loralink_icon.png",
+    _HERE.parent / "webapp" / "static" / "media" / "logo.png",
+]
+
+
+def _load_base_icon() -> "Image.Image":
+    """Load the brand icon, falling back to a simple generated icon."""
+    for path in ICON_PATHS:
+        if path.exists():
+            img = Image.open(path).convert("RGBA")
+            img = img.resize((ICON_SIZE, ICON_SIZE), Image.LANCZOS)
+            return img
+    # Fallback: dark square with cyan border
+    img = Image.new("RGBA", (ICON_SIZE, ICON_SIZE), (15, 20, 30, 255))
+    draw = ImageDraw.Draw(img)
+    draw.rectangle([1, 1, ICON_SIZE - 2, ICON_SIZE - 2], outline=(0, 180, 220), width=2)
+    return img
 
 
 def _make_icon(daemon_ok: bool, webapp_ok: bool) -> "Image.Image":
-    """Draw a tray icon reflecting current health state."""
-    img = Image.new("RGBA", (ICON_SIZE, ICON_SIZE), (0, 0, 0, 0))
+    """Overlay health status dots onto the brand icon."""
+    img = _load_base_icon().copy()
     draw = ImageDraw.Draw(img)
 
-    # Background circle
-    margin = 4
-    draw.ellipse(
-        [margin, margin, ICON_SIZE - margin, ICON_SIZE - margin],
-        fill=COLOR_BG,
-        outline=COLOR_ACCENT,
-        width=2,
-    )
+    dot_r = 9
 
-    # Daemon status dot — top-right
-    dot_r = 10
+    # Daemon dot — top-right corner
     dot_color = COLOR_GREEN if daemon_ok else COLOR_RED
-    draw.ellipse(
-        [ICON_SIZE - dot_r * 2 - 2, 2, ICON_SIZE - 2, dot_r * 2 + 2],
-        fill=dot_color,
-    )
+    x0, y0 = ICON_SIZE - dot_r * 2 - 1, 1
+    draw.ellipse([x0, y0, x0 + dot_r * 2, y0 + dot_r * 2], fill=COLOR_BLACK)
+    draw.ellipse([x0 + 2, y0 + 2, x0 + dot_r * 2 - 2, y0 + dot_r * 2 - 2], fill=dot_color)
 
-    # Webapp status dot — bottom-right
+    # Webapp dot — bottom-right corner
     webapp_color = COLOR_GREEN if webapp_ok else COLOR_YELLOW
-    draw.ellipse(
-        [ICON_SIZE - dot_r * 2 - 2, ICON_SIZE - dot_r * 2 - 2, ICON_SIZE - 2, ICON_SIZE - 2],
-        fill=webapp_color,
-    )
-
-    # LoRa signal arcs (decorative, center)
-    cx, cy = ICON_SIZE // 2, ICON_SIZE // 2 + 4
-    for r in [8, 14, 20]:
-        arc_color = COLOR_ACCENT if daemon_ok else (*COLOR_RED[:3], 180)
-        draw.arc([cx - r, cy - r, cx + r, cy + r], start=210, end=330, fill=arc_color, width=2)
+    x1, y1 = ICON_SIZE - dot_r * 2 - 1, ICON_SIZE - dot_r * 2 - 1
+    draw.ellipse([x1, y1, x1 + dot_r * 2, y1 + dot_r * 2], fill=COLOR_BLACK)
+    draw.ellipse([x1 + 2, y1 + 2, x1 + dot_r * 2 - 2, y1 + dot_r * 2 - 2], fill=webapp_color)
 
     return img
 
