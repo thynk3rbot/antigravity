@@ -2524,6 +2524,31 @@ def build_app(
         is_healthy = await _daemon_client.health()
         return {"daemon_connected": is_healthy}
 
+    @app.get("/api/daemon/carriers")
+    async def get_daemon_carriers():
+        """List available carrier board profiles from daemon."""
+        return await _daemon_client.list_carriers()
+
+    @app.post("/api/daemon/provision")
+    async def post_daemon_provision(body: dict):
+        """Provision a device via daemon — sets carrier, features, identity, triggers reboot."""
+        device_id = body.get("device_id")
+        carrier = body.get("carrier")
+        if not device_id or not carrier:
+            return JSONResponse(
+                status_code=400,
+                content={"error": "device_id and carrier are required"},
+            )
+        result = await _daemon_client.provision_device(
+            device_id=device_id,
+            carrier=carrier,
+            features=body.get("features"),
+            identity=body.get("identity"),
+            reboot=body.get("reboot", True),
+        )
+        status_code = 200 if result.get("status") == "ok" else 500
+        return JSONResponse(status_code=status_code, content=result)
+
     return app
 
 

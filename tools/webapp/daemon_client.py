@@ -119,12 +119,7 @@ class DaemonClient(BaseDeviceClient):
     async def get_messages(
         self, status: Optional[str] = None, dest: Optional[str] = None
     ) -> List[Dict]:
-        """Get command message history from daemon.
-
-        Args:
-            status: Filter by status ("QUEUED", "SENT", "FAILED", etc.)
-            dest: Filter by destination node ID
-        """
+        """Get command message history from daemon."""
         params = {}
         if status:
             params["status"] = status
@@ -140,4 +135,55 @@ class DaemonClient(BaseDeviceClient):
                 return []
         except Exception as e:
             logger.error(f"get_messages error: {e}")
+            return []
+
+    async def provision_device(
+        self,
+        device_id: str,
+        carrier: str,
+        features: Optional[Dict] = None,
+        identity: Optional[Dict] = None,
+        reboot: bool = True,
+    ) -> Dict:
+        """Provision a device with carrier profile and feature flags.
+
+        Args:
+            device_id: Target node identifier
+            carrier: Carrier board profile name (e.g. "rv12v", "bare")
+            features: Feature overrides {mqtt: 0, gps: 1, ...}
+            identity: Device identity {name, role, fleet_id}
+            reboot: Whether device should reboot after provisioning
+
+        Returns:
+            Response dict with status and reboot_in_ms, or error info
+        """
+        payload = {
+            "device_id": device_id,
+            "carrier": carrier,
+            "features": features or {},
+            "identity": identity or {},
+            "reboot": reboot,
+        }
+        try:
+            async with self.session.post(
+                f"{self.daemon_url}/api/provision", json=payload
+            ) as resp:
+                if resp.status == 200:
+                    return await resp.json()
+                error_text = await resp.text()
+                logger.error(f"provision_device failed HTTP {resp.status}: {error_text}")
+                return {"status": "error", "error_msg": error_text}
+        except Exception as e:
+            logger.error(f"provision_device error for {device_id}: {e}")
+            return {"status": "error", "error_msg": str(e)}
+
+    async def list_carriers(self) -> List[Dict]:
+        """Fetch available carrier board profiles from daemon."""
+        try:
+            async with self.session.get(f"{self.daemon_url}/api/carriers") as resp:
+                if resp.status == 200:
+                    return await resp.json()
+                return []
+        except Exception as e:
+            logger.error(f"list_carriers error: {e}")
             return []

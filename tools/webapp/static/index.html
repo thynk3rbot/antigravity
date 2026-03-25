@@ -418,6 +418,14 @@
                                 <button class="btn secondary" onclick="restoreNvs()">Restore Image</button>
                             </div>
                         </div>
+
+                        <div class="panel mb-4">
+                            <div class="panel-title">Fleet Provisioning</div>
+                            <div class="p-4">
+                                <div class="text-xs text-dim mb-3">Set carrier profile, feature flags, and device identity without reflashing.</div>
+                                <button class="btn w-full" onclick="openProvisionModal(window._activeNodeId || null)">Provision Active Device</button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -476,6 +484,134 @@
             </div>
         </div>
     </div>
+
+    <!-- Provision Device Modal -->
+    <div id="provision-modal" class="modal">
+        <div class="modal-content">
+            <div class="flex-row justify-between mb-4">
+                <h3 class="text-accent uppercase text-xs">Provision Device</h3>
+                <span class="text-xs text-dim" id="provision-device-label">—</span>
+            </div>
+            <div class="flex-col gap-3">
+                <div>
+                    <div class="lbl mb-1">Carrier Board</div>
+                    <select id="provision-carrier" class="input-styled w-full"></select>
+                </div>
+                <div>
+                    <div class="lbl mb-1">Device Identity</div>
+                    <div class="flex-row gap-2">
+                        <input id="provision-name" type="text" placeholder="Device name" class="input-styled flex-1">
+                        <select id="provision-role" class="input-styled" style="width:120px">
+                            <option value="node">node</option>
+                            <option value="hub">hub</option>
+                            <option value="relay">relay</option>
+                            <option value="gw">gw</option>
+                        </select>
+                    </div>
+                    <input id="provision-fleet" type="text" placeholder="Fleet ID (optional)" class="input-styled w-full mt-2">
+                </div>
+                <div>
+                    <div class="lbl mb-2">Feature Overrides <span class="text-dim text-xs">(carrier default if unchecked)</span></div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+                        <label class="flex-row gap-2 text-xs"><input type="checkbox" id="pf-relay" checked> Relay</label>
+                        <label class="flex-row gap-2 text-xs"><input type="checkbox" id="pf-mqtt"> MQTT</label>
+                        <label class="flex-row gap-2 text-xs"><input type="checkbox" id="pf-ble" checked> BLE</label>
+                        <label class="flex-row gap-2 text-xs"><input type="checkbox" id="pf-espnow" checked> ESP-NOW</label>
+                        <label class="flex-row gap-2 text-xs"><input type="checkbox" id="pf-sensor"> Sensor</label>
+                        <label class="flex-row gap-2 text-xs"><input type="checkbox" id="pf-gps"> GPS</label>
+                        <label class="flex-row gap-2 text-xs"><input type="checkbox" id="pf-oled" checked> OLED</label>
+                        <label class="flex-row gap-2 text-xs"><input type="checkbox" id="pf-mcp"> MCP I/O</label>
+                    </div>
+                </div>
+                <label class="flex-row gap-2 text-xs"><input type="checkbox" id="provision-reboot" checked> Reboot after provision</label>
+                <div id="provision-status" class="text-xs text-dim" style="min-height:18px;"></div>
+            </div>
+            <div class="flex-row gap-2 mt-4">
+                <button class="btn flex-1" onclick="submitProvision()">PROVISION & REBOOT</button>
+                <button class="btn secondary flex-1" onclick="closeProvisionModal()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    // ── Provisioning ─────────────────────────────────────────────────────────
+    let _provisionNodeId = null;
+
+    async function openProvisionModal(nodeId) {
+        _provisionNodeId = nodeId;
+        document.getElementById('provision-device-label').textContent = nodeId || '—';
+        document.getElementById('provision-status').textContent = '';
+        document.getElementById('provision-modal').classList.add('active');
+
+        const sel = document.getElementById('provision-carrier');
+        sel.textContent = '';
+        const fallbacks = [{id:'bare',name:'Bare Board'},{id:'rv12v',name:'RV 12V Control'}];
+        try {
+            const res = await fetch('/api/daemon/carriers');
+            const carriers = await res.json();
+            (carriers.length ? carriers : fallbacks).forEach(function(c) {
+                const opt = document.createElement('option');
+                opt.value = c.id;
+                opt.textContent = c.name;
+                sel.appendChild(opt);
+            });
+        } catch(_) {
+            fallbacks.forEach(function(c) {
+                const opt = document.createElement('option');
+                opt.value = c.id;
+                opt.textContent = c.name;
+                sel.appendChild(opt);
+            });
+        }
+    }
+
+    function closeProvisionModal() {
+        document.getElementById('provision-modal').classList.remove('active');
+        _provisionNodeId = null;
+    }
+
+    async function submitProvision() {
+        const nodeId = _provisionNodeId;
+        const carrier = document.getElementById('provision-carrier').value;
+        const statusEl = document.getElementById('provision-status');
+        if (!nodeId || !carrier) { statusEl.textContent = 'Select a device and carrier first.'; return; }
+
+        const features = {
+            relay:  document.getElementById('pf-relay').checked  ? 1 : 0,
+            mqtt:   document.getElementById('pf-mqtt').checked   ? 1 : 0,
+            ble:    document.getElementById('pf-ble').checked    ? 1 : 0,
+            espnow: document.getElementById('pf-espnow').checked ? 1 : 0,
+            sensor: document.getElementById('pf-sensor').checked ? 1 : 0,
+            gps:    document.getElementById('pf-gps').checked    ? 1 : 0,
+            oled:   document.getElementById('pf-oled').checked   ? 1 : 0,
+            mcp:    document.getElementById('pf-mcp').checked    ? 1 : 0,
+        };
+        const identity = { role: document.getElementById('provision-role').value };
+        const name  = document.getElementById('provision-name').value.trim();
+        const fleet = document.getElementById('provision-fleet').value.trim();
+        if (name)  identity.name     = name;
+        if (fleet) identity.fleet_id = fleet;
+
+        statusEl.textContent = 'Sending...';
+        try {
+            const res = await fetch('/api/daemon/provision', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ device_id: nodeId, carrier, features, identity,
+                                       reboot: document.getElementById('provision-reboot').checked }),
+            });
+            const data = await res.json();
+            if (data.status === 'ok') {
+                statusEl.textContent = 'Provisioned. Device rebooting...';
+                setTimeout(closeProvisionModal, 2500);
+            } else {
+                statusEl.textContent = 'Error: ' + (data.error_msg || data.detail || 'Unknown');
+            }
+        } catch(e) {
+            statusEl.textContent = 'Error: ' + e.message;
+        }
+    }
+    </script>
 
     <script src="/static/js/test_harness.js"></script>
     <script src="/static/js/app.js"></script>

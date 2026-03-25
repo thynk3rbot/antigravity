@@ -2,14 +2,22 @@
 TITLE LoRaLink Fleet Administrator
 color 0A
 echo =======================================================
-echo          LoRaLink Fleet Administrator Backend
+echo          LoRaLink Fleet Administrator
 echo =======================================================
 echo.
-echo Starting PC backend server on port 8000...
-echo Ensure your Heltec device is connected via USB for serial mapping if needed.
-echo Leave this window open to keep the server running.
-echo To access the Fleet Admin, go to http://localhost:8000 in your browser.
+echo Starting Daemon (port 8001) and Webapp (port 8000)...
+echo Fleet Admin UI: http://localhost:8000
+echo Daemon API:     http://localhost:8001
 echo.
+cd /d "%~dp0\.."
+
+:: Start daemon in background window
+start "LoRaLink Daemon :8001" cmd /k "python -m tools.daemon.daemon --config tools/daemon/daemon.config.json"
+
+:: Brief pause to let daemon initialize
+timeout /t 2 /nobreak >nul
+
+:: Start webapp in this window
 cd /d "%~dp0"
 python server.py
 if errorlevel 1 (
