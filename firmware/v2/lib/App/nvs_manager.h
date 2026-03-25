@@ -218,14 +218,53 @@ public:
     static bool getDerivedKey(const uint8_t peerMAC[6], uint8_t outKey[16]);
 
     // ========================================================================
+    // Modular Deployment Architecture (Phase 3)
+    // ========================================================================
+
+    /**
+     * @brief Check if a firmware feature is enabled via NVS toggle
+     * @param feature Name of the feature (e.g., "mqtt", "gps")
+     * @param defaultVal Default if key is missing (usually true for unprovisioned)
+     * @return true if enabled, false if explicitly disabled
+     */
+    static bool isFeatureEnabled(const std::string& feature, bool defaultVal = true);
+    static bool setFeatureEnabled(const std::string& feature, bool enabled);
+
+    /**
+     * @brief Get a hardware configuration value from "hw" namespace
+     */
+    static int32_t getHardwareConfigInt(const std::string& key, int32_t defaultVal = -1);
+    static std::string getHardwareConfigStr(const std::string& key, const std::string& defaultVal = "");
+    static bool setHardwareConfigInt(const std::string& key, int32_t value);
+    static bool setHardwareConfigStr(const std::string& key, const std::string& value);
+
+    /**
+     * @brief Get mesh/identity config from "mesh" namespace
+     */
+    static std::string getMeshConfigStr(const std::string& key, const std::string& defaultVal = "");
+    static bool setMeshConfigStr(const std::string& key, const std::string& value);
+
+    // ========================================================================
     // Utility Operations
     // ========================================================================
     static bool clearAll();
+    static bool clearNamespace(const char* nsName);
     static void printInfo();
 
 private:
-    static constexpr const char* NVS_NAMESPACE = "loralink";
+    static constexpr const char* NVS_NAMESPACE     = "loralink";
+    static constexpr const char* NS_FEATURES       = "features";
+    static constexpr const char* NS_HW             = "hw";
+    static constexpr const char* NS_MESH           = "mesh";
     
+    // Generic internal accessors
+    static bool getBool(const char* nsName, const char* key, bool defaultVal);
+    static bool setBool(const char* nsName, const char* key, bool value);
+    static int32_t getInt32(const char* nsName, const char* key, int32_t defaultVal);
+    static bool setInt32(const char* nsName, const char* key, int32_t value);
+    static std::string getString(const char* nsName, const char* key, const std::string& defaultVal);
+    static bool setString(const char* nsName, const char* key, const std::string& value);
+
     // Authoritative Keys (Aligned with legacy NVSConfig for zero-data-loss)
     static constexpr const char* KEY_NODE_ID     = "dev_name";
     static constexpr const char* KEY_WIFI_SSID   = "wifi_ssid";

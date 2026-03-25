@@ -52,6 +52,9 @@ public:
     /** @brief Poll all active plugins */
     void pollAll();
 
+    /** @brief Check if a feature/plugin is enabled in NVS */
+    static bool isEnabled(const char* featureName);
+
     /** @brief Get the full list of registered plugins */
     const std::vector<Plugin*>& getPlugins() const { return _plugins; }
 

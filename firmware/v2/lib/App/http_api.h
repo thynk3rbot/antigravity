@@ -187,6 +187,14 @@ private:
     static void handleOTAUpdate(AsyncWebServerRequest* request);
 
     /**
+     * @brief Provisioning & Configuration (Phase 3)
+     */
+    static void handleVersion(AsyncWebServerRequest* request);
+    static void handleConfig(AsyncWebServerRequest* request);
+    static void handleProvision(AsyncWebServerRequest* request);
+    static void handleReboot(AsyncWebServerRequest* request);
+
+    /**
      * @brief Handlers for Product Management (V1 Parity)
      */
     static void handleListProducts(AsyncWebServerRequest* request);

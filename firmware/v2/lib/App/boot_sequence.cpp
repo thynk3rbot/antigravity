@@ -40,6 +40,10 @@
 #include "mesh_coordinator.h"
 #include "control_loop.h"
 
+#ifdef BENCH_MODE
+  #include "bench_test.h"
+#endif
+
 // Forward declarations for tasks defined in main.cpp or separate handlers
 extern void radioTask(void* param);
 extern void meshTask(void* param);
@@ -110,28 +114,35 @@ void BootSequence::initCore() {
 #else
   Wire.begin(I2C_SDA, I2C_SCL, I2C_FREQ_HZ);
 #endif
-  
+  Serial.println("  ✓ I2C Wire started");
+
+  Serial.println("[CHECK] Initializing MCP...");
   MCPManager::getInstance().init();
-  vTaskDelay(pdMS_TO_TICKS(200)); 
+  Serial.println("  ✓ MCP Done");
+  vTaskDelay(pdMS_TO_TICKS(200));
+
+  Serial.println("[BOOT] Device initialized.");
 
   Serial.println("\n=== LoRaLink v2 Boot ===");
   Serial.printf("Version: %s\n", FIRMWARE_VERSION);
   Serial.printf("Board: %s / Radio: %s\n", HW_VERSION, RADIO_MODEL);
+  Serial.printf("Free Heap: %u bytes\n", esp_get_free_heap_size());
 }
 
 void BootSequence::initHAL() {
   Serial.println("\n[1/7] Initializing UI layer...");
-  if (OLEDManager::getInstance().init()) {
+  if (PluginManager::isEnabled("oled") && OLEDManager::getInstance().init()) {
     OLEDManager::getInstance().showSplash(FIRMWARE_VERSION, DEVICE_ROLE);
     Serial.println("  ✓ OLED initialized");
   } else {
-    Serial.println("  ! OLED init failed");
+    Serial.println("  ! OLED skipped or init failed");
   }
 
   ProductManager::getInstance().init();
   ProbeManager::getInstance().init();
   OLEDManager::getInstance().drawBootProgress("SYSTEM START", 10);
 
+  Serial.println("  -> Initializing Network Stack...");
   WiFi.mode(WIFI_STA);
   WiFi.disconnect(true);
   vTaskDelay(pdMS_TO_TICKS(50));
@@ -145,6 +156,7 @@ void BootSequence::initHAL() {
   OLEDManager::getInstance().setVersion(FIRMWARE_VERSION);
   OLEDManager::getInstance().setDeviceName(NVSManager::getNodeID("Node").c_str());
   OLEDManager::getInstance().addLog("System Initialized");
+  OLEDManager::getInstance().setDiagnostics(NVSManager::getBootCount(), NVSManager::getResetReason().c_str());
 
   Serial.println("[3/8] Initializing Radio HAL...");
   if (!RadioHAL::getInstance().init()) {
@@ -165,8 +177,16 @@ void BootSequence::initTransports() {
   static DHTSensorPlugin dhtPlugin(&dhtIO);
   SensorHAL::getInstance().registerPlugin(&dhtPlugin);
 #endif
-  SensorHAL::getInstance().init();
+  if (PluginManager::isEnabled("sensor")) {
+    SensorHAL::getInstance().init();
+  }
+  
+  if (PluginManager::isEnabled("mcp")) {
+     MCPManager::getInstance().init();
+  }
+
   PluginManager::getInstance().initAll();
+  Serial.println("  ✓ Core HAL & Plugins initialized");
 
   std::string nodeIDStr = NVSManager::getNodeID("Node");
   if (nodeIDStr.empty()) nodeIDStr = "Unknown";
@@ -175,26 +195,33 @@ void BootSequence::initTransports() {
     Serial.println("  ! LoRa transport failed");
   } else {
     MessageRouter::instance().registerTransport(&LoRaTransport::getInstance());
+    Serial.println("  ✓ LoRa transport initialized");
   }
-  vTaskDelay(pdMS_TO_TICKS(1000)); 
+  vTaskDelay(pdMS_TO_TICKS(1000));
   OLEDManager::getInstance().drawBootProgress("LORA COMM", 50);
 
   if (!SerialTransport::getInstance().init()) {
     Serial.println("  ! Serial CLI failed");
   } else {
     Serial.println("  ✓ Serial CLI initialized");
+    OLEDManager::getInstance().addLog("Serial CLI Ready");
   }
+  OLEDManager::getInstance().drawBootProgress("SERIAL CLI", 60);
 
-  vTaskDelay(pdMS_TO_TICKS(500)); 
-  if (!BLETransport::initStatic()) {
-    Serial.println("  ! BLE transport failed");
-  } else {
+  vTaskDelay(pdMS_TO_TICKS(500));
+  if (PluginManager::isEnabled("ble") && BLETransport::initStatic()) {
+    Serial.println("  ✓ BLE transport initialized");
     BLETransport::setRxCallback([](const String& data) {
+      Serial.printf("[BLE] Command received: '%s'\n", data.c_str());
       CommandManager::process(data, [](const String& resp) {
         BLETransport::sendStringStatic(resp);
       });
     });
+    OLEDManager::getInstance().addLog("BLE Ready");
+  } else {
+    Serial.println("  - BLE skipped");
   }
+  OLEDManager::getInstance().drawBootProgress("BLE MESH", 65);
 
   vTaskDelay(pdMS_TO_TICKS(2000)); 
 
@@ -204,17 +231,21 @@ void BootSequence::initTransports() {
 
   if (!wifiSSID.empty() && !wifiPass.empty()) {
     if (WiFiTransport::init(wifiSSID, wifiPass, mdnsHostname)) {
+      Serial.println("  ✓ WiFi transport initialized");
       if (HttpAPI::init()) {
+        Serial.println("  ✓ HTTP API server started");
         OLEDManager::getInstance().setIP(WiFi.localIP().toString().c_str());
       }
     }
   }
 
   vTaskDelay(pdMS_TO_TICKS(500));
-  if (!ESPNowTransport::getInstance().init()) {
-    Serial.println("  ! ESP-NOW failed");
-  } else {
+  Serial.println("[4.5/8] Initializing ESP-NOW...");
+  if (PluginManager::isEnabled("espnow") && ESPNowTransport::getInstance().init()) {
     MessageRouter::instance().registerTransport(&ESPNowTransport::getInstance());
+    Serial.println("  ✓ ESP-NOW transport initialized");
+  } else {
+    Serial.println("  - ESP-NOW skipped");
   }
   OLEDManager::getInstance().drawBootProgress("TRANS PORTS", 90);
 
@@ -228,7 +259,7 @@ void BootSequence::initTransports() {
   });
 
 #ifdef ENABLE_MQTT_TRANSPORT
-  if (MQTTTransport::initStatic()) {
+  if (PluginManager::isEnabled("mqtt") && MQTTTransport::initStatic()) {
     MQTTTransport::onCommand([](const std::string& cmd) {
       CommandManager::process(String(cmd.c_str()), [](const String& resp) {
         MQTTTransport::instance()->publishResponse(resp);
@@ -239,10 +270,15 @@ void BootSequence::initTransports() {
 }
 
 void BootSequence::initApplication() {
-  g_ourNodeID = 1; 
-  
+  Serial.println("[5/8] Initializing application...");
+
+  g_ourNodeID = 1;
+  Serial.println("  ✓ Peer mode initialized");
+
 #ifdef HAS_GPS
-  GPSManager::init();
+  if (PluginManager::isEnabled("gps")) {
+    GPSManager::init();
+  }
 #endif
 
   MeshCoordinator::instance().init();
@@ -254,13 +290,29 @@ void BootSequence::initApplication() {
     }
 #endif
   });
+  Serial.println("  ✓ Mesh coordinator initialized");
 
   MessageRouter::instance().setMessageHandler(MessageHandler::handleReceived);
 
-  ScheduleManager::init();
+#ifdef BENCH_MODE
+  Serial.println("[6/8] Running bench mode diagnostics...");
+  if (!BenchTest::runAll()) {
+    Serial.println("\n  WARNING: Some bench tests failed!");
+  }
+  Serial.println("[6/8] Re-initializing hardware after bench mode...");
+  RadioHAL::getInstance().init();
+  RelayHAL::getInstance().init();
+  LoRaTransport::getInstance().init();
+#endif
+
+  if (PluginManager::isEnabled("scheduler") && ScheduleManager::init()) {
+    Serial.printf("  ✓ Scheduler initialized (%d task(s) loaded)\n",
+                  ScheduleManager::getTaskCount());
+  }
 }
 
 void BootSequence::createTasks() {
+  Serial.println("[7/8] Creating FreeRTOS tasks...");
   xTaskCreatePinnedToCore(radioTask, "RadioTask", 8192, NULL, 4, &radioTaskHandle, 1);
   xTaskCreatePinnedToCore(meshTask, "MeshTask", 8192, NULL, 3, &meshTaskHandle, 1);
   xTaskCreatePinnedToCore(probeTask, "ProbeTask", 4096, NULL, 2, &probeTaskHandle, 0); 
@@ -276,4 +328,5 @@ void BootSequence::createTasks() {
     &controlTaskHandle,
     1
   );
+  Serial.println("  ✓ Tasks created");
 }

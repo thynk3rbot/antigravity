@@ -10,6 +10,7 @@
 #include <LittleFS.h>
 #include <ESPmDNS.h>
 #include "product_manager.h"
+#include "../HAL/board_config.h"
 #include "../HAL/probe_manager.h"
 
 // ============================================================================
@@ -57,6 +58,12 @@ bool HttpAPI::init() {
   server->on("/api/command", HTTP_POST, [](AsyncWebServerRequest *request){}, NULL, handleBody);
   server->on("/api/ota", HTTP_GET, handleOTACheck);
   server->on("/api/ota/update", HTTP_POST, [](AsyncWebServerRequest *request){}, NULL, _handleOTAUpdateBody);
+
+  // Provisioning & Config (Phase 3)
+  server->on("/api/version", HTTP_GET, handleVersion);
+  server->on("/api/config", HTTP_GET, handleConfig);
+  server->on("/api/provision", HTTP_POST, [](AsyncWebServerRequest *request){}, NULL, handleBody);
+  server->on("/api/reboot", HTTP_POST, handleReboot);
 
   // Product Management (V1 Parity)
   server->on("/api/products/list", HTTP_GET, handleListProducts);
@@ -397,6 +404,102 @@ void HttpAPI::handle404(AsyncWebServerRequest* request) {
   AsyncWebServerResponse* response = request->beginResponse(404, "application/json", jsonStr);
   response->addHeader("Access-Control-Allow-Origin", "*");
   request->send(response);
+}
+
+void HttpAPI::handleVersion(AsyncWebServerRequest* request) {
+  DynamicJsonDocument doc(256);
+  doc["version"] = FIRMWARE_VERSION;
+  doc["hardware"] = HW_VERSION;
+  doc["board"] = HW_VERSION;
+  std::string role = NVSManager::getMeshConfigStr("role");
+  doc["role"] = role.empty() ? "node" : role;
+  
+  String json;
+  serializeJson(doc, json);
+  request->send(200, "application/json", json);
+}
+
+void HttpAPI::handleConfig(AsyncWebServerRequest* request) {
+  DynamicJsonDocument doc(2048);
+  
+  // Features
+  JsonObject feats = doc.createNestedObject("features");
+  const char* featKeys[] = {"mqtt", "gps", "ble", "espnow", "sensor", "oled", "scheduler", "mcp"};
+  for (const char* k : featKeys) feats[k] = NVSManager::isFeatureEnabled(k);
+
+  // Hardware Pins/Buses
+  JsonObject hw = doc.createNestedObject("hw");
+  const char* hwKeys[] = {"i2c_sda", "i2c_scl", "mcp_addr", "carrier"};
+  for (const char* k : hwKeys) {
+    int32_t val = NVSManager::getHardwareConfigInt(k);
+    if (val != -1) hw[k] = val;
+    else {
+      std::string s = NVSManager::getHardwareConfigStr(k);
+      if (!s.empty()) hw[k] = s;
+    }
+  }
+
+  // Mesh/Identity
+  JsonObject mesh = doc.createNestedObject("mesh");
+  const char* meshKeys[] = {"node_id", "wifi_ssid", "role", "fleet_id"};
+  for (const char* k : meshKeys) {
+    std::string s = NVSManager::getMeshConfigStr(k);
+    if (!s.empty()) mesh[k] = s;
+  }
+  
+  String json;
+  serializeJson(doc, json);
+  request->send(200, "application/json", json);
+}
+
+void HttpAPI::handleProvision(AsyncWebServerRequest* request) {
+  if (request->_tempObject == nullptr) {
+    request->send(400, "application/json", "{\"error\":\"missing body\"}");
+    return;
+  }
+
+  String body = *((String*)request->_tempObject);
+  delete (String*)request->_tempObject;
+  request->_tempObject = nullptr;
+
+  DynamicJsonDocument doc(2048);
+  if (deserializeJson(doc, body) != DeserializationError::Ok) {
+    request->send(400, "application/json", "{\"error\":\"invalid json\"}");
+    return;
+  }
+
+  // Process features
+  if (doc.containsKey("features")) {
+    JsonObject feats = doc["features"];
+    for (JsonPair p : feats) {
+      NVSManager::setFeatureEnabled(p.key().c_str(), p.value().as<bool>());
+    }
+  }
+
+  // Process hardware
+  if (doc.containsKey("hw")) {
+    JsonObject hw = doc["hw"];
+    for (JsonPair p : hw) {
+      if (p.value().is<int>()) NVSManager::setHardwareConfigInt(p.key().c_str(), p.value().as<int>());
+      else NVSManager::setHardwareConfigStr(p.key().c_str(), p.value().as<String>().c_str());
+    }
+  }
+
+  // Process mesh
+  if (doc.containsKey("mesh")) {
+    JsonObject mesh = doc["mesh"];
+    for (JsonPair p : mesh) {
+      NVSManager::setMeshConfigStr(p.key().c_str(), p.value().as<String>().c_str());
+    }
+  }
+
+  request->send(200, "application/json", "{\"status\":\"ok\",\"action\":\"reboot_required\"}");
+}
+
+void HttpAPI::handleReboot(AsyncWebServerRequest* request) {
+  request->send(200, "application/json", "{\"status\":\"rebooting\"}");
+  vTaskDelay(pdMS_TO_TICKS(500));
+  ESP.restart();
 }
 
 void HttpAPI::addCORSHeaders(AsyncWebServerRequest* request) {

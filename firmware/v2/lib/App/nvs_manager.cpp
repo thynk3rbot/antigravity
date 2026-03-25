@@ -467,8 +467,17 @@ void NVSManager::setResetReason(const std::string& reason) {
 // ============================================================================
 
 bool NVSManager::clearAll() {
+  bool success = true;
+  if (!clearNamespace(NVS_NAMESPACE)) success = false;
+  if (!clearNamespace(NS_FEATURES)) success = false;
+  if (!clearNamespace(NS_HW)) success = false;
+  if (!clearNamespace(NS_MESH)) success = false;
+  return success;
+}
+
+bool NVSManager::clearNamespace(const char* nsName) {
   nvs_handle_t handle;
-  if (nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle) != ESP_OK) return false;
+  if (nvs_open(nsName, NVS_READWRITE, &handle) != ESP_OK) return false;
   esp_err_t err = nvs_erase_all(handle);
   if (err == ESP_OK) err = nvs_commit(handle);
   nvs_close(handle);
@@ -476,13 +485,122 @@ bool NVSManager::clearAll() {
 }
 
 void NVSManager::printInfo() {
-  Serial.println("\n========== NVS Configuration (Industrial) ==========");
+  Serial.println("\n========== NVS Configuration (Phase 3) ==========");
   Serial.printf("  Node ID: %s\n", getNodeID("(not set)").c_str());
-  Serial.printf("  WiFi SSID: %s\n", getWiFiSSID("(not set)").c_str());
-  Serial.printf("  MQTT Broker: %s\n", getMQTTBroker("(not set)").c_str());
   Serial.printf("  Hardware Var: %u\n", getHardwareVariant());
   Serial.printf("  Boot Count: %u\n", getBootCount());
-  Serial.println("==================================================\n");
+  
+  // Print features summary
+  Serial.println("  Features: [ " );
+  const char* feats[] = {"mqtt", "gps", "ble", "espnow", "sensor", "oled", "scheduler", "mcp"};
+  for (const char* f : feats) {
+    if (isFeatureEnabled(f)) Serial.printf("%s ", f);
+  }
+  Serial.println("]");
+  
+  Serial.println("================================================\n");
+}
+
+// ============================================================================
+// Modular Deployment Architecture (Phase 3)
+// ============================================================================
+
+bool NVSManager::isFeatureEnabled(const std::string& feature, bool defaultVal) {
+  return getBool(NS_FEATURES, feature.c_str(), defaultVal);
+}
+
+bool NVSManager::setFeatureEnabled(const std::string& feature, bool enabled) {
+  return setBool(NS_FEATURES, feature.c_str(), enabled);
+}
+
+int32_t NVSManager::getHardwareConfigInt(const std::string& key, int32_t defaultVal) {
+  return getInt32(NS_HW, key.c_str(), defaultVal);
+}
+
+std::string NVSManager::getHardwareConfigStr(const std::string& key, const std::string& defaultVal) {
+  return getString(NS_HW, key.c_str(), defaultVal);
+}
+
+bool NVSManager::setHardwareConfigInt(const std::string& key, int32_t value) {
+  return setInt32(NS_HW, key.c_str(), value);
+}
+
+bool NVSManager::setHardwareConfigStr(const std::string& key, const std::string& value) {
+  return setString(NS_HW, key.c_str(), value);
+}
+
+std::string NVSManager::getMeshConfigStr(const std::string& key, const std::string& defaultVal) {
+  return getString(NS_MESH, key.c_str(), defaultVal);
+}
+
+bool NVSManager::setMeshConfigStr(const std::string& key, const std::string& value) {
+  return setString(NS_MESH, key.c_str(), value);
+}
+
+// ============================================================================
+// Generic Internal Accessors
+// ============================================================================
+
+bool NVSManager::getBool(const char* nsName, const char* key, bool defaultVal) {
+  nvs_handle_t handle;
+  if (nvs_open(nsName, NVS_READONLY, &handle) != ESP_OK) return defaultVal;
+  uint8_t val = defaultVal ? 1 : 0;
+  nvs_get_u8(handle, key, &val);
+  nvs_close(handle);
+  return (val != 0);
+}
+
+bool NVSManager::setBool(const char* nsName, const char* key, bool value) {
+  nvs_handle_t handle;
+  if (nvs_open(nsName, NVS_READWRITE, &handle) != ESP_OK) return false;
+  esp_err_t err = nvs_set_u8(handle, key, value ? 1 : 0);
+  if (err == ESP_OK) err = nvs_commit(handle);
+  nvs_close(handle);
+  return (err == ESP_OK);
+}
+
+int32_t NVSManager::getInt32(const char* nsName, const char* key, int32_t defaultVal) {
+  nvs_handle_t handle;
+  if (nvs_open(nsName, NVS_READONLY, &handle) != ESP_OK) return defaultVal;
+  int32_t val = defaultVal;
+  nvs_get_i32(handle, key, &val);
+  nvs_close(handle);
+  return val;
+}
+
+bool NVSManager::setInt32(const char* nsName, const char* key, int32_t value) {
+  nvs_handle_t handle;
+  if (nvs_open(nsName, NVS_READWRITE, &handle) != ESP_OK) return false;
+  esp_err_t err = nvs_set_i32(handle, key, value);
+  if (err == ESP_OK) err = nvs_commit(handle);
+  nvs_close(handle);
+  return (err == ESP_OK);
+}
+
+std::string NVSManager::getString(const char* nsName, const char* key, const std::string& defaultVal) {
+  nvs_handle_t handle;
+  if (nvs_open(nsName, NVS_READONLY, &handle) != ESP_OK) return defaultVal;
+  size_t size = 0;
+  esp_err_t err = nvs_get_str(handle, key, nullptr, &size);
+  if (err != ESP_OK) {
+    nvs_close(handle);
+    return defaultVal;
+  }
+  char* buf = new char[size];
+  nvs_get_str(handle, key, buf, &size);
+  std::string res(buf);
+  delete[] buf;
+  nvs_close(handle);
+  return res;
+}
+
+bool NVSManager::setString(const char* nsName, const char* key, const std::string& value) {
+  nvs_handle_t handle;
+  if (nvs_open(nsName, NVS_READWRITE, &handle) != ESP_OK) return false;
+  esp_err_t err = nvs_set_str(handle, key, value.c_str());
+  if (err == ESP_OK) err = nvs_commit(handle);
+  nvs_close(handle);
+  return (err == ESP_OK);
 }
 
 bool NVSManager::setNetworkSecret(const uint8_t secret[16]) {
