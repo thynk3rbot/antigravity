@@ -1,11 +1,51 @@
 import aiohttp
+from abc import ABC, abstractmethod
 from typing import Optional, Dict, List
 import logging
 
 logger = logging.getLogger(__name__)
 
 
-class DaemonClient:
+class BaseDeviceClient(ABC):
+    """Abstract interface for device communication clients.
+
+    Any client that talks to LoRaLink devices — whether through the PC Daemon,
+    directly via HTTP to an ESP32, or via BLE — must implement this interface.
+
+    The webapp holds a BaseDeviceClient reference and never needs to know
+    which concrete implementation is in use.
+
+    Implementations:
+        DaemonClient      — routes via PC Daemon at localhost:8001
+        DirectHTTPClient  — calls ESP32 HTTP API directly (future)
+    """
+
+    @abstractmethod
+    async def connect(self) -> None:
+        """Initialize connection. Call at app startup."""
+
+    @abstractmethod
+    async def disconnect(self) -> None:
+        """Tear down connection. Call at app shutdown."""
+
+    @abstractmethod
+    async def health(self) -> bool:
+        """Return True if the backend is reachable."""
+
+    @abstractmethod
+    async def list_nodes(self) -> List[Dict]:
+        """Return list of known nodes as dicts."""
+
+    @abstractmethod
+    async def send_command(self, node_id: str, command: str) -> bool:
+        """Send command to device. Return True if delivered."""
+
+    @abstractmethod
+    async def get_messages(self, status: Optional[str] = None, dest: Optional[str] = None) -> List[Dict]:
+        """Return message history with optional filters."""
+
+
+class DaemonClient(BaseDeviceClient):
     """HTTP client for communicating with the LoRaLink PC Daemon.
 
     The webapp uses this to delegate ALL device communication to the daemon,

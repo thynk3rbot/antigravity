@@ -175,15 +175,17 @@ except ImportError:
 
 # ── Daemon client — communicates with LoRaLink PC Daemon on :8001 ─────────────
 try:
-    from tools.webapp.daemon_client import DaemonClient
+    from tools.webapp.daemon_client import DaemonClient, BaseDeviceClient
     DAEMON_CLIENT_AVAILABLE = True
 except ImportError:
     try:
         # Fallback for when running directly from tools/webapp/
-        from daemon_client import DaemonClient  # type: ignore
+        from daemon_client import DaemonClient, BaseDeviceClient  # type: ignore
         DAEMON_CLIENT_AVAILABLE = True
     except ImportError:
         DAEMON_CLIENT_AVAILABLE = False
+        class BaseDeviceClient:  # type: ignore
+            """Stub ABC when daemon_client.py is not importable."""
         class DaemonClient:  # type: ignore
             """Stub when daemon_client.py is not importable."""
             def __init__(self, *args, **kwargs): pass
@@ -1285,7 +1287,7 @@ def build_app(
     _sim_bridge: Optional[Any] = None
     _ai_gateway = AIGateway()
     _processor_task: Optional[asyncio.Task] = None
-    _daemon_client = DaemonClient()  # Connects to http://localhost:8001 by default
+    _daemon_client: BaseDeviceClient = DaemonClient()  # Connects to http://localhost:8001 by default
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):

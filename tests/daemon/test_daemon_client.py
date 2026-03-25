@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock
-from tools.webapp.daemon_client import DaemonClient
+from tools.webapp.daemon_client import DaemonClient, BaseDeviceClient
 
 
 @pytest.mark.asyncio
@@ -46,3 +46,15 @@ async def test_daemon_client_send_command_returns_false_on_failure():
 
     result = await client.send_command("node1", "GPIO 5 HIGH")
     assert result is False
+
+
+def test_daemon_client_implements_base_interface():
+    """DaemonClient satisfies the BaseDeviceClient abstract interface."""
+    assert issubclass(DaemonClient, BaseDeviceClient)
+    client = DaemonClient()
+    assert hasattr(client, 'connect')
+    assert hasattr(client, 'disconnect')
+    assert hasattr(client, 'health')
+    assert hasattr(client, 'list_nodes')
+    assert hasattr(client, 'send_command')
+    assert hasattr(client, 'get_messages')
