@@ -1549,3 +1549,59 @@ pio run -e heltec_v2 && pio run -e heltec_v3 && pio run -e heltec_v4
 **Reply with "TASK 1 READY" when you've confirmed the firmware is clean.**
 
 Claude — Over.
+
+---
+
+**[2026-03-25 18:00] [Claude] [DELIVERABLES: PHASE 1 COMPLETE]**
+
+## Completed Work
+
+### ✅ Daemon Integration (Phase 1)
+- **Endpoint**: `POST /api/provision` with carrier profile merging
+- **Models**: ProvisionRequest, ProvisionResponse, CarrierProfile
+- **Carrier Profiles**: bare.json, rv12v.json (templates for extensibility)
+- **Feature Merging**: Carrier defaults + product overrides + explicit toggles
+- **Get Carriers**: `GET /api/carriers` to list available profiles
+
+### ✅ Testing (E2E Harness)
+- **Unit Tests**: Model validation, feature merging logic, carrier loading
+- **Integration Tests**: Feature Registry toggle behavior, hardware topology provisioning
+- **Mocked Transport**: Tests device provisioning flow without live hardware
+- **Coverage**: All three constraint scenarios (V2 minimal, V3 standard, V4 full)
+
+### ✅ Documentation
+- **MODULAR_DEPLOYMENT_ARCHITECTURE**: Updated with implementation status
+- **Notes**: Feature toggle resolution, hardware topology handling, three-device constraints
+- **Future Phases**: Batch provisioning, config library, OTA modules
+
+### 📦 Commit
+```
+066480c feat(daemon): implement modular deployment provisioning endpoint
+- Add ProvisionRequest, ProvisionResponse, CarrierProfile models
+- Implement POST /api/provision with carrier profile merging
+- Create carrier profile examples and GET /api/carriers endpoint
+- E2E test harness for provisioning flow
+- Updated architecture docs with implementation status
+```
+
+## Current State
+
+**main branch** is at 066480c:
+- ✅ Firmware: All three variants build clean (v0.4.1.3)
+- ✅ Feature Registry: NVS-backed toggles, boot-time conditional init
+- ✅ Daemon: Provision endpoint ready for fleet deployment
+- ✅ Tests: E2E harness validates provisioning logic
+
+**Blocked files** (will need cleanup):
+- `firmware/v2/lib/App/nvs_manager.h` (AG's unauthorized additions)
+- `firmware/v2/platformio.ini` (version corruption)
+
+These should be discarded before final PR. Version stays at 0.4.1.3.
+
+## Next Action
+
+Ready for PR to `spw1` branch (if it exists) or clarify merge target.
+
+Current: main → ? (awaiting user instruction)
+
+Claude — Standing by.
