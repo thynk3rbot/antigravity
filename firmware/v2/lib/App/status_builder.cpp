@@ -42,32 +42,75 @@ uint32_t StatusBuilder::lastBootTimestamp = 0;
 // Public Methods
 // ============================================================================
 
-StaticJsonDocument<2048> StatusBuilder::buildStatus() {
+ArduinoJson::StaticJsonDocument<2048> StatusBuilder::buildStatus(bool verbose) {
     StaticJsonDocument<2048> doc;
 
-    // Add all sections to the document
-    addBasicInfo(doc);
-    addPowerInfo(doc);
-    addLoRaInfo(doc);
-    addWiFiInfo(doc);
-    addBLEInfo(doc);
-    addMQTTInfo(doc);
-    addPeerInfo(doc);
+    // Spec Matrix Locking (User Draft)
+    addBasicInfo(doc);  // Always adds name, id, ver
+
+    if (verbose) {
+        // VSTATUS: Exhaustive
+        addPowerInfo(doc);
+        addLoRaInfo(doc);
+        addWiFiInfo(doc);
+        addBLEInfo(doc);
+        addMQTTInfo(doc);
+        addPeerInfo(doc);
 #ifdef HAS_GPS
-    addGPSInfo(doc);
+        addGPSInfo(doc);
 #endif
-    addTransportStatus(doc);
-    addRelayInfo(doc);
-    addTelemetry(doc);
-    addSystemInfo(doc);
-    addPluginList(doc);
-    addHardwareMap(doc);
+        addTransportStatus(doc);
+        addRelayInfo(doc);
+        addTelemetry(doc);
+        addSystemInfo(doc);
+        addPluginList(doc);
+        addHardwareMap(doc);
+    } else {
+        // STATUS: Strictly Friendly (Draft column 3)
+        addPowerInfo(doc);      // contains bat_pct, mode, vext (removed bat_v below)
+        doc.remove("bat_v");
+        
+        addLoRaInfo(doc);       // contains lora_rssi (removed lora_snr, rssi_history below)
+        doc.remove("lora_snr");
+        doc.remove("rssi_history");
+        
+        addTelemetry(doc);      // contains uptime
+        doc.remove("free_heap");
+        
+        addPeerInfo(doc);       // contains peer_cnt (removed peers below)
+        doc.remove("peers");
+
+        #ifdef HAS_GPS
+        addGPSInfo(doc);        // contains lat, lon, alt (removed sats, fix, age below)
+        JsonObject gps = doc["gps"];
+        gps.remove("sats");
+        gps.remove("fix");
+        gps.remove("age");
+        #endif
+
+        // Additional Pruning to match Draft Identity
+        doc.remove("id");
+        doc.remove("hw_id");
+        doc.remove("hw");
+        doc.remove("mac");
+        
+        // Final cleanup for fields not in Draft column 3
+        doc.remove("transports");
+        doc.remove("relay_mask");
+        doc.remove("relays");
+        doc.remove("detected_devices");
+        doc.remove("boot_cnt");
+        doc.remove("reset");
+        doc.remove("temp_c");
+        doc.remove("plugins");
+        doc.remove("hardware_map");
+    }
 
     return doc;
 }
 
-std::string StatusBuilder::buildStatusString() {
-    StaticJsonDocument<2048> doc = buildStatus();
+std::string StatusBuilder::buildStatusString(bool verbose) {
+    StaticJsonDocument<2048> doc = buildStatus(verbose);
     std::string result;
     serializeJson(doc, result);
     return result;
@@ -88,6 +131,7 @@ void StatusBuilder::addBasicInfo(ArduinoJson::JsonDocument& doc) {
         devObj["type"] = d.isSTA ? "STA" : "AP";
         if (!d.ssid.empty()) devObj["ssid"] = d.ssid;
     }
+    ProbeManager::getInstance().releaseRegistry();
 
     // Device identity
     doc["id"] = String(NVSManager::getNodeID("Node").c_str());

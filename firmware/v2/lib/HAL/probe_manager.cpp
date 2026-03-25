@@ -1,11 +1,16 @@
 #include "probe_manager.h"
 #include <Arduino.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
 #include <WiFi.h>
 #include <esp_wifi.h>
 
 // Initialize static members if any (none currently besides singleton)
 
 bool ProbeManager::init() {
+    if (!_registryMutex) {
+        _registryMutex = xSemaphoreCreateMutex();
+    }
     // Wi-Fi is initialized in main.cpp to prevent deadlocks
     // We don't start sniffing by default to save power/cpu until requested
     return true;
@@ -68,7 +73,14 @@ void ProbeManager::clearRegistry() {
 }
 
 const std::vector<DetectedDevice>& ProbeManager::getDetectedDevices() const {
+    // Note: Returning reference while locked is risky, but StatusBuilder copies it into JSON doc quickly.
+    // In a high-concurrency app, we'd return a copy, but let's use the mutex for the read.
+    if (_registryMutex) xSemaphoreTake(_registryMutex, portMAX_DELAY);
     return _devices;
+}
+
+void ProbeManager::releaseRegistry() const {
+    if (_registryMutex) xSemaphoreGive(_registryMutex);
 }
 
 void ProbeManager::wifiSnifferCallback(void* buf, wifi_promiscuous_pkt_type_t type) {
@@ -125,6 +137,9 @@ void ProbeManager::processPacket(void* buf, wifi_promiscuous_pkt_type_t type) {
 }
 
 void ProbeManager::updateRegistry(const DetectedDevice& dev) {
+    if (!_registryMutex) return;
+    xSemaphoreTake(_registryMutex, portMAX_DELAY);
+
     // Add or update in registry
     bool found = false;
     for (auto& existing : _devices) {
@@ -143,4 +158,6 @@ void ProbeManager::updateRegistry(const DetectedDevice& dev) {
         }
         _devices.push_back(dev);
     }
+
+    xSemaphoreGive(_registryMutex);
 }

@@ -66,6 +66,7 @@ public:
 
   // Registry Access
   const std::vector<DetectedDevice>& getDetectedDevices() const;
+  void releaseRegistry() const;
   void clearRegistry();
 
 private:
@@ -95,6 +96,7 @@ private:
   uint8_t _currentChannel;
   
   std::vector<DetectedDevice> _devices;
+  SemaphoreHandle_t _registryMutex = nullptr;
   
   static const uint32_t HOP_INTERVAL_MS = 300;
   static const size_t MAX_DEVICES = 50;

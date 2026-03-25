@@ -49,7 +49,11 @@ void PowerManager::begin() {
 
 #ifdef VEXT_PIN
     pinMode(VEXT_PIN, OUTPUT);
-    digitalWrite(VEXT_PIN, HIGH);  // HIGH = off on Heltec boards (start disabled)
+#ifdef ARDUINO_HELTEC_WIFI_LORA_32_V4
+    digitalWrite(VEXT_PIN, LOW);   // V4: LOW = OFF
+#else
+    digitalWrite(VEXT_PIN, HIGH);  // V2/V3: HIGH = OFF
+#endif
 #endif
 
     // Create the pulse timer (non-blocking)
@@ -111,19 +115,25 @@ void PowerManager::enableVEXT() {
     _vextPulseState = 1;
     if (_vextTimer) xTimerStart((TimerHandle_t)_vextTimer, 0);
 #else
-    digitalWrite(VEXT_PIN, LOW);   // LOW = power ON on Heltec boards
 #ifdef ARDUINO_HELTEC_WIFI_LORA_32_V4
+    digitalWrite(VEXT_PIN, LOW);   // V4 VEXT is standard Active LOW (GPIO 36)
     pinMode(37, OUTPUT);
-    digitalWrite(37, HIGH);        // V4 Power Control (Active HIGH)
+    digitalWrite(37, HIGH);        // V4 Battery Sense Enable
+#else
+    digitalWrite(VEXT_PIN, LOW);   // V2/V3 VEXT is Active LOW
 #endif
-    _vextPulseState = 0; // Immediately stable
+    _vextPulseState = 0;           // Immediately stable
 #endif
 #endif
 }
 
 void PowerManager::disableVEXT() {
 #ifdef VEXT_PIN
-    digitalWrite(VEXT_PIN, HIGH);  // HIGH = power OFF on Heltec boards
+#ifdef ARDUINO_HELTEC_WIFI_LORA_32_V4
+    digitalWrite(VEXT_PIN, LOW);   // V4: LOW = OFF
+#else
+    digitalWrite(VEXT_PIN, HIGH);  // V2/V3: HIGH = OFF
+#endif
 #endif
 }
 
