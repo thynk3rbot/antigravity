@@ -193,13 +193,36 @@ bool OLEDManager::init() {
     _initState = InitState::RESET_LOW;
     _stateStartTime = millis();
     
+    // Perform synchronous hardware reset for boot visibility
     if (OLED_RESET_PIN != -1) {
         pinMode(OLED_RESET_PIN, OUTPUT);
         digitalWrite(OLED_RESET_PIN, LOW);
+        delay(50);
+        digitalWrite(OLED_RESET_PIN, HIGH);
+        delay(50);
     }
     
     pinMode(BUTTON_PIN, INPUT_PULLUP);
     attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), buttonISR, FALLING);
+    
+    // Synchronous I2C Start
+    Wire.begin(I2C_SDA, I2C_SCL);
+    if (display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDRESS)) {
+        display.ssd1306_command(SSD1306_SETCONTRAST);
+#ifdef ARDUINO_HELTEC_WIFI_LORA_32
+        display.ssd1306_command(0xFF);
+#else
+        display.ssd1306_command(0xCF);
+#endif
+        display.clearDisplay();
+        display.display();
+        _initState = InitState::RUNNING;
+        Serial.println("  ✓ OLED Hardware initialized");
+    } else {
+        Serial.println("  ! OLED Hardware begin failed");
+        // We still return true to allow the system to boot, but state stays START_I2C to retry in update()
+        _initState = InitState::START_I2C;
+    }
     
     g_lastUpdateTime = millis();
     g_lastActivityTime = millis();

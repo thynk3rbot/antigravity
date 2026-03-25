@@ -34,15 +34,15 @@
 // ============================================================================
 
 void setUp() {
-    MeshCoordinator::instance().clearNeighbors();
-    MeshCoordinator::instance().clearStats();
-    MeshCoordinator::instance().setOwnNodeID(10);
+    MeshCoordinator::getInstance().clearNeighbors();
+    MeshCoordinator::getInstance().clearStats();
+    MeshCoordinator::getInstance().setOwnNodeID(10);
     _mock_millis_value = 0;
 }
 
 void tearDown() {
     // Unregister any transports registered in tests to prevent cross-test contamination
-    MessageRouter& router = MessageRouter::instance();
+    MessageRouter& router = MessageRouter::getInstance();
     router.unregisterTransport(TransportType::SERIAL_DEBUG);
     router.unregisterTransport(TransportType::LORA);
     router.unregisterTransport(TransportType::MQTT);
@@ -69,7 +69,7 @@ static ControlPacket makeRelayablePacket(uint8_t src, uint8_t dest, uint8_t seq)
  * be relayed again. This is the primary loop-prevention mechanism.
  */
 void test_dedup_relay_flag_prevents_second_relay() {
-    MeshCoordinator& mc = MeshCoordinator::instance();
+    MeshCoordinator& mc = MeshCoordinator::getInstance();
     mc.updateNeighbor(5, -60, 1);
 
     ControlPacket pkt = makeRelayablePacket(2, 5, 1);
@@ -85,7 +85,7 @@ void test_dedup_relay_flag_prevents_second_relay() {
  * relayable (they are distinct packets, not duplicates).
  */
 void test_dedup_different_seq_both_relayable() {
-    MeshCoordinator& mc = MeshCoordinator::instance();
+    MeshCoordinator& mc = MeshCoordinator::getInstance();
     mc.updateNeighbor(5, -60, 1);
 
     ControlPacket pkt1 = makeRelayablePacket(2, 5, 1);
@@ -100,7 +100,7 @@ void test_dedup_different_seq_both_relayable() {
  * must both be relayable.
  */
 void test_dedup_same_seq_different_src_both_relayable() {
-    MeshCoordinator& mc = MeshCoordinator::instance();
+    MeshCoordinator& mc = MeshCoordinator::getInstance();
     mc.updateNeighbor(5, -60, 1);
 
     ControlPacket pkt1 = makeRelayablePacket(2, 5, 7);
@@ -115,7 +115,7 @@ void test_dedup_same_seq_different_src_both_relayable() {
  * broadcast storms.
  */
 void test_dedup_broadcast_never_relayed() {
-    MeshCoordinator& mc = MeshCoordinator::instance();
+    MeshCoordinator& mc = MeshCoordinator::getInstance();
     mc.updateNeighbor(5, -60, 1);
 
     ControlPacket pkt = ControlPacket::makeHeartbeat(2);  // dest == 0xFF
@@ -127,7 +127,7 @@ void test_dedup_broadcast_never_relayed() {
  * relayed (avoids blind flooding).
  */
 void test_dedup_no_route_prevents_relay() {
-    MeshCoordinator& mc = MeshCoordinator::instance();
+    MeshCoordinator& mc = MeshCoordinator::getInstance();
     // No neighbors registered
 
     ControlPacket pkt = makeRelayablePacket(2, 5, 1);
@@ -139,7 +139,7 @@ void test_dedup_no_route_prevents_relay() {
  * becomes unroutable and shouldRelay returns false.
  */
 void test_dedup_cleared_neighbors_block_relay() {
-    MeshCoordinator& mc = MeshCoordinator::instance();
+    MeshCoordinator& mc = MeshCoordinator::getInstance();
     mc.updateNeighbor(5, -60, 1);
 
     ControlPacket pkt = makeRelayablePacket(2, 5, 1);
@@ -153,7 +153,7 @@ void test_dedup_cleared_neighbors_block_relay() {
  * A packet destined for our own node ID must not be relayed.
  */
 void test_dedup_own_dest_not_relayed() {
-    MeshCoordinator& mc = MeshCoordinator::instance();
+    MeshCoordinator& mc = MeshCoordinator::getInstance();
     mc.updateNeighbor(5, -60, 1);
 
     // ownNodeID == 10 (set in setUp)
@@ -166,7 +166,7 @@ void test_dedup_own_dest_not_relayed() {
  * all be accepted as relayable (fills the rolling buffer exactly).
  */
 void test_dedup_rolling_buffer_16_entries() {
-    MeshCoordinator& mc = MeshCoordinator::instance();
+    MeshCoordinator& mc = MeshCoordinator::getInstance();
     mc.updateNeighbor(5, -60, 1);
 
     for (uint8_t i = 0; i < 16; i++) {
@@ -184,7 +184,7 @@ void test_dedup_rolling_buffer_16_entries() {
  * (Prevents accidental double-dispatch which would look like duplication.)
  */
 void test_router_reject_duplicate_transport_type() {
-    MessageRouter& router = MessageRouter::instance();
+    MessageRouter& router = MessageRouter::getInstance();
 
     MockTransport t1, t2;
     bool r1 = router.registerTransport(&t1);
@@ -201,7 +201,7 @@ void test_router_reject_duplicate_transport_type() {
  * broadcastPacket sends bytes to all registered (ready) transports exactly once.
  */
 void test_router_broadcast_reaches_registered_transport() {
-    MessageRouter& router = MessageRouter::instance();
+    MessageRouter& router = MessageRouter::getInstance();
 
     MockTransport mock;
     router.registerTransport(&mock);
@@ -221,7 +221,7 @@ void test_router_broadcast_reaches_registered_transport() {
  * exactly once per received packet (no duplicate dispatch).
  */
 void test_router_process_dispatches_once_per_packet() {
-    MessageRouter& router = MessageRouter::instance();
+    MessageRouter& router = MessageRouter::getInstance();
 
     struct {
         int count = 0;

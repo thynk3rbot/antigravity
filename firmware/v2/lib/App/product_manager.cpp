@@ -19,7 +19,7 @@ bool ProductManager::init() {
 void ProductManager::broadcastRegistry() {
     String list = listProducts();
     #ifdef ENABLE_MQTT_TRANSPORT
-      if (MQTTTransport::instance()->isConnected()) {
+      if (MQTTTransport::instance() && MQTTTransport::instance()->isConnected()) {
         MQTTTransport::instance()->publishTelemetry("{\"event\":\"plugin_registry\",\"list\":" + list + "}");
       }
     #endif
@@ -84,7 +84,7 @@ bool ProductManager::loadProduct(const String& name) {
     
     // Announce via MQTT
     #ifdef ENABLE_MQTT_TRANSPORT
-      if (MQTTTransport::instance()->isConnected()) {
+      if (MQTTTransport::instance() && MQTTTransport::instance()->isConnected()) {
         MQTTTransport::instance()->publishTelemetry("{\"event\":\"product_load\",\"name\":\"" + name + "\"}");
       }
     #endif

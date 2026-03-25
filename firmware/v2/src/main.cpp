@@ -411,74 +411,73 @@ void setup() {
   // Record boot timestamp
   g_bootTimestamp = millis();
 
-  // 2. Initialize Power & Rails IMMEDIATELY (V2 requires this for I2C)
-  PowerManager::init();
-  PowerManager::enableVEXT();
-  vTaskDelay(pdMS_TO_TICKS(500)); // Phase 1: Power stabilization window
+  // 1.5: Critical Filesystem & Persistence (Must happen before Rails for Power Persistence)
+  Serial.println("\n[BOOT] Initializing Persistence..."); Serial.flush();
   
-  Serial.println("[CHECK] Initializing I2C...");
+  if (!NVSManager::init()) {
+    Serial.println("  ! NVS init failed"); Serial.flush();
+  } else {
+    Serial.println("  ✓ NVS Ready"); Serial.flush();
+  }
+
+  if (!LittleFS.begin(true)) {
+    Serial.println("  ! LittleFS mount failed"); Serial.flush();
+  } else {
+    Serial.println("  ✓ LittleFS Ready"); Serial.flush();
+  }
+  
+  vTaskDelay(pdMS_TO_TICKS(100));
+
+  // 2. Initialize Power & Rails (Depends on NVS for Saved Power Mode)
+  Serial.println("[TRACE] PowerManager::init()"); Serial.flush();
+  PowerManager::init();
+  Serial.println("[TRACE] PowerManager::enableVEXT()"); Serial.flush();
+  PowerManager::enableVEXT();
+  vTaskDelay(pdMS_TO_TICKS(500)); 
+  
+  Serial.println("[CHECK] Initializing I2C..."); Serial.flush();
 #ifdef ARDUINO_HELTEC_WIFI_LORA_32
-  Wire.begin(I2C_SDA, I2C_SCL, 100000); // V2 uses 100K for better signal integrity on legacy bus
+  Wire.begin(I2C_SDA, I2C_SCL, 100000); 
 #else
   Wire.begin(I2C_SDA, I2C_SCL, I2C_FREQ_HZ);
 #endif
+  Serial.println("  ✓ I2C Wire started"); Serial.flush();
   
-  Serial.println("[CHECK] Initializing LittleFS...");
-  if (!LittleFS.begin(true)) {
-    Serial.println("WARNING: LittleFS mount failed");
-  }
-
-  Serial.println("[CHECK] Initializing NVS...");
-  if (!NVSManager::init()) {
-    Serial.println("WARNING: NVS init failed");
-  }
-
-  Serial.println("[CHECK] Initializing MCP...");
+  Serial.println("[CHECK] Initializing MCP..."); Serial.flush();
   MCPManager::getInstance().init();
-  vTaskDelay(pdMS_TO_TICKS(200)); // Phase 2: Bus stabilization
+  Serial.println("  ✓ MCP Done"); Serial.flush();
+  vTaskDelay(pdMS_TO_TICKS(200)); 
 
-  // ========================================================================
-  // CRITICAL: V1 Parity - Boot Stabilization 
-  // ========================================================================
-  Serial.println("[BOOT] Device initialized.");
+  Serial.println("[BOOT] Device initialized."); Serial.flush();
 
-  // ========================================================================
-  // CRITICAL: V1 Parity - Hardware Recovery Window (PRG Button)
-  // ========================================================================
-  if (MCPManager::getInstance().readPin(GPIO_PRG_BTN) == LOW) {
-    Serial.println("[RECOVERY] PRG Button held!");
-  }
-  
   Serial.println("\n=== LoRaLink v2 Boot ===");
   Serial.printf("Version: %s\n", FIRMWARE_VERSION);
   Serial.printf("Board: %s / Radio: %s\n", HW_VERSION, RADIO_MODEL);
   Serial.printf("Free Heap: %u bytes\n", esp_get_free_heap_size());
-
-  // Record boot timestamp
-  g_bootTimestamp = millis();
+  Serial.flush();
 
   // Step 1: Initialize Display & Basic UI
-  // ========================================================================
-  Serial.println("\n[1/7] Initializing UI layer...");
+  Serial.println("\n[1/7] Initializing UI layer..."); Serial.flush();
 
-  // Initialize Power & UI prerequisites
-  // PowerManager already initialized above
-
+  // Temporarily bypass OLED during stabilization if needed
+  Serial.println("[TRACE] OLEDManager::init()"); Serial.flush();
   if (OLEDManager::getInstance().init()) {
+    Serial.println("[TRACE] OLEDManager::showSplash()"); Serial.flush();
     OLEDManager::getInstance().showSplash(FIRMWARE_VERSION, DEVICE_ROLE);
-    Serial.println("  ✓ OLED/Power initialized");
+    Serial.println("  ✓ OLED initialized"); Serial.flush();
   } else {
-    Serial.println("  ! OLED init failed (non-fatal)");
+    Serial.println("  ! OLED init failed"); Serial.flush();
   }
 
-  // Initialize Product Engine & Sniffer mode configurations
+  Serial.println("[TRACE] ProductManager::init()"); Serial.flush();
   ProductManager::getInstance().init();
+  Serial.println("[TRACE] ProbeManager::init()"); Serial.flush();
   ProbeManager::getInstance().init();
 
+  Serial.println("[TRACE] UI Progress Update..."); Serial.flush();
   OLEDManager::getInstance().drawBootProgress("SYSTEM START", 10);
 
-  // Unify WiFi base initialization to prevent deadlocks in later transport setups
-  Serial.println("  -> Initializing Network Stack...");
+  Serial.println("  -> Initializing Network Stack..."); Serial.flush();
   WiFi.mode(WIFI_STA);
   WiFi.disconnect(true);
   vTaskDelay(pdMS_TO_TICKS(50));

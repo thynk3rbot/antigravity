@@ -99,6 +99,10 @@ void PowerManager::enableVEXT() {
     if (_vextTimer) xTimerStart((TimerHandle_t)_vextTimer, 0);
 #else
     digitalWrite(VEXT_PIN, LOW);   // LOW = power ON on Heltec boards
+#ifdef ARDUINO_HELTEC_WIFI_LORA_32_V4
+    pinMode(37, OUTPUT);
+    digitalWrite(37, HIGH);        // V4 Power Control (Active HIGH)
+#endif
     _vextPulseState = 0; // Immediately stable
 #endif
 #endif

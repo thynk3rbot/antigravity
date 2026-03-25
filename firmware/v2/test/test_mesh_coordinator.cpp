@@ -27,7 +27,7 @@
 // ============================================================================
 
 static void resetMeshCoordinator(void) {
-    MeshCoordinator& mesh = MeshCoordinator::instance();
+    MeshCoordinator& mesh = MeshCoordinator::getInstance();
     mesh.clearNeighbors();
     mesh.clearStats();
     mesh.setOwnNodeID(1);
@@ -49,40 +49,40 @@ void tearDown() {}
 // ============================================================================
 
 void test_updateNeighbor_adds_entry() {
-    MeshCoordinator& mc = MeshCoordinator::instance();
+    MeshCoordinator& mc = MeshCoordinator::getInstance();
     mc.updateNeighbor(2, -70, 1);
     TEST_ASSERT_EQUAL(1, (int)mc.getNeighborCount());
 }
 
 void test_updateNeighbor_two_distinct_nodes() {
-    MeshCoordinator& mc = MeshCoordinator::instance();
+    MeshCoordinator& mc = MeshCoordinator::getInstance();
     mc.updateNeighbor(2, -70, 1);
     mc.updateNeighbor(3, -80, 1);
     TEST_ASSERT_EQUAL(2, (int)mc.getNeighborCount());
 }
 
 void test_updateNeighbor_same_node_no_duplicate() {
-    MeshCoordinator& mc = MeshCoordinator::instance();
+    MeshCoordinator& mc = MeshCoordinator::getInstance();
     mc.updateNeighbor(2, -70, 1);
     mc.updateNeighbor(2, -65, 1);  // Update, not duplicate
     TEST_ASSERT_EQUAL(1, (int)mc.getNeighborCount());
 }
 
 void test_updateNeighbor_ignores_self() {
-    MeshCoordinator& mc = MeshCoordinator::instance();
+    MeshCoordinator& mc = MeshCoordinator::getInstance();
     // _ownNodeID is 1 (set in setUp)
     mc.updateNeighbor(1, -50, 1);
     TEST_ASSERT_EQUAL(0, (int)mc.getNeighborCount());
 }
 
 void test_updateNeighbor_ignores_broadcast_id() {
-    MeshCoordinator& mc = MeshCoordinator::instance();
+    MeshCoordinator& mc = MeshCoordinator::getInstance();
     mc.updateNeighbor(0xFF, -50, 1);
     TEST_ASSERT_EQUAL(0, (int)mc.getNeighborCount());
 }
 
 void test_updateNeighbor_updates_rssi() {
-    MeshCoordinator& mc = MeshCoordinator::instance();
+    MeshCoordinator& mc = MeshCoordinator::getInstance();
     mc.updateNeighbor(2, -70, 1);
     mc.updateNeighbor(2, -55, 1);
     const NeighborInfo* info = mc.getNeighbor(2);
@@ -91,7 +91,7 @@ void test_updateNeighbor_updates_rssi() {
 }
 
 void test_getNeighbor_returns_null_for_unknown() {
-    MeshCoordinator& mc = MeshCoordinator::instance();
+    MeshCoordinator& mc = MeshCoordinator::getInstance();
     TEST_ASSERT_NULL(mc.getNeighbor(99));
 }
 
@@ -100,7 +100,7 @@ void test_getNeighbor_returns_null_for_unknown() {
 // ============================================================================
 
 void test_getNextHop_returns_best_rssi_neighbor() {
-    MeshCoordinator& mc = MeshCoordinator::instance();
+    MeshCoordinator& mc = MeshCoordinator::getInstance();
     mc.updateNeighbor(2, -80, 1);
     mc.updateNeighbor(3, -60, 1);  // Better RSSI
     // Both hops==1; node 3 should win on RSSI
@@ -109,7 +109,7 @@ void test_getNextHop_returns_best_rssi_neighbor() {
 }
 
 void test_getNextHop_prefers_lower_hop_count() {
-    MeshCoordinator& mc = MeshCoordinator::instance();
+    MeshCoordinator& mc = MeshCoordinator::getInstance();
     mc.updateNeighbor(2, -50, 2);  // 2 hops, better RSSI
     mc.updateNeighbor(3, -90, 1);  // 1 hop, worse RSSI
     uint8_t hop = mc.getNextHop(5);
@@ -117,12 +117,12 @@ void test_getNextHop_prefers_lower_hop_count() {
 }
 
 void test_getNextHop_returns_0xFF_when_no_neighbors() {
-    MeshCoordinator& mc = MeshCoordinator::instance();
+    MeshCoordinator& mc = MeshCoordinator::getInstance();
     TEST_ASSERT_EQUAL_UINT8(0xFF, mc.getNextHop(5));
 }
 
 void test_getNextHop_returns_0xFF_for_self() {
-    MeshCoordinator& mc = MeshCoordinator::instance();
+    MeshCoordinator& mc = MeshCoordinator::getInstance();
     mc.updateNeighbor(2, -60, 1);
     // destID == ownNodeID (1) -> 0xFF per implementation
     TEST_ASSERT_EQUAL_UINT8(0xFF, mc.getNextHop(1));
@@ -133,18 +133,18 @@ void test_getNextHop_returns_0xFF_for_self() {
 // ============================================================================
 
 void test_hasRoute_true_for_known_neighbor() {
-    MeshCoordinator& mc = MeshCoordinator::instance();
+    MeshCoordinator& mc = MeshCoordinator::getInstance();
     mc.updateNeighbor(4, -70, 1);
     TEST_ASSERT_TRUE(mc.hasRoute(4));
 }
 
 void test_hasRoute_false_for_unknown() {
-    MeshCoordinator& mc = MeshCoordinator::instance();
+    MeshCoordinator& mc = MeshCoordinator::getInstance();
     TEST_ASSERT_FALSE(mc.hasRoute(99));
 }
 
 void test_hasRoute_true_for_self() {
-    MeshCoordinator& mc = MeshCoordinator::instance();
+    MeshCoordinator& mc = MeshCoordinator::getInstance();
     // ownNodeID==1; hasRoute(1) should be true
     TEST_ASSERT_TRUE(mc.hasRoute(1));
 }
@@ -154,20 +154,20 @@ void test_hasRoute_true_for_self() {
 // ============================================================================
 
 void test_shouldRelay_false_for_own_node_dest() {
-    MeshCoordinator& mc = MeshCoordinator::instance();
+    MeshCoordinator& mc = MeshCoordinator::getInstance();
     ControlPacket pkt = ControlPacket::makeTelemetry(2, 1, 0, 0, 0, 0);
     // dest == ownNodeID (1)
     TEST_ASSERT_FALSE(mc.shouldRelay(pkt));
 }
 
 void test_shouldRelay_false_for_broadcast_dest() {
-    MeshCoordinator& mc = MeshCoordinator::instance();
+    MeshCoordinator& mc = MeshCoordinator::getInstance();
     ControlPacket pkt = ControlPacket::makeHeartbeat(2);  // dest == 0xFF
     TEST_ASSERT_FALSE(mc.shouldRelay(pkt));
 }
 
 void test_shouldRelay_false_when_relay_flag_set() {
-    MeshCoordinator& mc = MeshCoordinator::instance();
+    MeshCoordinator& mc = MeshCoordinator::getInstance();
     mc.updateNeighbor(5, -60, 1);
     // Packet destined for node 5, but already has IS_RELAY flag
     ControlPacket pkt = ControlPacket::makeAction(2, 5, 0x01, 0x01);
@@ -176,14 +176,14 @@ void test_shouldRelay_false_when_relay_flag_set() {
 }
 
 void test_shouldRelay_false_when_no_route() {
-    MeshCoordinator& mc = MeshCoordinator::instance();
+    MeshCoordinator& mc = MeshCoordinator::getInstance();
     // No neighbor for dest 5
     ControlPacket pkt = ControlPacket::makeAction(2, 5, 0x01, 0x01);
     TEST_ASSERT_FALSE(mc.shouldRelay(pkt));
 }
 
 void test_shouldRelay_true_when_route_exists_and_not_for_us() {
-    MeshCoordinator& mc = MeshCoordinator::instance();
+    MeshCoordinator& mc = MeshCoordinator::getInstance();
     mc.updateNeighbor(5, -60, 1);
     // Packet for node 5, not for us (ownNodeID==1), no relay flag
     ControlPacket pkt = ControlPacket::makeAction(2, 5, 0x01, 0x01);
@@ -195,7 +195,7 @@ void test_shouldRelay_true_when_route_exists_and_not_for_us() {
 // ============================================================================
 
 void test_ageOutNeighbors_removes_stale_entry() {
-    MeshCoordinator& mc = MeshCoordinator::instance();
+    MeshCoordinator& mc = MeshCoordinator::getInstance();
     mc.setNeighborTimeout(1000);  // 1 second timeout
 
     _mock_millis_value = 0;
@@ -209,7 +209,7 @@ void test_ageOutNeighbors_removes_stale_entry() {
 }
 
 void test_ageOutNeighbors_keeps_fresh_entry() {
-    MeshCoordinator& mc = MeshCoordinator::instance();
+    MeshCoordinator& mc = MeshCoordinator::getInstance();
     mc.setNeighborTimeout(5000);  // 5 second timeout
 
     _mock_millis_value = 0;
@@ -222,7 +222,7 @@ void test_ageOutNeighbors_keeps_fresh_entry() {
 }
 
 void test_ageOutNeighbors_removes_only_stale() {
-    MeshCoordinator& mc = MeshCoordinator::instance();
+    MeshCoordinator& mc = MeshCoordinator::getInstance();
     mc.setNeighborTimeout(1000);
 
     _mock_millis_value = 0;
@@ -245,7 +245,7 @@ void test_ageOutNeighbors_removes_only_stale() {
 // ============================================================================
 
 void test_clearNeighbors_empties_table() {
-    MeshCoordinator& mc = MeshCoordinator::instance();
+    MeshCoordinator& mc = MeshCoordinator::getInstance();
     mc.updateNeighbor(2, -70, 1);
     mc.updateNeighbor(3, -80, 1);
     mc.clearNeighbors();
@@ -253,7 +253,7 @@ void test_clearNeighbors_empties_table() {
 }
 
 void test_forgetNeighbor_removes_specific() {
-    MeshCoordinator& mc = MeshCoordinator::instance();
+    MeshCoordinator& mc = MeshCoordinator::getInstance();
     mc.updateNeighbor(2, -70, 1);
     mc.updateNeighbor(3, -80, 1);
     mc.forgetNeighbor(2);
@@ -267,18 +267,18 @@ void test_forgetNeighbor_removes_specific() {
 // ============================================================================
 
 void test_getHopCount_returns_0_for_self() {
-    MeshCoordinator& mc = MeshCoordinator::instance();
+    MeshCoordinator& mc = MeshCoordinator::getInstance();
     TEST_ASSERT_EQUAL_UINT8(0, mc.getHopCount(1));
 }
 
 void test_getHopCount_returns_hopCount_for_known_neighbor() {
-    MeshCoordinator& mc = MeshCoordinator::instance();
+    MeshCoordinator& mc = MeshCoordinator::getInstance();
     mc.updateNeighbor(2, -70, 2);
     TEST_ASSERT_EQUAL_UINT8(2, mc.getHopCount(2));
 }
 
 void test_getHopCount_returns_0xFF_for_unknown() {
-    MeshCoordinator& mc = MeshCoordinator::instance();
+    MeshCoordinator& mc = MeshCoordinator::getInstance();
     TEST_ASSERT_EQUAL_UINT8(0xFF, mc.getHopCount(99));
 }
 
@@ -287,7 +287,7 @@ void test_getHopCount_returns_0xFF_for_unknown() {
 // ============================================================================
 
 void test_mesh_coordinator_dedup_rolling_buffer_wraps_at_17_entries() {
-    MeshCoordinator& mesh = MeshCoordinator::instance();
+    MeshCoordinator& mesh = MeshCoordinator::getInstance();
     mesh.updateNeighbor(5, -60, 1);
 
     // Insert 16 packets (fills the buffer exactly)

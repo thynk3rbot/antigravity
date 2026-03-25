@@ -89,10 +89,10 @@
   #define LORA_MOSI     10
   #define LORA_MISO     11
   #define LORA_SCLK     9
-  #define LORA_CS       7
-  #define LORA_RESET    5
-  #define LORA_DIO1     6
-  #define LORA_BUSY     4
+  #define LORA_CS       8        // V4 standard CS is 8
+  #define LORA_RESET    12       // V4 standard RESET is 12
+  #define LORA_DIO1     14       // V4 standard DIO1 is 14
+  #define LORA_BUSY     13       // V4 standard BUSY is 13
   #define LORA_FREQ_MHZ 915.0
   #define LORA_BW_KHZ   125.0
 

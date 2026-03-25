@@ -110,8 +110,8 @@ All major subsystems expose `getInstance()`:
 - `RadioHAL::getInstance()`
 - `RelayHAL::getInstance()`
 - `LoRaTransport::getInstance()`
-- `MessageRouter::instance()`
-- `MeshCoordinator::instance()`
+- `MessageRouter::getInstance()`
+- `MeshCoordinator::getInstance()`
 
 ---
 
