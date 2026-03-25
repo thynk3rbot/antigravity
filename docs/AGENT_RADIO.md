@@ -1,6 +1,17 @@
 # AGENT RADIO — Active Coordination
 
-**Last updated:** 2026-03-25 21:15 | Format: Checklist (minimal tokens)
+**Last updated:** 2026-03-25 23:45 | Format: Checklist (minimal tokens)
+
+---
+
+## OLED Stability Fix (COMPLETE ✅)
+
+**Commit: a29dac3** — Simplified OLED initialization, restored v1 stability
+- Removed async state machine (_processInit) that caused race conditions
+- init() now synchronous: reset → delay → Wire.begin() → display.begin()
+- Button only works after init complete
+- All variants (V2/V3/V4) build clean
+- Result: Reliable boot, responsive display like v1
 
 ---
 
@@ -8,8 +19,8 @@
 
 | Task | Owner | Status | Blocker |
 |------|-------|--------|---------|
-| v0.0.11 hardware test (V2, V3, V4 stable?) | AG | 🟡 Testing | — |
-| Commit v0.0.11 to main | Claude | ⏳ Waiting | Hardware green |
+| ✅ v0.0.11 stable (V2, V3, V4) | AG | ✅ COMPLETE | — |
+| ✅ Commit v0.0.11 to main | AG | ✅ COMPLETE | — |
 | Phase 50 spec: GPS/mesh + MAC crypto? | AG | 🔴 **NEEDED** | Scope clarity |
 | Cherry-pick feature branch fixes | Claude | ⏳ Waiting | Phase 50 spec |
 | Branch merge (v2-rat, v4-gps-mesh-fix) | Claude | ⏳ Waiting | Phase 50 spec |
@@ -18,9 +29,10 @@
 
 ## Questions for AG
 
-1. **Phase 50 scope** — Does it require feature/v4-gps-mesh-fix work, or is MAC-seeded crypto independent?
-2. **Hardware status** — All three devices (V2, V3, V4) running v0.0.11 stable?
-3. **Commit readiness** — Ready to push v0.0.11 to main once testing confirmed?
+**CRITICAL: Define Phase 50 scope before proceeding**
+1. **MAC-seeded key derivation** — what are the technical requirements?
+2. **GPS/mesh work** — does Phase 50 require feature/v4-gps-mesh-fix, or is it independent?
+3. **Timeline** — Phase 50 scope + implementation plan?
 
 ---
 
