@@ -1,5 +1,4 @@
-import asyncio
-from typing import Optional, Dict
+from typing import Optional
 from tools.daemon.models import Transport, Node
 import logging
 
@@ -10,10 +9,11 @@ class TransportManager:
     """Manages device communication across multiple transports with intelligent fallback"""
 
     def __init__(self):
-        self.transports: Dict[Transport, "TransportHandler"] = {}
         self._http_handler = HTTPTransport()
         self._ble_handler = BLETransport()
         self._serial_handler = SerialTransport()
+        self._lora_handler = LoRaTransport()
+        self._mqtt_handler = MQTTTransport()
 
     async def select_transport(self, node: Node) -> Transport:
         """
@@ -81,25 +81,23 @@ class TransportManager:
 
     async def _probe_http(self, node: Node) -> bool:
         """Check if HTTP is reachable"""
-        return self._http_handler.is_reachable(node)
+        return await self._http_handler.is_reachable(node)
 
     async def _probe_ble(self, node: Node) -> bool:
         """Check if BLE is reachable"""
-        return self._ble_handler.is_reachable(node)
+        return await self._ble_handler.is_reachable(node)
 
     async def _probe_serial(self, node: Node) -> bool:
         """Check if Serial is reachable"""
-        return self._serial_handler.is_reachable(node)
+        return await self._serial_handler.is_reachable(node)
 
     async def _probe_lora(self, node: Node) -> bool:
         """Check if LoRa is reachable"""
-        # TODO: Implement actual LoRa probe
-        return False
+        return await self._lora_handler.is_reachable(node)
 
     async def _probe_mqtt(self, node: Node) -> bool:
         """Check if MQTT is reachable"""
-        # TODO: Implement actual MQTT probe
-        return False
+        return await self._mqtt_handler.is_reachable(node)
 
     async def send_command(self, node: Node, command: str) -> bool:
         """Send command to node via best available transport
@@ -120,9 +118,14 @@ class TransportManager:
                 return await self._ble_handler.send(node, command)
             elif transport == Transport.SERIAL:
                 return await self._serial_handler.send(node, command)
-
-            return False
-        except RuntimeError as e:
+            elif transport == Transport.LORA:
+                return await self._lora_handler.send(node, command)
+            elif transport == Transport.MQTT:
+                return await self._mqtt_handler.send(node, command)
+            else:
+                logger.error(f"No handler for transport {transport.value}")
+                return False
+        except Exception as e:
             logger.error(f"Failed to send command to {node.name}: {e}")
             return False
 
@@ -130,7 +133,7 @@ class TransportManager:
 class TransportHandler:
     """Base class for transport handlers"""
 
-    def is_reachable(self, node: Node) -> bool:
+    async def is_reachable(self, node: Node) -> bool:
         """Check if transport is available for node
 
         Args:
@@ -157,7 +160,7 @@ class TransportHandler:
 class HTTPTransport(TransportHandler):
     """HTTP transport handler for WiFi-based devices"""
 
-    def is_reachable(self, node: Node) -> bool:
+    async def is_reachable(self, node: Node) -> bool:
         # TODO: Implement actual HTTP probe (HEAD request, timeout)
         return True
 
@@ -169,7 +172,7 @@ class HTTPTransport(TransportHandler):
 class BLETransport(TransportHandler):
     """BLE transport handler for Bluetooth Low Energy devices"""
 
-    def is_reachable(self, node: Node) -> bool:
+    async def is_reachable(self, node: Node) -> bool:
         # TODO: Implement actual BLE probe (scan, RSSI check)
         return True
 
@@ -181,10 +184,34 @@ class BLETransport(TransportHandler):
 class SerialTransport(TransportHandler):
     """Serial transport handler for direct USB/Serial connections"""
 
-    def is_reachable(self, node: Node) -> bool:
+    async def is_reachable(self, node: Node) -> bool:
         # TODO: Implement actual Serial probe (port check, handshake)
         return True
 
     async def send(self, node: Node, command: str) -> bool:
         # TODO: Implement actual Serial send (write to port)
         return True
+
+
+class LoRaTransport(TransportHandler):
+    """LoRa transport handler for long-range wireless devices"""
+
+    async def is_reachable(self, node: Node) -> bool:
+        # TODO: Implement actual LoRa probe (check mesh connectivity)
+        return False
+
+    async def send(self, node: Node, command: str) -> bool:
+        # TODO: Implement actual LoRa send (mesh routing)
+        return False
+
+
+class MQTTTransport(TransportHandler):
+    """MQTT transport handler for IoT broker-based communication"""
+
+    async def is_reachable(self, node: Node) -> bool:
+        # TODO: Implement actual MQTT probe (broker check, topic subscription)
+        return False
+
+    async def send(self, node: Node, command: str) -> bool:
+        # TODO: Implement actual MQTT send (publish to device topic)
+        return False
