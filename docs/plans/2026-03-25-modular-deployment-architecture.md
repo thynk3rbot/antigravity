@@ -132,7 +132,48 @@ Add to device detail panel:
 3. Identity fields (name, role, fleet)
 4. "Provision" button → daemon POST → device reboot
 
-## Future Phases (not in Phase 1)
+### Daemon: OTA Firmware Distribution (promoted to Phase 1)
+
+USB is unreliable (port enumeration, driver issues, physical access). OTA is the primary deployment channel.
+
+**Daemon firmware library:**
+```
+tools/daemon/firmware/
+  heltec_v2_0.5.00.bin
+  heltec_v3_0.5.00.bin
+  heltec_v4_0.5.00.bin
+```
+
+**New daemon endpoints:**
+```
+POST /api/ota
+{
+  "device_id": "loralink-27",
+  "firmware": "heltec_v3_0.5.00.bin"
+}
+
+GET /api/firmware          → list available binaries
+POST /api/firmware/upload  → upload new binary to library
+```
+
+**OTA flow:**
+1. Claude/PIO builds firmware → binary lands in `daemon/firmware/`
+2. Daemon `POST /api/ota` → streams binary to device via HTTP (ESP32 OTA partition)
+3. Device validates, writes to OTA partition, reboots
+4. If boot fails → automatic rollback to previous partition (ESP-IDF native feature)
+
+**Webapp UI:**
+- "Firmware" tab in device panel
+- Shows current version, available updates
+- "Flash" button → daemon OTA push
+- Progress bar via WebSocket
+
+**Device-side requirement:**
+- `WiFiManager` already has OTA handler (`ArduinoOTA` or `httpUpdate`)
+- Need: `GET /api/version` endpoint returning `{ "version": "0.5.00", "board": "V3" }`
+- Daemon uses version + board to select correct binary
+
+## Future Phases
 
 ### Phase 2: Batch Provisioning
 - Fleet manifest files (CSV/JSON) listing device_mac → carrier → product
@@ -149,10 +190,10 @@ Add to device detail panel:
 - Push modules without reflashing core firmware
 - Module marketplace concept
 
-### Phase 5: OTA Firmware Distribution
-- Daemon manages firmware binary library per board variant
-- Staged rollouts (canary → fleet)
-- Rollback on failure
+### Phase 5: Staged Rollouts
+- Canary deployment (push to 1 device, verify, then fleet)
+- Automatic rollback on boot failure
+- Deployment health scoring
 
 ## Key Files to Modify
 
