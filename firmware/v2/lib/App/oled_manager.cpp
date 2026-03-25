@@ -3,6 +3,7 @@
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
+#include "../HAL/i2c_mutex.h"
 
 // Display configuration
 #define OLED_WIDTH    128
@@ -51,11 +52,9 @@ static uint32_t g_lastUpdateTime = 0;
 static uint32_t g_lastAutoRotateTime = 0;
 static uint32_t g_lastActivityTime = 0;
 
-static const uint32_t UPDATE_INTERVAL_MS = 500;
+static const uint32_t UPDATE_INTERVAL_MS = 1000; // Stabilize at 1Hz
 static const uint32_t SLEEP_TIMEOUT_MS = 30000;
-// Using BUTTON_DEBOUNCE_MS from board_config.h
-// Using OLED_AUTO_ROTATE_MS from board_config.h
-#define AUTO_ROTATE_MS 0   // Set to 0 to disable auto-rotation as requested
+#define AUTO_ROTATE_MS 0   // DISABLED: Manual mode only
 
 static void displayPage1();
 static void displayPage2();
@@ -69,6 +68,7 @@ static void displayPage6();
 // ============================================================================
 
 static void drawHeader(const char* title) {
+    display.setTextColor(SSD1306_WHITE);
     display.setTextSize(1);
     display.setCursor(0, 0);
     display.printf("%s | %s", g_cached.deviceName, title);
@@ -206,6 +206,7 @@ bool OLEDManager::init() {
     attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), buttonISR, FALLING);
     
     // Synchronous I2C Start
+    I2C_LOCK();
     Wire.begin(I2C_SDA, I2C_SCL);
     if (display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDRESS)) {
         display.ssd1306_command(SSD1306_SETCONTRAST);
@@ -214,6 +215,7 @@ bool OLEDManager::init() {
 #else
         display.ssd1306_command(0xCF);
 #endif
+        display.setTextColor(SSD1306_WHITE);
         display.clearDisplay();
         display.display();
         _initState = InitState::RUNNING;
@@ -223,6 +225,7 @@ bool OLEDManager::init() {
         // We still return true to allow the system to boot, but state stays START_I2C to retry in update()
         _initState = InitState::START_I2C;
     }
+    I2C_UNLOCK();
     
     g_lastUpdateTime = millis();
     g_lastActivityTime = millis();
@@ -287,6 +290,7 @@ void OLEDManager::_processInit() {
 
 void OLEDManager::showSplash(const char* ver, const char* role) {
     display.clearDisplay();
+    display.setTextColor(SSD1306_WHITE);
     display.drawRect(0, 0, 128, 64, SSD1306_WHITE);
     display.drawFastHLine(0, 15, 128, SSD1306_WHITE);
     display.drawFastHLine(0, 48, 128, SSD1306_WHITE);
@@ -308,6 +312,7 @@ void OLEDManager::showSplash(const char* ver, const char* role) {
 
 void OLEDManager::drawBootProgress(const char* label, int percent) {
     if (!g_displayOn) return;
+    display.setTextColor(SSD1306_WHITE);
     display.fillRect(2, 49, 124, 14, SSD1306_BLACK); 
     display.setTextSize(1);
     display.setCursor(5, 52);
@@ -355,9 +360,10 @@ void OLEDManager::update() {
         g_lastAutoRotateTime = now;
     }
 
-    if (now - g_lastUpdateTime >= UPDATE_INTERVAL_MS) {
+    if (now - g_lastUpdateTime >= UPDATE_INTERVAL_MS || g_wakeRequested) {
         g_lastUpdateTime = now;
         if (g_displayOn) {
+            I2C_LOCK();
             switch (g_currentPage) {
                 case 0: displayPage1(); break;
                 case 1: displayPage2(); break;
@@ -372,6 +378,8 @@ void OLEDManager::update() {
                 case 5: displayPage6(); break;
                 default: g_currentPage = 0; break;
             }
+            display.display();
+            I2C_UNLOCK();
         }
     }
 }

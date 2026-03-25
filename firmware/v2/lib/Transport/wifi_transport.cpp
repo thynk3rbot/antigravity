@@ -215,6 +215,11 @@ bool WiFiTransport::_connect(uint32_t timeoutMs) {
         }
     }
 
+    if (_ssid.empty()) {
+        Serial.println("[WiFi] No SSID configured - skipping STA attempt");
+        return false;
+    }
+
     WiFi.begin(_ssid.c_str(), _password.c_str());
 
     uint32_t start = millis();
@@ -280,7 +285,7 @@ void WiFiTransport::_startMDNS() {
     // These allow the webapp to identify the device without an HTTP probe
     MDNS.addServiceTxt("http", "tcp", "id", _hostname.c_str());
     MDNS.addServiceTxt("http", "tcp", "type", "loralink-gateway");
-    MDNS.addServiceTxt("http", "tcp", "ver", "v2.0.0");
+    MDNS.addServiceTxt("http", "tcp", "ver", FIRMWARE_VERSION);
     
     MDNS.addServiceTxt("http", "tcp", "hw", NVSManager::getHardwareVersion("V3").c_str());
     MDNS.addServiceTxt("http", "tcp", "mac", WiFi.macAddress().c_str());

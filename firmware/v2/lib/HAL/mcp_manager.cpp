@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include "mcp_manager.h"
+#include "../HAL/i2c_mutex.h"
 
 void IRAM_ATTR MCPManager::_isr() {
     MCPManager::getInstance()._intFlag = true;
@@ -9,6 +10,7 @@ bool MCPManager::init() {
     _chipCount = 0;
     _ready = false;
 
+    I2C_LOCK();
     for (int i = 0; i < MCP_MAX_CHIPS; i++) {
         uint8_t addr = MCP_CHIP_ADDR_BASE + i;
         if (_chips[i].begin_I2C(addr)) {
@@ -19,6 +21,7 @@ bool MCPManager::init() {
             _present[i] = false;
         }
     }
+    I2C_UNLOCK();
 
     if (_chipCount == 0) {
         Serial.println("[MCP] No chips found — expander disabled");

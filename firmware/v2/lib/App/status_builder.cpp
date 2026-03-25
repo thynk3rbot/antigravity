@@ -25,6 +25,7 @@ using namespace ArduinoJson;
 #include "product_manager.h"
 #include "../HAL/board_config.h"
 #include <Arduino.h>
+#include <string>
 #include <esp_heap_caps.h>
 #include <cstring>
 #include <esp_wifi.h>
@@ -104,11 +105,7 @@ void StatusBuilder::addBasicInfo(ArduinoJson::JsonDocument& doc) {
     #endif
 
     // Firmware version (from build define)
-    #ifdef FIRMWARE_VERSION
-        doc["version"] = FIRMWARE_VERSION;
-    #else
-        doc["version"] = "0.2.2";
-    #endif
+    doc["version"] = FIRMWARE_VERSION;
 
     // IP address (empty if not connected)
     std::string ip = WiFiTransport::getIP();
@@ -135,9 +132,9 @@ void StatusBuilder::addPowerInfo(ArduinoJson::JsonDocument& doc) {
     snprintf(batStr, sizeof(batStr), "%.2fV", batVoltage);
     doc["bat"] = batStr;
 
-    // Battery percentage (linear interpolation: 3.2V = 100%, 2.8V = 0%)
-    // LiPo cell voltage range: 2.8V (empty) to 3.2V (full)
-    float batPercentage = ((batVoltage - 2.8f) / (3.2f - 2.8f)) * 100.0f;
+    // Battery percentage (linear interpolation: 3.0V = 0%, 4.2V = 100%)
+    // Aligned with PowerManager standard 1S LiPo logic
+    float batPercentage = ((batVoltage - 3.0f) / (4.2f - 3.0f)) * 100.0f;
     if (batPercentage < 0.0f) batPercentage = 0.0f;
     if (batPercentage > 100.0f) batPercentage = 100.0f;
     doc["bat_percentage"] = static_cast<uint8_t>(batPercentage);
@@ -313,13 +310,11 @@ void StatusBuilder::addSystemInfo(ArduinoJson::JsonDocument& doc) {
     doc["last_status_update"] = static_cast<uint32_t>(now / 1000);  // Unix-like seconds
 
     // Friendly device name (optional, from NVS)
-    // TODO: Add to NVSManager
     std::string nodeID = NVSManager::getNodeID("Node");
-    std::string friendlyName = nodeID + " (Kitchen)";  // Example
-    doc["friendly_name"] = String(friendlyName.c_str());
+    doc["friendly_name"] = String(nodeID.c_str());
 
     // Location tag (optional, from NVS)
-    doc["location"] = "Kitchen";  // TODO: Add to NVSManager
+    doc["location"] = String(NVSManager::getString("loralink", "location", "Home").c_str());
 
     // Last executed command
     doc["last_command"] = "STATUS";  // TODO: Track in CommandManager

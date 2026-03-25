@@ -22,6 +22,7 @@ public:
     // Status data for STATUS command response
     struct StatusData {
         String nodeId;
+        uint8_t meshId;
         String version;
         String hw;
         String mac;

@@ -47,6 +47,7 @@ TaskHandle_t controlTaskHandle = nullptr;
 
 uint8_t g_ourNodeID = 0;        // 0 = Hub, 1-254 = Node
 uint32_t g_bootTimestamp = 0;
+SemaphoreHandle_t g_i2cMutex = nullptr;
 
 // ============================================================================
 // Task 1: Radio Receiver (High Priority)

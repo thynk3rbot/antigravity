@@ -62,7 +62,11 @@ void PowerManager::begin() {
 #endif
 #ifdef BAT_ADC_CTRL
     pinMode(BAT_ADC_CTRL, OUTPUT);
-    digitalWrite(BAT_ADC_CTRL, LOW);   // Disable by default (high power)
+#ifdef ARDUINO_HELTEC_WIFI_LORA_32_V4
+    digitalWrite(BAT_ADC_CTRL, HIGH);   // On V4, HIGH enables sense
+#else
+    digitalWrite(BAT_ADC_CTRL, LOW);    // On V2/V3, LOW typically enables sense
+#endif
 #endif
 
     // Restore persisted power mode from NVS
@@ -130,7 +134,11 @@ void PowerManager::disableVEXT() {
 float PowerManager::getBatteryVoltage() {
 #ifdef BAT_ADC_PIN
 #ifdef BAT_ADC_CTRL
-    digitalWrite(BAT_ADC_CTRL, LOW);  // Enable voltage divider (Active LOW on Heltec)
+#ifdef ARDUINO_HELTEC_WIFI_LORA_32_V4
+    digitalWrite(BAT_ADC_CTRL, HIGH); // Enable
+#else
+    digitalWrite(BAT_ADC_CTRL, LOW);  // Enable 
+#endif
     delay(5);
 #endif
     // Average 5 readings for stability
@@ -139,7 +147,11 @@ float PowerManager::getBatteryVoltage() {
         sum += analogRead(BAT_ADC_PIN);
     }
 #ifdef BAT_ADC_CTRL
-    digitalWrite(BAT_ADC_CTRL, HIGH);   // Disable voltage divider (Passive HIGH)
+#ifdef ARDUINO_HELTEC_WIFI_LORA_32_V4
+    digitalWrite(BAT_ADC_CTRL, LOW); // Disable
+#else
+    digitalWrite(BAT_ADC_CTRL, HIGH); // Disable
+#endif
 #endif
     float reading = static_cast<float>(sum) / 5.0f;
     float voltage = (reading / 4095.0f) * 3.3f * 2.0f; // V4/V3 Standard Divider (6.6V Full Scale)

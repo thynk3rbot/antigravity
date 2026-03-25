@@ -108,6 +108,12 @@ void BootSequence::initCore() {
   PowerManager::enableVEXT();
   vTaskDelay(pdMS_TO_TICKS(500)); 
   
+  Serial.println("[CHECK] Initializing I2C Mutex...");
+  extern SemaphoreHandle_t g_i2cMutex;
+  if (!g_i2cMutex) {
+      g_i2cMutex = xSemaphoreCreateMutex();
+  }
+
   Serial.println("[CHECK] Initializing I2C...");
 #ifdef ARDUINO_HELTEC_WIFI_LORA_32
   Wire.begin(I2C_SDA, I2C_SCL, 100000); 
@@ -115,6 +121,12 @@ void BootSequence::initCore() {
   Wire.begin(I2C_SDA, I2C_SCL, I2C_FREQ_HZ);
 #endif
   Serial.println("  ✓ I2C Wire started");
+
+#ifdef ARDUINO_HELTEC_WIFI_LORA_32_V4
+  Serial.println("[V4] Enabling GPS Power (GPIO 34)...");
+  pinMode(34, OUTPUT);
+  digitalWrite(34, LOW); // GPS_EN is Active LOW on V4
+#endif
 
   Serial.println("[CHECK] Initializing MCP...");
   MCPManager::getInstance().init();
@@ -189,7 +201,14 @@ void BootSequence::initTransports() {
   Serial.println("  ✓ Core HAL & Plugins initialized");
 
   std::string nodeIDStr = NVSManager::getNodeID("Node");
-  if (nodeIDStr.empty()) nodeIDStr = "Unknown";
+  if (nodeIDStr.empty() || nodeIDStr == "Unknown") {
+    uint8_t mac[6];
+    esp_efuse_mac_get_default(mac);
+    char fallback[16];
+    snprintf(fallback, sizeof(fallback), "Peer-%02X%02X", mac[4], mac[5]);
+    nodeIDStr = fallback;
+    Serial.printf("  ! NVS NodeID missing, using fallback: %s\n", nodeIDStr.c_str());
+  }
 
   if (!LoRaTransport::getInstance().init()) {
     Serial.println("  ! LoRa transport failed");
@@ -229,21 +248,24 @@ void BootSequence::initTransports() {
   std::string wifiPass = NVSManager::getWiFiPassword();
   std::string mdnsHostname = "loralink-" + nodeIDStr;
 
-  if (!wifiSSID.empty() && !wifiPass.empty()) {
-    if (WiFiTransport::init(wifiSSID, wifiPass, mdnsHostname)) {
-      Serial.println("  ✓ WiFi transport initialized");
-      if (HttpAPI::init()) {
-        Serial.println("  ✓ HTTP API server started");
-        OLEDManager::getInstance().setIP(WiFi.localIP().toString().c_str());
-      }
-    }
+  // Unconditional WiFi Initialization (Starts AP if STA fails/is-empty)
+  if (WiFiTransport::init(wifiSSID, wifiPass, mdnsHostname)) {
+    Serial.println("  ✓ WiFi transport initialized");
+  } else {
+    Serial.println("  - WiFi STA failed, using SoftAP for provisioning");
+  }
+  
+  if (HttpAPI::init()) {
+    Serial.println("  ✓ HTTP API server started");
+    OLEDManager::getInstance().setIP(WiFi.localIP().toString().c_str());
   }
 
   vTaskDelay(pdMS_TO_TICKS(500));
   Serial.println("[4.5/8] Initializing ESP-NOW...");
   if (PluginManager::isEnabled("espnow") && ESPNowTransport::getInstance().init()) {
     MessageRouter::instance().registerTransport(&ESPNowTransport::getInstance());
-    Serial.println("  ✓ ESP-NOW transport initialized");
+    ESPNowTransport::getInstance().startDiscovery(); // Explicitly start discovery
+    Serial.println("  ✓ ESP-NOW transport initialized + Discovery Active");
   } else {
     Serial.println("  - ESP-NOW skipped");
   }

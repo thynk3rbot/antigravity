@@ -3,7 +3,9 @@
 #include "schedule_manager.h"
 #include "gps_manager.h"
 #include <Arduino.h>
+#ifndef UNIT_TEST
 #include <WiFi.h>
+#endif
 #include "../Transport/message_router.h"
 #include "control_packet.h"
 #include "product_manager.h"
@@ -175,6 +177,7 @@ String CommandManager::_handleStatus() {
     const StatusData& s = _lastStatus;
     String json = "{";
     json += "\"node_id\":\""    + s.nodeId      + "\",";
+    json += "\"mesh_id\":"      + String(s.meshId) + ",";
     json += "\"version\":\""    + s.version     + "\",";
     json += "\"hw\":\""         + s.hw          + "\",";
     json += "\"mac\":\""        + s.mac         + "\",";
@@ -596,7 +599,9 @@ String CommandManager::_handleSleep(const String& args) {
     
     // Give time for response to be sent
     vTaskDelay(pdMS_TO_TICKS(500));
+#ifndef UNIT_TEST
     esp_deep_sleep_start();
+#endif
     
     return "{\"ok\":true,\"msg\":\"Entering deep sleep\"}";
 }

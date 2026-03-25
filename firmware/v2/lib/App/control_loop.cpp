@@ -39,12 +39,13 @@ void ControlLoop::execute(void* param) {
   while (1) {
     updatePower();
     updateTelemetry();
-    updateOLED();
+    updateOLED(); // Data update (500ms)
     updateStatusRegistry();
     updateMesh();
     runDiscoveryBeacons();
     pollPlugins();
 
+    OLEDManager::getInstance().update(); // UI/Button Poll (10ms)
     vTaskDelay(pdMS_TO_TICKS(10));  // 100Hz loop
   }
 }
@@ -91,7 +92,7 @@ void ControlLoop::updateTelemetry() {
 
 void ControlLoop::updateOLED() {
   static uint32_t lastOLEDUpdate = 0;
-  static const uint32_t OLED_UPDATE_INTERVAL_MS = 500;
+  static const uint32_t OLED_UPDATE_INTERVAL_MS = 1000; // Slow down telemetry updates
   uint32_t now = millis();
 
   if (now - lastOLEDUpdate >= OLED_UPDATE_INTERVAL_MS) {
@@ -138,7 +139,7 @@ void ControlLoop::updateOLED() {
 
     oled.setPeerCount(MeshCoordinator::instance().getNeighborCount());
 
-    oled.update();
+    // NOTE: oled.update() now called at 100Hz in main loop for button sensitivity
     lastOLEDUpdate = now;
   }
 }
@@ -149,8 +150,9 @@ void ControlLoop::updateStatusRegistry() {
 
   if (now - lastRegistryUpdate >= 5000) {
     CommandManager::StatusData status;
-    status.nodeId = String(g_ourNodeID);
-    status.version = "2.0.0"; // Placeholder for FIRMWARE_VERSION
+    status.nodeId = String(NVSManager::getNodeID("Node").c_str());
+    status.meshId = g_ourNodeID;
+    status.version = FIRMWARE_VERSION; 
     status.hw = HW_VERSION;
     status.mac = WiFi.macAddress();
     status.ipAddr = WiFi.localIP().toString();

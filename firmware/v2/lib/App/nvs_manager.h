@@ -250,6 +250,10 @@ public:
     static bool clearAll();
     static bool clearNamespace(const char* nsName);
     static void printInfo();
+    
+    // Generic internal accessors (Exposed for StatusBuilder/Plugins)
+    static int32_t getInt32(const char* nsName, const char* key, int32_t defaultVal);
+    static std::string getString(const char* nsName, const char* key, const std::string& defaultVal);
 
 private:
     static constexpr const char* NVS_NAMESPACE     = "loralink";
@@ -260,9 +264,7 @@ private:
     // Generic internal accessors
     static bool getBool(const char* nsName, const char* key, bool defaultVal);
     static bool setBool(const char* nsName, const char* key, bool value);
-    static int32_t getInt32(const char* nsName, const char* key, int32_t defaultVal);
     static bool setInt32(const char* nsName, const char* key, int32_t value);
-    static std::string getString(const char* nsName, const char* key, const std::string& defaultVal);
     static bool setString(const char* nsName, const char* key, const std::string& value);
 
     // Authoritative Keys (Aligned with legacy NVSConfig for zero-data-loss)
