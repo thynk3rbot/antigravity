@@ -204,9 +204,8 @@ OLEDManager::OLEDManager() {
 }
 
 bool OLEDManager::init() {
-    _initState = InitState::RESET_LOW;
-    _stateStartTime = millis();
-    
+    // Simple, synchronous initialization
+    // 1. Reset display hardware
     if (OLED_RESET_PIN != -1) {
         pinMode(OLED_RESET_PIN, OUTPUT);
         digitalWrite(OLED_RESET_PIN, LOW);
@@ -214,13 +213,15 @@ bool OLEDManager::init() {
         digitalWrite(OLED_RESET_PIN, HIGH);
         delay(50);
     }
-    
-    pinMode(BUTTON_PIN, INPUT_PULLUP);
-    attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), buttonISR, FALLING);
-    
+
+    // 2. Wait for VEXT to stabilize (simple delay, not state machine)
+    delay(100);
+
+    // 3. Initialize I2C and OLED display
     I2C_LOCK();
     Wire.begin(I2C_SDA, I2C_SCL);
-    if (display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDRESS)) {
+    bool success = display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDRESS);
+    if (success) {
         display.ssd1306_command(SSD1306_SETCONTRAST);
 #ifdef ARDUINO_HELTEC_WIFI_LORA_32
         display.ssd1306_command(0xFF);
@@ -231,62 +232,25 @@ bool OLEDManager::init() {
         display.clearDisplay();
         display.display();
         _initState = InitState::RUNNING;
-        Serial.println("  ✓ OLED Hardware initialized");
+        Serial.println("  ✓ OLED initialized");
     } else {
-        Serial.println("  ! OLED Hardware begin failed");
-        _initState = InitState::START_I2C;
+        Serial.println("  ! OLED failed to initialize");
+        _initState = InitState::IDLE;
     }
     I2C_UNLOCK();
-    
+
+    // 4. Setup button for wake/page control
+    pinMode(BUTTON_PIN, INPUT_PULLUP);
+    attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), buttonISR, FALLING);
+
     g_lastUpdateTime = millis();
     g_lastActivityTime = millis();
     g_displayOn = true;
-    return true;
+    return success;
 }
 
-void OLEDManager::_processInit() {
-    uint32_t now = millis();
-    switch (_initState) {
-        case InitState::RESET_LOW:
-            if (now - _stateStartTime >= 50) {
-                if (OLED_RESET_PIN != -1) digitalWrite(OLED_RESET_PIN, HIGH);
-                _stateStartTime = now;
-                _initState = InitState::RESET_HIGH;
-            }
-            break;
-        case InitState::RESET_HIGH:
-            if (now - _stateStartTime >= 20) {
-                _initState = InitState::WAIT_POWER;
-            }
-            break;
-        case InitState::WAIT_POWER:
-            if (PowerManager::isVEXTStable()) {
-                _initState = InitState::START_I2C;
-            } else if (now - _stateStartTime >= 5000) {
-                Serial.println("  ! VEXT stability timeout");
-                _initState = InitState::START_I2C;
-            }
-            break;
-        case InitState::START_I2C:
-            I2C_LOCK();
-            if (display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDRESS)) {
-#ifdef ARDUINO_HELTEC_WIFI_LORA_32
-                display.ssd1306_command(0xFF);
-#else
-                display.ssd1306_command(0xCF);
-#endif
-                display.clearDisplay();
-                display.display();
-                _initState = InitState::RUNNING;
-            } else {
-                _stateStartTime = now;
-                _initState = InitState::WAIT_POWER; 
-            }
-            I2C_UNLOCK();
-            break;
-        default: break;
-    }
-}
+// State machine removed — initialization is now synchronous in init()
+// This simplifies the boot sequence and eliminates async race conditions
 
 void OLEDManager::showSplash(const char* ver, const char* role) {
     I2C_LOCK();
@@ -325,34 +289,38 @@ void OLEDManager::drawBootProgress(const char* label, int percent) {
 void OLEDManager::update() {
     uint32_t now = millis();
 
-    // 1. Process Button Inputs (Highest Priority)
+    // Skip if display not ready
+    if (_initState != InitState::RUNNING) {
+        return;
+    }
+
+    // 1. Process Button Input
     if (!g_buttonHandled) {
         g_buttonHandled = true;
         g_lastActivityTime = now;
-        
-        if (_initState != InitState::RUNNING) {
-            Serial.println("[OLED] Button: Attempting recovery of InitState");
-            _initState = InitState::START_I2C;
-            _stateStartTime = now;
-        } else if (!g_displayOn) {
+
+        if (!g_displayOn) {
+            // Wake display on button press
             setDisplayOn(true);
-            Serial.println("[OLED] Wake on button");
+            Serial.println("[OLED] Button: wake");
         } else {
+            // Rotate pages on button press
             g_currentPage++;
-            if (g_currentPage > MAX_PAGE && g_currentPage != 7) g_currentPage = 7;
-            else if (g_currentPage > 7) g_currentPage = 0;
-            Serial.printf("[OLED] Page -> %u\n", g_currentPage);
+            if (g_currentPage > MAX_PAGE && g_currentPage != 7) {
+                g_currentPage = 7;
+            } else if (g_currentPage > 7) {
+                g_currentPage = 0;
+            }
+            Serial.printf("[OLED] Button: page %u\n", g_currentPage);
         }
     }
 
-    // 2. Handle Asynchronous Initialization
-    if (_initState != InitState::RUNNING) {
-        _processInit();
-        if (_initState != InitState::RUNNING) return; 
-    }
+    // 2. Auto-sleep after inactivity
     if (g_displayOn && (now - g_lastActivityTime >= SLEEP_TIMEOUT_MS)) {
         setDisplayOn(false);
     }
+
+    // 3. Render page at 1Hz
     if (now - g_lastUpdateTime >= UPDATE_INTERVAL_MS) {
         g_lastUpdateTime = now;
         if (g_displayOn) {
@@ -379,11 +347,19 @@ void OLEDManager::setPage(uint8_t pageNum) { g_currentPage = pageNum; }
 uint8_t OLEDManager::getCurrentPage() { return g_currentPage; }
 void OLEDManager::setBrightness(uint8_t brightness) { g_brightness = brightness; }
 uint8_t OLEDManager::getBrightness() { return g_brightness; }
-void OLEDManager::setDisplayOn(bool on) { 
+void OLEDManager::setDisplayOn(bool on) {
+    // Only send power command if display is ready
     if (_initState != InitState::RUNNING) return;
-    g_displayOn = on; 
+
+    g_displayOn = on;
     I2C_LOCK();
-    display.ssd1306_command(on ? 0xAF : 0xAE); 
+    if (on) {
+        display.ssd1306_command(0xAF);  // Display ON
+        display.clearDisplay();
+        display.display();
+    } else {
+        display.ssd1306_command(0xAE);  // Display OFF
+    }
     I2C_UNLOCK();
 }
 bool OLEDManager::isDisplayOn() { return g_displayOn; }
