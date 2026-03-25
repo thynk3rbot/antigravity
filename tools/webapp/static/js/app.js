@@ -10,6 +10,8 @@ let _activeNodeId = null;
 let activePage = "dashboard";
 let _pendingGpio = {};
 const GPIO_PENDING_TIMEOUT = 5000;
+let _daemonNodes = [];      // Nodes known to daemon
+let _daemonConnected = false;
 let _map = null;
 let _mapMarker = null;
 let _mapInitialized = false;
@@ -62,8 +64,14 @@ function wsConnect() {
         const data = JSON.parse(e.data);
         if (data.type === 'status') {
             onStatusUpdate(data);
+        } else if (data.type === 'daemon_nodes') {
+            _daemonNodes = data.daemon_nodes || [];
+            _daemonConnected = Array.isArray(data.daemon_nodes);
+            renderDaemonSwarm(_daemonNodes);
+            updateDaemonStatus(_daemonConnected, _daemonNodes.length);
         } else if (data.type === 'log' || data.type === 'serial_log') {
             logTerminal(data.msg || data.text || data.line, data.type === 'serial_log' ? 'rx' : 'info', data.source);
+            if (typeof handleTransformMessage === 'function') handleTransformMessage(data);
         } else if (data.type === 'ai_status') {
             updateAiUI(data);
         }
@@ -251,7 +259,7 @@ function renderMeshTable(nodes) {
     const tb = document.getElementById("mesh-tbody");
     if (!tb) return;
     if (!nodes.length) {
-        tb.innerHTML = '<tr><td colspan="5" class="text-center text-dim p-4">Empty Swarm</td></tr>';
+        tb.innerHTML = '<tr><td colspan="6" class="text-center text-dim p-4">Empty Swarm</td></tr>';
         return;
     }
     tb.innerHTML = nodes.map(n => {
@@ -271,6 +279,92 @@ function renderMeshTable(nodes) {
             </tr>
         `;
     }).join("");
+}
+
+// ── Daemon Swarm Management ────────────────────────────────────────────────
+function renderDaemonSwarm(nodes) {
+    const tb = document.getElementById("mesh-tbody");
+    if (!tb) return;
+
+    // Merge: daemon nodes take priority, add mesh nodes not already listed
+    const allNodes = [...nodes];
+    (lastStatus.mesh || []).forEach(m => {
+        if (!allNodes.find(n => n.id === m.id || n.id === m.nodeId)) {
+            allNodes.push({ ...m, _source: 'mesh' });
+        }
+    });
+
+    if (!allNodes.length) {
+        tb.innerHTML = '<tr><td colspan="6" class="text-center text-dim p-4">No nodes in swarm — waiting for autodiscovery</td></tr>';
+        return;
+    }
+
+    tb.innerHTML = allNodes.map(n => {
+        const id = n.id || n.nodeId || "?";
+        const name = n.name || id;
+        const bat = parseFloat(n.bat) || 0;
+        const rssi = parseInt(n.rssi) || 0;
+        const hops = parseInt(n.hops) || 0;
+        const online = n.online !== false;
+        const isActive = _activeNodeId === id;
+        const isDaemon = !n._source;
+        const ago = n.last_seen ? Math.round((Date.now()/1000) - n.last_seen) + "s" : (n.ago || "—");
+
+        return `<tr class="${isActive ? 'node-active-row' : ''}" onclick="selectDaemonNode('${escHtml(id)}')" style="cursor:pointer">
+            <td>
+                <span class="status-dot" style="background:${online ? 'var(--ok)' : '#555'}; display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:6px;"></span>
+                <span class="text-bold text-accent">${escHtml(name)}</span>
+                ${isDaemon ? '<span style="font-size:9px;color:var(--muted);margin-left:4px;">daemon</span>' : ''}
+                ${isActive ? '<span style="font-size:9px;color:var(--ok);margin-left:4px;font-weight:700;">● ACTIVE</span>' : ''}
+            </td>
+            <td style="color:${bat > 3.5 ? 'var(--ok)' : (bat > 3.1 ? 'var(--warn)' : (bat ? 'var(--err)' : 'var(--muted)'))}">
+                ${bat ? bat.toFixed(2) + "V" : "—"}
+            </td>
+            <td>${rssi ? rssi + " dBm" : "—"}</td>
+            <td>${hops || "—"}</td>
+            <td class="text-dim">${ago}</td>
+            <td>
+                <button class="btn sm" onclick="event.stopPropagation(); quickCmd('${escHtml(id)}', 'STATUS')" style="padding:2px 8px;font-size:10px;">STATUS</button>
+            </td>
+        </tr>`;
+    }).join("");
+}
+
+function selectDaemonNode(nodeId) {
+    _activeNodeId = nodeId;
+    // Re-render to show ACTIVE badge
+    renderDaemonSwarm(_daemonNodes);
+    logTerminal(`Active node → ${nodeId}`, 'info');
+    // Update header if element exists
+    const nameEl = document.getElementById("active-node-name");
+    if (nameEl) nameEl.textContent = `Node: ${nodeId}`;
+}
+
+async function quickCmd(nodeId, cmd) {
+    logTerminal(`[${nodeId}] → ${cmd}`, 'tx');
+    try {
+        const r = await fetch("/api/cmd", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ cmd, node_id: nodeId })
+        });
+        const text = await r.text();
+        logTerminal(`[${nodeId}] ← ${text}`, r.ok ? 'rx' : 'err');
+    } catch (e) {
+        logTerminal(`[${nodeId}] CMD error: ${e.message}`, 'err');
+    }
+}
+
+function updateDaemonStatus(connected, nodeCount) {
+    const el = document.getElementById("daemon-status");
+    if (!el) return;
+    if (connected) {
+        el.textContent = `⬡ DAEMON  ${nodeCount} node${nodeCount !== 1 ? 's' : ''}`;
+        el.style.color = "var(--ok)";
+    } else {
+        el.textContent = "⬡ DAEMON  offline";
+        el.style.color = "var(--err)";
+    }
 }
 
 // ── Presence (Marauder) ───────────────────────────────────────────────────

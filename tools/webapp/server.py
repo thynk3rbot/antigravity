@@ -1631,6 +1631,21 @@ def build_app(
 
         if not cmd:
             return PlainTextResponse("Missing cmd", status_code=400)
+
+        # If node_id is provided, try daemon routing first (daemon nodes take priority)
+        if node_id and _daemon_client:
+            try:
+                daemon_nodes = await _daemon_client.list_nodes()
+                daemon_ids = {n.get("id") for n in daemon_nodes}
+                if node_id in daemon_ids:
+                    ok = await _daemon_client.send_command(node_id, cmd)
+                    if _poller:
+                        _poller.trigger()
+                    return PlainTextResponse("OK" if ok else "ERR", status_code=200 if ok else 502)
+            except Exception as e:
+                print(f"[cmd] Daemon routing failed for {node_id}: {e}, falling through to direct transport")
+
+        # Fall through to direct transport (existing behaviour)
         if _transport is None:
             return PlainTextResponse("No transport available", status_code=503)
 
