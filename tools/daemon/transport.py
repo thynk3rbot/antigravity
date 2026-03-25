@@ -1,8 +1,41 @@
 from typing import Optional
 from tools.daemon.models import Transport, Node
+import asyncio
 import logging
+import re
 
 logger = logging.getLogger(__name__)
+
+# Optional imports — degrade gracefully if not installed
+try:
+    import aiohttp
+except ImportError:
+    aiohttp = None
+
+try:
+    from bleak import BleakClient, BleakScanner
+except ImportError:
+    BleakClient = None
+    BleakScanner = None
+
+try:
+    import serial
+except ImportError:
+    serial = None
+
+# BLE Nordic UART Service UUIDs (matches firmware BLEManager)
+NUS_SERVICE_UUID = "6E400001-B5A3-F393-E0A9-E50E24DCCA9E"
+NUS_RX_CHAR_UUID = "6E400002-B5A3-F393-E0A9-E50E24DCCA9E"  # PC → device
+NUS_TX_CHAR_UUID = "6E400003-B5A3-F393-E0A9-E50E24DCCA9E"  # device → PC
+
+# Timeouts (seconds)
+HTTP_CMD_TIMEOUT = 3.0
+HTTP_PROBE_TIMEOUT = 2.5
+BLE_SCAN_TIMEOUT = 8.0
+BLE_CONNECT_TIMEOUT = 10.0
+BLE_ATT_MTU = 20
+SERIAL_BAUD = 115200
+SERIAL_TIMEOUT = 2.0
 
 
 class TransportManager:
@@ -160,37 +193,164 @@ class TransportHandler:
 class HTTPTransport(TransportHandler):
     """HTTP transport handler for WiFi-based devices"""
 
+    def __init__(self):
+        self._session: Optional["aiohttp.ClientSession"] = None
+
+    async def _get_session(self) -> "aiohttp.ClientSession":
+        if self._session is None or self._session.closed:
+            self._session = aiohttp.ClientSession()
+        return self._session
+
+    def _get_ip(self, node: Node) -> Optional[str]:
+        addr = node.address
+        if re.match(r"^\d{1,3}(\.\d{1,3}){3}$", addr):
+            return addr
+        return None
+
     async def is_reachable(self, node: Node) -> bool:
-        # TODO: Implement actual HTTP probe (HEAD request, timeout)
-        return True
+        if not aiohttp:
+            return False
+        ip = self._get_ip(node)
+        if not ip:
+            return False
+        try:
+            session = await self._get_session()
+            async with session.get(
+                f"http://{ip}/api/status",
+                timeout=aiohttp.ClientTimeout(total=HTTP_PROBE_TIMEOUT),
+            ) as r:
+                return r.status == 200
+        except Exception:
+            return False
 
     async def send(self, node: Node, command: str) -> bool:
-        # TODO: Implement actual HTTP send (POST to device API)
-        return True
+        if not aiohttp:
+            return False
+        ip = self._get_ip(node)
+        if not ip:
+            return False
+        try:
+            session = await self._get_session()
+            async with session.post(
+                f"http://{ip}/api/cmd",
+                data={"cmd": command},
+                timeout=aiohttp.ClientTimeout(total=HTTP_CMD_TIMEOUT),
+            ) as r:
+                return r.status == 200
+        except Exception as e:
+            logger.error(f"HTTP send to {ip} failed: {e}")
+            return False
 
 
 class BLETransport(TransportHandler):
-    """BLE transport handler for Bluetooth Low Energy devices"""
+    """BLE transport handler using Nordic UART Service (connect-per-command)"""
+
+    def _is_ble_address(self, addr: str) -> bool:
+        return bool(re.match(r"^([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$", addr))
+
+    async def _find_device(self, node: Node):
+        """Find BLE device by MAC address or name prefix"""
+        if not BleakScanner:
+            return None
+        devices = await BleakScanner.discover(timeout=BLE_SCAN_TIMEOUT)
+        # Match by MAC address
+        if self._is_ble_address(node.address):
+            for d in devices:
+                if d.address.upper() == node.address.upper():
+                    return d
+            return None
+        # Match by name prefix
+        for d in devices:
+            if d.name and d.name.startswith(node.address):
+                return d
+        return None
 
     async def is_reachable(self, node: Node) -> bool:
-        # TODO: Implement actual BLE probe (scan, RSSI check)
-        return True
+        if not BleakClient:
+            return False
+        try:
+            device = await self._find_device(node)
+            return device is not None
+        except Exception:
+            return False
 
     async def send(self, node: Node, command: str) -> bool:
-        # TODO: Implement actual BLE send (write characteristic)
-        return True
+        if not BleakClient:
+            return False
+        try:
+            device = await self._find_device(node)
+            if not device:
+                logger.error(f"BLE device not found for {node.name}")
+                return False
+
+            async with BleakClient(device, timeout=BLE_CONNECT_TIMEOUT) as client:
+                # Find RX characteristic (PC → device)
+                rx_uuid = None
+                for service in client.services:
+                    if service.uuid.upper() == NUS_SERVICE_UUID.upper():
+                        for char in service.characteristics:
+                            if char.uuid.upper() == NUS_RX_CHAR_UUID.upper():
+                                rx_uuid = char.uuid
+                if not rx_uuid:
+                    logger.error(f"NUS RX characteristic not found on {node.name}")
+                    return False
+
+                # Write command in chunks (ATT_MTU safe)
+                payload = (command + "\n").encode("utf-8")
+                for i in range(0, len(payload), BLE_ATT_MTU):
+                    await client.write_gatt_char(
+                        rx_uuid, payload[i:i + BLE_ATT_MTU], response=False
+                    )
+                return True
+        except Exception as e:
+            logger.error(f"BLE send to {node.name} failed: {e}")
+            return False
 
 
 class SerialTransport(TransportHandler):
     """Serial transport handler for direct USB/Serial connections"""
 
+    def _is_serial_port(self, addr: str) -> bool:
+        return bool(re.match(r"^(COM\d+|/dev/tty(USB|ACM|S)\d+)$", addr, re.IGNORECASE))
+
     async def is_reachable(self, node: Node) -> bool:
-        # TODO: Implement actual Serial probe (port check, handshake)
-        return True
+        if not serial or not self._is_serial_port(node.address):
+            return False
+        loop = asyncio.get_event_loop()
+        try:
+            def _probe():
+                import time
+                with serial.Serial(node.address, SERIAL_BAUD, timeout=SERIAL_TIMEOUT) as ser:
+                    ser.flushInput()
+                    ser.write(b"STATUS\n")
+                    buf = b""
+                    end = time.monotonic() + SERIAL_TIMEOUT
+                    while time.monotonic() < end:
+                        chunk = ser.read(ser.in_waiting or 1)
+                        if chunk:
+                            buf += chunk
+                            if b"\n" in buf:
+                                return True
+                    return len(buf) > 0
+            return await loop.run_in_executor(None, _probe)
+        except Exception:
+            return False
 
     async def send(self, node: Node, command: str) -> bool:
-        # TODO: Implement actual Serial send (write to port)
-        return True
+        if not serial or not self._is_serial_port(node.address):
+            return False
+        loop = asyncio.get_event_loop()
+        try:
+            def _send():
+                with serial.Serial(node.address, SERIAL_BAUD, timeout=SERIAL_TIMEOUT) as ser:
+                    ser.flushInput()
+                    ser.write((command + "\n").encode("utf-8"))
+                    ser.flush()
+                    return True
+            return await loop.run_in_executor(None, _send)
+        except Exception as e:
+            logger.error(f"Serial send to {node.address} failed: {e}")
+            return False
 
 
 class LoRaTransport(TransportHandler):
