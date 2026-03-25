@@ -162,12 +162,35 @@ def create_api_app(message_queue: MessageQueue, transport_manager: TransportMana
             "reboot": req.reboot,
         }
 
-        # Send to device via best available transport
+        # Send to device — WiFi nodes get direct HTTP POST to /api/provision,
+        # BLE/Serial nodes get a PROVISION command string via transport fallback.
         try:
-            success = await transport_manager.send_command(
-                device,
-                f"PROVISION {json.dumps(provision_payload)}"
-            )
+            import re as _re
+            is_wifi = _re.match(r"^\d{1,3}(\.\d{1,3}){3}$", device.address)
+            success = False
+
+            if is_wifi and aiohttp:
+                try:
+                    import aiohttp as _aiohttp
+                    async with _aiohttp.ClientSession() as session:
+                        async with session.post(
+                            f"http://{device.address}/api/provision",
+                            json=provision_payload,
+                            timeout=_aiohttp.ClientTimeout(total=5.0),
+                        ) as resp:
+                            success = resp.status == 200
+                            if not success:
+                                body = await resp.text()
+                                logger.warning(f"Device provision HTTP {resp.status}: {body}")
+                except Exception as e:
+                    logger.warning(f"HTTP provision failed for {device.address}, trying transport fallback: {e}")
+
+            if not success:
+                success = await transport_manager.send_command(
+                    device,
+                    f"PROVISION {json.dumps(provision_payload)}"
+                )
+
             if success:
                 logger.info(f"Provisioned {req.device_id} with carrier={req.carrier}")
                 return {
@@ -175,8 +198,9 @@ def create_api_app(message_queue: MessageQueue, transport_manager: TransportMana
                     "device_id": req.device_id,
                     "reboot_in_ms": 2000 if req.reboot else None,
                 }
-            else:
-                raise HTTPException(status_code=500, detail=f"Failed to send provision to {req.device_id}")
+            raise HTTPException(status_code=500, detail=f"Failed to send provision to {req.device_id}")
+        except HTTPException:
+            raise
         except Exception as e:
             logger.error(f"Provision error for {req.device_id}: {e}")
             raise HTTPException(status_code=500, detail=str(e))
@@ -184,7 +208,7 @@ def create_api_app(message_queue: MessageQueue, transport_manager: TransportMana
     @app.get("/api/carriers")
     async def list_carriers():
         """List available carrier board profiles."""
-        carriers_dir = Path("tools/daemon/carriers")
+        carriers_dir = Path(__file__).parent / "carriers"
         if not carriers_dir.exists():
             return []
         profiles = []
@@ -199,7 +223,7 @@ def create_api_app(message_queue: MessageQueue, transport_manager: TransportMana
 
     def _load_carrier_profile(carrier_id: str) -> Optional[CarrierProfile]:
         """Load carrier profile from disk."""
-        profile_path = Path("tools/daemon/carriers") / f"{carrier_id}.json"
+        profile_path = Path(__file__).parent / "carriers" / f"{carrier_id}.json"
         if not profile_path.exists():
             return None
         try:
