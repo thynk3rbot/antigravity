@@ -2013,7 +2013,7 @@ def build_app(
                 print(f"[discover] Local IP: {local_ip}, scanning {base_ip}.0/24...")
             except Exception:
                 # Still fallback, but better than nothing
-                base_ip = "192.168.1" 
+                base_ip = "172.16.0"
                 print(f"[discover] Could not detect local IP, trying {base_ip}.0/24")
 
             async with aiohttp.ClientSession() as session:

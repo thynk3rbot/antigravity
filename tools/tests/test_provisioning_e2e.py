@@ -43,7 +43,7 @@ async def test_provision_basic(api_app):
         id="loralink-27",
         name="Test-Device",
         type="wifi",
-        address="192.168.1.100"
+        address="172.16.0.100"
     )
 
     # Mock request
