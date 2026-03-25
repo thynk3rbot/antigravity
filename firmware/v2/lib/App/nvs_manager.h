@@ -212,6 +212,12 @@ public:
     static void setResetReason(const std::string& reason);
 
     // ========================================================================
+    // Security & Key Derivation (Phase 2)
+    // ========================================================================
+    static bool setNetworkSecret(const uint8_t secret[16]);
+    static bool getDerivedKey(const uint8_t peerMAC[6], uint8_t outKey[16]);
+
+    // ========================================================================
     // Utility Operations
     // ========================================================================
     static bool clearAll();

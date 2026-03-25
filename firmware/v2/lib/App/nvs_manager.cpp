@@ -25,6 +25,8 @@
 #include <nvs_flash.h>
 #include <esp_random.h>
 #include <esp_efuse.h>
+#include <mbedtls/sha256.h>
+#include <algorithm>
 
 // ============================================================================
 // Static Initialization
@@ -481,6 +483,66 @@ void NVSManager::printInfo() {
   Serial.printf("  Hardware Var: %u\n", getHardwareVariant());
   Serial.printf("  Boot Count: %u\n", getBootCount());
   Serial.println("==================================================\n");
+}
+
+bool NVSManager::setNetworkSecret(const uint8_t secret[16]) {
+  nvs_handle_t handle;
+  if (nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle) != ESP_OK) return false;
+  esp_err_t err = nvs_set_blob(handle, "net_secret", (void*)secret, 16);
+  if (err == ESP_OK) err = nvs_commit(handle);
+  nvs_close(handle);
+  return (err == ESP_OK);
+}
+
+bool NVSManager::getDerivedKey(const uint8_t peerMAC[6], uint8_t outKey[16]) {
+  uint8_t ourMAC[6];
+  esp_efuse_mac_get_default(ourMAC);
+
+  // Load Network Secret
+  uint8_t secret[16];
+  nvs_handle_t handle;
+  if (nvs_open(NVS_NAMESPACE, NVS_READONLY, &handle) != ESP_OK) return false;
+  size_t size = 16;
+  esp_err_t err = nvs_get_blob(handle, "net_secret", secret, &size);
+  nvs_close(handle);
+
+  if (err != ESP_OK || size != 16) {
+    // Fallback: Use baked-in default if unprovisioned (Development-only)
+    // In production, this should return false to block unencrypted comms.
+    for (int i = 0; i < 16; i++) secret[i] = 0x42;
+  }
+
+  // Deterministic Peer-to-Peer key derivation: SHA256(sort(ourMAC, peerMAC) + secret)
+  uint8_t combined[12 + 16];
+  uint8_t sortedMACs[12];
+  
+  bool weAreLower = false;
+  for (int i = 0; i < 6; i++) {
+    if (ourMAC[i] < peerMAC[i]) { weAreLower = true; break; }
+    if (ourMAC[i] > peerMAC[i]) { weAreLower = false; break; }
+  }
+
+  if (weAreLower) {
+    memcpy(sortedMACs, ourMAC, 6);
+    memcpy(sortedMACs + 6, peerMAC, 6);
+  } else {
+    memcpy(sortedMACs, peerMAC, 6);
+    memcpy(sortedMACs + 6, ourMAC, 6);
+  }
+
+  memcpy(combined, sortedMACs, 12);
+  memcpy(combined + 12, secret, 16);
+
+  uint8_t hash[32];
+  mbedtls_sha256_context ctx;
+  mbedtls_sha256_init(&ctx);
+  mbedtls_sha256_starts(&ctx, 0); // No _ret suffix
+  mbedtls_sha256_update(&ctx, combined, sizeof(combined));
+  mbedtls_sha256_finish(&ctx, hash);
+  mbedtls_sha256_free(&ctx);
+
+  memcpy(outKey, hash, 16); // Use first 128 bits
+  return true;
 }
 
 void NVSManager::logError(const char* operation, const char* key, int err) {
