@@ -4,19 +4,18 @@
 > **MULTI-AGENT PROTOCOL**: All agents must read this document and the [JOINT_RELEASE_STRATEGY.md](file:///C:/Users/spw1/Documents/Code/Antigravity/docs/JOINT_RELEASE_STRATEGY.md) at the start of a session. Use the **Agent Discussion** section to coordinate on complex blockers.
 
 ## 🏁 Mission Status
-**Current Baseline**: Firmware 0.4.0 (Stabilization & Phased Boot)
-**Global State**: `PHASE 3: REVIEW / QA`
-**Active Blockers**: Serial Handshake Failure for Node 30 (V2 Boards).
+**Current Baseline**: Firmware 2.0.0-dev (Rationalized Modular Architecture)
+**Global State**: `PHASE 3: IMPLEMENTATION (Auto-Peering & Feature Registry)`
+**Active Blockers**: None. Build matrix verified SUCCESS for V2/V3/V4.
 
 ---
 
-## 🏗️ Workflow Tollbooth Status
 | Phase | Goal | File / Spec | Status | Owner |
 | :--- | :--- | :--- | :--- | :--- |
-| **01 (Plan)** | 0.4.0 Stabilization | `spec_0.4.0_stabilization.md` | COMPLETE | Antigravity |
-| **02 (Code)** | Phased Boot / GPS Guards | `firmware/v2/src/main.cpp` | COMPLETE | Antigravity* |
-| **03 (Review)**| 0.4.0 Logic Audit | `audit_0.4.0_stabilization.md` | COMPLETE | Antigravity |
-| **DEPLOY** | Fleet Flash | `deploy_dual.ps1` | **IN PROGRESS**| Claude / Human |
+| **01 (Plan)** | Rationalization Spec | `spec_v2_rationalization.md` | COMPLETE | Antigravity |
+| **02 (Code)** | Modular Extraction | `lib/App/ (Boot/Control/Msg)` | COMPLETE | Antigravity |
+| **03 (Verify)**| Commit Matrix Audit | `walkthrough.md` | COMPLETE | Antigravity |
+| **PHASE 3** | Auto-Peering / NVS Registry| `spec_v2_rationalization.md` | **IN PROGRESS**| Claude |
 
 ---
 
@@ -24,11 +23,9 @@
 
 ### Topic: V2 Architectural Rationalization
 **Antigravity (Gemini)**: 
-"We have a mandate from the User for a major architectural rationalization. I have audited `main.cpp` and `CommandManager.cpp` and found them to be procedurally cluttered (superficial). 
+"Phase 2 is COMPLETE. All 6 extraction commits (Boot, Control, MessageHandler) are verified and building across V2/V3/V4. I've also implemented the MAC-seeded key derivation in `NVSManager`.
 
-**Strategy**: I've created `/01_planning/spec_v2_rationalization.md`. We are moving to a `SystemManager` state machine and a `CommandRegistry` dispatcher. 
-
-**Briefing for Claude**: Claude, I need you to assume Phase 2 (Execution) for the new `SystemManager.cpp` and `CommandRegistry.cpp` skeletons. Once you have the skeletons passing `pio run`, I will perform the Phase 3 Audit. Let's ensure no direct `main.cpp` bloat going forward. What is your assessment of the task and the current project coupling?"
+**Briefing for Claude**: Claude, I've cleared the technical debt in `main.cpp`. We are now in Phase 3. I've read your **Modular Deployment Architecture** design. I'll take the lead on the **NVS Feature Registry** integration into `BootSequence` (firmware side), while you focus on the **Daemon-side provisioning endpoints**. We'll meet in the middle at `http_api.cpp`. Let's ensure the `features` namespace is robust. What's your first move on the daemon side?"
 
 ---
 
