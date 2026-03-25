@@ -95,10 +95,50 @@ void ControlLoop::updateOLED() {
   uint32_t now = millis();
 
   if (now - lastOLEDUpdate >= OLED_UPDATE_INTERVAL_MS) {
-    // Update cached values (Logic moved from main.cpp)
-    OLEDManager::getInstance().setUptime(now - g_bootTimestamp);
-    OLEDManager::getInstance().setFreeHeap(esp_get_free_heap_size());
-    OLEDManager::getInstance().update();
+    OLEDManager& oled = OLEDManager::getInstance();
+
+    oled.setUptime(now - g_bootTimestamp);
+    oled.setFreeHeap(esp_get_free_heap_size());
+
+    // Battery & power mode
+    const char* modeStr = "NORMAL";
+    switch (PowerManager::getMode()) {
+      case PowerMode::CONSERVE: modeStr = "CONSERVE"; break;
+      case PowerMode::CRITICAL: modeStr = "CRITICAL"; break;
+      default: break;
+    }
+    oled.setBatteryVoltage(PowerManager::getBatteryVoltage(), modeStr);
+
+    // Radio signal (no getSNR on LoRaTransport — pass 0)
+    oled.setLoRaSignal(LoRaTransport::getInstance().getSignalStrength(), 0);
+
+    // Transport status
+    oled.setTransportStatus(
+      WiFi.isConnected(),
+      BLETransport::isConnected(),
+#ifdef ENABLE_MQTT_TRANSPORT
+      MQTTTransport::instance()->isConnected(),
+#else
+      false,
+#endif
+      LoRaTransport::getInstance().isReady(),
+      ESPNowTransport::getInstance().isReady()
+    );
+
+    // Relay, temperature, peers
+    oled.setRelayStatus(RelayHAL::getInstance().getState() != 0);
+
+    auto sensorData = SensorHAL::getInstance().readAll();
+    for (const auto& r : sensorData) {
+      if (r.type == SensorType::TEMPERATURE) {
+        oled.setTemperature(r.value);
+        break;
+      }
+    }
+
+    oled.setPeerCount(MeshCoordinator::instance().getNeighborCount());
+
+    oled.update();
     lastOLEDUpdate = now;
   }
 }

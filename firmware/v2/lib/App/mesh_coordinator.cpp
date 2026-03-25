@@ -73,7 +73,7 @@ void MeshCoordinator::poll() {
     
     _lastDiscoveryPing = now;
     jitter = random(500); // Re-roll jitter for next ping
-    Serial.printf("[MeshCoordinator] Heartbeat sent (Interval: %lu ms, Jitter: %lu ms)\n", interval, jitter);
+    Serial.printf("[MeshCoordinator] Heartbeat sent (Interval: %u ms, Jitter: %u ms)\n", (unsigned int)interval, (unsigned int)jitter);
   }
 }
 
@@ -249,8 +249,8 @@ uint8_t MeshCoordinator::getHopCount(uint8_t destID) const {
 
 const char* MeshCoordinator::getStatus() const {
   snprintf(_statusBuffer, sizeof(_statusBuffer),
-           "Mesh: %zu neighbors, %lu relayed, %lu dropped",
-           _neighbors.size(), _relayCount, _droppedDuplicates);
+           "Mesh: %zu neighbors, %u relayed, %u dropped",
+           _neighbors.size(), (unsigned int)_relayCount, (unsigned int)_droppedDuplicates);
   return _statusBuffer;
 }
 
@@ -266,9 +266,9 @@ const char* MeshCoordinator::getNeighborTable() const {
   for (const auto& pair : _neighbors) {
     const NeighborInfo& neighbor = pair.second;
     int len = snprintf(ptr, remaining,
-                       "Node %u: RSSI=%d dBm, Hops=%u, Pkts=%lu\n",
+                       "Node %u: RSSI=%d dBm, Hops=%u, Pkts=%u\n",
                        neighbor.nodeID, neighbor.rssi, neighbor.hopCount,
-                       neighbor.packetCount);
+                       (unsigned int)neighbor.packetCount);
     ptr += len;
     remaining -= len;
     if (remaining <= 0) break;
