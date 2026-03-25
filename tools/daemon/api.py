@@ -1,9 +1,11 @@
 from fastapi import FastAPI, HTTPException
 from typing import List, Optional
-from tools.daemon.models import Node, Message, MessageStatus
+from tools.daemon.models import Node, Message, MessageStatus, ProvisionRequest, ProvisionResponse, CarrierProfile
 from tools.daemon.persistence import MessageQueue
 from tools.daemon.transport import TransportManager
 import logging
+import json
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -116,6 +118,103 @@ def create_api_app(message_queue: MessageQueue, transport_manager: TransportMana
             logger.error(f"Command routing error for {dest}: {e}")
             message_queue.update_status(msg.id, MessageStatus.FAILED)
             raise HTTPException(status_code=500, detail=str(e))
+
+    # ─────────────────────────────────────────────────────────
+    # Provisioning (Phase 1: Modular Deployment)
+    # ─────────────────────────────────────────────────────────
+
+    @app.post("/api/provision")
+    async def provision_device(req_data: dict):
+        """Provision a device with carrier profile, product config, and identity.
+
+        Payload: {device_id, carrier, product, identity, features, reboot}
+        Response: {status, device_id, reboot_in_ms}
+        """
+        try:
+            req = ProvisionRequest(**req_data)
+        except TypeError as e:
+            raise HTTPException(status_code=400, detail=f"Invalid provision request: {str(e)}")
+
+        # Find device
+        device = next((n for n in nodes if n.id == req.device_id), None)
+        if not device:
+            raise HTTPException(status_code=404, detail=f"Device {req.device_id} not found")
+
+        # Load carrier profile
+        carrier_profile = _load_carrier_profile(req.carrier)
+        if not carrier_profile:
+            raise HTTPException(status_code=400, detail=f"Carrier profile '{req.carrier}' not found")
+
+        # Merge configs: carrier defaults + product overrides + explicit features
+        merged_config = {
+            "features": {**carrier_profile.features, **(req.features or {})},
+            "hw": carrier_profile.hw,
+            "mesh": {},
+            "identity": req.identity or {},
+        }
+
+        # Build provisioning payload
+        provision_payload = {
+            "features": merged_config["features"],
+            "hw": merged_config["hw"],
+            "mesh": merged_config["mesh"],
+            "identity": merged_config["identity"],
+            "reboot": req.reboot,
+        }
+
+        # Send to device via best available transport
+        try:
+            success = await transport_manager.send_command(
+                device,
+                f"PROVISION {json.dumps(provision_payload)}"
+            )
+            if success:
+                logger.info(f"Provisioned {req.device_id} with carrier={req.carrier}")
+                return {
+                    "status": "ok",
+                    "device_id": req.device_id,
+                    "reboot_in_ms": 2000 if req.reboot else None,
+                }
+            else:
+                raise HTTPException(status_code=500, detail=f"Failed to send provision to {req.device_id}")
+        except Exception as e:
+            logger.error(f"Provision error for {req.device_id}: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @app.get("/api/carriers")
+    async def list_carriers():
+        """List available carrier board profiles."""
+        carriers_dir = Path("tools/daemon/carriers")
+        if not carriers_dir.exists():
+            return []
+        profiles = []
+        for profile_file in carriers_dir.glob("*.json"):
+            try:
+                with open(profile_file) as f:
+                    data = json.load(f)
+                    profiles.append(data)
+            except Exception as e:
+                logger.warning(f"Failed to load carrier profile {profile_file}: {e}")
+        return profiles
+
+    def _load_carrier_profile(carrier_id: str) -> Optional[CarrierProfile]:
+        """Load carrier profile from disk."""
+        profile_path = Path("tools/daemon/carriers") / f"{carrier_id}.json"
+        if not profile_path.exists():
+            return None
+        try:
+            with open(profile_path) as f:
+                data = json.load(f)
+                return CarrierProfile(
+                    id=data.get("id", carrier_id),
+                    name=data.get("name", ""),
+                    hw=data.get("hw", {}),
+                    features=data.get("features", {}),
+                    pins=data.get("pins"),
+                )
+        except Exception as e:
+            logger.error(f"Failed to load carrier profile {carrier_id}: {e}")
+            return None
 
     # ─────────────────────────────────────────────────────────
     # Message History

@@ -1,0 +1,27 @@
+{
+  "id": "bare",
+  "name": "Bare Board (No Expansion)",
+  "description": "Minimal Heltec V3/V4 with built-in OLED and relay",
+  "hw": {
+    "i2c_buses": 1,
+    "i2c0_sda": 21,
+    "i2c0_scl": 22,
+    "mcp_count": 0
+  },
+  "features": {
+    "relay": 1,
+    "mqtt": 0,
+    "gps": 0,
+    "ble": 1,
+    "espnow": 1,
+    "sensor": 0,
+    "oled": 1,
+    "scheduler": 1,
+    "mcp": 0
+  },
+  "pins": {
+    "relay_output": 46,
+    "oled_sda": 21,
+    "oled_scl": 22
+  }
+}

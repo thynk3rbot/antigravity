@@ -222,3 +222,79 @@ POST /api/firmware/upload  → upload new binary to library
 4. Device reboots, `GET /api/config` shows updated config
 5. MQTT and GPS managers do NOT initialize (verify via serial log)
 6. All other features work normally
+
+---
+
+## Implementation Status (2026-03-25)
+
+### ✅ COMPLETED
+
+**Firmware (v2):**
+- NVS Feature Registry: Three namespaces (`features`, `hw`, `mesh`) with u8 per feature
+- Boot Sequence: Conditional init based on `PluginManager::isEnabled(feature_name)`
+- Provisioning Endpoint: `POST /api/provision` and `GET /api/config` on device
+- I2C Mutex: FreeRTOS binary semaphore for shared-bus protection
+- All Features Toggleable: relay, mqtt, gps, ble, espnow, sensor, oled, scheduler, mcp
+- Always-On: NVSManager, PowerManager, LoRaManager, MessageRouter, ScheduleManager, CommandManager
+
+**Daemon (tools/daemon/):**
+- Models: ProvisionRequest, ProvisionResponse, CarrierProfile data classes
+- Provision Endpoint: `POST /api/provision` with carrier profile merging
+- Carrier Profiles: bare.json, rv12v.json (template examples)
+- Endpoint: `GET /api/carriers` to list available profiles
+
+**Testing:**
+- E2E Test Harness: tools/tests/test_provisioning_e2e.py
+- Unit Tests: Feature merging, carrier loading, response models
+- Integration Tests: Feature Registry logic, hardware topology provisioning
+
+### 📋 READY FOR NEXT PHASE
+
+**Phase 2: Batch Provisioning**
+- Fleet manifest (CSV/JSON) → daemon → devices
+- `POST /api/provision/batch` endpoint
+- Headless CLI for production deployment
+
+**Phase 3: Config Library**
+- Daemon-hosted carrier + product library
+- GitOps workflow: watch repo, auto-push to devices
+- Version-controlled configurations
+
+### 📝 NOTES FOR IMPLEMENTATION
+
+1. **Carrier Profiles Live in:** `tools/daemon/carriers/*.json`
+   - Add new profiles for custom hardware without firmware recompile
+   - Each profile defines `hw`, `features`, `pins` topology
+
+2. **Feature Toggle Resolution:**
+   - Firmware defaults to ALL ON (permissive)
+   - Provisioning writes NVS, device reboots
+   - Boot reads NVS, skips disabled managers
+   - No reflash needed
+
+3. **Hardware Topology:**
+   - `hw` namespace configures I2C buses, MCP addresses, pin mappings
+   - Carrier profiles encode board-specific topology
+   - Device HAL respects configured topology at runtime
+
+4. **Three-Device Constraint Handling:**
+   - V2 (16MB Flash, low RAM): disable mqtt, gps, sensor → bare profile
+   - V3 (full-featured): enable all → rv12v profile
+   - V4 (GPS support): enable gps → custom profile with GPS pins
+   - All use same compiled binary, different configurations
+
+5. **Provisioning Flow:**
+   ```
+   Daemon (POST /api/provision)
+     → Loads carrier profile (e.g., rv12v.json)
+     → Merges with product config (if provided)
+     → Merges with explicit feature overrides
+     → Sends merged config to device
+     → Device writes to NVS, reboots
+     → Device reads NVS, boots with new config
+   ```
+
+6. **Future: OTA Module System**
+   - Phase 4: Push Lua/WASM scripts via LittleFS
+   - Extend device behavior without reflash
+   - Complements Feature Registry for custom logic
