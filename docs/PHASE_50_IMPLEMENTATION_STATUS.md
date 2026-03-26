@@ -74,55 +74,53 @@
 ## In Progress 🔄
 
 ### Device Firmware Phase 50 Changes (Owner: AG)
-**Expected inputs from Ollama async task:**
-- GpioPayload struct (being generated async)
-- Factory methods for GpioPayload
-- MQTT parsing boilerplate
+**Completed:**
+- ✅ PacketType::GPIO_SET (0x07) added to ControlPacket
+- ✅ Universal dispatch logic in MessageHandler
+- ✅ All builds verified (V2, V3, V4)
+- ✅ Ready for flashing
 
-**AG implementation needed:**
-- Add `handleMeshCommand()` function to firmware
-- Use GpioPayload struct from local model output
-- Wire into message handler
-- Test on V2/V3/V4 hardware
-
-**Status:** AG kicked off async model task via `ollama_queue.bat`
+**Current:** AG flashing devices for fleet test
 
 ---
 
-## Pending ⏳
+## Tonight's Fleet Test 🧪
 
-### Integration & Testing (Claude)
-1. **Verify daemon starts cleanly**
-   - All imports working
-   - MQTT connection handling
-   - REST API responding on localhost:8001
+### Setup (Ready Now)
+- ✅ Daemon: Pure mesh gateway (localhost:8001)
+- ✅ Firmware: Phase 50 GPIO_SET + dispatch logic
+- ✅ Test tools: Checklist, analyzer script, command tester
+- ✅ MQTT: Ready (devices will auto-register)
 
-2. **Update webapp for Phase 50**
-   - Add mesh control panel (send command to any device)
-   - Show topology graph (who can reach whom)
-   - Command status tracking (real-time ACK)
-   - Update DaemonClient with mesh endpoints
+### Test Plan
+1. **Device Registration** (5 min)
+   - Flash 3+ devices
+   - Watch daemon register them via MQTT status
 
-3. **Device-Daemon Integration**
-   - Ensure devices publish status to correct MQTT topics
-   - Verify daemon receives and registers peers
-   - Test command routing (direct, multi-hop, queue)
-   - Validate ACK flow
+2. **Topology Discovery** (10 min)
+   - Verify mesh neighbors discovered
+   - Check topology endpoint
 
-### Full End-to-End Test
-1. Start daemon: `python daemon/src/main.py`
-2. Flash 2+ devices with Phase 50 firmware
-3. Devices should register in daemon topology
-4. Send command from webapp to device through mesh
-5. Verify command execution on device
-6. Check ACK received in daemon
+3. **Single-Hop Command** (10 min)
+   - Send GPIO_TOGGLE via daemon REST API
+   - Device executes, ACKs back
 
-### Webapp Integration (Day 3)
-- Add `/mesh` UI panel
-- Show real-time peer topology
-- Command submission form
-- Status tracking with real-time updates
-- Device selector (any device in mesh)
+4. **Multi-Hop Command** (optional, 10 min)
+   - Command relays through intermediate device
+   - Validates mesh routing
+
+### Success Criteria
+- ✅ 3+ devices register
+- ✅ Topology shows neighbors
+- ✅ Commands publish to MQTT
+- ✅ Device ACKs return
+- ✅ Daemon tracks completion
+
+### Post-Test (Pending)
+- [ ] Webapp integration (Phase 50 mesh panel)
+- [ ] Firmware distribution (OTA updates)
+- [ ] Performance optimization
+- [ ] Production hardening
 
 ---
 
@@ -177,24 +175,29 @@ Design Docs:
 
 ## Next Immediate Actions
 
-**Today (2026-03-26 evening/night):**
-1. ✅ Complete V2 rationalization → commit
-2. ✅ Design Phase 50 architecture → PHASE_50_DESIGN.md
-3. ✅ Implement daemon (MeshRouter, API, MQTT, Server)
-4. ⏳ **AG: Implement device firmware handleMeshCommand() + wire boilerplate**
-5. ⏳ **Claude: Verify daemon starts, test locally**
+**TONIGHT (2026-03-26 evening):**
+1. ✅ Daemon: Pure mesh gateway (complete)
+2. ✅ Firmware: Phase 50 GPIO_SET (complete)
+3. ✅ Test tools: Checklist + scripts (complete)
+4. ⏳ **AG: Flash 3+ devices, start fleet test**
+5. ⏳ **Claude: Monitor logs, analyze results**
 
-**Tomorrow (2026-03-27):**
-1. Integrate device firmware Phase 50 changes
-2. Test daemon routing with simulated devices or real hardware
-3. Update webapp for mesh control panel
-4. Full end-to-end test (2+ devices)
+**SUCCESS TARGETS:**
+- [ ] 3+ devices register in daemon
+- [ ] Topology correctly shows neighbors
+- [ ] Single-hop command executes + ACKs
+- [ ] Multi-hop command works (if 3+ devices)
+
+**TOMORROW (2026-03-27):**
+1. Post-test analysis + bug fixes (if needed)
+2. Webapp Phase 50 mesh panel
+3. Full integration test (users control mesh)
+4. Performance validation
 
 **2026-03-28:**
-1. Final integration & edge case testing
-2. Verify all 3 variants (V2, V3, V4) work together
-3. Tag v0.1.0-phase50
-4. Ship
+1. Final edge cases
+2. All variants validated (V2, V3, V4)
+3. Tag & ship v0.1.0-phase50
 
 ---
 
