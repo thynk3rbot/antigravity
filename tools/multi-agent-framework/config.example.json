@@ -6,6 +6,14 @@
     "build_command": null,
     "test_command": null
   },
+  "branding": {
+    "app_name": "MyProject",
+    "tagline": "Multi-Agent Cooperative Development",
+    "copyright": "Copyright 2026 Your Name. All Rights Reserved.",
+    "icon_path": null,
+    "accent_color": "#00b4d8",
+    "theme": "dark"
+  },
   "agents": {
     "planner": {
       "name": "Planner",

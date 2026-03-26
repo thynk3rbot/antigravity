@@ -41,9 +41,14 @@ def build_variables(config: dict) -> dict:
     build_cmd = config.get("project", {}).get("build_command")
     build_rule = f"Must pass `{build_cmd}`. " if build_cmd else ""
 
+    branding = config.get("branding", {})
     return {
         "project_name": config.get("project", {}).get("name", "MyProject"),
         "project_description": config.get("project", {}).get("description", ""),
+        "app_name": branding.get("app_name", config.get("project", {}).get("name", "MyProject")),
+        "tagline": branding.get("tagline", ""),
+        "copyright": branding.get("copyright", ""),
+        "accent_color": branding.get("accent_color", "#00b4d8"),
         # Planner
         "planner_name": planner.get("name", "Planner"),
         "planner_name_lower": planner.get("name", "Planner").lower(),

@@ -6,6 +6,14 @@
     "build_command": "pio run",
     "test_command": "pio test"
   },
+  "branding": {
+    "app_name": "LoRaLink",
+    "tagline": "Autonomous Mesh Intelligence",
+    "copyright": "LoRaLink(tm) Copyright 2026 spw1.com. All Rights Reserved.",
+    "icon_path": "tools/webapp/static/media/loralink_icon.png",
+    "accent_color": "#00b4d8",
+    "theme": "dark"
+  },
   "agents": {
     "planner": {
       "name": "OpenAI",

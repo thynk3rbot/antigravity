@@ -27,7 +27,8 @@ import httpx
 # ── Configuration ────────────────────────────────────────────────────────────
 
 DEFAULT_CONFIG = {
-    "project": {"name": "MultiAgentProject"},
+    "project": {"name": "Orion Instance"},
+    "branding": {"app_name": "Orion", "copyright": ""},
     "model_proxy": {
         "local": {
             "provider": "ollama",

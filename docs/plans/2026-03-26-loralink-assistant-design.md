@@ -1,9 +1,14 @@
 # LoRaLink Assistant — Production Specification
+### An Orion Framework Instance
 
 **Date:** 2026-03-26
 **Status:** Design approved, ready for AG implementation
 **Authors:** Claude + User (brainstorming), AG (implementation)
 **Target:** Standalone Windows app, evolving into cross-platform AI assistant
+**Framework:** Orion (tools/multi-agent-framework/)
+**Current Branding:** LoRaLink(tm) Copyright 2026 spw1.com. All Rights Reserved.
+
+> **IMPERATIVE — BRANDING IS CONFIG-DRIVEN:** All user-facing brand strings (app name, tagline, copyright, logo, accent color) MUST be read from `config.json` `"branding"` section at runtime. NEVER hardcode "LoRaLink", logo paths, or color values in HTML/CSS/JS/Python. The branding will change in the future. Every UI element, window title, tray tooltip, page header, and footer must pull from config. This is a hard requirement.
 
 ## Problem
 
@@ -44,6 +49,49 @@ Everything runs locally. No data leaves the machine unless Ollama is unavailable
 │    collections       local/cloud       per session   │
 └─────────────────────────────────────────────────────┘
 ```
+
+## Branding Architecture
+
+**ALL branding is config-driven. This is non-negotiable.**
+
+```json
+{
+    "branding": {
+        "app_name": "LoRaLink Assistant",
+        "tagline": "Your Local AI Knowledge Assistant",
+        "copyright": "LoRaLink(tm) Copyright 2026 spw1.com. All Rights Reserved.",
+        "icon_path": "static/media/loralink_icon.png",
+        "accent_color": "#00b4d8",
+        "theme": "dark"
+    }
+}
+```
+
+Every place brand identity appears in code must reference `config["branding"]`:
+
+| Location | What reads from config |
+|----------|----------------------|
+| System tray tooltip | `branding.app_name` |
+| Browser tab title | `branding.app_name` |
+| Chat UI header | `branding.app_name` + `branding.tagline` |
+| Page footer | `branding.copyright` |
+| Tray icon | `branding.icon_path` |
+| CSS accent color | `branding.accent_color` |
+| FastAPI title | `branding.app_name` |
+| Log prefix | `branding.app_name` |
+
+**The `/api/branding` endpoint** serves branding config to the frontend:
+```python
+@app.get("/api/branding")
+async def get_branding():
+    return config.get("branding", {})
+```
+
+The frontend loads branding on startup and applies it to all UI elements. CSS custom properties are set dynamically from the config accent color.
+
+**To rebrand:** Change `config.json` `"branding"` section. Restart the server. Done.
+
+---
 
 ## Component Specifications
 
@@ -259,7 +307,7 @@ Single-page app. Dark theme matching LoRaLink branding.
 └──────────────────────────────────────────────────┘
 ```
 
-**Design tokens** (match LoRaLink webapp):
+**Design tokens** (defaults — accent color overridden by `config.branding.accent_color`):
 ```css
 :root {
     --bg-primary: #0a0e17;       /* Deep navy */
@@ -267,7 +315,7 @@ Single-page app. Dark theme matching LoRaLink branding.
     --bg-input: #1a2233;         /* Input fields */
     --text-primary: #e2e8f0;     /* Light text */
     --text-secondary: #94a3b8;   /* Muted text */
-    --accent: #00b4d8;           /* LoRaLink cyan */
+    --accent: #00b4d8;           /* DEFAULT — overridden by config.branding.accent_color */
     --accent-hover: #0096b7;
     --success: #00d464;          /* Green status */
     --error: #dc3232;            /* Red status */
@@ -275,6 +323,17 @@ Single-page app. Dark theme matching LoRaLink branding.
     --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
     --font-sans: 'Inter', system-ui, sans-serif;
 }
+```
+
+**On page load, JS must call `/api/branding` and apply:**
+```javascript
+fetch('/api/branding').then(r => r.json()).then(b => {
+    document.title = b.app_name || 'Assistant';
+    document.querySelector('.app-title').textContent = b.app_name || '';
+    document.querySelector('.app-tagline').textContent = b.tagline || '';
+    document.querySelector('.copyright').textContent = b.copyright || '';
+    if (b.accent_color) document.documentElement.style.setProperty('--accent', b.accent_color);
+});
 ```
 
 **Key UI behaviors:**
@@ -596,8 +655,16 @@ These are NOT to be implemented now, but the architecture should not prevent the
 
 ## Notes for AG
 
-- The multi-agent framework with RAG is already built and tested at `tools/multi-agent-framework/`. Reuse `rag/`, `hybrid_model_proxy.py`, and `rag/embeddings.py` directly — don't rewrite them.
-- The GardenBrain project at `C:\Users\spw1\Documents\Garden\` is a working proof-of-concept. `ask.py` demonstrates the full query pipeline.
+### IMPERATIVE: Config-Driven Branding
+**NEVER hardcode brand strings.** All of these must come from `config.json` `"branding"`:
+- App name, tagline, copyright — in HTML, window titles, tray tooltips, logs
+- Icon path — in tray.py and favicon
+- Accent color — in CSS via JS override of `--accent` custom property
+- The branding WILL change. If you hardcode "LoRaLink" anywhere in UI code, it will need to be found and replaced later. Use config from day one.
+
+### Framework: Orion
+- The Orion framework (multi-agent cooperative dev with RAG) is at `tools/multi-agent-framework/`. Reuse `rag/`, `hybrid_model_proxy.py`, and `rag/embeddings.py` directly — don't rewrite them.
+- Orion's Garden at `C:\Users\spw1\Documents\Garden\` is a working proof-of-concept. `ask.py` demonstrates the full query pipeline.
 - The daemon tray at `tools/daemon/tray.py` is the exact pattern for the system tray. Copy and modify.
 - The webapp at `tools/webapp/` has the CSS design language to match. Pull colors and fonts from there.
 - ChromaDB v1.5 requires `name()`, `embed_query()`, `get_config()`, `build_from_config()` on embedding functions. This is already handled in `tools/multi-agent-framework/rag/embeddings.py`.

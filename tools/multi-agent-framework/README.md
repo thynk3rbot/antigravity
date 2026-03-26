@@ -1,6 +1,8 @@
-# Multi-Agent Cooperative Development Framework
+# Orion — Multi-Agent Cooperative Development Framework
 
 A reusable framework for coordinating multiple AI agents (Claude, Ollama, IDE agents, etc.) working on the same codebase. Enforces structured handoffs, file ownership, and optional RAG-augmented local model queries.
+
+> **Branding note:** All user-facing strings (app name, tagline, copyright, colors) are driven by the `"branding"` section in `config.json`. Never hardcode brand identity in code — always read from config. This allows any Orion instance to be rebranded without code changes.
 
 ## Quick Start
 
@@ -83,6 +85,7 @@ python -m rag.retriever --config config.json --query "how does authentication wo
 See `config.example.json` for the full schema. Key sections:
 
 - **`project`**: Name, description, build/test commands
+- **`branding`**: App name, tagline, copyright, icon path, accent color, theme — all UI-facing identity
 - **`agents`**: Define your 3 agents (name, tool, lock file, directory scopes)
 - **`phases`**: Map phases to directories and I/O artifacts
 - **`model_proxy`**: Local/cloud endpoints, pricing, health check TTL
@@ -100,3 +103,11 @@ See `config.example.json` for the full schema. Key sections:
 ## Examples
 
 See `examples/loralink/config.json` for a real-world configuration used in ESP32 firmware development with Claude + Ollama + Antigravity IDE.
+
+### Known Orion Instances
+
+| Instance | Domain | Location |
+|----------|--------|----------|
+| LoRaLink | ESP32 mesh firmware | This repo (`examples/loralink/`) |
+| Orion's Garden | Gardening knowledge base | `C:\Users\spw1\Documents\Garden\` |
+| LoRaLink Assistant | Multi-domain AI chat | `tools/assistant/` (planned) |
