@@ -126,8 +126,13 @@ class MQTTClientManager(BaseMQTTClient):
             logger.info(f"[MQTT] Subscribed to {topic}")
 
     async def publish_command(self, node_id: str, cmd: Dict) -> bool:
-        """Publish command to device."""
-        if not self.client or not self.connected:
+        """Publish command to device for mesh relay."""
+        if not self.client:
+            # Mock mode - just log it
+            logger.info(f"[MQTT] Mock publish to device/{node_id}/mesh/command: {cmd.get('cmd_id', '?')}")
+            return True
+
+        if not self.connected:
             logger.warning(f"[MQTT] Not connected, cannot send command to {node_id}")
             return False
 

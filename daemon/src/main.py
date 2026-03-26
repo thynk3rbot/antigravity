@@ -1,21 +1,17 @@
 """
-LoRaLink Daemon: Central intelligence layer for Phase 50 Autonomous Mesh Sovereignty.
+LoRaLink Daemon: Pure Mesh Gateway for Phase 50 Autonomous Mesh Sovereignty.
 
-Purpose:
-- Routes commands from webapp/clients to devices via mesh (direct/multi-hop/queue)
-- Discovers and tracks device topology in real-time
-- Handles device telemetry, status updates, and command ACKs
-- Manages command queueing and retry for offline devices
-- Provides REST API for mesh control and status monitoring
+Pure Mesh Architecture:
+- Devices mesh with each other via ControlPacket (LoRa/BLE/ESP-NOW)
+- All devices understand all capabilities (relay even if they don't have them)
+- Daemon monitors topology (reads MQTT status)
+- Daemon acts as command gateway (publishes to MQTT for devices to relay)
+- Webapp controls mesh through daemon REST API
 
-Architecture:
-- MeshRouter: Core routing logic (peer discovery, path finding, queueing)
-- MQTT Client: Listens for device status and handles acknowledgments
-- REST API: FastAPI server for webapp integration
-- Background Tasks: Periodic retry, queue draining, health checks
+Key: Devices own the mesh routing. Daemon owns the interface.
 
 Usage:
-    python main.py [--port 8001] [--mqtt-broker localhost:1883]
+    python run.py [--port 8001] [--mqtt-broker localhost:1883]
 """
 
 import asyncio
@@ -23,15 +19,19 @@ import logging
 import argparse
 import signal
 from typing import Optional
-import time
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
-from mesh_router import MeshRouter, MeshPeer, TransportType, MeshCommand
-from mesh_api import init_mesh_api, health_check
-import mqtt_client
+try:
+    from .mesh_router import MeshTopology
+    from .mesh_api import init_mesh_api
+    from . import mqtt_client
+except ImportError:
+    from mesh_router import MeshTopology
+    from mesh_api import init_mesh_api
+    import mqtt_client
 
 # Configure logging
 logging.basicConfig(
@@ -42,14 +42,14 @@ logger = logging.getLogger(__name__)
 
 
 class LoRaLinkDaemon:
-    """Main daemon coordinator."""
+    """Pure mesh gateway daemon."""
 
     def __init__(self, port: int = 8001, mqtt_broker: str = "localhost:1883"):
         self.port = port
         self.mqtt_broker = mqtt_broker
 
         # Core components
-        self.router = MeshRouter(own_node_id="daemon-0")
+        self.topology = MeshTopology(own_node_id="daemon-0")
         self.mqtt = None
         self.app = None
 
@@ -59,12 +59,12 @@ class LoRaLinkDaemon:
 
     async def initialize(self) -> None:
         """Initialize daemon components."""
-        logger.info("[Daemon] Initializing LoRaLink Daemon...")
+        logger.info("[Daemon] Initializing LoRaLink Daemon (Pure Mesh Gateway)...")
 
         # Setup FastAPI app
         self.app = FastAPI(
             title="LoRaLink Daemon",
-            description="Phase 50 Autonomous Mesh Sovereignty",
+            description="Phase 50 Autonomous Mesh Sovereignty (Pure Mesh Gateway)",
             version="0.1.0",
         )
 
@@ -77,8 +77,8 @@ class LoRaLinkDaemon:
             allow_headers=["*"],
         )
 
-        # Mount mesh API
-        mesh_api = init_mesh_api(self.router)
+        # Mount mesh API (pass MQTT publisher for command injection)
+        mesh_api = init_mesh_api(self.topology, self.mqtt)
         self.app.include_router(mesh_api)
 
         # Add health check to root
@@ -86,8 +86,9 @@ class LoRaLinkDaemon:
         async def root_health():
             return {
                 "status": "healthy",
-                "service": "LoRaLink Daemon",
-                "peers": len(self.router.peer_registry),
+                "service": "LoRaLink Pure Mesh Gateway",
+                "peers": len(self.topology.peer_registry),
+                "model": "pure-mesh",
             }
 
         # Initialize MQTT client
@@ -101,7 +102,14 @@ class LoRaLinkDaemon:
         await self.mqtt.connect()
         await self.mqtt.subscribe_to_device_topics()
 
-        logger.info("[Daemon] Initialization complete!")
+        # Update API with MQTT publisher
+        from mesh_api import init_mesh_api
+        init_mesh_api(self.topology, self.mqtt)
+
+        logger.info("[Daemon] Initialization complete! (Pure Mesh Mode)")
+        logger.info("  - Topology monitoring: ENABLED")
+        logger.info("  - Command gateway: ENABLED")
+        logger.info("  - Device mesh routing: ENABLED")
 
     async def start(self) -> None:
         """Start the daemon."""
@@ -110,7 +118,6 @@ class LoRaLinkDaemon:
 
         # Start background tasks
         self.background_tasks = [
-            asyncio.create_task(self._retry_loop()),
             asyncio.create_task(self._health_loop()),
         ]
 
@@ -149,73 +156,44 @@ class LoRaLinkDaemon:
         logger.info("[Daemon] Shutdown complete!")
 
     # ─────────────────────────────────────────────────────────────────
-    # Device Event Handlers
+    # MQTT Event Handlers
     # ─────────────────────────────────────────────────────────────────
 
     async def _handle_device_status(self, node_id: str, status: dict) -> None:
         """Process device status update from MQTT."""
-        logger.info(f"[Status] {node_id}: {status}")
-
-        # Get or create peer
-        peer = self.router.get_peer(node_id)
-        if not peer:
-            # New device discovered
-            peer = MeshPeer(
-                node_id=node_id,
-                mac_address=status.get("mac", "00:00:00:00:00:00"),
-                last_seen=time.time() * 1000,
-                rssi_dbm=status.get("rssi", -80),
-                transport=TransportType.MQTT,  # Default to MQTT for status messages
-                reachable=True,
-                neighbors=status.get("neighbors", []),
-            )
-            self.router.register_peer(peer)
-        else:
-            # Update existing peer
-            self.router.update_peer_status(node_id, status)
+        logger.debug(f"[Status] {node_id}: {status}")
+        self.topology.update_peer_status(node_id, status)
 
     async def _handle_command_ack(self, cmd_id: str, success: bool, result: dict) -> None:
         """Process command acknowledgment from device."""
         logger.info(f"[Ack] {cmd_id}: {'SUCCESS' if success else 'FAILED'}")
-        self.router.handle_command_ack(cmd_id, success, result)
+        self.topology.handle_command_ack(cmd_id, success, result)
 
     # ─────────────────────────────────────────────────────────────────
     # Background Tasks
     # ─────────────────────────────────────────────────────────────────
 
-    async def _retry_loop(self) -> None:
-        """Background task: retry queued commands periodically."""
-        logger.info("[Background] Retry loop started (30s interval)")
-
-        while self.running:
-            try:
-                await asyncio.sleep(30)  # Retry every 30 seconds
-                self.router.retry_failed_commands(max_retries=3)
-            except Exception as e:
-                logger.error(f"[Retry] Error: {e}")
-
     async def _health_loop(self) -> None:
-        """Background task: periodic health checks and diagnostics."""
+        """Background task: periodic health checks and topology maintenance."""
         logger.info("[Background] Health loop started (60s interval)")
 
         while self.running:
             try:
-                await asyncio.sleep(60)  # Health check every 60 seconds
-                stats = self.router.get_stats()
+                await asyncio.sleep(60)
+
+                stats = self.topology.get_stats()
                 logger.info(
-                    f"[Health] Peers={stats['peer_count']}, "
-                    f"Pending={stats['pending_commands']}, "
-                    f"Queued={stats['queued_commands']}"
+                    f"[Health] Peers: {stats['total_peers']} total, "
+                    f"{stats['online_peers']} online | "
+                    f"Commands: {stats['active_commands']} active, "
+                    f"{stats['command_history_size']} history"
                 )
 
-                # Clean up stale peers
-                stale_peers = [
-                    p for p in self.router.list_peers()
-                    if p.is_stale(threshold_ms=120000)  # 2 minutes
-                ]
-                for peer in stale_peers:
-                    logger.info(f"[Health] Marking {peer.node_id} as stale (no update for 2min)")
-                    peer.reachable = False
+                # Mark stale peers as offline
+                for peer in self.topology.list_peers():
+                    if peer.is_stale(threshold_ms=120000):  # 2 minutes
+                        peer.reachable = False
+                        logger.info(f"[Health] Marking {peer.node_id} as offline (stale)")
 
             except Exception as e:
                 logger.error(f"[Health] Error: {e}")
@@ -223,7 +201,7 @@ class LoRaLinkDaemon:
 
 async def main():
     """Entry point."""
-    parser = argparse.ArgumentParser(description="LoRaLink Daemon")
+    parser = argparse.ArgumentParser(description="LoRaLink Pure Mesh Gateway Daemon")
     parser.add_argument(
         "--port", type=int, default=8001, help="REST API port (default: 8001)"
     )

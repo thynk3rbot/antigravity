@@ -1,22 +1,26 @@
 """
-MeshRouter: Intelligence layer for Phase 50 Autonomous Mesh Sovereignty.
+MeshTopology: Topology monitor for pure peer-to-peer mesh.
 
-Maintains peer discovery, handles command routing (direct/multi-hop/queue),
-tracks command status, and implements retry logic with exponential backoff.
+Pure Mesh Model:
+- Devices route to each other via ControlPacket (LoRa/BLE/ESP-NOW)
+- All devices understand all capabilities (even if they don't have them)
+- Devices relay packets for other devices automatically
+- Daemon monitors topology only (reads MQTT status messages)
+- Daemon provides visibility + acts as command injection point for webapp
 
-Core Responsibilities:
-1. Peer Discovery — Track all devices in mesh (MAC, signal strength, neighbors)
-2. Routing — Find best path to target device (priority: direct → LoRa → multi-hop → queue)
-3. Command Queueing — Hold commands for offline devices
-4. Retry Logic — Resend with exponential backoff (max 3 retries, 2s initial)
-5. Conflict Resolution — FIFO queue for simultaneous commands to same device
+Daemon role:
+1. Track all peers (from MQTT status updates)
+2. Monitor mesh topology in real-time
+3. Provide REST API for webapp to inject commands
+4. Publish commands to MQTT for devices to mesh-relay
+5. Track command status (device ACKs)
 """
 
 import time
 import uuid
 from enum import Enum
 from dataclasses import dataclass, field, asdict
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 from collections import deque
 import logging
 
@@ -26,19 +30,10 @@ logger = logging.getLogger(__name__)
 class CommandStatus(Enum):
     """Status lifecycle for mesh commands."""
     PENDING = "pending"
-    SENT = "sent"
+    PUBLISHED = "published"  # Published to MQTT for devices to relay
     ACKED = "acked"
     COMPLETED = "completed"
     FAILED = "failed"
-
-
-class TransportType(Enum):
-    """Available transport mediums."""
-    WIFI = "wifi"
-    LORA = "lora"
-    BLE = "ble"
-    MQTT = "mqtt"
-    ESPNOW = "espnow"
 
 
 @dataclass
@@ -48,7 +43,6 @@ class MeshPeer:
     mac_address: str
     last_seen: float  # Unix timestamp (ms)
     rssi_dbm: int
-    transport: TransportType
     reachable: bool
     neighbors: List[str] = field(default_factory=list)
     battery_mv: Optional[int] = None
@@ -61,16 +55,15 @@ class MeshPeer:
 
 @dataclass
 class MeshCommand:
-    """Represents a command routed through the mesh."""
+    """Represents a command injected into the mesh."""
     cmd_id: str
-    from_node: str
+    from_node: str  # Usually "daemon-api" or "webapp"
     to_node: str
     action: str  # "gpio_toggle", "gpio_set", "gpio_read", etc.
     pin: int
     duration_ms: Optional[int] = None
     status: CommandStatus = CommandStatus.PENDING
-    retry_count: int = 0
-    queued_at_ms: float = field(default_factory=lambda: time.time() * 1000)
+    published_at_ms: float = field(default_factory=lambda: time.time() * 1000)
     result: Optional[Dict] = None
     error_message: Optional[str] = None
 
@@ -81,20 +74,19 @@ class MeshCommand:
         return d
 
 
-@dataclass
-class MeshPath:
-    """Represents a route to a target device."""
-    hops: List[str]  # [device1, device2, target]
-    transport: TransportType
-    signal_quality: int  # Estimated 0-100
-
-
-class MeshRouter:
+class MeshTopology:
     """
-    Core routing intelligence for Phase 50 mesh sovereignty.
+    Topology monitor for pure peer-to-peer mesh.
 
-    Manages peer discovery, command routing, queueing, and retry logic.
-    Thread-safe for concurrent command submission.
+    Passive monitoring:
+    - Listens to device status updates
+    - Tracks peer registry (MAC, signal, neighbors, battery, uptime)
+    - Maintains command history for status tracking
+
+    Active gateway:
+    - Publishes commands to MQTT for devices to relay
+    - Tracks ACKs from devices
+    - Provides REST API for webapp
     """
 
     def __init__(self, own_node_id: str = "daemon-0"):
@@ -104,18 +96,15 @@ class MeshRouter:
         self.peer_registry: Dict[str, MeshPeer] = {}
 
         # In-flight commands: cmd_id → MeshCommand
-        self.pending_commands: Dict[str, MeshCommand] = {}
-
-        # Queued commands for offline devices: deque of MeshCommand
-        self.command_queue: deque = deque()
+        self.active_commands: Dict[str, MeshCommand] = {}
 
         # Command history for diagnostics/UI
         self.command_history: deque = deque(maxlen=1000)
 
-        logger.info(f"[MeshRouter] Initialized as {self.own_node_id}")
+        logger.info(f"[Mesh] Topology monitor initialized as {self.own_node_id}")
 
     # ─────────────────────────────────────────────────────────────────
-    # Peer Management
+    # Peer Management (Passive Monitoring)
     # ─────────────────────────────────────────────────────────────────
 
     def register_peer(self, peer: MeshPeer) -> None:
@@ -124,25 +113,38 @@ class MeshRouter:
         logger.info(
             f"[Peer] {peer.node_id} registered: "
             f"MAC={peer.mac_address}, RSSI={peer.rssi_dbm}dBm, "
-            f"transport={peer.transport.value}, neighbors={peer.neighbors}"
+            f"neighbors={peer.neighbors}"
         )
 
     def update_peer_status(self, node_id: str, status: Dict) -> None:
         """Update peer status from heartbeat/status message."""
         if node_id not in self.peer_registry:
-            logger.warning(f"[Peer] Unknown peer {node_id}, skipping update")
-            return
+            # New device discovered
+            peer = MeshPeer(
+                node_id=node_id,
+                mac_address=status.get("mac_address", status.get("mac", "00:00:00:00:00:00")),
+                last_seen=status.get("timestamp_ms", time.time() * 1000),
+                rssi_dbm=status.get("rssi_dbm", status.get("rssi", -80)),
+                reachable=True,
+                neighbors=status.get("neighbors", []),
+                battery_mv=status.get("battery_mv"),
+                uptime_ms=status.get("uptime_ms"),
+            )
+            self.register_peer(peer)
+        else:
+            # Update existing peer
+            peer = self.peer_registry[node_id]
+            peer.last_seen = status.get("timestamp_ms", time.time() * 1000)
+            peer.reachable = status.get("reachable", True)
+            peer.battery_mv = status.get("battery_mv", peer.battery_mv)
+            peer.uptime_ms = status.get("uptime_ms", peer.uptime_ms)
+            peer.neighbors = status.get("neighbors", peer.neighbors)
+            if "rssi_dbm" in status:
+                peer.rssi_dbm = status["rssi_dbm"]
+            elif "rssi" in status:
+                peer.rssi_dbm = status["rssi"]
 
-        peer = self.peer_registry[node_id]
-        peer.last_seen = status.get("timestamp_ms", time.time() * 1000)
-        peer.reachable = status.get("reachable", True)
-        peer.battery_mv = status.get("battery_mv")
-        peer.uptime_ms = status.get("uptime_ms")
-        peer.neighbors = status.get("neighbors", [])
-
-        # Try to drain queue if device just came online
-        if peer.reachable:
-            self._drain_queue_for_peer(node_id)
+            logger.debug(f"[Peer] {node_id} updated: neighbors={peer.neighbors}, rssi={peer.rssi_dbm}dBm")
 
     def get_peer(self, node_id: str) -> Optional[MeshPeer]:
         """Get peer by node ID."""
@@ -154,156 +156,64 @@ class MeshRouter:
 
     def get_topology(self) -> Dict:
         """Return mesh topology for visualization/status."""
+        # Mark stale peers as offline
+        for peer in self.peer_registry.values():
+            if peer.is_stale(threshold_ms=120000):  # 2 minutes
+                peer.reachable = False
+
         return {
             "node_count": len(self.peer_registry),
+            "online_count": sum(1 for p in self.peer_registry.values() if p.reachable),
             "peers": [asdict(p) for p in self.peer_registry.values()],
             "own_node_id": self.own_node_id,
         }
 
     # ─────────────────────────────────────────────────────────────────
-    # Routing Algorithm
+    # Command Management (Gateway)
     # ─────────────────────────────────────────────────────────────────
 
-    def find_path(self, target_node_id: str) -> Optional[MeshPath]:
+    def create_command(self, target_node: str, action: str, pin: int, duration_ms: Optional[int] = None) -> MeshCommand:
+        """Create a new command to inject into the mesh."""
+        cmd = MeshCommand(
+            cmd_id=str(uuid.uuid4()),
+            from_node="daemon-api",
+            to_node=target_node,
+            action=action,
+            pin=pin,
+            duration_ms=duration_ms,
+        )
+        return cmd
+
+    def publish_command(self, cmd: MeshCommand) -> bool:
         """
-        Find best path to target using priority order:
-        1. Direct (device has WiFi/BLE to daemon or has LoRa radio online)
-        2. Multi-hop (via known neighbors)
-        3. None if unreachable and not queued
+        Mark command as published to MQTT.
+
+        Actual MQTT publishing happens in mqtt_client.py.
+        This method just tracks the command for status tracking.
         """
-        target = self.get_peer(target_node_id)
-        if not target:
-            logger.warning(f"[Route] Target {target_node_id} not in peer registry")
-            return None
-
-        # Priority 1: Direct path (device is currently reachable)
-        if target.reachable and not target.is_stale():
-            logger.info(f"[Route] Direct path to {target_node_id} via {target.transport.value}")
-            return MeshPath(
-                hops=[target_node_id],
-                transport=target.transport,
-                signal_quality=self._estimate_signal_quality(target.rssi_dbm),
-            )
-
-        # Priority 2: Multi-hop via neighbors
-        path = self._find_multihop_path(target_node_id, visited=set())
-        if path:
-            logger.info(f"[Route] Multi-hop path found: {' → '.join(path.hops)}")
-            return path
-
-        # No path available
-        logger.warning(f"[Route] No path to {target_node_id}, will queue for retry")
-        return None
-
-    def _find_multihop_path(
-        self, target_node_id: str, visited: set, max_hops: int = 3
-    ) -> Optional[MeshPath]:
-        """BFS to find multi-hop path with max 3 hops."""
-        from collections import deque as Queue
-
-        target = self.get_peer(target_node_id)
-        if not target:
-            return None
-
-        queue = Queue([([target_node_id], target)])
-        visited.add(target_node_id)
-
-        while queue:
-            path, current_peer = queue.popleft()
-
-            if len(path) > max_hops:
-                continue
-
-            # Check each neighbor
-            for neighbor_id in current_peer.neighbors:
-                if neighbor_id in visited:
-                    continue
-
-                neighbor = self.get_peer(neighbor_id)
-                if not neighbor or not neighbor.reachable:
-                    continue
-
-                new_path = [neighbor_id] + path
-                visited.add(neighbor_id)
-
-                # If this neighbor can reach target directly, we found a path
-                if target_node_id in neighbor.neighbors and neighbor.reachable:
-                    return MeshPath(
-                        hops=new_path + [target_node_id],
-                        transport=neighbor.transport,
-                        signal_quality=self._estimate_signal_quality(neighbor.rssi_dbm),
-                    )
-
-                queue.append((new_path, neighbor))
-
-        return None
-
-    def _estimate_signal_quality(self, rssi_dbm: int) -> int:
-        """Convert RSSI to signal quality 0-100."""
-        # RSSI ranges typically -30 (excellent) to -120 (poor)
-        if rssi_dbm > -50:
-            return 100
-        elif rssi_dbm > -70:
-            return 80
-        elif rssi_dbm > -90:
-            return 60
-        elif rssi_dbm > -110:
-            return 40
-        else:
-            return 20
-
-    # ─────────────────────────────────────────────────────────────────
-    # Command Routing
-    # ─────────────────────────────────────────────────────────────────
-
-    def route_command(self, cmd: MeshCommand) -> Tuple[bool, str]:
-        """
-        Route a command to target device.
-
-        Returns:
-            (success, status_msg)
-            success=True if command sent or queued
-            status_msg describes what happened
-        """
-        logger.info(f"[Cmd] Routing {cmd.cmd_id}: {cmd.action} to {cmd.to_node}")
-
-        # Validate target exists
         if cmd.to_node not in self.peer_registry:
-            msg = f"Target {cmd.to_node} not in peer registry"
-            logger.error(f"[Cmd] {msg}")
+            logger.warning(f"[Cmd] Target {cmd.to_node} not in peer registry")
             cmd.status = CommandStatus.FAILED
-            cmd.error_message = msg
-            return False, msg
+            cmd.error_message = f"Target {cmd.to_node} unknown"
+            return False
 
-        # Try to find path
-        path = self.find_path(cmd.to_node)
+        cmd.status = CommandStatus.PUBLISHED
+        self.active_commands[cmd.cmd_id] = cmd
+        self.command_history.append(cmd)
 
-        if path:
-            # We can reach the device
-            cmd.status = CommandStatus.SENT
-            self.pending_commands[cmd.cmd_id] = cmd
-            self.command_history.append(cmd)
-
-            msg = f"Command {cmd.cmd_id} sent via {' → '.join(path.hops)}"
-            logger.info(f"[Cmd] {msg}")
-            return True, msg
-        else:
-            # Device unreachable, queue for retry
-            cmd.status = CommandStatus.PENDING
-            self.command_queue.append(cmd)
-            self.command_history.append(cmd)
-
-            msg = f"Command {cmd.cmd_id} queued (device offline, retry in {30000}ms)"
-            logger.info(f"[Cmd] {msg}")
-            return True, msg
+        logger.info(
+            f"[Cmd] {cmd.cmd_id} published to MQTT for {cmd.to_node}: "
+            f"{cmd.action} pin={cmd.pin}"
+        )
+        return True
 
     def handle_command_ack(self, cmd_id: str, success: bool, result: Optional[Dict] = None) -> None:
         """Process ACK from device."""
-        if cmd_id not in self.pending_commands:
+        if cmd_id not in self.active_commands:
             logger.warning(f"[Ack] Unknown command ID {cmd_id}")
             return
 
-        cmd = self.pending_commands[cmd_id]
+        cmd = self.active_commands[cmd_id]
         if success:
             cmd.status = CommandStatus.COMPLETED
             cmd.result = result
@@ -313,13 +223,13 @@ class MeshRouter:
             cmd.error_message = result.get("error", "Unknown error") if result else None
             logger.error(f"[Ack] {cmd_id} failed: {cmd.error_message}")
 
-        del self.pending_commands[cmd_id]
+        del self.active_commands[cmd_id]
 
     def get_command_status(self, cmd_id: str) -> Optional[Dict]:
         """Get status of a command by ID."""
-        # Check pending
-        if cmd_id in self.pending_commands:
-            return self.pending_commands[cmd_id].to_dict()
+        # Check active
+        if cmd_id in self.active_commands:
+            return self.active_commands[cmd_id].to_dict()
 
         # Check history
         for cmd in self.command_history:
@@ -329,73 +239,34 @@ class MeshRouter:
         return None
 
     # ─────────────────────────────────────────────────────────────────
-    # Queueing & Retry
-    # ─────────────────────────────────────────────────────────────────
-
-    def _drain_queue_for_peer(self, node_id: str, max_retries: int = 3) -> None:
-        """Attempt to send queued commands for a peer that just came online."""
-        commands_to_retry = []
-
-        while self.command_queue:
-            cmd = self.command_queue.popleft()
-
-            if cmd.to_node == node_id and cmd.retry_count < max_retries:
-                # Try to reroute this command
-                success, msg = self.route_command(cmd)
-                if not success and cmd.retry_count < max_retries:
-                    # Re-queue if failed
-                    cmd.retry_count += 1
-                    commands_to_retry.append(cmd)
-                    logger.info(f"[Queue] Retry {cmd.retry_count}/{max_retries} for {cmd.cmd_id}")
-            else:
-                # Not for this peer, or out of retries
-                commands_to_retry.append(cmd)
-
-        # Re-queue commands that weren't sent
-        for cmd in commands_to_retry:
-            self.command_queue.append(cmd)
-
-    def retry_failed_commands(self, max_retries: int = 3) -> None:
-        """Background task: retry commands for peers that are now online."""
-        now = time.time() * 1000
-
-        for peer in list(self.peer_registry.values()):
-            if peer.reachable:
-                self._drain_queue_for_peer(peer.node_id, max_retries)
-
-    def get_queue_status(self) -> Dict:
-        """Return current queue statistics."""
-        return {
-            "queued_count": len(self.command_queue),
-            "pending_count": len(self.pending_commands),
-            "history_count": len(self.command_history),
-        }
-
-    # ─────────────────────────────────────────────────────────────────
     # Diagnostics
     # ─────────────────────────────────────────────────────────────────
 
     def get_stats(self) -> Dict:
-        """Get router statistics."""
+        """Get mesh statistics."""
+        online_peers = sum(1 for p in self.peer_registry.values() if p.reachable)
         return {
             "own_node_id": self.own_node_id,
-            "peer_count": len(self.peer_registry),
-            "pending_commands": len(self.pending_commands),
-            "queued_commands": len(self.command_queue),
+            "total_peers": len(self.peer_registry),
+            "online_peers": online_peers,
+            "active_commands": len(self.active_commands),
             "command_history_size": len(self.command_history),
         }
 
     def print_status(self) -> None:
-        """Print router status for debugging."""
-        print("\n" + "=" * 60)
-        print(f"[MeshRouter] {self.own_node_id} Status")
-        print("=" * 60)
-        print(f"Peers: {len(self.peer_registry)}")
-        for peer in self.peer_registry.values():
-            status = "🟢 ONLINE" if peer.reachable else "🔴 OFFLINE"
-            print(f"  {peer.node_id:20} {status:15} RSSI={peer.rssi_dbm:4}dBm "
-                  f"neighbors={peer.neighbors}")
-        print(f"\nPending commands: {len(self.pending_commands)}")
-        print(f"Queued commands: {len(self.command_queue)}")
-        print(f"Command history: {len(self.command_history)}")
-        print("=" * 60 + "\n")
+        """Print mesh status for debugging."""
+        online = sum(1 for p in self.peer_registry.values() if p.reachable)
+        print("\n" + "=" * 70)
+        print(f"[Mesh Topology] {self.own_node_id}")
+        print("=" * 70)
+        print(f"Peers: {len(self.peer_registry)} ({online} online)")
+
+        for peer in sorted(self.peer_registry.values(), key=lambda p: p.node_id):
+            status = "ONLINE" if peer.reachable else "OFFLINE"
+            neighbors_str = ", ".join(peer.neighbors) if peer.neighbors else "(none)"
+            print(f"  {peer.node_id:15} {status:8} RSSI={peer.rssi_dbm:4}dBm "
+                  f"neighbors=[{neighbors_str}]")
+
+        print(f"\nActive Commands: {len(self.active_commands)}")
+        print(f"Command History: {len(self.command_history)}")
+        print("=" * 70 + "\n")
