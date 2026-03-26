@@ -662,6 +662,16 @@ These are NOT to be implemented now, but the architecture should not prevent the
 - Accent color — in CSS via JS override of `--accent` custom property
 - The branding WILL change. If you hardcode "LoRaLink" anywhere in UI code, it will need to be found and replaced later. Use config from day one.
 
+### IMPERATIVE: Offload to Ollama
+**Use the local Ollama model (qwen2.5-coder:14b) for repetitive and boilerplate tasks.** AG should NOT hand-write everything — queue work to Ollama via the hybrid proxy for:
+- **Boilerplate generation:** SQLite schema + CRUD methods, FastAPI route stubs, test file scaffolding
+- **CSS generation:** Generate the full dark-theme stylesheet from the design tokens above
+- **JS utilities:** WebSocket reconnection logic, fetch wrappers, DOM helpers
+- **Repetitive patterns:** Error handler functions, logging setup, config loading
+- **Test generation:** Given a function signature, generate pytest cases
+
+Use `tools/hybrid_model_proxy.py` or the `ollama_bridge.py` to queue these. The model runs 24/7 at zero cost. AG's time is better spent on architecture decisions, integration, and validation — not typing boilerplate. This is the three-agent model: AG decides WHAT, Ollama generates HOW, AG reviews and integrates.
+
 ### Framework: Orion
 - The Orion framework (multi-agent cooperative dev with RAG) is at `tools/multi-agent-framework/`. Reuse `rag/`, `hybrid_model_proxy.py`, and `rag/embeddings.py` directly — don't rewrite them.
 - Orion's Garden at `C:\Users\spw1\Documents\Garden\` is a working proof-of-concept. `ask.py` demonstrates the full query pipeline.
@@ -670,3 +680,24 @@ These are NOT to be implemented now, but the architecture should not prevent the
 - ChromaDB v1.5 requires `name()`, `embed_query()`, `get_config()`, `build_from_config()` on embedding functions. This is already handled in `tools/multi-agent-framework/rag/embeddings.py`.
 - Ollama streaming uses `/api/generate` with `"stream": true`. Response is NDJSON.
 - Bind to `127.0.0.1:8300`, never `0.0.0.0`.
+
+### Suggested Ollama Offload Tasks (by implementation step)
+
+| Step | What AG decides | What Ollama generates |
+|------|----------------|----------------------|
+| 1 | Server structure, config schema | FastAPI boilerplate, config loader, `/health` endpoint |
+| 2 | Layout wireframe, design tokens | Full `style.css` from design tokens, HTML skeleton |
+| 3 | SQLite schema design | `session_manager.py` CRUD methods, table creation SQL |
+| 4 | Domain config format | `domain_manager.py` class with list/query/ingest methods |
+| 5 | API contract (request/response) | Route handler with validation, error responses |
+| 6 | UI interaction flow | `app.js` fetch wrapper, message rendering, DOM updates |
+| 7 | WebSocket protocol design | WS handler with streaming loop, reconnection logic |
+| 8 | Token rendering UX | JS streaming token renderer, typing animation |
+| 9 | Voice UX (hold/release) | `voice.js` Web Speech API integration |
+| 10 | Domain selector behavior | `domains.js` dropdown + ingest trigger |
+| 11 | Tray menu structure | `tray.py` adapted from `tools/daemon/tray.py` |
+| 12 | Startup sequence | `main.py` subprocess management, signal handling |
+| 13 | Error scenario list | Error handler functions, user-facing messages |
+| 14 | Logging strategy | Rotating file handler setup, graceful shutdown sequence |
+
+**Pattern:** AG writes a 2-3 line prompt describing what's needed → Ollama generates 50-200 lines → AG reviews, integrates, tests. This is 3-5x faster than hand-writing.
