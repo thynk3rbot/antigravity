@@ -1857,62 +1857,44 @@ def build_app(
                 results.append({"node": nid, "ok": ok})
         return JSONResponse({"ok": True, "results": results})
 
-    # ── OTA Flash (job-tracked, IP-based) ───────────────────────────────
-    _ota_jobs: dict = {}  # job_id -> {status, version, error, progress}
-
-    class OTAFlashRequest(BaseModel):
-        env: str
-        ip: str
+    # ── OTA Flash — proxied through daemon (port 8001) ───────────────────
+    # Daemon is the actor: it knows device IPs, runs pio espota, tracks jobs.
+    # Webapp is pure UI — never runs pio directly.
+    DAEMON_URL = "http://localhost:8001"
 
     @app.post("/api/ota/flash")
-    async def _ota_flash(req: OTAFlashRequest) -> JSONResponse:
-        """Start OTA flash to a single device IP. Returns job_id for polling."""
-        import uuid
-        job_id = str(uuid.uuid4())[:8]
-        _ota_jobs[job_id] = {"status": "running", "ip": req.ip, "env": req.env, "progress": "starting..."}
-
-        async def _run(job_id: str, env: str, ip: str):
-            # Determine firmware/v2 path relative to server.py location
-            import pathlib
-            fw_dir = pathlib.Path(__file__).parent.parent.parent / "firmware" / "v2"
-            pio = pathlib.Path.home() / ".platformio" / "penv" / "Scripts" / "pio.exe"
-            if not pio.exists():
-                pio = "pio"
-            cmd = f'"{pio}" run --target upload --environment {env} --upload-port {ip}'
-            print(f"[OTA] {job_id}: flashing {ip} with {env}")
+    async def _ota_flash(request: Request) -> JSONResponse:
+        """Proxy OTA flash request to daemon."""
+        body = await request.json()
+        async with aiohttp.ClientSession() as s:
             try:
-                proc = await asyncio.create_subprocess_shell(
-                    cmd, cwd=str(fw_dir),
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.STDOUT,
-                )
-                output = []
-                async for line in proc.stdout:
-                    text = line.decode(errors="replace").strip()
-                    output.append(text)
-                    _ota_jobs[job_id]["progress"] = text[-120:] if text else ""
-                await proc.wait()
-                if proc.returncode == 0:
-                    # Extract new version from output if present
-                    ver = next((l.split("->")[-1].strip().split('"')[0] for l in output if "[VERSION]" in l and "->" in l), None)
-                    _ota_jobs[job_id].update({"status": "done", "version": ver})
-                    print(f"[OTA] {job_id}: done — {ver or 'version unknown'}")
-                else:
-                    err = next((l for l in reversed(output) if l), "unknown error")
-                    _ota_jobs[job_id].update({"status": "error", "error": err[-200:]})
-                    print(f"[OTA] {job_id}: FAILED — {err[:80]}")
+                async with s.post(f"{DAEMON_URL}/api/mesh/ota/flash", json=body,
+                                  timeout=aiohttp.ClientTimeout(total=5)) as r:
+                    return JSONResponse(await r.json(), status_code=r.status)
             except Exception as e:
-                _ota_jobs[job_id].update({"status": "error", "error": str(e)})
-
-        asyncio.create_task(_run(job_id, req.env, req.ip))
-        return JSONResponse({"ok": True, "job_id": job_id})
+                return JSONResponse({"ok": False, "error": f"Daemon unavailable: {e}"}, status_code=503)
 
     @app.get("/api/ota/status/{job_id}")
     async def _ota_status(job_id: str) -> JSONResponse:
-        job = _ota_jobs.get(job_id)
-        if not job:
-            return JSONResponse({"status": "unknown"}, status_code=404)
-        return JSONResponse(job)
+        """Proxy OTA status poll to daemon."""
+        async with aiohttp.ClientSession() as s:
+            try:
+                async with s.get(f"{DAEMON_URL}/api/mesh/ota/status/{job_id}",
+                                 timeout=aiohttp.ClientTimeout(total=3)) as r:
+                    return JSONResponse(await r.json(), status_code=r.status)
+            except Exception as e:
+                return JSONResponse({"status": "error", "error": f"Daemon unavailable: {e}"}, status_code=503)
+
+    @app.get("/api/ota/fleet")
+    async def _ota_fleet() -> JSONResponse:
+        """Get online devices from daemon for OTA panel population."""
+        async with aiohttp.ClientSession() as s:
+            try:
+                async with s.get(f"{DAEMON_URL}/api/mesh/ota/fleet",
+                                 timeout=aiohttp.ClientTimeout(total=3)) as r:
+                    return JSONResponse(await r.json())
+            except Exception:
+                return JSONResponse({"devices": []})
 
     # Legacy serial-port flash (kept for backward compatibility)
     @app.post("/api/fleet/flash")

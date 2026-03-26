@@ -1094,3 +1094,13 @@ function otaLog(msg, level='info') {
     d.style.color = c[level]||'#aaa'; d.textContent = msg;
     el.appendChild(d); el.scrollTop = el.scrollHeight;
 }
+
+// Auto-populate OTA device list from daemon fleet endpoint
+async function otaRefreshFleet() {
+    try {
+        const d = await (await fetch('/api/ota/fleet')).json();
+        if (d.devices && d.devices.length > 0) otaUpdateDeviceList(d.devices);
+    } catch (_) {}
+}
+// Refresh on load and every 30s
+document.addEventListener('DOMContentLoaded', () => { otaRefreshFleet(); setInterval(otaRefreshFleet, 30000); });

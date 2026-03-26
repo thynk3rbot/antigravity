@@ -233,3 +233,92 @@ async def health_check() -> Dict:
         "peers_online": stats["online_peers"],
         "active_commands": stats["active_commands"],
     }
+
+
+# ── OTA Firmware Flash ────────────────────────────────────────────────────────
+# Daemon is the actor: it knows device IPs and runs pio espota against them.
+# Webapp calls daemon; daemon does the flash.
+
+import asyncio
+import uuid
+import pathlib
+
+_ota_jobs: Dict = {}  # job_id -> {status, ip, env, version, progress, error}
+
+_FW_DIR = pathlib.Path(__file__).parent.parent.parent / "firmware" / "v2"
+_PIO = pathlib.Path.home() / ".platformio" / "penv" / "Scripts" / "pio.exe"
+if not _PIO.exists():
+    _PIO = pathlib.Path("pio")
+
+
+class OTAFlashRequest(BaseModel):
+    env: str    # heltec_v3 or heltec_v4
+    ip: str     # device IP (from topology)
+    node_id: Optional[str] = None  # if provided, used for logging only
+
+
+@api.post("/ota/flash")
+async def ota_flash(request: OTAFlashRequest) -> Dict:
+    """
+    Flash firmware OTA to a device. Daemon runs pio espota against device IP.
+    Returns job_id — poll /api/mesh/ota/status/{job_id} for progress.
+    """
+    job_id = str(uuid.uuid4())[:8]
+    _ota_jobs[job_id] = {"status": "running", "ip": request.ip, "env": request.env, "progress": "starting..."}
+
+    async def _run(job_id: str, env: str, ip: str):
+        cmd = f'"{_PIO}" run --target upload --environment {env} --upload-port {ip}'
+        logger.info(f"[OTA] {job_id}: flashing {ip} ({env})")
+        try:
+            proc = await asyncio.create_subprocess_shell(
+                cmd, cwd=str(_FW_DIR),
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+            )
+            output = []
+            async for line in proc.stdout:
+                text = line.decode(errors="replace").strip()
+                output.append(text)
+                _ota_jobs[job_id]["progress"] = text[-120:]
+            await proc.wait()
+            if proc.returncode == 0:
+                ver = next((l.split("->")[-1].strip().split('"')[0]
+                            for l in output if "[VERSION]" in l and "->" in l), None)
+                _ota_jobs[job_id].update({"status": "done", "version": ver})
+                logger.info(f"[OTA] {job_id}: done — {ver or 'version unknown'}")
+            else:
+                err = next((l for l in reversed(output) if l), "unknown error")
+                _ota_jobs[job_id].update({"status": "error", "error": err[-200:]})
+                logger.error(f"[OTA] {job_id}: FAILED — {err[:80]}")
+        except Exception as e:
+            _ota_jobs[job_id].update({"status": "error", "error": str(e)})
+
+    asyncio.create_task(_run(job_id, request.env, request.ip))
+    return {"ok": True, "job_id": job_id}
+
+
+@api.get("/ota/status/{job_id}")
+async def ota_status(job_id: str) -> Dict:
+    """Poll OTA flash job status."""
+    job = _ota_jobs.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return job
+
+
+@api.get("/ota/fleet")
+async def ota_fleet() -> Dict:
+    """Return all online devices with their IPs and versions — for webapp OTA panel."""
+    if not topology_instance:
+        return {"devices": []}
+    topo = topology_instance.get_topology()
+    devices = []
+    for p in topo.get("peers", []):
+        if p.get("reachable") and p.get("ip"):
+            devices.append({
+                "node_id": p["node_id"],
+                "ip": p["ip"],
+                "ver": p.get("version", "?"),
+                "hw": p.get("hw", "?"),
+            })
+    return {"devices": devices}
