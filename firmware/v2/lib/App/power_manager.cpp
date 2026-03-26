@@ -114,22 +114,29 @@ bool PowerManager::isVEXTStable() {
 
 void PowerManager::enableVEXT() {
 #ifdef VEXT_PIN
+    Serial.printf("[PWR] Enabling VEXT on pin %d (V1 Baseline Parity)\n", VEXT_PIN);
+    pinMode(VEXT_PIN, OUTPUT);
+    
+    // Verified V1 Pulse sequence (from DisplayManager.cpp:45-47)
+    // Ensures stability for all iterations (V2/V3/V4).
+    digitalWrite(VEXT_PIN, LOW);  delay(50);
+    digitalWrite(VEXT_PIN, HIGH); delay(50);
+    digitalWrite(VEXT_PIN, LOW);
+    
 #ifdef ARDUINO_HELTEC_WIFI_LORA_32_V4
-    digitalWrite(VEXT_PIN, HIGH);  // V4 Reference is Active HIGH -> ON
     pinMode(37, OUTPUT);
     digitalWrite(37, HIGH);        // V4 Battery Sense Enable
-#else
-    digitalWrite(VEXT_PIN, LOW);   // V2/V3 is Active LOW -> ON
 #endif
-    _vextPulseState = 0;           // Immediately stable
-    delay(50);                     // Conservative settle for rail stability
+
+    _vextPulseState = 0;           
+    delay(200);                    // Stabilization delay before I2C initialization
 #endif
 }
 
 void PowerManager::disableVEXT() {
 #ifdef VEXT_PIN
 #ifdef ARDUINO_HELTEC_WIFI_LORA_32_V4
-    digitalWrite(VEXT_PIN, LOW);   // V4 Reference is Active HIGH -> OFF
+    digitalWrite(VEXT_PIN, HIGH);  // V4 Reference is Active LOW -> OFF
 #else
     digitalWrite(VEXT_PIN, HIGH);  // V2/V3 is Active LOW -> OFF
 #endif
@@ -207,13 +214,20 @@ void PowerManager::autoUpdateMode() {
     float hysteresis = 0.05f; // 50mV parity with V1
 
     if (isPowered()) {
+        // USB/External power detected - Always force NORMAL mode
+        if (_mode != PowerMode::NORMAL) {
+            Serial.printf("[Power] USB power detected (%.2fV) — restoring NORMAL mode\n", _lastVoltage);
+        }
         newMode = PowerMode::NORMAL;
     } else if (voltage >= VOLT_NORMAL + (_mode > PowerMode::NORMAL ? hysteresis : 0)) {
         newMode = PowerMode::NORMAL;
     } else if (voltage >= VOLT_CONSERVE + (_mode > PowerMode::CONSERVE ? hysteresis : 0)) {
         newMode = PowerMode::CONSERVE;
-    } else if (voltage < VOLT_CONSERVE - (newMode < PowerMode::CRITICAL ? hysteresis : 0)) {
+    } else {
         newMode = PowerMode::CRITICAL;
+        if (_mode != PowerMode::CRITICAL) {
+             Serial.printf("[Power] Low Battery (%.2fV) — entering CRITICAL mode\n", _lastVoltage);
+        }
     }
 
     if (newMode != _mode) {
@@ -248,9 +262,9 @@ uint32_t PowerManager::getSleepIntervalMs() {
 
 bool PowerManager::isPowered() {
     float volt = _lastVoltage;
-    // USB/Mains: battery reads near 0V (no battery) or > 4.25V (charging/bus)
-    // Same logic as V1 PowerManager::isPowered()
-    return (volt < 0.1f || volt > 4.25f);
+    // USB/Mains: battery reads near 0V-0.8V (no battery) or > 4.25V (charging/bus)
+    // LiPo cells should never be below 2.5V; anything under 1.5V is considered "USB only"
+    return (volt < 1.5f || volt > 4.25f);
 }
 
 // ============================================================================

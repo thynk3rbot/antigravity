@@ -16,6 +16,7 @@
 #include "../HAL/probe_manager.h"
 #include "../HAL/sensor_hal.h"
 #include "../HAL/radio_hal.h"
+#include "../HAL/i2c_mutex.h"
 
 // Transport Layer
 #include "../Transport/message_router.h"
@@ -58,6 +59,8 @@ extern TaskHandle_t probeTaskHandle;
 extern TaskHandle_t controlTaskHandle;
 extern uint8_t g_ourNodeID;
 extern uint32_t g_bootTimestamp;
+
+// (Removed redundant g_i2cMutex definition)
 
 void BootSequence::run() {
   initCore();
@@ -111,19 +114,13 @@ void BootSequence::initCore() {
   vTaskDelay(pdMS_TO_TICKS(500)); // Enforce rail stability
   
   Serial.println("[CHECK] Initializing I2C Mutex...");
-  extern SemaphoreHandle_t g_i2cMutex;
   if (!g_i2cMutex) {
       g_i2cMutex = xSemaphoreCreateMutex();
   }
 
-  Serial.println("[CHECK] Initializing I2C Wire...");
-#ifdef ARDUINO_HELTEC_WIFI_LORA_32
-  // V2 hardware is picky about I2C speed and stabilization
+  Serial.println("[CHECK] Initializing I2C Wire (100kHz)...");
+  // Force 100kHz across all variants for V1-parity stability
   Wire.begin(I2C_SDA, I2C_SCL, 100000); 
-#else
-  // S3 (V3/V4) hardware standard
-  Wire.begin(I2C_SDA, I2C_SCL, I2C_FREQ_HZ);
-#endif
   Serial.println("  ✓ I2C Wire started");
 
 #ifdef ARDUINO_HELTEC_WIFI_LORA_32_V4
