@@ -1104,3 +1104,31 @@ async function otaRefreshFleet() {
 }
 // Refresh on load and every 30s
 document.addEventListener('DOMContentLoaded', () => { otaRefreshFleet(); setInterval(otaRefreshFleet, 30000); });
+
+// ── System Services Panel (octopus) ──────────────────────────────────────────
+async function servicesRefresh() {
+    const el = document.getElementById('services-list');
+    if (!el) return;
+    try {
+        const d = await (await fetch('http://localhost:8001/api/services')).json();
+        el.innerHTML = Object.values(d).map(s => {
+            const dot = s.running ? '🟢' : '⚪';
+            const uptime = s.uptime_s ? ` ${s.uptime_s}s` : '';
+            const btn = s.running
+                ? `<button class="btn sm secondary" style="padding:1px 6px;font-size:10px" onclick="svcAction('${s.name}','stop')">stop</button>`
+                : `<button class="btn sm" style="padding:1px 6px;font-size:10px" onclick="svcAction('${s.name}','start')">start</button>`;
+            return `<div class="flex gap-2 items-center mb-2">${dot} <span class="flex-1">${s.name}</span><span class="text-dim">${uptime}</span>${btn}</div>`;
+        }).join('') || '<span class="text-dim">Daemon not reachable</span>';
+    } catch (_) {
+        if (el) el.innerHTML = '<span class="text-dim">Daemon offline</span>';
+    }
+}
+
+async function svcAction(name, action) {
+    try {
+        await fetch(`http://localhost:8001/api/services/${name}/${action}`, {method:'POST'});
+        setTimeout(servicesRefresh, 1500);
+    } catch (e) { console.error('svcAction failed', e); }
+}
+
+document.addEventListener('DOMContentLoaded', () => { servicesRefresh(); setInterval(servicesRefresh, 15000); });

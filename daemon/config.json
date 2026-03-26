@@ -1,0 +1,25 @@
+{
+  "services": [
+    {
+      "name": "webapp",
+      "cmd": "python tools/webapp/server.py",
+      "port": 8000,
+      "auto": true,
+      "description": "Fleet Admin Webapp"
+    },
+    {
+      "name": "assistant",
+      "cmd": "python tools/assistant/main.py",
+      "port": 8300,
+      "auto": false,
+      "description": "LoRaLink AI Assistant"
+    },
+    {
+      "name": "ollama_proxy",
+      "cmd": "python tools/multi-agent-framework/hybrid_model_proxy.py",
+      "port": null,
+      "auto": false,
+      "description": "Hybrid Model Proxy (Ollama + OpenRouter)"
+    }
+  ]
+}

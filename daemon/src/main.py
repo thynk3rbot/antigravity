@@ -27,10 +27,12 @@ import uvicorn
 try:
     from .mesh_router import MeshTopology
     from .mesh_api import init_mesh_api
+    from .service_manager import ServiceManager
     from . import mqtt_client
 except ImportError:
     from mesh_router import MeshTopology
     from mesh_api import init_mesh_api
+    from service_manager import ServiceManager
     import mqtt_client
 
 # Configure logging
@@ -42,7 +44,19 @@ logger = logging.getLogger(__name__)
 
 
 class LoRaLinkDaemon:
-    """Pure mesh gateway daemon."""
+    """
+    LoRaLink Daemon — the octopus.
+
+    Central hub for all system services:
+    - Manages service lifecycle (webapp, assistant, ollama_proxy, + any in config.json)
+    - Mesh gateway: monitors fleet topology via MQTT
+    - Command gateway: injects commands into the mesh
+    - OTA firmware delivery: runs pio espota against device IPs
+    - REST API on port 8001 for all of the above
+
+    Each service runs standalone as a subprocess. The daemon starts, stops,
+    restarts, and tails logs for all of them. New services: add to daemon/config.json.
+    """
 
     def __init__(self, port: int = 8001, mqtt_broker: str = "localhost:1883"):
         self.port = port
@@ -52,6 +66,7 @@ class LoRaLinkDaemon:
         self.topology = MeshTopology(own_node_id="daemon-0")
         self.mqtt = None
         self.app = None
+        self.services = ServiceManager()   # the tentacles
 
         # Background tasks
         self.running = False
@@ -64,7 +79,7 @@ class LoRaLinkDaemon:
         # Setup FastAPI app
         self.app = FastAPI(
             title="LoRaLink Daemon",
-            description="Phase 50 Autonomous Mesh Sovereignty (Pure Mesh Gateway)",
+            description="The octopus — central hub for fleet, firmware, and services",
             version="0.1.0",
         )
 
@@ -81,14 +96,44 @@ class LoRaLinkDaemon:
         mesh_api = init_mesh_api(self.topology, self.mqtt)
         self.app.include_router(mesh_api)
 
-        # Add health check to root
+        # Mount service management API
+        from fastapi import APIRouter
+        svc_router = APIRouter(prefix="/api/services", tags=["services"])
+        svc_mgr = self.services
+
+        @svc_router.get("")
+        async def list_services():
+            return svc_mgr.status_all()
+
+        @svc_router.post("/{name}/start")
+        async def start_service(name: str):
+            return await svc_mgr.start(name)
+
+        @svc_router.post("/{name}/stop")
+        async def stop_service(name: str):
+            return await svc_mgr.stop(name)
+
+        @svc_router.post("/{name}/restart")
+        async def restart_service(name: str):
+            return await svc_mgr.restart(name)
+
+        @svc_router.get("/{name}/logs")
+        async def service_logs(name: str, lines: int = 50):
+            return {"name": name, "logs": svc_mgr.logs(name, lines)}
+
+        self.app.include_router(svc_router)
+
+        # Root health — full system status
         @self.app.get("/health")
         async def root_health():
+            svc_status = svc_mgr.status_all()
+            running = [n for n, s in svc_status.items() if s["running"]]
             return {
                 "status": "healthy",
-                "service": "LoRaLink Pure Mesh Gateway",
+                "daemon": "octopus",
                 "peers": len(self.topology.peer_registry),
-                "model": "pure-mesh",
+                "services_running": running,
+                "services_total": len(svc_status),
             }
 
         # Initialize MQTT client
@@ -105,10 +150,18 @@ class LoRaLinkDaemon:
         # Update API with MQTT publisher
         init_mesh_api(self.topology, self.mqtt)
 
-        logger.info("[Daemon] Initialization complete! (Pure Mesh Mode)")
+        # Start managed services (auto=true in config.json)
+        await self.services.start_auto_services()
+
+        logger.info("[Daemon] Octopus initialized.")
         logger.info("  - Topology monitoring: ENABLED")
         logger.info("  - Command gateway: ENABLED")
-        logger.info("  - Device mesh routing: ENABLED")
+        logger.info("  - Service manager: ENABLED")
+        svc_status = self.services.status_all()
+        for name, s in svc_status.items():
+            icon = "✓" if s["running"] else "○"
+            auto = " (auto)" if s["auto"] else ""
+            logger.info(f"  {icon} {name}{auto} — {s['description']}")
 
     async def start(self) -> None:
         """Start the daemon."""
