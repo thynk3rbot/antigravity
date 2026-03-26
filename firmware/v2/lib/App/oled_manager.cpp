@@ -169,7 +169,7 @@ static void displayPage6() {
 }
 
 // Interrupt handler for button (Debounced via update loop)
-static volatile bool g_buttonHandled = true;
+static volatile bool g_buttonHandled = false;
 static volatile uint32_t g_lastInterruptTime = 0;
 
 static void IRAM_ATTR buttonISR() {
@@ -337,7 +337,10 @@ void OLEDManager::update() {
 
     uint32_t now = millis();
     if (g_wakeRequested) { setDisplayOn(true); g_wakeRequested = false; }
-    if (g_displayOn && (now - g_lastActivityTime >= SLEEP_TIMEOUT_MS)) setDisplayOn(false);
+    // Only sleep if not USB powered
+    if (g_displayOn && !PowerManager::isPowered() && (now - g_lastActivityTime >= SLEEP_TIMEOUT_MS)) setDisplayOn(false);
+    // Keep display alive when USB connected
+    if (PowerManager::isPowered() && !g_displayOn) { setDisplayOn(true); g_lastActivityTime = now; }
 
     // Handle button press detected by ISR
     if (!g_buttonHandled) {

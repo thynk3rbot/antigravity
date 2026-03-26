@@ -114,14 +114,19 @@ bool PowerManager::isVEXTStable() {
 
 void PowerManager::enableVEXT() {
 #ifdef VEXT_PIN
-    Serial.printf("[PWR] Enabling VEXT on pin %d (V1 Baseline Parity)\n", VEXT_PIN);
+    Serial.printf("[PWR] Enabling VEXT on pin %d (HW Variant Parity)\n", VEXT_PIN);
     pinMode(VEXT_PIN, OUTPUT);
     
-    // Verified V1 Pulse sequence (from DisplayManager.cpp:45-47)
-    // Ensures stability for all iterations (V2/V3/V4).
+    // Pulse sequence for rail stabilization
+#ifdef ARDUINO_HELTEC_WIFI_LORA_32_V4
     digitalWrite(VEXT_PIN, LOW);  delay(50);
     digitalWrite(VEXT_PIN, HIGH); delay(50);
-    digitalWrite(VEXT_PIN, LOW);
+    digitalWrite(VEXT_PIN, HIGH); // V4 Active HIGH -> Leave ON
+#else
+    digitalWrite(VEXT_PIN, HIGH);  delay(50);
+    digitalWrite(VEXT_PIN, LOW);   delay(50);
+    digitalWrite(VEXT_PIN, LOW);   // V2/V3 Active LOW -> Leave ON
+#endif
     
 #ifdef ARDUINO_HELTEC_WIFI_LORA_32_V4
     pinMode(37, OUTPUT);
@@ -136,7 +141,7 @@ void PowerManager::enableVEXT() {
 void PowerManager::disableVEXT() {
 #ifdef VEXT_PIN
 #ifdef ARDUINO_HELTEC_WIFI_LORA_32_V4
-    digitalWrite(VEXT_PIN, HIGH);  // V4 Reference is Active LOW -> OFF
+    digitalWrite(VEXT_PIN, LOW);   // V4 Reference is Active HIGH -> OFF
 #else
     digitalWrite(VEXT_PIN, HIGH);  // V2/V3 is Active LOW -> OFF
 #endif

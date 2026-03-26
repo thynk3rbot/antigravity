@@ -104,8 +104,9 @@ void ControlLoop::updateOLED() {
     }
     oled.setBatteryVoltage(PowerManager::getBatteryVoltage(), modeStr);
 
-    // Radio signal (no getSNR on LoRaTransport — pass 0)
-    oled.setLoRaSignal(LoRaTransport::getInstance().getSignalStrength(), 0);
+    // Radio signal (v2 aligns with v0.0.11 schema)
+    oled.setLoRaSignal(LoRaTransport::getInstance().getSignalStrength(), 
+                        LoRaTransport::getInstance().getLastSNR());
 
     // Transport status
     oled.setTransportStatus(

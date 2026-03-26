@@ -64,8 +64,11 @@ extern uint32_t g_bootTimestamp;
 
 void BootSequence::run() {
   initCore();
+  vTaskDelay(pdMS_TO_TICKS(BOOT_SAFE_DELAY_STAGGER_MS));
   initHAL();
+  vTaskDelay(pdMS_TO_TICKS(BOOT_SAFE_DELAY_STAGGER_MS));
   initTransports();
+  vTaskDelay(pdMS_TO_TICKS(BOOT_SAFE_DELAY_STAGGER_MS));
   initApplication();
   createTasks();
 
@@ -86,7 +89,9 @@ void BootSequence::initCore() {
   Serial.begin(SERIAL_BAUD);
   
   uint32_t startWait = millis();
-  while (!Serial && (millis() - startWait < 3000)) {
+  uint32_t waitTimeout = BOOT_SAFE_DELAY_USB_MS; // Project standard for Windows enumeration
+  
+  while (!Serial && (millis() - startWait < waitTimeout)) {
     vTaskDelay(pdMS_TO_TICKS(10));
   }
 
@@ -121,6 +126,7 @@ void BootSequence::initCore() {
   Serial.println("[CHECK] Initializing I2C Wire (100kHz)...");
   // Force 100kHz across all variants for V1-parity stability
   Wire.begin(I2C_SDA, I2C_SCL, 100000); 
+  Wire.setTimeOut(100); // Prevent bus hangs on collision/error
   Serial.println("  ✓ I2C Wire started");
 
 #ifdef ARDUINO_HELTEC_WIFI_LORA_32_V4
@@ -338,8 +344,8 @@ void BootSequence::initApplication() {
 
 void BootSequence::createTasks() {
   Serial.println("[7/8] Creating FreeRTOS tasks...");
-  xTaskCreatePinnedToCore(radioTask, "RadioTask", 8192, NULL, 4, &radioTaskHandle, 1);
-  xTaskCreatePinnedToCore(meshTask, "MeshTask", 8192, NULL, 3, &meshTaskHandle, 1);
+  xTaskCreatePinnedToCore(radioTask, "RadioTask", 8192, NULL, 4, &radioTaskHandle, 0); // Core 0
+  xTaskCreatePinnedToCore(meshTask, "MeshTask", 8192, NULL, 3, &meshTaskHandle, 0);   // Core 0
   xTaskCreatePinnedToCore(probeTask, "ProbeTask", 4096, NULL, 2, &probeTaskHandle, 0);
 
   RadioHAL::getInstance().setNotifyTask(radioTaskHandle);

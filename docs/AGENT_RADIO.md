@@ -221,6 +221,25 @@ result = await proxy.query(
 
 ---
 
+---
+
+## Telemetry Protocol & Agent Management (v0.1.0)
+
+To minimize dashboard latency and mesh overhead, the fleet implements a tiered telemetry protocol.
+
+### Tiered Commands
+1. **`STATUS` (Friendly/UI)**:
+   - **Fields**: `name`, `ver`, `ip`, `bat_pct`, `mode`, `vext`, `lora_rssi`, `peer_cnt`, `uptime`, `gps`.
+   - **Usage**: Periodic heartbeats, general dashboard rendering, and mobile app polling.
+   - **Agent Management**: External agents (Claude/Orion) should prefer this for 90% of interactions.
+
+2. **`VSTATUS` (Verbose/Technical)**:
+   - **Fields**: Fullforensics including `mac`, `hw_id`, `lora_snr`, `rssi_history`, `heap`, `reset`, `relay_mask`, and GPS diagnostics.
+   - **Usage**: Deep telemetry analysis, debugging, and initial provisioning verification.
+   - **Agent Management**: Trigger only on diagnostic failure, manual "Expert" toggle, or fleet audit events.
+
+---
+
 **Next Sync:** 2026-03-27 09:00 (Phase 50 planning)
 **Goal:** Ship Phase 50 by end of week
 **Motto:** Product ready. Agentic development. Full speed ahead.

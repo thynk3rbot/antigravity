@@ -30,6 +30,10 @@ using namespace ArduinoJson;
 #include <cstring>
 #include <esp_wifi.h>
 
+// Transport headers already provide extern references
+#include "../Transport/lora_transport.h"
+#include "mesh_coordinator.h"
+
 // ============================================================================
 // Static State Initialization
 // ============================================================================
@@ -90,10 +94,11 @@ void StatusBuilder::addBasicInfo(ArduinoJson::JsonDocument& doc) {
     }
 
     // Device identity
-    doc["id"] = String(NVSManager::getNodeID("Node").c_str());
+    doc["name"] = String(NVSManager::getNodeID("Node").c_str());
+    doc["id"] = String(NVSManager::getString("mesh", "numeric_id", "0").c_str());
     doc["hw_id"] = String(NVSManager::getHardwareID().c_str());
 
-    // Hardware version (detect from build flags)
+    // Hardware version
     #ifdef ARDUINO_HELTEC_WIFI_LORA_32_V4
         doc["hw"] = "V4";
     #elif defined(ARDUINO_HELTEC_WIFI_LORA_32_V3)
@@ -104,14 +109,13 @@ void StatusBuilder::addBasicInfo(ArduinoJson::JsonDocument& doc) {
         doc["hw"] = String(NVSManager::getHardwareVersion("V3").c_str());
     #endif
 
-    // Firmware version (from build define)
     doc["version"] = FIRMWARE_VERSION;
+    doc["ver"] = FIRMWARE_VERSION; // Matrix uses 'ver'
+    doc["mac"] = WiFi.macAddress();
 
-    // IP address (empty if not connected)
     std::string ip = WiFiTransport::getIP();
     doc["ip"] = ip.empty() ? "" : String(ip.c_str());
 
-    // MAC address formatted as "XX:XX:XX:XX:XX:XX"
     uint8_t macAddr[6];
     if (esp_wifi_get_mac(WIFI_IF_STA, macAddr) == ESP_OK) {
         char macStr[18];
@@ -119,27 +123,23 @@ void StatusBuilder::addBasicInfo(ArduinoJson::JsonDocument& doc) {
                  macAddr[0], macAddr[1], macAddr[2],
                  macAddr[3], macAddr[4], macAddr[5]);
         doc["mac"] = macStr;
-    } else {
-        doc["mac"] = "XX:XX:XX:XX:XX:XX";
     }
 }
 
 void StatusBuilder::addPowerInfo(ArduinoJson::JsonDocument& doc) {
     float batVoltage = PowerManager::getBatteryVoltage();
+    doc["bat_v"] = batVoltage; // Raw voltage for technical VSTATUS
 
-    // Battery voltage formatted as "X.XXV"
     char batStr[8];
     snprintf(batStr, sizeof(batStr), "%.2fV", batVoltage);
     doc["bat"] = batStr;
 
-    // Battery percentage (linear interpolation: 3.0V = 0%, 4.2V = 100%)
-    // Aligned with PowerManager standard 1S LiPo logic
     float batPercentage = ((batVoltage - 3.0f) / (4.2f - 3.0f)) * 100.0f;
     if (batPercentage < 0.0f) batPercentage = 0.0f;
     if (batPercentage > 100.0f) batPercentage = 100.0f;
+    doc["bat_pct"] = static_cast<uint8_t>(batPercentage); // Matrix uses 'bat_pct'
     doc["bat_percentage"] = static_cast<uint8_t>(batPercentage);
 
-    // Power mode as string
     PowerMode mode = PowerManager::getMode();
     const char* modeStr = "NORMAL";
     if (mode == PowerMode::CONSERVE) {
@@ -148,24 +148,21 @@ void StatusBuilder::addPowerInfo(ArduinoJson::JsonDocument& doc) {
         modeStr = "CRITICAL";
     }
     doc["mode"] = modeStr;
+    doc["vext"] = PowerManager::isVEXTStable();
 }
 
 void StatusBuilder::addLoRaInfo(ArduinoJson::JsonDocument& doc) {
-    // Get current LoRa RSSI and SNR (from last received packet)
-    int8_t loraRSSI = loraTransport.getSignalStrength();
-
-    // SNR is not readily available in current loraTransport interface
-    // Default to 0 (TODO: enhance loraTransport to track SNR)
-    int8_t loraSNR = 0;
+    // LoRa signal info
+    int8_t loraRSSI = LoRaTransport::getInstance().getSignalStrength();
+    int8_t loraSNR = LoRaTransport::getInstance().getLastSNR();
 
     doc["lora_rssi"] = loraRSSI;
     doc["lora_snr"] = loraSNR;
 
-    // Update RSSI history (rolling window of last 5 readings)
+    // Update RSSI history
     rssiHistory[rssiHistoryIndex] = loraRSSI;
     rssiHistoryIndex = (rssiHistoryIndex + 1) % 5;
 
-    // Add RSSI history array
     ArduinoJson::JsonArray rssiArr = doc.createNestedArray("rssi_history");
     for (int i = 0; i < 5; i++) {
         rssiArr.add(rssiHistory[i]);

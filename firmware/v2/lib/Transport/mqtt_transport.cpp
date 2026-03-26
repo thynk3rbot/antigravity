@@ -313,8 +313,8 @@ void MQTTTransport::_subscribe() {
     _mqttClient.subscribe("loralink/broadcast/command");
     
     // Subscribe to all plugin-registered topics
-    for (auto const& [topic, cb] : _topicRegistry) {
-        _mqttClient.subscribe(topic.c_str());
+    for (auto const& it : _topicRegistry) {
+        _mqttClient.subscribe(it.first.c_str());
     }
 
     Serial.printf("[MQTT] Subscribed: %s\n", deviceCmd.c_str());
@@ -345,7 +345,9 @@ void MQTTTransport::_mqttCallback(char* topic, byte* payload,
     Serial.printf("[MQTT] RX [%s]: %s\n", topic, payloadStr.c_str());
 
     // 1. Dispatch to plugins via registry
-    for (auto const& [pattern, cb] : _instance->_topicRegistry) {
+    for (auto const& it : _instance->_topicRegistry) {
+        const String& pattern = it.first;
+        const TopicCallback& cb = it.second;
         bool match = false;
         if (pattern.endsWith("#")) {
             String prefix = pattern.substring(0, pattern.length() - 1);
@@ -408,8 +410,16 @@ void MQTTTransport::pollStatic() {
     if (_instance) _instance->poll();
 }
 
+void MQTTTransport::onCommand(MQTTTransport::CommandCallback cb) {
+    if (cb) {
+        instance()->setCommandCallback(cb);
+    }
+}
+
 void MQTTTransport::onCommand(std::function<void(const std::string&)> cb) {
-    instance()->setCommandCallback([cb](const String& s) {
-        cb(s.c_str());
-    });
+    if (cb) {
+        instance()->setCommandCallback([cb](const String& s) {
+            cb(s.c_str());
+        });
+    }
 }

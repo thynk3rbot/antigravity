@@ -249,6 +249,29 @@ class HybridModelProxy:
 
     # ── Main query router (with RAG injection) ───────────────────────────
 
+    async def stream(self, model: str, prompt: str, **kwargs):
+        """Yield tokens as they arrive from Ollama."""
+        # Note: Currently only local Ollama supports streaming in this implementation
+        async with httpx.AsyncClient() as client:
+            try:
+                async with client.stream(
+                    "POST",
+                    f"{self.ollama_base}/api/generate",
+                    json={"model": model, "prompt": prompt, "stream": True, **kwargs},
+                    timeout=120.0
+                ) as response:
+                    async for line in response.aiter_lines():
+                        if line:
+                            data = json.loads(line)
+                            if not data.get("done"):
+                                yield data.get("response", "")
+                            else:
+                                # Final message — yield metrics
+                                yield {"done": True, "metrics": data}
+            except Exception as e:
+                logger.error(f"Streaming failed: {e}")
+                yield {"error": str(e)}
+
     async def query(self, model: str, prompt: str, prefer_local: bool = True,
                     use_rag: Optional[bool] = None, **kwargs) -> Dict[str, Any]:
         """Route query with optional RAG context injection."""
@@ -299,9 +322,9 @@ class HybridModelProxy:
         if not self.metrics_log:
             logger.info("No requests logged yet")
             return
-        print(f"\n{'=' * 70}")
-        print(f"HYBRID MODEL PROXY — METRICS REPORT")
-        print(f"{'=' * 70}")
+        print("HYBRID MODEL PROXY — METRICS REPORT")
+        print("=" * 70)
+        print("=" * 70)
         ollama_reqs = [m for m in self.metrics_log if m.backend == "ollama"]
         cloud_reqs = [m for m in self.metrics_log if m.backend != "ollama"]
         print(f"\nTotal Requests: {len(self.metrics_log)}")

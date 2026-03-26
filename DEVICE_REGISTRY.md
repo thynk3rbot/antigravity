@@ -1,70 +1,19 @@
-# LoRaLink Fleet Registry (Deployment Configuration)
+# LoRaLink Fleet Registry (Unambiguous)
 
-This file tracks the active devices in the LoRaLink fleet and their current verified firmware status.
+This registry is driven by live network discovery. Identification is anchored to the **Full MAC Address** and **Last 4** for brevity. All nodes are peers in an Any2Any mesh.
 
----
-
-## Device 1: Peer1 (Gateway)
-
-| Property | Value |
-|----------|-------|
-| **Previous Role** | Master |
-| **Hardware** | Heltec ESP32 LoRa V3 (ESP32-S3) |
-| **MAC Address** | `10:51:db:58:e6:c8` |
-| **Serial Port** | [Auto-Select] |
-| **IP Address** | `172.16.0.27` |
-| **Firmware Version** | **v0.4.0** (Build Verified) 🧪 |
-| **mDNS Hostname** | `peer1.local` |
-| **Network Mode** | Static IP |
-| **Flash Date** | 2026-03-12 |
-
-**Notes:**
-- Acting as the primary entry point for the fleet.
-- Persisted in `.settings.json` as `ble_prefix_a`.
+| MAC (Last 4) | Friendly Name | IP (Current) | HW Class | OS Version | Status |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **E6C8** | loralink-Peer1V3 | 172.16.0.27 | V3 | 0.0.13 | [x] Online (Verified) |
+| **A4B8** | loralink-Peer4V4 | 172.16.0.29 | V4 | 0.0.12 | [x] Online |
+| **97D4** | loralink-Peer-V4 | 172.16.0.43 | V4 | 0.0.12 | [x] Online |
+| **7E34** | loralink-Peer5V2 | 172.16.0.30 | V4 | 0.0.12 | [x] Online |
+| **FCC4** | loralink-Peer2V3 | 172.16.0.26 | V3 | Unknown | [ ] Offline |
 
 ---
 
-## Device 2: Peer2 (Node)
-
-| Property | Value |
-|----------|-------|
-| **Previous Role** | Slave |
-| **Hardware** | Heltec ESP32 LoRa V3 (ESP32-S3) |
-| **MAC Address** | `10:51:db:51:fc:c4` |
-| **Serial Port** | [Auto-Select] |
-| **IP Address** | `172.16.0.26` |
-| **Firmware Version** | **v0.4.0** (Build Verified) 🧪 |
-| **mDNS Hostname** | `peer2.local` |
-| **Network Mode** | Static IP |
-| **Flash Date** | 2026-03-12 |
-
-**Notes:**
-- Acting as the secondary test node.
-- Persisted in `.settings.json` as `ble_prefix_b`.
-
----
-
-## Fleet Verification Status (Baseline)
-
-| Milestone | Status | Details |
-|-----------|--------|---------|
-| **Version Sync** | ✅ PASS | Both devices verified on v0.4.0 logic baseline. |
-| **0.4.0 Readiness** | ⚠️ BLOCKED | Node 30 USB Flash pending handshake. |
-| **OTA Stability** | ✅ PASS | Successfully updated via `ota_master` / `ota_slave` envs in previous cycles. |
-| **Registry Mirroring** | ✅ PASS | Webapp correctly maps internal Registry to Peer1/Peer2 labels. |
-
----
-
-## Deployment Shortcuts
-
-Always use the unified script to prevent version drift:
-```powershell
-.\tools\deploy_dual.ps1
-```
-
----
-
-## Last Updated
-- **Date:** 2026-03-24
-- **By:** Antigravity (0.4.0 Stabilization Session)
-- **Firmware Baseline:** v0.4.0
+## Fleet Identification Protocol
+- **Discovery**: Use `python tools/discover_fleet.py` for mDNS census.
+- **Unambiguous Primary Key**: Full MAC Address.
+- **Hierarchical Roles**: None. All nodes are autonomous peers.
+- **OTA Strategy**: Parallel or Sequential targeted by IP/MAC.
