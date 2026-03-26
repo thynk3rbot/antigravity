@@ -157,7 +157,7 @@
   #define RELAY_CH3   26
   #define RELAY_CH4   12
   #define RELAY_CH5   13
-  #define RELAY_CH6   21
+  #define RELAY_CH6   255         // GPIO 21 shared with VEXT_PIN — disabled on V2
   #define RELAY_CH7   22
 #elif defined(RADIO_SX1262)
   // V3/V4 Node: SX1262 occupies GPIO 8,9,10,11,12,13,14
