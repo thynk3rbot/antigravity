@@ -15,9 +15,11 @@ Usage:
 """
 
 import asyncio
+import json
 import logging
 import argparse
 import signal
+from pathlib import Path
 from typing import Optional
 
 from fastapi import FastAPI
@@ -28,11 +30,13 @@ try:
     from .mesh_router import MeshTopology
     from .mesh_api import init_mesh_api
     from .service_manager import ServiceManager
+    from .community import CommunityManager
     from . import mqtt_client
 except ImportError:
     from mesh_router import MeshTopology
     from mesh_api import init_mesh_api
     from service_manager import ServiceManager
+    from community import CommunityManager
     import mqtt_client
 
 # Configure logging
@@ -63,10 +67,12 @@ class LoRaLinkDaemon:
         self.mqtt_broker = mqtt_broker
 
         # Core components
+        self._config_path = Path(__file__).parent.parent / "config.json"
         self.topology = MeshTopology(own_node_id="daemon-0")
         self.mqtt = None
         self.app = None
-        self.services = ServiceManager()   # the tentacles
+        self.services = ServiceManager()
+        self.community = CommunityManager(self._config_path)
 
         # Background tasks
         self.running = False
@@ -123,17 +129,50 @@ class LoRaLinkDaemon:
 
         self.app.include_router(svc_router)
 
-        # Root health — full system status
+        # ── Config API — read/write daemon/config.json live ──────────────
+        from fastapi import Request as FRequest
+        cfg_path = self._config_path
+        community_mgr = self.community
+
+        @self.app.get("/api/config")
+        async def get_config():
+            if cfg_path.exists():
+                return json.loads(cfg_path.read_text())
+            return {}
+
+        @self.app.put("/api/config")
+        async def save_config(request: FRequest):
+            body = await request.json()
+            cfg_path.write_text(json.dumps(body, indent=2))
+            # Hot-reload services and community
+            svc_mgr._load_services()
+            community_mgr.reload()
+            return {"ok": True, "message": "Config saved. Services and community reloaded."}
+
+        # ── Community API — peer daemon registry ─────────────────────────
+        @self.app.get("/api/community")
+        async def get_community():
+            return {
+                "peers": community_mgr.status_all(),
+                "total": community_mgr.peer_count(),
+                "online": community_mgr.online_count(),
+            }
+
+        # Root health — full system status (visible to peer daemons polling us)
         @self.app.get("/health")
         async def root_health():
             svc_status = svc_mgr.status_all()
             running = [n for n, s in svc_status.items() if s["running"]]
+            topo = self.topology.get_topology() if hasattr(self.topology, 'get_topology') else {}
             return {
                 "status": "healthy",
                 "daemon": "octopus",
                 "peers": len(self.topology.peer_registry),
+                "peers_online": topo.get("online_count", 0),
                 "services_running": running,
                 "services_total": len(svc_status),
+                "community_peers": community_mgr.peer_count(),
+                "community_online": community_mgr.online_count(),
             }
 
         # Initialize MQTT client
@@ -152,6 +191,9 @@ class LoRaLinkDaemon:
 
         # Start managed services (auto=true in config.json)
         await self.services.start_auto_services()
+
+        # Start community polling (peer daemons)
+        self.community.start()
 
         logger.info("[Daemon] Octopus initialized.")
         logger.info("  - Topology monitoring: ENABLED")

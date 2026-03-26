@@ -12,7 +12,10 @@ Endpoints:
   GET    /api/mesh/stats                — Get topology statistics
 """
 
-from fastapi import APIRouter, HTTPException
+import asyncio
+import time
+from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Optional, List, Dict
 import logging
@@ -239,7 +242,6 @@ async def health_check() -> Dict:
 # Daemon is the actor: it knows device IPs and runs pio espota against them.
 # Webapp calls daemon; daemon does the flash.
 
-import asyncio
 import uuid
 import pathlib
 
@@ -322,3 +324,37 @@ async def ota_fleet() -> Dict:
                 "hw": p.get("hw", "?"),
             })
     return {"devices": devices}
+
+
+# ── Server-Sent Events: live topology push ────────────────────────────────────
+
+@api.get("/events")
+async def topology_events(request: Request):
+    """
+    SSE stream of mesh topology updates.
+    Sends current topology immediately, then pushes on every change (2s poll interval).
+    Browser: new EventSource('http://localhost:8001/api/mesh/events')
+    """
+    async def _stream():
+        last_hash = None
+        while True:
+            if await request.is_disconnected():
+                break
+            if topology_instance:
+                topo = topology_instance.get_topology()
+                topo_hash = hash(json.dumps(topo, sort_keys=True, default=str))
+                if topo_hash != last_hash:
+                    last_hash = topo_hash
+                    yield f"data: {json.dumps(topo)}\n\n"
+            else:
+                yield f"data: {json.dumps({'peers': [], 'node_count': 0, 'online_count': 0})}\n\n"
+            await asyncio.sleep(2)
+
+    return StreamingResponse(
+        _stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )

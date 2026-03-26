@@ -1906,6 +1906,36 @@ def build_app(
             ))
         return JSONResponse({"ok": True, "msg": f"Flash started for {len(ports)} ports"})
 
+    # ── Daemon config + community — proxy to daemon:8001 ────────────────
+
+    @app.get("/api/daemon/config")
+    async def _get_daemon_config() -> JSONResponse:
+        async with aiohttp.ClientSession() as s:
+            try:
+                async with s.get(f"{DAEMON_URL}/api/config", timeout=aiohttp.ClientTimeout(total=3)) as r:
+                    return JSONResponse(await r.json())
+            except Exception as e:
+                return JSONResponse({"error": str(e)}, status_code=503)
+
+    @app.put("/api/daemon/config")
+    async def _save_daemon_config(request: Request) -> JSONResponse:
+        body = await request.json()
+        async with aiohttp.ClientSession() as s:
+            try:
+                async with s.put(f"{DAEMON_URL}/api/config", json=body, timeout=aiohttp.ClientTimeout(total=5)) as r:
+                    return JSONResponse(await r.json(), status_code=r.status)
+            except Exception as e:
+                return JSONResponse({"ok": False, "error": str(e)}, status_code=503)
+
+    @app.get("/api/community")
+    async def _get_community() -> JSONResponse:
+        async with aiohttp.ClientSession() as s:
+            try:
+                async with s.get(f"{DAEMON_URL}/api/community", timeout=aiohttp.ClientTimeout(total=3)) as r:
+                    return JSONResponse(await r.json())
+            except Exception:
+                return JSONResponse({"peers": [], "total": 0, "online": 0})
+
     # ── SMS / Magic Webhook ──────────────────────────────────────────────
 
     @app.post("/webhook/twilio", response_class=PlainTextResponse)

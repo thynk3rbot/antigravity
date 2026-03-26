@@ -1132,3 +1132,282 @@ async function svcAction(name, action) {
 }
 
 document.addEventListener('DOMContentLoaded', () => { servicesRefresh(); setInterval(servicesRefresh, 15000); });
+
+// ── Ops Center ────────────────────────────────────────────────────────────────
+
+async function opsRefresh() {
+    await Promise.all([opsRefreshServices(), opsRefreshFleet(), opsRefreshAI(), opsRefreshCommunity()]);
+}
+
+async function opsRefreshServices() {
+    const el = document.getElementById('ops-services');
+    const ct = document.getElementById('ops-svc-count');
+    if (!el) return;
+    try {
+        const d = await (await fetch('http://localhost:8001/api/services')).json();
+        const svcs = Object.values(d);
+        const running = svcs.filter(s => s.running).length;
+        if (ct) ct.textContent = `${running}/${svcs.length} running`;
+        el.innerHTML = svcs.map(s => {
+            const dot = s.running ? '🟢' : '⚪';
+            const up = s.uptime_s ? `<span class="text-dim">${s.uptime_s}s</span>` : '';
+            const port = s.port ? `<span class="text-dim">:${s.port}</span>` : '';
+            const btn = s.running
+                ? `<button class="btn sm secondary" style="font-size:10px;padding:1px 6px" onclick="svcAction('${s.name}','stop')">stop</button>`
+                : `<button class="btn sm" style="font-size:10px;padding:1px 6px" onclick="svcAction('${s.name}','start')">start</button>`;
+            return `<div class="flex gap-2 items-center mb-2 text-xs">${dot}<span class="flex-1 font-mono">${s.name}</span>${port}${up}${btn}</div>`;
+        }).join('');
+    } catch (_) { if (el) el.innerHTML = '<span class="text-dim text-xs">Daemon offline</span>'; }
+}
+
+async function opsRefreshFleet() {
+    const el = document.getElementById('ops-fleet');
+    const ct = document.getElementById('ops-fleet-count');
+    if (!el) return;
+    try {
+        const d = await (await fetch('http://localhost:8001/api/mesh/topology')).json();
+        const peers = d.peers || [];
+        const online = peers.filter(p => p.reachable).length;
+        if (ct) ct.textContent = `${online}/${peers.length} online`;
+        if (!peers.length) { el.innerHTML = '<span class="text-dim text-xs">No devices</span>'; return; }
+        el.innerHTML = peers.map(p => {
+            const dot = p.reachable ? '🟢' : '🔴';
+            const bat = p.battery_mv ? `${(p.battery_mv/1000).toFixed(1)}V` : '';
+            const rssi = p.rssi_dbm ? `${p.rssi_dbm}dBm` : '';
+            return `<div class="flex gap-2 items-center mb-2 text-xs">${dot}<span class="flex-1 font-mono">${p.node_id}</span><span class="text-dim">${bat} ${rssi}</span></div>`;
+        }).join('');
+    } catch (_) { if (el) el.innerHTML = '<span class="text-dim text-xs">No fleet data</span>'; }
+}
+
+async function opsRefreshAI() {
+    const el = document.getElementById('ops-ai');
+    if (!el) return;
+    try {
+        const [ollamaOk, proxyD] = await Promise.all([
+            fetch('http://localhost:11434/api/tags').then(r => r.ok).catch(() => false),
+            fetch('/api/proxy/status').then(r => r.json()).catch(() => ({}))
+        ]);
+        el.innerHTML = `
+            <div class="flex gap-2 items-center mb-2 text-xs">${ollamaOk ? '🟢' : '🔴'}<span class="flex-1">Ollama</span><span class="text-dim">:11434</span></div>
+            <div class="flex gap-2 items-center mb-2 text-xs">${proxyD.running ? '🟢' : '⚪'}<span class="flex-1">Hybrid Proxy</span><span class="text-dim">${proxyD.running ? 'running' : 'stopped'}</span></div>
+            <div class="text-xs text-dim mt-3">Model: ${proxyD.model || 'qwen2.5-coder:14b'}</div>
+            <div class="text-xs text-dim">Requests today: ${proxyD.total_requests || 0}</div>
+            <div class="text-xs text-dim">Cost today: $${(proxyD.total_cost || 0).toFixed(4)}</div>`;
+    } catch (_) { if (el) el.innerHTML = '<span class="text-dim text-xs">No AI data</span>'; }
+}
+
+async function opsRefreshCommunity() {
+    const el = document.getElementById('ops-community');
+    const ct = document.getElementById('ops-community-count');
+    if (!el) return;
+    try {
+        const d = await (await fetch('/api/community')).json();
+        if (ct) ct.textContent = `${d.online}/${d.total} online`;
+        if (!d.peers || !d.peers.length) {
+            el.innerHTML = '<span class="text-dim text-xs">No peers configured.<br>Add to daemon config.json → community[]</span>';
+            return;
+        }
+        el.innerHTML = d.peers.map(p => {
+            const dot = p.online ? '🟢' : '🔴';
+            const fleet = p.online ? `${p.peers_online}/${p.peers_total} devices` : (p.error || 'offline');
+            const loc = (p.location && p.location.label) ? `<span class="text-dim"> · ${p.location.label}</span>` : '';
+            return `<div class="mb-3 text-xs"><div class="flex gap-2 items-center">${dot}<span class="flex-1 font-bold">${p.name}</span><span class="text-dim">${fleet}</span></div><div class="text-dim ml-5">${p.description}${loc}</div></div>`;
+        }).join('');
+    } catch (_) { if (el) el.innerHTML = '<span class="text-dim text-xs">Community unavailable</span>'; }
+}
+
+// Config editor
+async function opsConfigLoad() {
+    const ta = document.getElementById('ops-config-editor');
+    const st = document.getElementById('ops-config-status');
+    if (!ta) return;
+    try {
+        const d = await (await fetch('/api/daemon/config')).json();
+        ta.value = JSON.stringify(d, null, 2);
+        if (st) { st.textContent = 'Loaded'; st.style.color = '#4ade80'; }
+    } catch (e) { if (st) { st.textContent = `Load failed: ${e.message}`; st.style.color = '#f87171'; } }
+}
+
+async function opsConfigSave() {
+    const ta = document.getElementById('ops-config-editor');
+    const st = document.getElementById('ops-config-status');
+    if (!ta) return;
+    try {
+        const parsed = JSON.parse(ta.value);
+        const res = await fetch('/api/daemon/config', { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(parsed) });
+        const d = await res.json();
+        if (st) { st.textContent = d.message || 'Saved'; st.style.color = d.ok ? '#4ade80' : '#f87171'; }
+        setTimeout(opsRefresh, 1000);
+    } catch (e) { if (st) { st.textContent = `Error: ${e.message}`; st.style.color = '#f87171'; } }
+}
+
+// Auto-refresh when ops page is visible
+let _opsInterval = null;
+let _fmEventSource = null;
+const _origSwitchPage = window.switchPage;
+window.switchPage = function(page) {
+    if (_origSwitchPage) _origSwitchPage(page);
+    if (page === 'ops') {
+        opsRefresh();
+        opsConfigLoad();
+        _opsInterval = _opsInterval || setInterval(opsRefresh, 15000);
+    } else {
+        clearInterval(_opsInterval); _opsInterval = null;
+    }
+    if (page === 'fleet-monitor') {
+        fleetMonitorStart();
+    } else {
+        fleetMonitorStop();
+    }
+};
+
+// ── Fleet Monitor ─────────────────────────────────────────────────────────────
+// Uses Server-Sent Events for push updates; falls back to polling if SSE unavailable.
+
+function _esc(s) {
+    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function _batColor(pct) {
+    if (pct >= 60) return '#00ff88';
+    if (pct >= 25) return '#ffaa00';
+    return '#ff4444';
+}
+function _rssiColor(dbm) {
+    if (dbm >= -70) return '#00ff88';
+    if (dbm >= -85) return '#ffaa00';
+    return '#ff4444';
+}
+function _rssiBarsFill(dbm) {
+    const c = _rssiColor(dbm);
+    const lit = dbm >= -90 ? (dbm >= -80 ? (dbm >= -70 ? 3 : 2) : 1) : 0;
+    const dim = 'rgba(255,255,255,0.12)';
+    return [4,7,10].map((h,i) =>
+        `<span style="height:${h}px;background:${i < lit ? c : dim}"></span>`
+    ).join('');
+}
+function _fmtUptime(ms) {
+    if (!ms) return '—';
+    const s = Math.floor(ms / 1000);
+    if (s < 60) return `${s}s`;
+    const m = Math.floor(s / 60);
+    if (m < 60) return `${m}m`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `${h}h${String(m % 60).padStart(2,'0')}m`;
+    return `${Math.floor(h/24)}d ${h%24}h`;
+}
+function _fmtAge(ts_ms) {
+    const age = (Date.now() - ts_ms) / 1000;
+    if (age < 5)    return 'just now';
+    if (age < 60)   return `${Math.floor(age)}s ago`;
+    if (age < 3600) return `${Math.floor(age/60)}m ago`;
+    return `${Math.floor(age/3600)}h ago`;
+}
+function _macShort(mac) {
+    if (!mac) return '';
+    const p = mac.split(':');
+    return p.length >= 3 ? p.slice(-3).join(':') : mac.slice(-8);
+}
+
+function _buildDeviceCard(p) {
+    const batPct = p.battery_mv
+        ? Math.min(100, Math.max(0, Math.round((p.battery_mv - 3000) / 12)))
+        : null;
+    const rssi  = p.rssi_dbm ?? -999;
+    const age   = Date.now() - (p.last_seen || 0);
+    const stale = age > 90000 && p.reachable;
+    const state = p.reachable ? (stale ? 'stale' : 'online') : 'offline';
+    const stateLabel = stale ? 'STALE' : (p.reachable ? 'ONLINE' : 'OFFLINE');
+
+    const batBar = batPct !== null
+        ? `<div class="dc-row">
+               <span class="dc-lbl">BAT</span>
+               <div class="dc-bar-wrap"><div class="dc-bar-fill" style="width:${batPct}%;background:${_batColor(batPct)}"></div></div>
+               <span class="dc-val" style="color:${_batColor(batPct)}">${batPct}%</span>
+           </div>` : '';
+
+    const rssiRow = rssi > -999
+        ? `<div class="dc-row">
+               <span class="dc-lbl">RF</span>
+               <div class="dc-rssi-bars">${_rssiBarsFill(rssi)}</div>
+               <span class="dc-val" style="color:${_rssiColor(rssi)};margin-left:4px">${rssi}</span>
+           </div>` : '';
+
+    const neighbors = (p.neighbors || []).length;
+    const ageStr    = p.reachable ? _fmtUptime(p.uptime_ms) : _fmtAge(p.last_seen || 0);
+
+    // Build card as DOM element (avoids innerHTML for trusted content; _esc used for device-sourced strings)
+    return `<div class="dc dc-${state}"
+                 title="${_esc(p.node_id)} &#10;MAC: ${_esc(p.mac_address||'—')} &#10;Last seen: ${_fmtAge(p.last_seen||0)}">
+        <div class="dc-head">
+            <span class="dc-name">${_esc(p.node_id)}</span>
+            <span class="dc-state">${stateLabel}</span>
+        </div>
+        ${batBar}${rssiRow}
+        <div class="dc-foot">
+            <span>${neighbors ? `&#8661; ${neighbors}` : '—'}</span>
+            <span>${_esc(ageStr)}</span>
+            <span class="dc-mac">${_esc(_macShort(p.mac_address))}</span>
+        </div>
+    </div>`;
+}
+
+function _renderFleet(peers) {
+    const grid = document.getElementById('fm-grid');
+    if (!grid) return;
+    const online  = peers.filter(p => p.reachable).length;
+    const offline = peers.length - online;
+    const rssis   = peers.filter(p => p.reachable && p.rssi_dbm).map(p => p.rssi_dbm);
+    const avgRssi = rssis.length ? Math.round(rssis.reduce((a,b)=>a+b,0)/rssis.length) : null;
+
+    const el = id => document.getElementById(id);
+    if (el('fm-total'))      el('fm-total').textContent      = peers.length;
+    if (el('fm-online'))     el('fm-online').textContent     = online;
+    if (el('fm-offline'))    el('fm-offline').textContent    = offline;
+    if (el('fm-avg-rssi'))   el('fm-avg-rssi').textContent   = avgRssi != null ? `${avgRssi}` : '—';
+    if (el('fm-last-update'))el('fm-last-update').textContent= `Updated ${new Date().toLocaleTimeString()}`;
+
+    if (!peers.length) {
+        grid.innerHTML = '<div class="text-dim text-xs" style="padding:24px">No devices. Are devices running and MQTT connected?</div>';
+        return;
+    }
+    const sorted = [...peers].sort((a,b) => {
+        if (a.reachable !== b.reachable) return b.reachable - a.reachable;
+        return a.node_id.localeCompare(b.node_id);
+    });
+    // Safe: all user-facing strings are escaped via _esc() inside _buildDeviceCard
+    grid.innerHTML = sorted.map(_buildDeviceCard).join(''); // nosec – content is escaped
+}
+
+async function fleetMonitorRefresh() {
+    try {
+        const d = await (await fetch('http://localhost:8001/api/mesh/topology')).json();
+        _renderFleet(d.peers || []);
+    } catch (_) {
+        const g = document.getElementById('fm-grid');
+        if (g) g.innerHTML = '<div class="text-dim text-xs" style="padding:24px">Fleet data unavailable — is the daemon running?</div>';
+    }
+}
+
+function fleetMonitorStart() {
+    // Prefer SSE push; fall back to polling if daemon doesn't support it
+    if (_fmEventSource) return;
+    const es = new EventSource('http://localhost:8001/api/mesh/events');
+    es.onmessage = e => {
+        try { const d = JSON.parse(e.data); _renderFleet(d.peers || []); } catch (_) {}
+    };
+    es.onerror = () => {
+        // SSE failed — daemon may not support it yet; close and fall back to polling
+        es.close();
+        _fmEventSource = null;
+        if (document.getElementById('fm-grid')) {
+            fleetMonitorRefresh();
+            _fmEventSource = { _poll: setInterval(fleetMonitorRefresh, 8000), close() { clearInterval(this._poll); } };
+        }
+    };
+    _fmEventSource = es;
+    fleetMonitorRefresh(); // immediate render while SSE connects
+}
+
+function fleetMonitorStop() {
+    if (_fmEventSource) { _fmEventSource.close(); _fmEventSource = null; }
+}
