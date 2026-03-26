@@ -71,8 +71,9 @@ class Retriever:
         for i, doc_text in enumerate(results["documents"][0]):
             metadata = results["metadatas"][0][i] if results.get("metadatas") else {}
             distance = results["distances"][0][i] if results.get("distances") else 0.0
-            # ChromaDB returns L2 distance; convert to similarity score (0-1)
-            score = max(0.0, 1.0 - distance / 2.0)
+            # ChromaDB returns squared L2 distance; lower = more similar
+            # Convert to a readable similarity: 1/(1+d) maps [0,inf) -> (0,1]
+            score = 1.0 / (1.0 + distance)
             docs.append({
                 "text": doc_text,
                 "source": metadata.get("source", "unknown"),

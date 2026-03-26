@@ -7,6 +7,8 @@ Requires Ollama running with an embedding model pulled:
     ollama pull nomic-embed-text
 """
 
+from typing import Any, Dict
+
 import httpx
 
 DEFAULT_MODEL = "nomic-embed-text"
@@ -41,14 +43,20 @@ async def embed_batch(texts: list[str], model: str = DEFAULT_MODEL,
 
 
 class OllamaEmbeddingFunction:
-    """ChromaDB-compatible embedding function using local Ollama."""
+    """ChromaDB v1.5-compatible embedding function using local Ollama.
+
+    Implements the full ChromaDB EmbeddingFunction protocol:
+    __call__, name, embed_query, get_config, build_from_config.
+    """
 
     def __init__(self, model: str = DEFAULT_MODEL, base_url: str = DEFAULT_BASE_URL):
         self.model = model
         self.base_url = base_url
 
-    def __call__(self, input: list[str]) -> list[list[float]]:
-        """Synchronous interface required by ChromaDB."""
+    def name(self) -> str:
+        return f"ollama-{self.model}"
+
+    def _embed(self, input: list[str]) -> list[list[float]]:
         results = []
         with httpx.Client(timeout=60) as client:
             for text in input:
@@ -59,3 +67,18 @@ class OllamaEmbeddingFunction:
                 resp.raise_for_status()
                 results.append(resp.json()["embedding"])
         return results
+
+    def __call__(self, input: list[str]) -> list[list[float]]:
+        return self._embed(input)
+
+    def embed_query(self, input: list[str]) -> list[list[float]]:
+        """ChromaDB v1.5 calls this for query-time embeddings."""
+        return self._embed(input)
+
+    def get_config(self) -> Dict[str, Any]:
+        return {"model": self.model, "base_url": self.base_url}
+
+    @classmethod
+    def build_from_config(cls, config: Dict[str, Any]) -> "OllamaEmbeddingFunction":
+        return cls(model=config.get("model", DEFAULT_MODEL),
+                   base_url=config.get("base_url", DEFAULT_BASE_URL))
