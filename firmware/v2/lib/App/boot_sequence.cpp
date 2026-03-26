@@ -48,6 +48,8 @@
 extern void radioTask(void* param);
 extern void meshTask(void* param);
 extern void probeTask(void* param);
+extern void displayTask(void* param);
+extern void wifiTask(void* param);
 
 // Global status handles
 extern TaskHandle_t radioTaskHandle;
@@ -106,7 +108,7 @@ void BootSequence::initCore() {
   PowerManager::init();
   Serial.println("[TRACE] PowerManager::enableVEXT()");
   PowerManager::enableVEXT();
-  vTaskDelay(pdMS_TO_TICKS(500)); 
+  vTaskDelay(pdMS_TO_TICKS(500)); // Enforce rail stability
   
   Serial.println("[CHECK] Initializing I2C Mutex...");
   extern SemaphoreHandle_t g_i2cMutex;
@@ -114,10 +116,12 @@ void BootSequence::initCore() {
       g_i2cMutex = xSemaphoreCreateMutex();
   }
 
-  Serial.println("[CHECK] Initializing I2C...");
+  Serial.println("[CHECK] Initializing I2C Wire...");
 #ifdef ARDUINO_HELTEC_WIFI_LORA_32
+  // V2 hardware is picky about I2C speed and stabilization
   Wire.begin(I2C_SDA, I2C_SCL, 100000); 
 #else
+  // S3 (V3/V4) hardware standard
   Wire.begin(I2C_SDA, I2C_SCL, I2C_FREQ_HZ);
 #endif
   Serial.println("  ✓ I2C Wire started");
@@ -339,7 +343,7 @@ void BootSequence::createTasks() {
   Serial.println("[7/8] Creating FreeRTOS tasks...");
   xTaskCreatePinnedToCore(radioTask, "RadioTask", 8192, NULL, 4, &radioTaskHandle, 1);
   xTaskCreatePinnedToCore(meshTask, "MeshTask", 8192, NULL, 3, &meshTaskHandle, 1);
-  xTaskCreatePinnedToCore(probeTask, "ProbeTask", 4096, NULL, 2, &probeTaskHandle, 0); 
+  xTaskCreatePinnedToCore(probeTask, "ProbeTask", 4096, NULL, 2, &probeTaskHandle, 0);
 
   RadioHAL::getInstance().setNotifyTask(radioTaskHandle);
 
@@ -352,5 +356,12 @@ void BootSequence::createTasks() {
     &controlTaskHandle,
     1
   );
+
+  // Display update task (low priority to not starve control loop)
+  xTaskCreatePinnedToCore(displayTask, "DisplaySvc", 4096, NULL, 1, NULL, 1);
+
+  // WiFi/MQTT service task (low priority to not starve control loop)
+  xTaskCreatePinnedToCore(wifiTask, "WiFiSvc", 4096, NULL, 1, NULL, 1);
+
   Serial.println("  ✓ Tasks created");
 }

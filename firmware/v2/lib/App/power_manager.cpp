@@ -50,9 +50,9 @@ void PowerManager::begin() {
 #ifdef VEXT_PIN
     pinMode(VEXT_PIN, OUTPUT);
 #ifdef ARDUINO_HELTEC_WIFI_LORA_32_V4
-    digitalWrite(VEXT_PIN, LOW);   // V4: LOW = OFF
+    digitalWrite(VEXT_PIN, LOW);   // V4 is Active HIGH -> Start OFF
 #else
-    digitalWrite(VEXT_PIN, HIGH);  // V2/V3: HIGH = OFF
+    digitalWrite(VEXT_PIN, HIGH);  // V2/V3 is Active LOW -> Start OFF
 #endif
 #endif
 
@@ -114,33 +114,24 @@ bool PowerManager::isVEXTStable() {
 
 void PowerManager::enableVEXT() {
 #ifdef VEXT_PIN
-#ifdef ARDUINO_HELTEC_WIFI_LORA_32
-    if (_vextPulseState != 0) return; // Already pulsing
-    
-    // Pulse VEXT for V2 display stability (Non-blocking Timer Pattern)
-    digitalWrite(VEXT_PIN, LOW);
-    _vextPulseState = 1;
-    if (_vextTimer) xTimerStart((TimerHandle_t)_vextTimer, 0);
-#else
 #ifdef ARDUINO_HELTEC_WIFI_LORA_32_V4
-    digitalWrite(VEXT_PIN, LOW);   // V4 VEXT is standard Active LOW (GPIO 36)
+    digitalWrite(VEXT_PIN, HIGH);  // V4 Reference is Active HIGH -> ON
     pinMode(37, OUTPUT);
     digitalWrite(37, HIGH);        // V4 Battery Sense Enable
 #else
-    digitalWrite(VEXT_PIN, LOW);   // V2/V3 VEXT is Active LOW
+    digitalWrite(VEXT_PIN, LOW);   // V2/V3 is Active LOW -> ON
 #endif
     _vextPulseState = 0;           // Immediately stable
-    delay(10);                     // AG stability fix: settle power rail before I2C/SPI init
-#endif
+    delay(50);                     // Conservative settle for rail stability
 #endif
 }
 
 void PowerManager::disableVEXT() {
 #ifdef VEXT_PIN
 #ifdef ARDUINO_HELTEC_WIFI_LORA_32_V4
-    digitalWrite(VEXT_PIN, LOW);   // V4: LOW = OFF
+    digitalWrite(VEXT_PIN, LOW);   // V4 Reference is Active HIGH -> OFF
 #else
-    digitalWrite(VEXT_PIN, HIGH);  // V2/V3: HIGH = OFF
+    digitalWrite(VEXT_PIN, HIGH);  // V2/V3 is Active LOW -> OFF
 #endif
 #endif
 }
@@ -280,8 +271,8 @@ void PowerManager::printStatus() {
     Serial.printf("Current Mode:      %s\n", modeNames[static_cast<uint8_t>(_mode)]);
     Serial.printf("Battery Voltage:   %.2f V\n", _lastVoltage);
     Serial.printf("Battery Percent:   %u%%\n", getBatteryPercent());
-    Serial.printf("Heartbeat:         %lu ms\n", getHeartbeatIntervalMs());
-    Serial.printf("Sleep Interval:    %lu ms\n", getSleepIntervalMs());
+    Serial.printf("Heartbeat:         %u ms\n", (unsigned int)getHeartbeatIntervalMs());
+    Serial.printf("Sleep Interval:    %u ms\n", (unsigned int)getSleepIntervalMs());
     Serial.printf("USB Powered:       %s\n", isPowered() ? "Yes" : "No");
     Serial.println("=========================================\n");
 }

@@ -7,14 +7,14 @@ Handles:
 - Command acknowledgments from devices
 - Publishing commands to devices
 
-MQTT Topic Contract (Phase 50):
+MQTT Topic Contract (Phase 50 - Aligned with firmware):
   Device → Daemon:
-    device/{node_id}/status       → {"uptime_ms": ..., "battery_mv": ..., "neighbors": [...]}
-    device/{node_id}/peers        → {"neighbors": ["node-X", "node-Y"], "rssi": [-75, -80]}
-    device/{node_id}/mesh/ack     → {"cmd_id": "abc123", "status": "ok", "result": {...}}
+    loralink/{node_id}/telemetry   → {"uptime_ms": ..., "battery_mv": ..., "neighbors": [...]}
+    loralink/{node_id}/status      → "ONLINE" / "OFFLINE"
+    loralink/{node_id}/msg         → {"cmd_id": "abc123", "status": "ok", "result": {...}}
 
   Daemon → Device:
-    device/{node_id}/mesh/command ← {"cmd_id": "abc123", "action": "gpio_toggle", "pin": 32, ...}
+    loralink/{node_id}/cmd         ← {"cmd_id": "abc123", "action": "gpio_toggle", "pin": 32, ...}
 """
 
 import asyncio
@@ -116,9 +116,9 @@ class MQTTClientManager(BaseMQTTClient):
             return
 
         topics = [
-            "device/+/status",
-            "device/+/peers",
-            "device/+/mesh/ack",
+            "loralink/+/telemetry",
+            "loralink/+/status",
+            "loralink/+/msg",
         ]
 
         for topic in topics:
@@ -136,7 +136,7 @@ class MQTTClientManager(BaseMQTTClient):
             logger.warning(f"[MQTT] Not connected, cannot send command to {node_id}")
             return False
 
-        topic = f"device/{node_id}/mesh/command"
+        topic = f"loralink/cmd/{node_id}"
         payload = json.dumps(cmd)
 
         try:
@@ -175,14 +175,14 @@ class MQTTClientManager(BaseMQTTClient):
     def _on_message(self, client, userdata, msg):
         """MQTT message callback."""
         try:
-            # Parse topic: device/{node_id}/{type}
+            # Parse topic: loralink/{node_id}/{type}
             parts = msg.topic.split("/")
-            if len(parts) < 2 or parts[0] != "device":
+            if len(parts) < 3 or parts[0] != "loralink":
                 logger.warning(f"[MQTT] Unknown topic format: {msg.topic}")
                 return
 
             node_id = parts[1]
-            msg_type = "/".join(parts[2:])  # Handles device/{id}/mesh/ack
+            msg_type = parts[2]
 
             # Decode payload
             try:
@@ -194,11 +194,12 @@ class MQTTClientManager(BaseMQTTClient):
             logger.debug(f"[MQTT] {msg.topic}: {payload}")
 
             # Route by message type
-            if msg_type == "status":
+            if msg_type == "telemetry":
                 self._handle_device_status(node_id, payload)
-            elif msg_type == "peers":
-                self._handle_peer_list(node_id, payload)
-            elif msg_type == "mesh/ack":
+            elif msg_type == "status":
+                # ONLINE/OFFLINE handled if needed
+                pass
+            elif msg_type == "msg":
                 self._handle_command_ack(payload)
             else:
                 logger.warning(f"[MQTT] Unknown message type: {msg_type}")

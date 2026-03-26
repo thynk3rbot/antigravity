@@ -18,4 +18,5 @@ private:
     static void handleTelemetry(const ControlPacket* pkt);
     static void handleAck(const ControlPacket* pkt);
     static void handleHeartbeat(const ControlPacket* pkt);
+    static void handleGpioSet(const ControlPacket* pkt);
 };

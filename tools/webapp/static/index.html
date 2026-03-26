@@ -153,6 +153,7 @@
                 <a class="nav-item" onclick="switchPage('plugins')">🔌 Plugin Registry</a>
                 <a class="nav-item" onclick="switchPage('test-harness')">🧪 Test Harness</a>
                 <a class="nav-item" onclick="switchPage('tools')">🛠️ Tools</a>
+                <a class="nav-item" onclick="switchPage('hybrid-proxy')">🔗 Hybrid Proxy</a>
                 <a class="nav-item" onclick="switchPage('admin')">🛡️ Admin</a>
 
                 <div class="fleet-header">Active Fleet</div>
@@ -383,6 +384,114 @@
                                     <tr><td colspan="5" class="text-center text-dim p-8">Initializing passive scan...</td></tr>
                                 </tbody>
                             </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Hybrid Proxy Page -->
+                <div id="pg-hybrid-proxy" class="page">
+                    <div class="p-4">
+                        <div class="flex-between mb-4">
+                            <div>
+                                <h2 class="text-accent uppercase">🔗 Hybrid Model Proxy</h2>
+                                <p class="text-dim text-sm">Route queries between local Ollama (free) and OpenRouter cloud (paid) with automatic failover and cost tracking</p>
+                            </div>
+                            <div>
+                                <button class="btn" id="proxy-start-btn" onclick="proxyControl('start')">▶ Start</button>
+                                <button class="btn secondary" id="proxy-stop-btn" onclick="proxyControl('stop')" style="margin-left:8px; display:none;">⏹ Stop</button>
+                            </div>
+                        </div>
+
+                        <!-- Status Panel -->
+                        <div class="panel mb-4">
+                            <div class="panel-title">Proxy Status</div>
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; padding: 20px;">
+                                <div class="card">
+                                    <div class="lbl">Proxy Server</div>
+                                    <div class="val" id="proxy-status">—</div>
+                                </div>
+                                <div class="card">
+                                    <div class="lbl">Ollama Health</div>
+                                    <div class="val" id="proxy-ollama-health">—</div>
+                                </div>
+                                <div class="card">
+                                    <div class="lbl">OpenRouter Health</div>
+                                    <div class="val" id="proxy-openrouter-health">—</div>
+                                </div>
+                                <div class="card">
+                                    <div class="lbl">Uptime</div>
+                                    <div class="val" id="proxy-uptime">—</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Metrics Panel -->
+                        <div class="panel mb-4">
+                            <div class="panel-title">Request Metrics (Today)</div>
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; padding: 20px;">
+                                <div class="card">
+                                    <div class="lbl">Total Requests</div>
+                                    <div class="val" id="proxy-total-requests">0</div>
+                                </div>
+                                <div class="card">
+                                    <div class="lbl">Ollama Requests</div>
+                                    <div class="val" id="proxy-ollama-requests">0</div>
+                                    <div class="text-xs text-dim mt-2" id="proxy-ollama-cost">$0.00</div>
+                                </div>
+                                <div class="card">
+                                    <div class="lbl">OpenRouter Requests</div>
+                                    <div class="val" id="proxy-openrouter-requests">0</div>
+                                    <div class="text-xs text-dim mt-2" id="proxy-openrouter-cost">$0.00</div>
+                                </div>
+                                <div class="card">
+                                    <div class="lbl">Total Cost</div>
+                                    <div class="val" id="proxy-total-cost">$0.00</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Recent Requests -->
+                        <div class="panel mb-4">
+                            <div class="panel-title">Recent Requests</div>
+                            <div style="flex:1; overflow-y: auto; max-height: 300px;">
+                                <table class="compact-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Time</th>
+                                            <th>Backend</th>
+                                            <th>Model</th>
+                                            <th>Tokens</th>
+                                            <th>Latency</th>
+                                            <th>Cost</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="proxy-requests-tbody">
+                                        <tr><td colspan="6" class="text-center text-dim p-4">No requests yet</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Configuration -->
+                        <div class="panel mb-4">
+                            <div class="panel-title">Configuration</div>
+                            <div class="p-4">
+                                <div class="flex-col gap-4">
+                                    <div>
+                                        <label class="label-caps mb-2 d-block">Ollama Endpoint</label>
+                                        <input type="text" id="proxy-ollama-endpoint" placeholder="http://localhost:11434" class="input-styled w-full" style="height: 38px;" value="http://localhost:11434" disabled>
+                                    </div>
+                                    <div>
+                                        <label class="label-caps mb-2 d-block">OpenRouter API Key</label>
+                                        <div class="flex-row gap-2">
+                                            <input type="password" id="proxy-openrouter-key" placeholder="sk-..." class="input-styled flex-1" style="height: 38px;" value="">
+                                            <button class="btn sm secondary" onclick="proxyControl('test-openrouter')">Test</button>
+                                        </div>
+                                        <div class="text-xs text-dim mt-2">Optional — proxy will use Ollama if available, fall back to OpenRouter if configured</div>
+                                    </div>
+                                    <button class="btn" onclick="proxySaveConfig()">Save Configuration</button>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>

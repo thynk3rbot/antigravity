@@ -53,6 +53,10 @@ function switchPage(name) {
     if (name === "plugins") {
         refreshPlugins();
     }
+    if (name === "hybrid-proxy") {
+        loadProxyStatus();
+        setInterval(loadProxyStatus, 5000);
+    }
 }
 
 // ── WebSocket ─────────────────────────────────────────────────────────────
@@ -933,4 +937,109 @@ async function finishBuilder() {
     document.getElementById("product-filename").textContent = `/products/${manifest.id}.json`;
     document.getElementById("product-json-editor").value = JSON.stringify(manifest, null, 4);
     document.getElementById("product-modal").classList.add("open");
+}
+
+// ── Hybrid Model Proxy ─────────────────────────────────────────────────────────
+async function loadProxyStatus() {
+    try {
+        const res = await fetch('/api/proxy/status');
+        if (!res.ok) return;
+        const data = await res.json();
+
+        // Update status
+        const statusEl = document.getElementById('proxy-status');
+        if (statusEl) {
+            statusEl.textContent = data.running ? '✓ RUNNING' : '⏸ STOPPED';
+            statusEl.style.color = data.running ? 'var(--ok)' : 'var(--muted)';
+        }
+
+        // Update health
+        document.getElementById('proxy-ollama-health').textContent = data.ollama_healthy ? '✓ Healthy' : '✗ Down';
+        document.getElementById('proxy-openrouter-health').textContent = data.openrouter_healthy ? '✓ Healthy' : '✗ Down';
+        document.getElementById('proxy-uptime').textContent = data.uptime || '—';
+
+        // Update metrics
+        document.getElementById('proxy-total-requests').textContent = data.total_requests || 0;
+        document.getElementById('proxy-ollama-requests').textContent = data.ollama_requests || 0;
+        document.getElementById('proxy-ollama-cost').textContent = `$` + (data.ollama_cost || 0).toFixed(4);
+        document.getElementById('proxy-openrouter-requests').textContent = data.openrouter_requests || 0;
+        document.getElementById('proxy-openrouter-cost').textContent = `$` + (data.openrouter_cost || 0).toFixed(4);
+        document.getElementById('proxy-total-cost').textContent = `$` + (data.total_cost || 0).toFixed(4);
+
+        // Update buttons
+        document.getElementById('proxy-start-btn').style.display = data.running ? 'none' : 'inline-block';
+        document.getElementById('proxy-stop-btn').style.display = data.running ? 'inline-block' : 'none';
+
+        // Update recent requests table
+        const tbody = document.getElementById('proxy-requests-tbody');
+        if (tbody && data.recent_requests) {
+            if (data.recent_requests.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center text-dim p-4">No requests yet</td></tr>';
+            } else {
+                tbody.innerHTML = data.recent_requests.map(req => {
+                    const time = new Date(req.timestamp).toLocaleTimeString();
+                    const backend = req.backend;
+                    const model = String(req.model).substring(0, 20);
+                    const tokens = req.total_tokens;
+                    const latency = (req.latency_ms || 0).toFixed(0);
+                    const cost = (req.cost_usd || 0).toFixed(4);
+                    return '<tr><td class="text-xs text-dim">' + time + '</td><td><span class="badge' + (backend === 'ollama' ? ' on' : '') + '">' + backend + '</span></td><td class="text-xs">' + model + '</td><td class="text-xs">' + tokens + '</td><td class="text-xs">' + latency + 'ms</td><td class="text-xs">$' + cost + '</td></tr>';
+                }).join('');
+            }
+        }
+    } catch (err) {
+        console.error('Failed to load proxy status:', err);
+    }
+}
+
+async function proxyControl(action) {
+    try {
+        if (action === 'start') {
+            const res = await fetch('/api/proxy/start', { method: 'POST' });
+            if (res.ok) {
+                logTerminal('✓ Proxy started', 'info');
+                await loadProxyStatus();
+            }
+        } else if (action === 'stop') {
+            const res = await fetch('/api/proxy/stop', { method: 'POST' });
+            if (res.ok) {
+                logTerminal('✓ Proxy stopped', 'info');
+                await loadProxyStatus();
+            }
+        } else if (action === 'test-openrouter') {
+            const res = await fetch('/api/proxy/test-openrouter', { method: 'POST' });
+            const data = await res.json();
+            if (data.success) {
+                alert('✓ OpenRouter API is accessible');
+            } else {
+                alert('✗ OpenRouter API error: ' + (data.error || 'unknown'));
+            }
+        }
+    } catch (err) {
+        alert('Error: ' + err.message);
+    }
+}
+
+async function proxySaveConfig() {
+    const ollamaEndpoint = document.getElementById('proxy-ollama-endpoint').value;
+    const openrouterKey = document.getElementById('proxy-openrouter-key').value;
+
+    try {
+        const res = await fetch('/api/proxy/config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                ollama_endpoint: ollamaEndpoint,
+                openrouter_key: openrouterKey
+            })
+        });
+        if (res.ok) {
+            logTerminal('✓ Proxy configuration saved', 'info');
+            alert('Configuration saved');
+        } else {
+            alert('Failed to save configuration');
+        }
+    } catch (err) {
+        alert('Error: ' + err.message);
+    }
 }

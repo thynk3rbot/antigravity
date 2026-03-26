@@ -103,7 +103,6 @@ class LoRaLinkDaemon:
         await self.mqtt.subscribe_to_device_topics()
 
         # Update API with MQTT publisher
-        from mesh_api import init_mesh_api
         init_mesh_api(self.topology, self.mqtt)
 
         logger.info("[Daemon] Initialization complete! (Pure Mesh Mode)")

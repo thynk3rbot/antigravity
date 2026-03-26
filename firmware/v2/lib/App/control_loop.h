@@ -19,4 +19,7 @@ private:
     static void updateMesh();
     static void runDiscoveryBeacons();
     static void pollPlugins();
+
+    // Cached sensor data to avoid duplicate reads (read once per 1s in updateOLED)
+    static uint16_t cachedTempC_x10;
 };

@@ -51,6 +51,7 @@ static bool g_wakeRequested = false;
 static uint32_t g_lastUpdateTime = 0;
 static uint32_t g_lastAutoRotateTime = 0;
 static uint32_t g_lastActivityTime = 0;
+static volatile bool g_displayNeedsRefresh = false;  // Flag for deferred I2C send
 
 static const uint32_t UPDATE_INTERVAL_MS = 1000; // Stabilize at 1Hz
 static const uint32_t SLEEP_TIMEOUT_MS = 30000;
@@ -205,17 +206,19 @@ bool OLEDManager::init() {
     }
     
     pinMode(BUTTON_PIN, INPUT_PULLUP);
+#ifdef ARDUINO_HELTEC_WIFI_LORA_32_V4
+    pinMode(BUTTON_PIN, INPUT);        // V4 has strong hardware pullup
+#endif
     attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), buttonISR, FALLING);
     
-    // Synchronous I2C Start
+    // Synchronous I2C Hardware check (Wire.begin already called in BootSequence)
     I2C_LOCK();
-    Wire.begin(I2C_SDA, I2C_SCL);
     if (display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDRESS)) {
         display.ssd1306_command(SSD1306_SETCONTRAST);
 #ifdef ARDUINO_HELTEC_WIFI_LORA_32
-        display.ssd1306_command(0xFF);
+        display.ssd1306_command(0xFF); // Max contrast for V2
 #else
-        display.ssd1306_command(0xCF);
+        display.ssd1306_command(0xCF); // Standard for V3/V4
 #endif
         display.setTextColor(SSD1306_WHITE);
         display.clearDisplay();
@@ -224,8 +227,7 @@ bool OLEDManager::init() {
         Serial.println("  ✓ OLED Hardware initialized");
     } else {
         Serial.println("  ! OLED Hardware begin failed");
-        // We still return true to allow the system to boot, but state stays START_I2C to retry in update()
-        _initState = InitState::START_I2C;
+        _initState = InitState::START_I2C; // Fallback for retry
     }
     I2C_UNLOCK();
     
@@ -263,15 +265,15 @@ void OLEDManager::_processInit() {
             break;
             
         case InitState::START_I2C:
-            Wire.begin(I2C_SDA, I2C_SCL); // Explicitly start Wire with board-specific pins
+            // Only retry display.begin, do NOT call Wire.begin again
             if (display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDRESS)) {
                 display.ssd1306_command(SSD1306_SETCONTRAST);
 #ifdef ARDUINO_HELTEC_WIFI_LORA_32
                 display.ssd1306_command(0xFF);
                 display.ssd1306_command(SSD1306_SETPRECHARGE);
-                display.ssd1306_command(0x22); 
+                display.ssd1306_command(0xF1); // Improved precharge for V2 longevity
                 display.ssd1306_command(SSD1306_SETVCOMDETECT);
-                display.ssd1306_command(0x20); 
+                display.ssd1306_command(0x40); // Higher VCOM for better contrast
 #else
                 display.ssd1306_command(0xCF);
 #endif
@@ -279,7 +281,6 @@ void OLEDManager::_processInit() {
                 display.setTextColor(SSD1306_WHITE);
                 _initState = InitState::RUNNING;
             } else {
-                // Retry I2C after 100ms
                 _stateStartTime = now;
                 _initState = InitState::WAIT_POWER; 
             }
@@ -352,7 +353,8 @@ void OLEDManager::update() {
         }
     }
 
-    if (g_displayOn && (AUTO_ROTATE_MS > 0) && (now - g_lastAutoRotateTime >= AUTO_ROTATE_MS)) {
+#if defined(AUTO_ROTATE_MS) && (AUTO_ROTATE_MS > 0)
+    if (g_displayOn && (now - g_lastAutoRotateTime >= AUTO_ROTATE_MS)) {
         // Auto Rotation
 #ifdef HAS_GPS
         g_currentPage = (g_currentPage + 1) % 6;
@@ -361,6 +363,7 @@ void OLEDManager::update() {
 #endif
         g_lastAutoRotateTime = now;
     }
+#endif
 
     if (now - g_lastUpdateTime >= UPDATE_INTERVAL_MS || g_wakeRequested) {
         g_lastUpdateTime = now;
@@ -371,18 +374,29 @@ void OLEDManager::update() {
                 case 1: displayPage2(); break;
                 case 2: displayPage3(); break;
                 case 3: displayPage4(); break;
-                case 4: 
+                case 4:
 #ifdef HAS_GPS
                     displayPage5(); break;
 #else
-                    displayPage6(); break; 
+                    displayPage6(); break;
 #endif
                 case 5: displayPage6(); break;
                 default: g_currentPage = 0; break;
             }
-            display.display();
             I2C_UNLOCK();
+            // Set flag for deferred I2C send (happens in low-priority displayTask)
+            g_displayNeedsRefresh = true;
         }
+    }
+}
+
+void OLEDManager::deferredRefresh() {
+    // Low-priority task safe to block here
+    if (g_displayOn && g_displayNeedsRefresh) {
+        I2C_LOCK();
+        display.display();  // 50-100ms blocking I2C operation
+        I2C_UNLOCK();
+        g_displayNeedsRefresh = false;
     }
 }
 

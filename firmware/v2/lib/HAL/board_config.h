@@ -226,9 +226,6 @@
   #define GPS_RST_PIN      42
   #define GPS_WAKE_PIN     40
   #define GPS_EN_PIN       34       // Power enable (Active LOW)
-#elif defined(ARDUINO_HELTEC_WIFI_LORA_32_V3)
-  #define GPS_RX_PIN       47
-  #define GPS_TX_PIN       48
 #endif
 
 #define GPS_SERIAL_BAUD    9600
@@ -278,6 +275,10 @@
 
 // WiFi + OTA enabled on all boards (nodes need OTA for field updates)
 #define ENABLE_WIFI_TRANSPORT
+#ifndef RADIO_SX1276
+  #define ENABLE_HTTP_API
+#endif
+
 #ifdef ROLE_HUB
   #define ENABLE_MQTT_TRANSPORT
 #endif

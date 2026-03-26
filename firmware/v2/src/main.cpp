@@ -20,10 +20,13 @@
 #include "../lib/Transport/serial_transport.h"
 #include "../lib/Transport/wifi_transport.h"
 #include "../lib/Transport/ble_transport.h"
+#include "../lib/Transport/mqtt_transport.h"
 #include "../lib/App/mesh_coordinator.h"
 #include "../lib/App/control_packet.h"
 #include "../lib/App/status_builder.h"
 #include "../lib/HAL/relay_hal.h"
+#include "../lib/App/oled_manager.h"
+#include "../lib/Transport/mqtt_transport.h"
 
 // ============================================================================
 // Forward Declarations
@@ -31,6 +34,8 @@
 void radioTask(void* param);
 void meshTask(void* param);
 void probeTask(void* param);
+void displayTask(void* param);
+void wifiTask(void* param);
 
 // ============================================================================
 // Task Handles
@@ -149,16 +154,52 @@ void setup() {
 // Main Loop (Arduino Loop)
 // ============================================================================
 /**
- * @brief Main idle loop
+ * @brief Display Update Task (Low Priority)
+ * Handles blocking I2C display operations without starving control loop.
+ * The OLEDManager::update() function is called at 100Hz in control loop for button responsiveness,
+ * but the actual display.display() call (full I2C buffer send, 50-100ms) is deferred to this task.
+ * Priority: 1 (low, core 1)
+ * Period: 100ms (10Hz) — limits display updates, sufficient for visual feedback
+ */
+void displayTask(void* param) {
+  Serial.println("[Task] Display Update Task Started");
+  for (;;) {
+    // Deferred display refresh (once per 100ms = 10Hz)
+    // Actual data updates happen in control loop, just the I2C send is deferred
+    vTaskDelay(pdMS_TO_TICKS(100));
+    OLEDManager::getInstance().deferredRefresh();
+  }
+}
+
+/**
+ * @brief WiFi & MQTT Service Task (Low Priority)
+ * Handles blocking WiFi/MQTT operations without starving control loop.
+ * Priority: 1 (low, core 1)
+ * Period: 50ms (20Hz)
+ */
+void wifiTask(void* param) {
+  Serial.println("[Task] WiFi/MQTT Service Task Started");
+  for (;;) {
+    // Drive OTA and WiFi reconnects with explicit timeout
+    WiFiTransport::service();
+#ifdef ENABLE_MQTT_TRANSPORT
+    MQTTTransport::pollStatic();
+#endif
+    // 50ms allows OTA to complete while not starving control loop
+    vTaskDelay(pdMS_TO_TICKS(50));
+  }
+}
+
+/**
+ * @brief Main idle loop (Arduino Entry Point)
  * FreeRTOS manages all task scheduling.
  * This function is called by the idle task and should yield frequently.
+ * REMOVED: WiFi service (now in dedicated task)
  */
 void loop() {
-  // Drive OTA and WiFi reconnects (High frequency required during firmware upload)
-  WiFiTransport::service();
-
-  // Sleep minimally to give other tasks CPU time without starving OTA handling
-  vTaskDelay(pdMS_TO_TICKS(10));
+  // Pure idle loop - WiFi service moved to wifiTask
+  // This allows FreeRTOS scheduler to run uninterrupted
+  vTaskDelay(pdMS_TO_TICKS(100));
 
   // Periodic status output (every ~10 seconds)
   static uint32_t lastStatus = 0;
@@ -168,7 +209,7 @@ void loop() {
     // Periodic JSON status output (every ~10 seconds) for Web App / PC serial bridge
     Serial.print("[JSON_STATUS] ");
     Serial.println(StatusBuilder::buildStatusString().c_str());
-    
+
     lastStatus = now;
   }
 }

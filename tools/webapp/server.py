@@ -2549,6 +2549,139 @@ def build_app(
         status_code = 200 if result.get("status") == "ok" else 500
         return JSONResponse(status_code=status_code, content=result)
 
+    # ── Hybrid Model Proxy API ────────────────────────────────────────────────
+
+    @app.get("/api/proxy/status")
+    async def _proxy_status() -> JSONResponse:
+        """Get hybrid proxy status, health checks, and metrics."""
+        try:
+            # Try to get proxy status from HTTP endpoint
+            if not AIOHTTP:
+                return JSONResponse({
+                    "running": False,
+                    "error": "aiohttp not available",
+                    "ollama_healthy": False,
+                    "openrouter_healthy": False,
+                    "total_requests": 0,
+                    "recent_requests": []
+                })
+
+            async with aiohttp.ClientSession() as session:
+                try:
+                    async with session.get("http://localhost:5555/status", timeout=aiohttp.ClientTimeout(total=2)) as r:
+                        if r.status == 200:
+                            data = await r.json()
+                            return JSONResponse(data)
+                except Exception:
+                    pass
+
+            # Proxy not running - return stub
+            return JSONResponse({
+                "running": False,
+                "ollama_healthy": False,
+                "openrouter_healthy": False,
+                "total_requests": 0,
+                "ollama_requests": 0,
+                "openrouter_requests": 0,
+                "ollama_cost": 0.0,
+                "openrouter_cost": 0.0,
+                "total_cost": 0.0,
+                "uptime": "—",
+                "recent_requests": []
+            })
+        except Exception as e:
+            print(f"[proxy] Status check error: {e}")
+            return JSONResponse({
+                "running": False,
+                "error": str(e),
+                "total_requests": 0,
+                "recent_requests": []
+            })
+
+    @app.post("/api/proxy/start")
+    async def _proxy_start() -> JSONResponse:
+        """Start the hybrid proxy server."""
+        import subprocess
+        import platform
+        try:
+            proxy_script = Path(__file__).parent.parent / "hybrid_model_proxy.py"
+            if not proxy_script.exists():
+                return JSONResponse({
+                    "ok": False,
+                    "error": "hybrid_model_proxy.py not found"
+                }, status_code=404)
+
+            # Start proxy in background
+            if platform.system() == "Windows":
+                subprocess.Popen(["python", str(proxy_script)], creationflags=subprocess.CREATE_NEW_CONSOLE)
+            else:
+                subprocess.Popen(["python3", str(proxy_script)])
+
+            return JSONResponse({"ok": True, "msg": "Proxy starting..."})
+        except Exception as e:
+            return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+    @app.post("/api/proxy/stop")
+    async def _proxy_stop() -> JSONResponse:
+        """Stop the hybrid proxy server."""
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post("http://localhost:5555/shutdown", timeout=aiohttp.ClientTimeout(total=2)) as r:
+                    if r.status == 200:
+                        return JSONResponse({"ok": True, "msg": "Proxy stopping..."})
+        except Exception:
+            pass
+
+        # Try via system call
+        import subprocess
+        import platform
+        try:
+            if platform.system() == "Windows":
+                subprocess.run(["taskkill", "/FI", "WINDOWTITLE eq Hybrid Model Proxy*", "/T", "/F"], check=False)
+            else:
+                subprocess.run(["pkill", "-f", "hybrid_model_proxy.py"], check=False)
+            return JSONResponse({"ok": True, "msg": "Proxy stopped"})
+        except Exception as e:
+            return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+    @app.post("/api/proxy/config")
+    async def _proxy_config(body: dict) -> JSONResponse:
+        """Save proxy configuration."""
+        try:
+            config_file = Path.home() / ".claude" / "hybrid_proxy_config.json"
+            config_file.parent.mkdir(parents=True, exist_ok=True)
+            config_file.write_text(json.dumps(body, indent=2))
+            return JSONResponse({"ok": True, "msg": "Configuration saved"})
+        except Exception as e:
+            return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+    @app.post("/api/proxy/test-openrouter")
+    async def _proxy_test_openrouter(body: dict = None) -> JSONResponse:
+        """Test OpenRouter API connectivity."""
+        if not AIOHTTP:
+            return JSONResponse({"success": False, "error": "aiohttp not available"})
+
+        key = (body or {}).get("openrouter_key", "") if body else ""
+        if not key:
+            return JSONResponse({"success": False, "error": "API key required"})
+
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(
+                    "https://openrouter.ai/api/v1/models",
+                    headers={"Authorization": f"Bearer {key}"},
+                    timeout=aiohttp.ClientTimeout(total=5)
+                ) as r:
+                    if r.status == 200:
+                        return JSONResponse({"success": True})
+                    else:
+                        return JSONResponse({
+                            "success": False,
+                            "error": f"HTTP {r.status}"
+                        })
+        except Exception as e:
+            return JSONResponse({"success": False, "error": str(e)})
+
     return app
 
 

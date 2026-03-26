@@ -88,6 +88,7 @@ void CommandManager::process(const String& input, ResponseCallback responseCallb
         _parseCommand(trimmed, cmd, args);
     }
 
+    cmd.toUpperCase(); // Ensure consistency for all parsing paths
     String response;
     if (cmd == "STATUS") {
         response = _handleStatus();

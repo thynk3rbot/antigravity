@@ -79,9 +79,8 @@ bool MQTTTransport::init() {
     _config.clientId = "loralink-" + _nodeId;
 
     if (_config.broker.length() == 0) {
-        Serial.println("[MQTT] No broker configured — MQTT disabled");
-        _configured = false;
-        return false;
+        Serial.println("[MQTT] No broker configured in NVS — defaulting to 172.16.0.25");
+        _config.broker = "172.16.0.25";
     }
 
     _configured = true;
@@ -230,7 +229,7 @@ bool MQTTTransport::publishResponse(const String& jsonPayload) {
 bool MQTTTransport::publishNodeStatus(uint8_t nodeId, bool isOnline) {
     if (!_mqttClient.connected()) return false;
 
-    String topic = "loralink/status/" + String(nodeId);
+    String topic = "loralink/" + String(nodeId) + "/status";
     String payload = isOnline ? "ONLINE" : "OFFLINE";
     bool ok = _mqttClient.publish(topic.c_str(),
                                   (const uint8_t*)payload.c_str(),
@@ -375,19 +374,19 @@ void MQTTTransport::_mqttCallback(char* topic, byte* payload,
 // ============================================================================
 
 String MQTTTransport::_telemetryTopic() const {
-    return "loralink/telemetry/" + _nodeId;
+    return "loralink/" + _nodeId + "/telemetry";
 }
 
 String MQTTTransport::_commandTopic() const {
-    return "loralink/cmd/" + _nodeId;
+    return "loralink/" + _nodeId + "/cmd";
 }
 
 String MQTTTransport::_responseTopic() const {
-    return "loralink/msg/" + _nodeId;
+    return "loralink/" + _nodeId + "/msg";
 }
 
 String MQTTTransport::_statusTopic() const {
-    return "loralink/status/" + _nodeId;
+    return "loralink/" + _nodeId + "/status";
 }
 
 // ============================================================================

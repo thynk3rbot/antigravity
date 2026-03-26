@@ -36,9 +36,17 @@ public:
     bool init();
 
     /**
-     * @brief Refresh display (call periodically, e.g., every 500ms)
+     * @brief Update display data (called at 100Hz from control loop)
+     * Handles button ISR and buffer updates without blocking on I2C
      */
     void update();
+
+    /**
+     * @brief Deferred I2C display refresh (called from low-priority task)
+     * Sends display buffer over I2C without blocking control loop
+     * This is the blocking operation (50-100ms) moved to low-priority task
+     */
+    void deferredRefresh();
 
     /**
      * @brief Draw a boot progress bar on the splash screen
