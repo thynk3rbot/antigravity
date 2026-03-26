@@ -41,7 +41,7 @@ public:
      *
      * @return JsonDocument containing full status (or empty doc on error)
      */
-    static ArduinoJson::StaticJsonDocument<2048> buildStatus(bool verbose = true);
+    static StaticJsonDocument<2048> buildStatus();
 
     /**
      * @brief Build status and serialize to string
@@ -50,7 +50,7 @@ public:
      *
      * @return JSON string representation of full status
      */
-    static std::string buildStatusString(bool verbose = true);
+    static std::string buildStatusString();
 
     // Helper methods for each status section
     // These are called by buildStatus() to populate the document
@@ -60,19 +60,69 @@ public:
      */
     static void addBasicInfo(ArduinoJson::JsonDocument& doc);
 
-    static void addPowerInfo(ArduinoJson::JsonDocument& doc);
-    static void addLoRaInfo(ArduinoJson::JsonDocument& doc);
-    static void addWiFiInfo(ArduinoJson::JsonDocument& doc);
+    /**
+     * @brief Add power/battery info (bat, bat_percentage, mode)
+     */
+    static void addPowerInfo(JsonDocument& doc);
+
+    /**
+     * @brief Add LoRa signal info (lora_rssi, lora_snr, rssi_history)
+     */
+    static void addLoRaInfo(JsonDocument& doc);
+
+    /**
+     * @brief Add WiFi connectivity info (wifi_rssi, wifi_connected)
+     */
+    static void addWiFiInfo(JsonDocument& doc);
+
+    /**
+     * @brief Add BLE info (ble_enabled, ble_device_name)
+     */
     static void addBLEInfo(ArduinoJson::JsonDocument& doc);
+
+    /**
+     * @brief Add MQTT info (mqtt_connected, mqtt_broker)
+     */
     static void addMQTTInfo(ArduinoJson::JsonDocument& doc);
+
+    /**
+     * @brief Add peer list from mesh coordinator
+     */
     static void addPeerInfo(ArduinoJson::JsonDocument& doc);
+
+    /**
+     * @brief Add GPS info (latitude, longitude, altitude, satellites, fix_type)
+     */
     static void addGPSInfo(ArduinoJson::JsonDocument& doc);
+    /**
+     * @brief Add transport status object (wifi, ble, mqtt, lora booleans)
+     */
     static void addTransportStatus(ArduinoJson::JsonDocument& doc);
+
+    /**
+     * @brief Add relay status (status, mode, last_toggled, on_duration_ms)
+     */
     static void addRelayInfo(ArduinoJson::JsonDocument& doc);
+
+    /**
+     * @brief Add telemetry (temp_sensor, temp_c, humidity_percent, pressure_hpa)
+     */
     static void addTelemetry(ArduinoJson::JsonDocument& doc);
-    static void addSystemInfo(ArduinoJson::JsonDocument& doc);
-    static void addPluginList(ArduinoJson::JsonDocument& doc);
-    static void addHardwareMap(ArduinoJson::JsonDocument& doc);
+
+     /**
+     * @brief Add system info (uptime, boot_count, heap, last_update, etc.)
+     */
+    static void addSystemInfo(JsonDocument& doc);
+
+    /**
+     * @brief Add list of registered plugins
+     */
+    static void addPluginList(JsonDocument& doc);
+
+    /**
+     * @brief Add hardware I/O map
+     */
+    static void addHardwareMap(JsonDocument& doc);
 
 private:
     // Static state for historical data

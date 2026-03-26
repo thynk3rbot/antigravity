@@ -35,6 +35,9 @@
 extern uint32_t g_bootTimestamp;
 extern uint8_t g_ourNodeID;
 
+// Static member initialization
+uint16_t ControlLoop::cachedTempC_x10 = 2500;
+
 void ControlLoop::execute(void* param) {
   while (1) {
     updatePower();
@@ -67,21 +70,12 @@ void ControlLoop::updateTelemetry() {
   uint32_t now = millis();
 
   if (now - lastTelemetrySend >= SEND_TELEMETRY_INTERVAL_MS) {
-    // Collect sensor data
-    uint16_t tempC_x10 = 2500; // fallback if no sensor
-    auto readings = SensorHAL::getInstance().readAll();
-    for (const auto& r : readings) {
-      if (r.type == SensorType::TEMPERATURE) {
-        tempC_x10 = static_cast<uint16_t>(r.value * 10.0f);
-        break;
-      }
-    }
-
+    // Use cached sensor data (read once per 1s in updateOLED)
     uint16_t voltageV_x100 = static_cast<uint16_t>(PowerManager::getBatteryVoltage() * 100.0f);
     uint8_t relayState = RelayHAL::getInstance().getState();
 
     ControlPacket telemetry = ControlPacket::makeTelemetry(
-      g_ourNodeID, 0xFF, tempC_x10, voltageV_x100, relayState, 
+      g_ourNodeID, 0xFF, cachedTempC_x10, voltageV_x100, relayState,
       LoRaTransport::getInstance().getSignalStrength()
     );
 
@@ -133,6 +127,8 @@ void ControlLoop::updateOLED() {
     for (const auto& r : sensorData) {
       if (r.type == SensorType::TEMPERATURE) {
         oled.setTemperature(r.value);
+        // Cache for telemetry (avoid duplicate sensor reads)
+        cachedTempC_x10 = static_cast<uint16_t>(r.value * 10.0f);
         break;
       }
     }

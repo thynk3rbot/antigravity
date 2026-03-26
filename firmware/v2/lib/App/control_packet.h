@@ -23,7 +23,7 @@ enum class PacketType : uint8_t {
   MESH_PROBE = 0x04,    // Discovery/beacon packet
   HEARTBEAT = 0x05,     // Periodic life-sign
   GPS_LOCATION = 0x06,  // Node -> Any (GPS coordinates)
-  RESERVED_07 = 0x07,
+  GPIO_SET = 0x07,      // Mesh-enabled GPIO control
   RESERVED_08 = 0x08,
   RESERVED_09 = 0x09,
   RESERVED_0A = 0x0A,
@@ -136,6 +136,24 @@ struct GpsPayload {
 static_assert(sizeof(GpsPayload) == 8, "GpsPayload must be 8 bytes");
 
 // ============================================================================
+// Payload Union: GPIO (4 bytes)
+// ============================================================================
+
+/**
+ * @struct GpioPayload
+ * @brief Remote GPIO control (byte-aligned)
+ */
+struct GpioPayload {
+  uint8_t pin;          // Pin number (0-47)
+  uint8_t action;       // 0=OFF, 1=ON, 2=TOGGLE
+  uint16_t duration_ms; // Pulse duration (0 = persistent)
+  uint16_t command_id;  // For tracking/ACK alignment
+  uint16_t reserved;    // Padding to 8 bytes for union alignment
+};
+
+static_assert(sizeof(GpioPayload) == 8, "GpioPayload must be 8 bytes");
+
+// ============================================================================
 // Complete Control Packet (14 bytes)
 // ============================================================================
 
@@ -160,6 +178,7 @@ struct ControlPacket {
     TelemetryPayload telemetry;
     ActionPayload action;
     GpsPayload gps;
+    GpioPayload gpio;
     uint8_t raw[8];  // Raw byte access (8 bytes)
   } payload;
 
@@ -282,6 +301,31 @@ struct ControlPacket {
 
     memset(pkt.payload.raw, 0, sizeof(pkt.payload.raw));
 
+    return pkt;
+  }
+
+  /**
+   * @brief Create a GPIO control packet
+   * @param src Source node ID
+   * @param dest Destination node ID
+   * @param pin Pin number
+   * @param action 0=OFF, 1=ON, 2=TOGGLE
+   * @param duration Pulse duration (0=persistent)
+   * @return Initialized ControlPacket
+   */
+  static ControlPacket makeGpioSet(uint8_t src, uint8_t dest, uint8_t pin, uint8_t action, uint16_t duration = 0) {
+    ControlPacket pkt;
+    memset(&pkt, 0, sizeof(pkt));
+    pkt.header.type = static_cast<uint8_t>(PacketType::GPIO_SET);
+    pkt.header.src = src;
+    pkt.header.dest = dest;
+    pkt.header.seq = 0; // Increment before send
+    pkt.header.flags = PKT_FLAG_REQUIRE_ACK;
+
+    pkt.payload.gpio.pin = pin;
+    pkt.payload.gpio.action = action;
+    pkt.payload.gpio.duration_ms = duration;
+    pkt.payload.gpio.command_id = 0; // TBD
     return pkt;
   }
 };

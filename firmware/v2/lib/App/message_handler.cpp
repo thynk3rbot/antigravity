@@ -1,16 +1,15 @@
-/**
- * @file message_handler.cpp
- * @brief Implementation of packet dispatch logic
- */
-
 #include "message_handler.h"
 #include "mesh_coordinator.h"
 #include "command_manager.h"
+#include "hal_compat.h"
 #include "../HAL/relay_hal.h"
+#include "../HAL/mcp_manager.h"
 #include "../Transport/message_router.h"
 #include "../Transport/lora_transport.h"
 #include "../Transport/espnow_transport.h"
 #include <Arduino.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 
 extern uint8_t g_ourNodeID;
 
@@ -36,6 +35,9 @@ void MessageHandler::handleReceived(TransportType transportType, const uint8_t* 
             break;
         case PacketType::HEARTBEAT:
             handleHeartbeat(pkt);
+            break;
+        case PacketType::GPIO_SET:
+            handleGpioSet(pkt);
             break;
         default:
             Serial.printf("[UNKNOWN] Packet type 0x%02X\n", pkt->header.type);
@@ -91,4 +93,45 @@ void MessageHandler::handleHeartbeat(const ControlPacket* pkt) {
     Serial.printf("[HEARTBEAT] From node %u\n", pkt->header.src);
     // Auto-update neighbor table
     MeshCoordinator::instance().updateNeighbor(pkt->header.src, 0, 1); // RSSI logic handled in RadioTask
+}
+
+void MessageHandler::handleGpioSet(const ControlPacket* pkt) {
+    if (pkt->header.dest == g_ourNodeID || pkt->header.dest == 0xFF) {
+        uint8_t pin = pkt->payload.gpio.pin;
+        uint8_t action = pkt->payload.gpio.action;
+        uint16_t duration = pkt->payload.gpio.duration_ms;
+
+        Serial.printf("[GPIO] Peer %u cmd: Pin %d, Action %d, Dur %dms\n",
+                      pkt->header.src, pin, action, duration);
+
+        if (pin > 49 && pin < 100) {
+            Serial.println("  ! Invalid pin (50-99 reserved)");
+            return;
+        }
+
+        uPinMode(pin, OUTPUT);
+        
+        bool targetLevel = LOW;
+        if (action == 1) { // ON/HIGH
+            targetLevel = HIGH;
+        } else if (action == 2) { // TOGGLE
+            targetLevel = (uDigitalRead(pin) == HIGH) ? LOW : HIGH;
+        }
+
+        uDigitalWrite(pin, targetLevel);
+
+        if (duration > 0) {
+            // Simple pulsed output (blocking for now, or use a timer task for robustness)
+            // For sovereignty phase, simple blocking is okay for testing
+            vTaskDelay(pdMS_TO_TICKS(duration));
+            uDigitalWrite(pin, !targetLevel);
+        }
+
+        if (pkt->header.requiresACK()) {
+            ControlPacket ack = ControlPacket::makeACK(
+                g_ourNodeID, pkt->header.src, pkt->header.seq
+            );
+            MessageRouter::instance().broadcastPacket((uint8_t*)&ack, sizeof(ack));
+        }
+    }
 }
