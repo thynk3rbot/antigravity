@@ -1043,3 +1043,54 @@ async function proxySaveConfig() {
         alert('Error: ' + err.message);
     }
 }
+
+// ── OTA Firmware Flash ────────────────────────────────────────────────────────
+
+function otaUpdateDeviceList(peers) {
+    const el = document.getElementById('ota-device-list');
+    if (!el) return;
+    if (!peers || peers.length === 0) { el.innerHTML = '<span class="text-dim">No devices online</span>'; return; }
+    el.innerHTML = peers.map(p => {
+        const ip = p.ip || p.ipAddr || '';
+        const ver = p.ver || p.version || '?';
+        const name = p.name || p.node_id || p.nodeId || ip;
+        if (!ip) return '';
+        return `<label class="flex gap-2 items-center mb-1 cursor-pointer"><input type="checkbox" class="ota-device-cb" data-ip="${ip}" checked><span>${name}</span><span class="text-dim ml-auto">${ver}&nbsp;·&nbsp;${ip}</span></label>`;
+    }).join('');
+}
+
+async function otaFlashSelected() {
+    const env = document.getElementById('ota-env').value;
+    const ips = Array.from(document.querySelectorAll('.ota-device-cb:checked')).map(cb => cb.dataset.ip).filter(Boolean);
+    if (ips.length === 0) { otaLog('No devices selected', 'warn'); return; }
+    otaLog(`Flashing ${ips.length} device(s) with ${env}...`);
+    for (const ip of ips) {
+        try {
+            const res = await fetch('/api/ota/flash', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({env, ip}) });
+            const data = await res.json();
+            if (data.ok) { otaLog(`→ ${ip} started (job ${data.job_id})`); otaPollJob(data.job_id, ip); }
+            else otaLog(`✗ ${ip}: ${data.error || 'failed'}`, 'err');
+        } catch (e) { otaLog(`✗ ${ip}: ${e.message}`, 'err'); }
+    }
+}
+
+async function otaPollJob(jobId, ip) {
+    for (let i = 0; i < 60; i++) {
+        await new Promise(r => setTimeout(r, 3000));
+        try {
+            const d = await (await fetch(`/api/ota/status/${jobId}`)).json();
+            if (d.status === 'done') { otaLog(`✓ ${ip} done — ${d.version || ''}`, 'ok'); return; }
+            if (d.status === 'error') { otaLog(`✗ ${ip}: ${d.error}`, 'err'); return; }
+        } catch (_) {}
+    }
+    otaLog(`⚠ ${ip} timed out`, 'warn');
+}
+
+function otaLog(msg, level='info') {
+    const el = document.getElementById('ota-log');
+    if (!el) return;
+    const c = {ok:'#4ade80', err:'#f87171', warn:'#fbbf24', info:'#aaa'};
+    const d = document.createElement('div');
+    d.style.color = c[level]||'#aaa'; d.textContent = msg;
+    el.appendChild(d); el.scrollTop = el.scrollHeight;
+}

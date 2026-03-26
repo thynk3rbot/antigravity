@@ -1857,28 +1857,72 @@ def build_app(
                 results.append({"node": nid, "ok": ok})
         return JSONResponse({"ok": True, "results": results})
 
+    # ── OTA Flash (job-tracked, IP-based) ───────────────────────────────
+    _ota_jobs: dict = {}  # job_id -> {status, version, error, progress}
+
+    class OTAFlashRequest(BaseModel):
+        env: str
+        ip: str
+
+    @app.post("/api/ota/flash")
+    async def _ota_flash(req: OTAFlashRequest) -> JSONResponse:
+        """Start OTA flash to a single device IP. Returns job_id for polling."""
+        import uuid
+        job_id = str(uuid.uuid4())[:8]
+        _ota_jobs[job_id] = {"status": "running", "ip": req.ip, "env": req.env, "progress": "starting..."}
+
+        async def _run(job_id: str, env: str, ip: str):
+            # Determine firmware/v2 path relative to server.py location
+            import pathlib
+            fw_dir = pathlib.Path(__file__).parent.parent.parent / "firmware" / "v2"
+            pio = pathlib.Path.home() / ".platformio" / "penv" / "Scripts" / "pio.exe"
+            if not pio.exists():
+                pio = "pio"
+            cmd = f'"{pio}" run --target upload --environment {env} --upload-port {ip}'
+            print(f"[OTA] {job_id}: flashing {ip} with {env}")
+            try:
+                proc = await asyncio.create_subprocess_shell(
+                    cmd, cwd=str(fw_dir),
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.STDOUT,
+                )
+                output = []
+                async for line in proc.stdout:
+                    text = line.decode(errors="replace").strip()
+                    output.append(text)
+                    _ota_jobs[job_id]["progress"] = text[-120:] if text else ""
+                await proc.wait()
+                if proc.returncode == 0:
+                    # Extract new version from output if present
+                    ver = next((l.split("->")[-1].strip().split('"')[0] for l in output if "[VERSION]" in l and "->" in l), None)
+                    _ota_jobs[job_id].update({"status": "done", "version": ver})
+                    print(f"[OTA] {job_id}: done — {ver or 'version unknown'}")
+                else:
+                    err = next((l for l in reversed(output) if l), "unknown error")
+                    _ota_jobs[job_id].update({"status": "error", "error": err[-200:]})
+                    print(f"[OTA] {job_id}: FAILED — {err[:80]}")
+            except Exception as e:
+                _ota_jobs[job_id].update({"status": "error", "error": str(e)})
+
+        asyncio.create_task(_run(job_id, req.env, req.ip))
+        return JSONResponse({"ok": True, "job_id": job_id})
+
+    @app.get("/api/ota/status/{job_id}")
+    async def _ota_status(job_id: str) -> JSONResponse:
+        job = _ota_jobs.get(job_id)
+        if not job:
+            return JSONResponse({"status": "unknown"}, status_code=404)
+        return JSONResponse(job)
+
+    # Legacy serial-port flash (kept for backward compatibility)
     @app.post("/api/fleet/flash")
     async def _fleet_flash(env: str, ports: list[str]) -> JSONResponse:
-        """Trigger pio flash for multiple serial ports in parallel."""
-        # Simple implementation: run in background tasks
-        async def _flash_task(port: str, target_env: str):
-            cmd = f"python -m platformio run --target upload --environment {target_env} --upload-port {port}"
-            print(f"[Fleet] Flashing {port} with {target_env}...")
-            proc = await asyncio.create_subprocess_shell(
-                cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
-            )
-            stdout, stderr = await proc.communicate()
-            if proc.returncode == 0:
-                print(f"[Fleet] Successfully flashed {port}")
-            else:
-                print(f"[Fleet] Failed flashing {port}: {stderr.decode()}")
-
         for p in ports:
-            asyncio.create_task(_flash_task(p, env))
-        
-        return JSONResponse({"ok": True, "msg": f"Flash tasks started for {len(ports)} devices"})
+            asyncio.create_task(asyncio.create_subprocess_shell(
+                f'pio run --target upload --environment {env} --upload-port {p}',
+                stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL
+            ))
+        return JSONResponse({"ok": True, "msg": f"Flash started for {len(ports)} ports"})
 
     # ── SMS / Magic Webhook ──────────────────────────────────────────────
 

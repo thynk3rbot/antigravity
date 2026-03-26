@@ -535,6 +535,22 @@
                                 <button class="btn w-full" onclick="openProvisionModal(window._activeNodeId || null)">Provision Active Device</button>
                             </div>
                         </div>
+
+                        <div class="panel mb-4">
+                            <div class="panel-title">OTA Firmware Flash</div>
+                            <div class="p-4">
+                                <div class="text-xs text-dim mb-3">Flash firmware over WiFi. Version auto-increments per flash.</div>
+                                <div class="flex gap-2 mb-3">
+                                    <select id="ota-env" class="input-styled" style="flex:1">
+                                        <option value="heltec_v3">V3 — SX1262</option>
+                                        <option value="heltec_v4" selected>V4 — GPS</option>
+                                    </select>
+                                    <button class="btn sm" onclick="otaFlashSelected()">Flash</button>
+                                </div>
+                                <div id="ota-device-list" class="text-xs mb-2"></div>
+                                <div id="ota-log" class="text-xs font-mono text-dim" style="max-height:80px;overflow-y:auto"></div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

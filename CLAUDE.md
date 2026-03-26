@@ -106,42 +106,65 @@ Follow these rules for all builds, bugs, and enhancements:
 
 ## Firmware Versioning [MANDATORY]
 
-**Format:** `MAJOR.MINOR.POINT-PLATFORM` (e.g., `0.0.00-2`, `0.1.05-3`, `1.0.00-4`)
+**Format:** `x.x.xxV3` or `x.x.xxV4` — separate counter per hardware target.
 
-**Platforms:** 2, 3, 4 (target hardware variants)
+**Examples:** `0.0.15V3`, `0.0.17V4`
 
-**CRITICAL:** Version **MUST** be bumped for EVERY firmware flash. Build system will warn if not updated.
+**Rules:**
+- Version auto-increments on every `pio run -t upload` via `increment_version.py`
+- Counters stored in `.version` at repo root: `V3=0.0.xx` and `V4=0.0.xx`
+- V3 and V4 increment independently — flash V4 only, V4 counter goes up, V3 unchanged
+- **Version = flash confirmation**: if `STATUS` returns same version as before, flash failed
+- V2 hardware is **deprecated** — test machine only, not a production target
+- After every successful flash, Claude commits `.version` and tags: `git tag v0.0.xxV3`
 
-### Version Management Commands
+**Plugin internal versions:** Each firmware module/plugin carries a `PLUGIN_VERSION` constant
+(e.g., `static const char* PLUGIN_VERSION = "1.0.0";`) — not tracked in git, available at runtime.
 
-Store in `.version` file. Use `tools/version.sh` (bash) or `tools/version.bat` (Windows):
+**To flash:** `pio run -t upload -e heltec_v4` — version auto-increments, no manual step needed.
 
+## Three-Agent Team Process [MANDATORY]
+
+Full process in `TEAM_PROCESS.md`. Summary:
+
+**Roles:**
+- **Claude** — Release engineer, architecture, daemon, tools. Owns all git operations.
+- **AG** — Firmware coding, hardware flashing, test validation. Never commits directly.
+- **Ollama** — Async boilerplate generation via `tools/multi-agent-framework/ollama_bridge.py`
+
+**Session rules:**
+1. AG always starts with `git pull origin main`
+2. Queue Ollama tasks at session START (not end) — output ready in ~1 hour
+3. AG reports hardware results to Claude in plain language — Claude commits + tags
+4. Claude checks `git status` at session end — nothing uncommitted ever
+
+**Ollama task queuing (AG: use this, don't hand-write boilerplate):**
 ```bash
-# Show current version for a platform
-tools/version.sh current 2
-
-# Bump point release (0.0.XX → 0.0.YY)
-tools/version.sh bump point 2
-
-# Bump minor version (0.XX.00 → 0.YY.00)
-tools/version.sh bump minor 3
-
-# Set specific version
-tools/version.sh set 0.1.00-2
-
-# Validate all versions
-tools/version.sh validate-all
+python tools/multi-agent-framework/ollama_bridge.py generate-code "your task here"
+python tools/multi-agent-framework/ollama_bridge.py analyze "paste code here"
+python tools/multi-agent-framework/ollama_bridge.py search-replace "task description"
 ```
 
-See `VERSIONING.md` for full methodology and rules.
+**What to offload to Ollama:** C++ structs, JSON boilerplate, test stubs, switch/case handlers,
+CSS/HTML templates, SQLite CRUD, FastAPI route stubs, search/replace across files.
+
+## OTA Firmware Delivery
+
+Webapp at `http://localhost:8000` → **OTA Firmware Flash** panel (right sidebar).
+
+1. Select target: V3 or V4
+2. Check devices to flash (auto-populated from fleet status)
+3. Click **Flash** — version increments automatically, job tracked by ID
+4. Poll `/api/ota/status/{job_id}` for progress — panel shows live output
+5. Confirm: `STATUS` on device returns new version number
+
+**Backend:** `POST /api/ota/flash` `{env, ip}` → `{ok, job_id}`
+**Status:** `GET /api/ota/status/{job_id}` → `{status, version, progress, error}`
 
 ## Shortcuts & Workflows
 
-- `/devops` - Current project devops procedures and rules
-- `/version` - Firmware version management (`tools/version.sh`)
-- `/build` - `pio run -e heltec_wifi_lora_32_V3`
-- `/flash` - Build + Upload + Monitor (`/flash.md`)
-- `/commit` - Verify build -> Stage -> Commit -> Push
-- `/clean` - Clean build artifacts (`rmdir /s /q .pio`)
+- `/build` - `pio run -e heltec_v4` (or heltec_v3)
+- `/flash` - `pio run -t upload -e heltec_v4` — version auto-increments
 - `/monitor` - `pio device monitor -b 115200`
-- `/webapp` - `python tools/webapp/server.py` → open `http://localhost:8000`
+- `/webapp` - `python tools/webapp/server.py` → `http://localhost:8000`
+- `/commit` - Claude handles: stage → commit → tag → push
