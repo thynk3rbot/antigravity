@@ -1,5 +1,4 @@
 #include "command_manager.h"
-#include "status_builder.h"
 #include "nvs_manager.h"
 #include "schedule_manager.h"
 #include "gps_manager.h"
@@ -91,9 +90,7 @@ void CommandManager::process(const String& input, ResponseCallback responseCallb
 
     String response;
     if (cmd == "STATUS") {
-        response = StatusBuilder::buildStatusString(false).c_str(); // Friendly
-    } else if (cmd == "VSTATUS") {
-        response = StatusBuilder::buildStatusString(true).c_str(); // Verbose
+        response = _handleStatus();
     } else if (cmd == "RELAY") {
         response = _handleRelay(args);
     } else if (cmd == "SETWIFI") {
@@ -177,7 +174,28 @@ void CommandManager::_parseCommand(const String& input, String& cmd, String& arg
 // ---------------------------------------------------------------------------
 
 String CommandManager::_handleStatus() {
-    return StatusBuilder::buildStatusString(false).c_str();
+    const StatusData& s = _lastStatus;
+    String json = "{";
+    json += "\"node_id\":\""    + s.nodeId      + "\",";
+    json += "\"mesh_id\":"      + String(s.meshId) + ",";
+    json += "\"version\":\""    + s.version     + "\",";
+    json += "\"hw\":\""         + s.hw          + "\",";
+    json += "\"mac\":\""        + s.mac         + "\",";
+    json += "\"ip\":\""         + s.ipAddr      + "\",";
+    json += "\"bat_v\":"        + String(s.batVoltage, 2) + ",";
+    json += "\"bat_pct\":"      + String(s.batPercent)    + ",";
+    json += "\"power_mode\":\"" + s.powerMode   + "\",";
+    json += "\"relay1\":"       + String(s.relay1  ? "true" : "false") + ",";
+    json += "\"relay2\":"       + String(s.relay2  ? "true" : "false") + ",";
+    json += "\"lora_rssi\":"    + String(s.loraRSSI) + ",";
+    json += "\"lora_snr\":"     + String(s.loraSNR, 1) + ",";
+    json += "\"lora_tx\":"      + String(s.loraTX)   + ",";
+    json += "\"lora_rx\":"      + String(s.loraRX)   + ",";
+    json += "\"mesh_neighbors\":" + String(s.meshNeighbors) + ",";
+    json += "\"uptime\":"       + String(s.uptime)   + ",";
+    json += "\"free_heap\":"    + String(s.freeHeap);
+    json += "}";
+    return json;
 }
 
 String CommandManager::_handleRelay(const String& args) {

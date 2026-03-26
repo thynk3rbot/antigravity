@@ -255,10 +255,12 @@ void BootSequence::initTransports() {
     Serial.println("  - WiFi STA failed, using SoftAP for provisioning");
   }
   
+#ifdef ENABLE_HTTP_API
   if (HttpAPI::init()) {
     Serial.println("  ✓ HTTP API server started");
     OLEDManager::getInstance().setIP(WiFi.localIP().toString().c_str());
   }
+#endif
 
   vTaskDelay(pdMS_TO_TICKS(500));
   Serial.println("[4.5/8] Initializing ESP-NOW...");

@@ -94,6 +94,13 @@ bool PowerManager::init() {
         NVSManager::setPowerMode(static_cast<uint8_t>(PowerMode::NORMAL));
     }
     enableVEXT();  // Ensure peripherals like OLED are powered on boot
+    
+    // On V2 (pulsing mode), wait for stability before proceeding to init HAL/Transports
+    uint8_t timeout = 0;
+    while (!isVEXTStable() && timeout < 20) {
+        delay(10);
+        timeout++;
+    }
     return true;
 }
 

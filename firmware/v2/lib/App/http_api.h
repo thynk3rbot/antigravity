@@ -15,6 +15,9 @@
 
 #include <string>
 #include <cstdint>
+#include "../HAL/board_config.h"
+
+#ifdef ENABLE_HTTP_API
 
 // Forward declarations
 class AsyncWebServer;
@@ -215,3 +218,4 @@ private:
     static void handleBody(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total);
     static void _handleOTAUpdateBody(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total);
 };
+#endif

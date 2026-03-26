@@ -1,3 +1,7 @@
+#include "../HAL/board_config.h"
+
+#ifdef ENABLE_HTTP_API
+
 #include <Arduino.h>
 #include <string>
 #include <vector>
@@ -10,7 +14,6 @@
 #include <LittleFS.h>
 #include <ESPmDNS.h>
 #include "product_manager.h"
-#include "../HAL/board_config.h"
 #include "../HAL/probe_manager.h"
 
 // ============================================================================
@@ -588,3 +591,4 @@ void HttpAPI::handleBody(AsyncWebServerRequest *request, uint8_t *data, size_t l
 void HttpAPI::_handleOTAUpdateBody(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
   // OTA update body handling (future implementation)
 }
+#endif
