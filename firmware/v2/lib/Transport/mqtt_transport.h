@@ -165,6 +165,7 @@ public:
     // ========================================================================
     static bool initStatic();
     static void pollStatic();
+    static void onCommand(CommandCallback cb);
     static void onCommand(std::function<void(const std::string&)> cb);
     static MQTTTransport* instance();
 

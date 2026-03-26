@@ -1,0 +1,22 @@
+{
+  "version": "0.1.0",
+  "name": "LoRaLink V2 Telemetry",
+  "fields": [
+    { "key": "name", "label": "Device Name", "type": "string" },
+    { "key": "ver", "label": "Firmware Version", "type": "string" },
+    { "key": "hw", "label": "Hardware", "type": "string" },
+    { "key": "mac", "label": "MAC Address", "type": "string" },
+    { "key": "ip", "label": "Local IP", "type": "string" },
+    { "key": "bat_pct", "label": "Battery", "type": "int", "unit": "%" },
+    { "key": "mode", "label": "Power Mode", "type": "string" },
+    { "key": "vext", "label": "VEXT Stable", "type": "bool" },
+    { "key": "lora_rssi", "label": "Signal Strength", "type": "int", "unit": "dBm" },
+    { "key": "lora_snr", "label": "Signal Quality", "type": "int", "unit": "dB" },
+    { "key": "peer_cnt", "label": "Neighbors", "type": "int" },
+    { "key": "uptime", "label": "Uptime", "type": "int", "unit": "s" }
+  ],
+  "endpoints": {
+    "status": { "path": "/api/status", "method": "GET" },
+    "vstatus": { "path": "/api/vstatus", "method": "GET" }
+  }
+}

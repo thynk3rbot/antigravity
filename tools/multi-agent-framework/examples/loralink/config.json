@@ -1,0 +1,100 @@
+{
+  "project": {
+    "name": "LoRaLink-AnyToAny",
+    "description": "Unified ESP32-S3 firmware for prioritized any-to-any command routing",
+    "repo_url": "https://github.com/antigravity/loralink",
+    "build_command": "pio run",
+    "test_command": "pio test"
+  },
+  "branding": {
+    "app_name": "LoRaLink",
+    "tagline": "Autonomous Mesh Intelligence",
+    "copyright": "LoRaLink(tm) Copyright 2026 spw1.com. All Rights Reserved.",
+    "icon_path": "tools/webapp/static/media/loralink_icon.png",
+    "accent_color": "#00b4d8",
+    "theme": "dark"
+  },
+  "agents": {
+    "planner": {
+      "name": "OpenAI",
+      "tool": "sgpt",
+      "lock_file": "openai.lock",
+      "directories": ["01_planning/", "docs/plans/"],
+      "description": "High-level architecture and requirement decomposition"
+    },
+    "executor": {
+      "name": "Claude",
+      "tool": "claude-code",
+      "lock_file": "claude.lock",
+      "directories": ["02_coding/", "src/", "tools/webapp/", "tools/pc_app/"],
+      "description": "Implementation and build verification"
+    },
+    "reviewer": {
+      "name": "Antigravity",
+      "tool": "antigravity-ide",
+      "lock_file": "antigravity.lock",
+      "directories": ["03_review/", "docs/", "main.cpp", "config.h"],
+      "description": "QA, hardware validation, and release gatekeeping"
+    }
+  },
+  "phases": {
+    "1": {
+      "name": "Planning",
+      "directory": "01_planning/",
+      "input": "idea.txt",
+      "output": "spec.md",
+      "agent": "planner"
+    },
+    "2": {
+      "name": "Execution",
+      "directory": "02_coding/",
+      "input": "spec.md",
+      "output": "source files",
+      "agent": "executor"
+    },
+    "3": {
+      "name": "Review",
+      "directory": "03_review/",
+      "input": "source files",
+      "output": "audit_report.md",
+      "agent": "reviewer"
+    }
+  },
+  "model_proxy": {
+    "local": {
+      "provider": "ollama",
+      "base_url": "http://localhost:11434",
+      "default_model": "qwen2.5-coder:14b"
+    },
+    "cloud": {
+      "provider": "openrouter",
+      "base_url": "https://openrouter.ai/api/v1",
+      "api_key_env": "OPENROUTER_API_KEY",
+      "default_model": "anthropic/claude-3-sonnet"
+    },
+    "prefer_local": true,
+    "health_check_ttl": 30,
+    "pricing": {
+      "claude-3-opus": [0.015, 0.075],
+      "claude-3-sonnet": [0.003, 0.015],
+      "gpt-4": [0.03, 0.06],
+      "gpt-3.5-turbo": [0.0005, 0.0015]
+    }
+  },
+  "rag": {
+    "enabled": true,
+    "vector_store": "chromadb",
+    "persist_directory": ".rag_store",
+    "collection_name": "loralink_knowledge",
+    "embedding_model": "nomic-embed-text",
+    "chunk_size": 512,
+    "chunk_overlap": 50,
+    "top_k": 5,
+    "sources": ["docs/", "firmware/v1/src/", "firmware/v2/lib/"]
+  },
+  "lock_settings": {
+    "abandoned_timeout_minutes": 120,
+    "locks_directory": ".locks",
+    "audit_log_path": "~/logs/agent-audit.log"
+  }
+}

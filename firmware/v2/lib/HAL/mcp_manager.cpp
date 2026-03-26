@@ -46,21 +46,28 @@ void MCPManager::mcpPinMode(int extPin, uint8_t mode) {
     int c = chipIndex(extPin);
     int p = pinIndex(extPin);
     if (c < 0 || c >= MCP_MAX_CHIPS || !_present[c]) return;
+    I2C_LOCK();
     _chips[c].pinMode(p, mode);
+    I2C_UNLOCK();
 }
 
 void MCPManager::mcpDigitalWrite(int extPin, bool val) {
     int c = chipIndex(extPin);
     int p = pinIndex(extPin);
     if (c < 0 || c >= MCP_MAX_CHIPS || !_present[c]) return;
+    I2C_LOCK();
     _chips[c].digitalWrite(p, val ? HIGH : LOW);
+    I2C_UNLOCK();
 }
 
 bool MCPManager::mcpDigitalRead(int extPin) {
     int c = chipIndex(extPin);
     int p = pinIndex(extPin);
     if (c < 0 || c >= MCP_MAX_CHIPS || !_present[c]) return false;
-    return _chips[c].digitalRead(p);
+    I2C_LOCK();
+    bool val = _chips[c].digitalRead(p);
+    I2C_UNLOCK();
+    return val;
 }
 
 bool MCPManager::writePin(int pin, bool val) {

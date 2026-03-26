@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="/static/css/style.css">
+    <title>Assistant</title>
+</head>
+<body>
+    <header>
+        <div class="app-identity">
+            <img class="app-logo" src="" alt="">
+            <span class="app-title">Assistant</span>
+            <span class="app-tagline"></span>
+        </div>
+        <div class="status-indicators">
+            <div class="flex-row">
+                <div id="ollama-dot" class="status-dot dot-red"></div>
+                <span class="text-xs">Ollama</span>
+            </div>
+            <div class="flex-row">
+                <div id="server-dot" class="status-dot dot-green"></div>
+                <span class="text-xs">Server</span>
+            </div>
+            <select id="domain-select" class="btn-select" title="Select Knowledge Domain">
+                <option value="general">General</option>
+            </select>
+        </div>
+    </header>
+
+    <div class="app-container">
+        <aside class="sidebar">
+            <div class="sidebar-header">Conversations</div>
+            <div id="session-list" class="session-list">
+                <!-- Session items will be populated here -->
+            </div>
+            <div class="sidebar-footer">
+                <span class="copyright"></span>
+            </div>
+        </aside>
+
+        <main class="chat-container">
+            <div id="messages-area" class="messages-area">
+                <div class="message bot">
+                    <div class="bubble">Welcome! How can I help you today?</div>
+                </div>
+            </div>
+
+            <div class="input-bar">
+                <div class="input-wrapper">
+                    <button id="mic-btn" class="btn-icon">🎤</button>
+                    <input type="text" id="chat-input" placeholder="Type your question...">
+                    <button id="send-btn" class="btn-icon">➤</button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>

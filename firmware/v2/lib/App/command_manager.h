@@ -47,6 +47,7 @@ private:
     static StatusData _lastStatus;
 
     static String _handleStatus();
+    static String _handleVStatus();
     static String _handleRelay(const String& args);
     static String _handleSetWifi(const String& args);
     static String _handleBlink();

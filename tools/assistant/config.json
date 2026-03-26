@@ -1,0 +1,45 @@
+{
+  "project": {
+    "name": "LoRaLink Assistant",
+    "description": "Multi-domain AI chat assistant with local RAG support",
+    "version": "0.1.0"
+  },
+  "branding": {
+    "app_name": "LoRaLink Assistant",
+    "tagline": "Your Local AI Knowledge Assistant",
+    "copyright": "LoRaLink(tm) Copyright 2026 spw1.com. All Rights Reserved.",
+    "icon_path": "static/media/loralink_icon.png",
+    "accent_color": "#00b4d8",
+    "theme": "dark"
+  },
+  "server": {
+    "host": "127.0.0.1",
+    "port": 8300,
+    "log_level": "info"
+  },
+  "model_proxy": {
+    "local": {
+      "provider": "ollama",
+      "base_url": "http://localhost:11434",
+      "default_model": "qwen2.5-coder:14b"
+    },
+    "cloud": {
+      "provider": "openrouter",
+      "base_url": "https://openrouter.ai/api/v1",
+      "api_key_env": "OPENROUTER_API_KEY",
+      "default_model": "anthropic/claude-3-sonnet"
+    },
+    "prefer_local": true
+  },
+  "rag": {
+    "enabled": true,
+    "persist_dir": "data/chromadb",
+    "embedding_model": "nomic-embed-text",
+    "chunk_size": 1024,
+    "chunk_overlap": 100,
+    "domains_dir": "domains"
+  },
+  "sessions": {
+    "db_path": "data/sessions.db"
+  }
+}

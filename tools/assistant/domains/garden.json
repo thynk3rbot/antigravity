@@ -1,0 +1,11 @@
+{
+    "id": "garden",
+    "name": "Garden Knowledge",
+    "description": "PDFs, books, and notes about gardening, soil science, and botany",
+    "sources": ["C:/Users/spw1/Documents/Garden/pdfs/", "C:/Users/spw1/Documents/Garden/books/"],
+    "collection_name": "garden_knowledge",
+    "chunk_size": 1024,
+    "chunk_overlap": 100,
+    "top_k": 8,
+    "system_prompt": "You are a knowledgeable garden expert. Answer using ONLY the provided context from the user's garden reference library. Be practical and specific — include timing, quantities, and conditions. Cite source documents."
+}

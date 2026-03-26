@@ -1,0 +1,15 @@
+{
+  "protocol": "v0.1.0",
+  "registry": [
+    { "field": "name", "label": "Node Name", "category": "Identity" },
+    { "field": "ver", "label": "Firmware", "category": "Identity" },
+    { "field": "mac", "label": "MAC Address", "category": "Identity" },
+    { "field": "bat_pct", "label": "Battery Level", "unit": "%", "category": "Power" },
+    { "field": "mode", "label": "Power Profile", "category": "Power" },
+    { "field": "vext", "label": "VEXT Active", "category": "Power" },
+    { "field": "lora_rssi", "label": "LoRa Signal", "unit": "dBm", "category": "Radio" },
+    { "field": "lora_snr", "label": "LoRa Quality", "unit": "dB", "category": "Radio" },
+    { "field": "peer_cnt", "label": "Mesh Peers", "category": "Mesh" },
+    { "field": "uptime", "label": "System Uptime", "unit": "s", "category": "Diagnostic" }
+  ]
+}

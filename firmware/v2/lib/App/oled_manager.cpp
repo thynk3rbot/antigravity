@@ -169,7 +169,7 @@ static void displayPage6() {
 }
 
 // Interrupt handler for button (Debounced via update loop)
-static volatile bool g_buttonHandled = true;
+static volatile bool g_buttonHandled = false;
 static volatile uint32_t g_lastInterruptTime = 0;
 
 static void IRAM_ATTR buttonISR() {
@@ -196,38 +196,41 @@ bool OLEDManager::init() {
     _initState = InitState::RESET_LOW;
     _stateStartTime = millis();
     
-    // Perform synchronous hardware reset for boot visibility
+    Serial.println("[UI] Performing Hardened OLED Reset...");
     if (OLED_RESET_PIN != -1) {
         pinMode(OLED_RESET_PIN, OUTPUT);
         digitalWrite(OLED_RESET_PIN, LOW);
-        delay(50);
+        delay(100);
         digitalWrite(OLED_RESET_PIN, HIGH);
-        delay(50);
+        delay(100);
     }
     
     pinMode(BUTTON_PIN, INPUT_PULLUP);
 #ifdef ARDUINO_HELTEC_WIFI_LORA_32_V4
-    pinMode(BUTTON_PIN, INPUT);        // V4 has strong hardware pullup
+    pinMode(BUTTON_PIN, INPUT);
 #endif
     attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), buttonISR, FALLING);
     
-    // Synchronous I2C Hardware check (Wire.begin already called in BootSequence)
+    // Wire.begin should have happened in BootSequence, but we'll re-verify at 100k
     I2C_LOCK();
+    Wire.begin(I2C_SDA, I2C_SCL, 100000); 
+    
     if (display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDRESS)) {
         display.ssd1306_command(SSD1306_SETCONTRAST);
-#ifdef ARDUINO_HELTEC_WIFI_LORA_32
-        display.ssd1306_command(0xFF); // Max contrast for V2
-#else
-        display.ssd1306_command(0xCF); // Standard for V3/V4
-#endif
-        display.setTextColor(SSD1306_WHITE);
+        display.ssd1306_command(0xFF); // Universal max contrast for debug
+        
         display.clearDisplay();
+        display.setTextColor(SSD1306_WHITE);
+        display.setTextSize(1);
+        display.setCursor(0,0);
+        display.println("LoRaLink v2");
+        display.println("Starting Mesh...");
         display.display();
         _initState = InitState::RUNNING;
-        Serial.println("  ✓ OLED Hardware initialized");
+        Serial.println("  ✓ OLED Hardware initialized and cleared");
     } else {
-        Serial.println("  ! OLED Hardware begin failed");
-        _initState = InitState::START_I2C; // Fallback for retry
+        Serial.println("  ! OLED Hardware begin failed - check VEXT/I2C");
+        _initState = InitState::START_I2C; 
     }
     I2C_UNLOCK();
     
@@ -334,7 +337,10 @@ void OLEDManager::update() {
 
     uint32_t now = millis();
     if (g_wakeRequested) { setDisplayOn(true); g_wakeRequested = false; }
-    if (g_displayOn && (now - g_lastActivityTime >= SLEEP_TIMEOUT_MS)) setDisplayOn(false);
+    // Only sleep if not USB powered
+    if (g_displayOn && !PowerManager::isPowered() && (now - g_lastActivityTime >= SLEEP_TIMEOUT_MS)) setDisplayOn(false);
+    // Keep display alive when USB connected
+    if (PowerManager::isPowered() && !g_displayOn) { setDisplayOn(true); g_lastActivityTime = now; }
 
     // Handle button press detected by ISR
     if (!g_buttonHandled) {
@@ -368,7 +374,8 @@ void OLEDManager::update() {
     if (now - g_lastUpdateTime >= UPDATE_INTERVAL_MS || g_wakeRequested) {
         g_lastUpdateTime = now;
         if (g_displayOn) {
-            I2C_LOCK();
+            // Buffer-only writes (no I2C). Mutex NOT required here as data race 
+            // with displayTask is transient and non-blocking.
             switch (g_currentPage) {
                 case 0: displayPage1(); break;
                 case 1: displayPage2(); break;
@@ -383,7 +390,6 @@ void OLEDManager::update() {
                 case 5: displayPage6(); break;
                 default: g_currentPage = 0; break;
             }
-            I2C_UNLOCK();
             // Set flag for deferred I2C send (happens in low-priority displayTask)
             g_displayNeedsRefresh = true;
         }
