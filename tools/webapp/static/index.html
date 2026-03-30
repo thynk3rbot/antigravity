@@ -215,6 +215,7 @@
                 <a class="nav-item" onclick="switchPage('hybrid-proxy')">🔗 Hybrid Proxy</a>
                 <a class="nav-item" onclick="switchPage('ops')">🐙 Ops Center</a>
                 <a class="nav-item" onclick="switchPage('admin')">⚙️ Admin</a>
+                <a class="nav-item" onclick="switchPage('magiccache')">💾 Magic Cache</a>
 
                 <div class="fleet-header">Active Fleet</div>
                 <div id="sidebar-node-list" class="node-mini-list">
@@ -723,6 +724,33 @@
                 </div>
             </div>
 
+            <!-- MagicCache Page -->
+            <div id="pg-magiccache" class="page">
+                <div class="magiccache-container">
+                    <!-- Sidebar: Table List -->
+                    <div class="magiccache-sidebar">
+                        <div class="panel">
+                            <div class="panel-title">Tables</div>
+                            <div id="magiccache-tables" class="magiccache-tables p-2">
+                                <!-- Populated by magiccache.js -->
+                            </div>
+                        </div>
+                        <div class="panel">
+                            <div class="panel-title">Alerts</div>
+                            <div id="magiccache-alerts" class="p-2">
+                                <!-- Alerts populated by magiccache.js -->
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Content: Table Data & Controls -->
+                    <div class="magiccache-content" id="magiccache-content">
+                        <div style="padding: 20px; text-align: center; color: var(--text-dim);">
+                            Select a table from the sidebar to view data
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Terminal Area -->
             <div class="terminal-panel" id="terminal-log">
                 <!-- Log entries -->
@@ -909,5 +937,6 @@
     <script src="/static/js/store.js"></script>
     <script src="/static/js/test_harness.js"></script>
     <script src="/static/js/app.js"></script>
+    <script src="/static/js/magiccache.js"></script>
 </body>
 </html>
