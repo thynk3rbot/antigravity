@@ -1,0 +1,16 @@
+{
+  "name": "Magic",
+  "tagline": "The Octopus Network",
+  "description": "Autonomous mesh gateway & data orchestration",
+  "accent_color": "#7c3aed",
+  "secondary_color": "#a855f7",
+  "tertiary_color": "#1f2937",
+  "logo_path": "/static/magic-logo.svg",
+  "favicon_path": "/static/magic-favicon.ico",
+  "theme": "dark",
+  "features": {
+    "magiccache_enabled": true,
+    "alerts_enabled": true,
+    "export_enabled": true
+  }
+}
