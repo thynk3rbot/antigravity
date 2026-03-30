@@ -5,10 +5,10 @@
     --bg-card: #141426;
     --bg-hdr: #12122b;
     --border: #222240;
-    --accent: #00d4ff;
-    --accent-hover: #00c3eb;
-    --accent-dim: #0099b3;
-    --accent-glow: rgba(0, 212, 255, 0.4);
+    --accent: #7c3aed;
+    --accent-hover: #a855f7;
+    --accent-dim: #6d28d9;
+    --accent-glow: rgba(124, 58, 237, 0.4);
 
     /* ── States ─────────────────────────────────────────────────────────── */
     --ok: #00ff88;
@@ -21,7 +21,7 @@
     /* ── Glassmorphism / Effects ────────────────────────────────────────── */
     --glass: rgba(20, 20, 38, 0.85);
     --shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
-    --border-glow: 0 0 15px rgba(0, 212, 255, 0.2);
+    --border-glow: 0 0 15px rgba(124, 58, 237, 0.2);
 }
 
 .app-container {
@@ -77,7 +77,7 @@ body {
 
 .nav-item { transition: background 0.2s, color 0.2s; }
 .nav-item:hover { background: rgba(255,255,255,0.05); color: var(--accent); }
-.nav-item.active { background: rgba(0, 212, 255, 0.1); color: var(--accent); border-right: 3px solid var(--accent); }
+.nav-item.active { background: rgba(124, 58, 237, 0.1); color: var(--accent); border-right: 3px solid var(--accent); }
 .text-muted { color: var(--muted); }
 .text-dim { color: var(--text-dim); }
 .text-accent { color: var(--accent); }
@@ -179,7 +179,7 @@ body {
     text-transform: uppercase;
     letter-spacing: 1.5px;
     padding: 10px 14px;
-    background: rgba(0, 212, 255, 0.06);
+    background: rgba(124, 58, 237, 0.06);
     border-bottom: 1px solid var(--border);
     font-weight: 800;
 }
@@ -242,7 +242,7 @@ body {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    box-shadow: 0 0 10px rgba(0, 212, 255, 0.1);
+    box-shadow: 0 0 10px rgba(124, 58, 237, 0.1);
 }
 .btn.secondary { background: var(--bg-hdr); color: var(--text); border: 1px solid var(--border); }
 .btn.danger { background: var(--err); color: #fff; }
@@ -329,7 +329,7 @@ body {
     text-transform: uppercase;
     letter-spacing: 0.3px;
 }
-.pill.toggle { background: rgba(0, 212, 255, 0.1); color: var(--accent); border: 1px solid rgba(0, 212, 255, 0.3); }
+.pill.toggle { background: rgba(124, 58, 237, 0.1); color: var(--accent); border: 1px solid rgba(124, 58, 237, 0.3); }
 .pill.pulse { background: rgba(255, 170, 0, 0.1); color: var(--warn); border: 1px solid rgba(255, 170, 0, 0.3); }
 .pill.on { background: rgba(0, 255, 136, 0.1); color: var(--ok); border: 1px solid rgba(0, 255, 136, 0.3); }
 .pill.off { background: rgba(255, 68, 68, 0.1); color: var(--err); border: 1px solid rgba(255, 68, 68, 0.3); }
@@ -359,7 +359,7 @@ body {
     user-select: none;
 }
 .nav-link:hover { color: var(--accent); }
-.nav-link.active { color: var(--accent); background: rgba(0, 212, 255, 0.08); }
+.nav-link.active { color: var(--accent); background: rgba(124, 58, 237, 0.08); }
 
 .page-nav {
     display: flex;
@@ -440,8 +440,8 @@ body {
     cursor: pointer;
     transition: 0.2s;
 }
-.file-item:hover, .seq-item:hover { border-color: rgba(0, 212, 255, 0.2); }
-.file-item.active-file, .node-item.active-node { border-color: var(--accent); background: rgba(0, 212, 255, 0.05); }
+.file-item:hover, .seq-item:hover { border-color: rgba(124, 58, 237, 0.2); }
+.file-item.active-file, .node-item.active-node { border-color: var(--accent); background: rgba(124, 58, 237, 0.05); }
 
 .config-editor, .bench-editor {
     display: flex;
@@ -479,4 +479,48 @@ body {
 
 @media (max-width: 820px) {
     .main, .nodes-layout, .file-item, .seq-item { grid-template-columns: 1fr !important; }
+}
+
+/* ── Mode System ─────────────────────────────────────────────────── */
+/*
+ *  .nm  = novice-mode content    (plain-English labels, no jargon)
+ *  .am  = admin-mode content     (current default: IDs, dBm, raw values)
+ *  .dm  = debug-mode content     (verbose: raw JSON, packet stats, heap)
+ *
+ *  Default (body has no data-mode or data-mode="admin"): show .am, hide .nm/.dm
+ */
+.nm, .dm { display: none !important; }
+
+body[data-mode="novice"] .am  { display: none !important; }
+body[data-mode="novice"] .nm  { display: revert !important; }
+
+body[data-mode="debug"] .dm   { display: revert !important; }
+body[data-mode="debug"] .dm.flex-row,
+body[data-mode="debug"] .dm.flex-between { display: flex !important; }
+
+/* Mode switcher pill strip */
+.mode-switcher {
+    display: flex;
+    gap: 3px;
+    align-items: center;
+}
+.mode-pill {
+    padding: 2px 9px;
+    border-radius: 10px;
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    background: transparent;
+    transition: 0.15s;
+    user-select: none;
+}
+.mode-pill:hover { color: var(--accent); border-color: rgba(124, 58, 237, 0.4); }
+.mode-pill.active {
+    background: rgba(124, 58, 237, 0.12);
+    color: var(--accent);
+    border-color: var(--accent);
 }
