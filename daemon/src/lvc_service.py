@@ -12,7 +12,7 @@ if str(current_dir) not in sys.path:
     sys.path.insert(0, str(current_dir))
 
 import paho.mqtt.client as mqtt
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, Query, WebSocket, Request
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 from monitor import monitor
@@ -24,6 +24,8 @@ class MagicLVCService:
         self.config = self._load_config()
         self.lvc_store = {}  # In-memory "Magic" image
         self.rest_port = rest_port
+        self.alerts = {}  # Alert management: {alert_id: {name, condition, enabled, triggered}}
+        self.subscribers = []  # WebSocket subscribers for real-time updates
 
         # MQTT Setup
         self.client = mqtt.Client("MagicLVCService")
@@ -176,6 +178,78 @@ class MagicLVCService:
                 }
             else:
                 return {"error": f"Unsupported format: {format}"}, 400
+
+        # ── Alert Management Endpoints ──
+        @self.app.get("/alerts")
+        async def list_alerts():
+            """List all configured alerts."""
+            return {
+                "alerts": self.alerts,
+                "count": len(self.alerts)
+            }
+
+        @self.app.post("/alerts")
+        async def create_alert(request):
+            """Create a new alert rule."""
+            body = await request.json()
+            alert_id = body.get("id", f"alert_{len(self.alerts)+1}")
+            self.alerts[alert_id] = {
+                "name": body.get("name", "Unnamed Alert"),
+                "condition": body.get("condition", ""),  # e.g. "battery < 20"
+                "enabled": body.get("enabled", True),
+                "triggered": False,
+                "last_check": None
+            }
+            return {"ok": True, "alert_id": alert_id}
+
+        @self.app.put("/alerts/{alert_id}")
+        async def update_alert(alert_id: str, request):
+            """Update an alert rule."""
+            if alert_id not in self.alerts:
+                return {"error": f"Alert '{alert_id}' not found"}, 404
+            body = await request.json()
+            self.alerts[alert_id].update(body)
+            return {"ok": True, "alert_id": alert_id}
+
+        @self.app.delete("/alerts/{alert_id}")
+        async def delete_alert(alert_id: str):
+            """Delete an alert rule."""
+            if alert_id not in self.alerts:
+                return {"error": f"Alert '{alert_id}' not found"}, 404
+            del self.alerts[alert_id]
+            return {"ok": True}
+
+        # ── WebSocket Subscription ──
+        @self.app.websocket("/ws")
+        async def websocket_endpoint(websocket: WebSocket):
+            """WebSocket endpoint for real-time data subscriptions."""
+            await websocket.accept()
+            self.subscribers.append(websocket)
+            try:
+                while True:
+                    data = await websocket.receive_text()
+                    # Echo back subscription confirmation
+                    await websocket.send_json({
+                        "type": "subscription",
+                        "message": f"Subscribed to: {data}"
+                    })
+            except Exception as e:
+                monitor.log_error("WS", f"WebSocket error: {e}")
+            finally:
+                self.subscribers.remove(websocket)
+
+        @self.app.post("/broadcast")
+        async def broadcast_update(request: Request):
+            """Broadcast a message to all WebSocket subscribers."""
+            body = await request.json()
+            for subscriber in self.subscribers:
+                try:
+                    await subscriber.send_json({
+                        "type": "update",
+                        "data": body
+                    })
+                except Exception as e:
+                    monitor.log_error("WS", f"Broadcast error: {e}")
 
     def run(self):
         import threading
