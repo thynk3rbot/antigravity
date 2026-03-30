@@ -1,7 +1,7 @@
 {
   "daemon": {
-    "name": "Home Base",
-    "description": "Primary LoRaLink daemon",
+    "name": "Magic Fleet Orchestrator",
+    "description": "Magic Mesh Gateway — Autonomous mesh fleet coordinator",
     "location": {
       "lat": null,
       "lng": null,
@@ -14,14 +14,14 @@
       "cmd": "python tools/webapp/server.py",
       "port": 8000,
       "auto": true,
-      "description": "Fleet Admin Webapp"
+      "description": "Magic Dashboard — Fleet monitor & device control"
     },
     {
       "name": "assistant",
       "cmd": "python tools/assistant/main.py",
       "port": 8300,
       "auto": false,
-      "description": "LoRaLink AI Assistant"
+      "description": "Magic Assistant — Multi-domain AI advisor"
     },
     {
       "name": "ollama_proxy",
@@ -29,6 +29,20 @@
       "port": null,
       "auto": false,
       "description": "Hybrid Model Proxy (Ollama + OpenRouter)"
+    },
+    {
+      "name": "magic_lvc",
+      "cmd": "python daemon/src/lvc_service.py",
+      "port": null,
+      "auto": true,
+      "description": "Magic Cache LVC Service"
+    },
+    {
+      "name": "magic_transmitter",
+      "cmd": "python daemon/src/transmitter.py",
+      "port": null,
+      "auto": false,
+      "description": "Magic Cache Data Spoofer"
     }
   ],
   "community": [
