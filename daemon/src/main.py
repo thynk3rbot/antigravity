@@ -182,6 +182,18 @@ class MagicDaemon:
             """Return branding configuration for clients (webapp, etc)."""
             return self.branding
 
+        @self.app.get("/api/services/status")
+        async def get_services_status():
+            """Return status of all services including MagicCache."""
+            svc_status = svc_mgr.status_all()
+            return {
+                "services": svc_status,
+                "magiccache": {
+                    "enabled": "magic_lvc" in svc_status and svc_status["magic_lvc"].get("running", False),
+                    "port": 8200
+                }
+            }
+
         # ── Community API — peer daemon registry ─────────────────────────
         @self.app.get("/api/community")
         async def get_community():
