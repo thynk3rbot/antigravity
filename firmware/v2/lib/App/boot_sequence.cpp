@@ -39,6 +39,7 @@
 #include "plugin_manager.h"
 #include "message_handler.h"
 #include "mesh_coordinator.h"
+#include "msg_manager.h"
 #include "control_loop.h"
 
 #ifdef BENCH_MODE
@@ -340,6 +341,9 @@ void BootSequence::initApplication() {
     Serial.printf("  ✓ Scheduler initialized (%d task(s) loaded)\n",
                   ScheduleManager::getTaskCount());
   }
+
+  MsgManager::getInstance().init();
+  Serial.println("  ✓ MsgManager (LMX) initialized");
 }
 
 void BootSequence::createTasks() {

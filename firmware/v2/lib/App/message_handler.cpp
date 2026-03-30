@@ -2,6 +2,7 @@
 #include "mesh_coordinator.h"
 #include "command_manager.h"
 #include "hal_compat.h"
+#include "msg_manager.h"
 #include "../HAL/relay_hal.h"
 #include "../HAL/mcp_manager.h"
 #include "../Transport/message_router.h"
@@ -14,11 +15,17 @@
 extern uint8_t g_ourNodeID;
 
 void MessageHandler::handleReceived(TransportType transportType, const uint8_t* payload, size_t len) {
+    // Detect LMX packets by sync bytes before ControlPacket dispatch
+    if (len >= 2 && payload[0] == 0xAA && payload[1] == 0x4D) {
+        MsgManager::getInstance().handleLmxPacket(payload, len, transportType);
+        return;
+    }
+
     if (len < sizeof(ControlPacket)) {
         if (MeshCoordinator::instance().handleV1Packet(payload, len)) {
-            return; 
+            return;
         }
-        return; 
+        return;
     }
 
     const ControlPacket* pkt = reinterpret_cast<const ControlPacket*>(payload);
