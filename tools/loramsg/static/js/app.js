@@ -1,5 +1,6 @@
 /**
- * LMX Messenger PWA — WebSocket chat client
+ * Magic Messenger PWA — WebSocket chat client
+ * Phone → Daemon (:8400) → Heltec → mesh
  */
 
 const messagesEl = document.getElementById('messages');

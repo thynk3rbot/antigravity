@@ -1,0 +1,17 @@
+{
+  "name": "Magic Messenger",
+  "short_name": "Magic Msg",
+  "description": "Mesh messaging over LoRa/WiFi/BLE",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0d0d1a",
+  "theme_color": "#7c3aed",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/static/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    }
+  ]
+}
