@@ -1,5 +1,5 @@
 /**
- * app.js — LoRaLink Unified UI Engine
+ * app.js — Magic Unified UI Engine
  * Consolidates status, mesh, and control logic into a single-pane-of-glass app.
  */
 
@@ -16,9 +16,49 @@ let _map = null;
 let _mapMarker = null;
 let _mapInitialized = false;
 let _lastLat = 0, _lastLon = 0;
+let _brandingConfig = null;  // Daemon branding configuration
+
+// ── Branding ───────────────────────────────────────────────────────────────
+async function loadBrandingConfig() {
+    try {
+        const response = await fetch('/api/branding');
+        if (response.ok) {
+            _brandingConfig = await response.json();
+            applyBranding(_brandingConfig);
+        }
+    } catch (e) {
+        console.warn('[Branding] Failed to load config:', e);
+    }
+}
+
+function applyBranding(config) {
+    if (!config) return;
+
+    // Apply accent color to CSS variables if specified
+    if (config.accent_color) {
+        document.documentElement.style.setProperty('--accent', config.accent_color);
+        // Derive hover and dim variants (simple approach: adjust alpha)
+        // For more control, these could be in branding.json as well
+    }
+
+    // Update any branding-aware DOM elements
+    const brandName = config.name || 'Magic';
+    const brandTagline = config.tagline || '';
+
+    // Update brand display in sidebar if element exists
+    const brandEl = document.querySelector('.brand-name');
+    if (brandEl) brandEl.textContent = brandName;
+
+    const taglineEl = document.querySelector('.brand-tagline');
+    if (taglineEl && brandTagline) taglineEl.textContent = brandTagline;
+
+    // Log for debugging
+    console.log(`[Branding] Applied: ${brandName} — ${brandTagline}`);
+}
 
 // ── Initialization ──────────────────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+    await loadBrandingConfig();
     wsConnect();
     loadNodes();
     loadSettings();
@@ -1139,43 +1179,60 @@ async function opsRefresh() {
     await Promise.all([opsRefreshServices(), opsRefreshFleet(), opsRefreshAI(), opsRefreshCommunity()]);
 }
 
-async function opsRefreshServices() {
+function _renderOpsServices(d) {
     const el = document.getElementById('ops-services');
     const ct = document.getElementById('ops-svc-count');
     if (!el) return;
+    const svcs = Object.values(d || {});
+    const running = svcs.filter(s => s.running).length;
+    if (ct) ct.textContent = `${running}/${svcs.length} running`;
+    if (!svcs.length) { el.innerHTML = '<span class="text-dim text-xs">No services</span>'; return; }
+    el.innerHTML = svcs.map(s => {
+        const dot = s.running ? '🟢' : '⚪';
+        const up = s.uptime_s ? `<span class="text-dim">${s.uptime_s}s</span>` : '';
+        const port = s.port ? `<span class="text-dim">:${s.port}</span>` : '';
+        const btn = s.running
+            ? `<button class="btn sm secondary" style="font-size:10px;padding:1px 6px" onclick="svcAction('${s.name}','stop')">stop</button>`
+            : `<button class="btn sm" style="font-size:10px;padding:1px 6px" onclick="svcAction('${s.name}','start')">start</button>`;
+        return `<div class="flex gap-2 items-center mb-2 text-xs">${dot}<span class="flex-1 font-mono">${s.name}</span>${port}${up}${btn}</div>`;
+    }).join('');
+}
+
+async function opsRefreshServices() {
+    if (typeof Store !== 'undefined' && Store.state.services) {
+        _renderOpsServices(Store.state.services); return;
+    }
+    const el = document.getElementById('ops-services');
     try {
         const d = await (await fetch('http://localhost:8001/api/services')).json();
-        const svcs = Object.values(d);
-        const running = svcs.filter(s => s.running).length;
-        if (ct) ct.textContent = `${running}/${svcs.length} running`;
-        el.innerHTML = svcs.map(s => {
-            const dot = s.running ? '🟢' : '⚪';
-            const up = s.uptime_s ? `<span class="text-dim">${s.uptime_s}s</span>` : '';
-            const port = s.port ? `<span class="text-dim">:${s.port}</span>` : '';
-            const btn = s.running
-                ? `<button class="btn sm secondary" style="font-size:10px;padding:1px 6px" onclick="svcAction('${s.name}','stop')">stop</button>`
-                : `<button class="btn sm" style="font-size:10px;padding:1px 6px" onclick="svcAction('${s.name}','start')">start</button>`;
-            return `<div class="flex gap-2 items-center mb-2 text-xs">${dot}<span class="flex-1 font-mono">${s.name}</span>${port}${up}${btn}</div>`;
-        }).join('');
+        _renderOpsServices(d);
     } catch (_) { if (el) el.innerHTML = '<span class="text-dim text-xs">Daemon offline</span>'; }
 }
 
-async function opsRefreshFleet() {
+function _renderOpsFleet(d) {
     const el = document.getElementById('ops-fleet');
     const ct = document.getElementById('ops-fleet-count');
     if (!el) return;
+    const peers = (d && d.peers) || [];
+    const online = peers.filter(p => p.reachable).length;
+    if (ct) ct.textContent = `${online}/${peers.length} online`;
+    if (!peers.length) { el.innerHTML = '<span class="text-dim text-xs">No devices</span>'; return; }
+    el.innerHTML = peers.map(p => {
+        const dot = p.reachable ? '🟢' : '🔴';
+        const bat = p.battery_mv ? `${(p.battery_mv/1000).toFixed(1)}V` : '';
+        const rssi = p.rssi_dbm ? `${p.rssi_dbm}dBm` : '';
+        return `<div class="flex gap-2 items-center mb-2 text-xs">${dot}<span class="flex-1 font-mono">${p.node_id}</span><span class="text-dim">${bat} ${rssi}</span></div>`;
+    }).join('');
+}
+
+async function opsRefreshFleet() {
+    if (typeof Store !== 'undefined' && Store.state.topology) {
+        _renderOpsFleet(Store.state.topology); return;
+    }
+    const el = document.getElementById('ops-fleet');
     try {
         const d = await (await fetch('http://localhost:8001/api/mesh/topology')).json();
-        const peers = d.peers || [];
-        const online = peers.filter(p => p.reachable).length;
-        if (ct) ct.textContent = `${online}/${peers.length} online`;
-        if (!peers.length) { el.innerHTML = '<span class="text-dim text-xs">No devices</span>'; return; }
-        el.innerHTML = peers.map(p => {
-            const dot = p.reachable ? '🟢' : '🔴';
-            const bat = p.battery_mv ? `${(p.battery_mv/1000).toFixed(1)}V` : '';
-            const rssi = p.rssi_dbm ? `${p.rssi_dbm}dBm` : '';
-            return `<div class="flex gap-2 items-center mb-2 text-xs">${dot}<span class="flex-1 font-mono">${p.node_id}</span><span class="text-dim">${bat} ${rssi}</span></div>`;
-        }).join('');
+        _renderOpsFleet(d);
     } catch (_) { if (el) el.innerHTML = '<span class="text-dim text-xs">No fleet data</span>'; }
 }
 
@@ -1196,23 +1253,32 @@ async function opsRefreshAI() {
     } catch (_) { if (el) el.innerHTML = '<span class="text-dim text-xs">No AI data</span>'; }
 }
 
-async function opsRefreshCommunity() {
+function _renderOpsCommunity(d) {
     const el = document.getElementById('ops-community');
     const ct = document.getElementById('ops-community-count');
     if (!el) return;
+    const peers = (d && d.peers) || [];
+    if (ct) ct.textContent = `${d && d.online || 0}/${d && d.total || 0} online`;
+    if (!peers.length) {
+        el.innerHTML = '<span class="text-dim text-xs">No peers configured.<br>Add to daemon config.json → community[]</span>';
+        return;
+    }
+    el.innerHTML = peers.map(p => {
+        const dot = p.online ? '🟢' : '🔴';
+        const fleet = p.online ? `${p.peers_online}/${p.peers_total} devices` : (p.error || 'offline');
+        const loc = (p.location && p.location.label) ? `<span class="text-dim"> · ${p.location.label}</span>` : '';
+        return `<div class="mb-3 text-xs"><div class="flex gap-2 items-center">${dot}<span class="flex-1 font-bold">${p.name}</span><span class="text-dim">${fleet}</span></div><div class="text-dim ml-5">${p.description}${loc}</div></div>`;
+    }).join('');
+}
+
+async function opsRefreshCommunity() {
+    if (typeof Store !== 'undefined' && Store.state.community) {
+        _renderOpsCommunity(Store.state.community); return;
+    }
+    const el = document.getElementById('ops-community');
     try {
         const d = await (await fetch('/api/community')).json();
-        if (ct) ct.textContent = `${d.online}/${d.total} online`;
-        if (!d.peers || !d.peers.length) {
-            el.innerHTML = '<span class="text-dim text-xs">No peers configured.<br>Add to daemon config.json → community[]</span>';
-            return;
-        }
-        el.innerHTML = d.peers.map(p => {
-            const dot = p.online ? '🟢' : '🔴';
-            const fleet = p.online ? `${p.peers_online}/${p.peers_total} devices` : (p.error || 'offline');
-            const loc = (p.location && p.location.label) ? `<span class="text-dim"> · ${p.location.label}</span>` : '';
-            return `<div class="mb-3 text-xs"><div class="flex gap-2 items-center">${dot}<span class="flex-1 font-bold">${p.name}</span><span class="text-dim">${fleet}</span></div><div class="text-dim ml-5">${p.description}${loc}</div></div>`;
-        }).join('');
+        _renderOpsCommunity(d);
     } catch (_) { if (el) el.innerHTML = '<span class="text-dim text-xs">Community unavailable</span>'; }
 }
 
@@ -1243,16 +1309,33 @@ async function opsConfigSave() {
 
 // Auto-refresh when ops page is visible
 let _opsInterval = null;
-let _fmEventSource = null;
+let _opsStoreSubbed = false;
+
+function _opsStoreHandler(type, data) {
+    if (type === 'topology')  _renderOpsFleet(data);
+    if (type === 'services')  _renderOpsServices(data);
+    if (type === 'community') _renderOpsCommunity(data);
+}
+
 const _origSwitchPage = window.switchPage;
 window.switchPage = function(page) {
     if (_origSwitchPage) _origSwitchPage(page);
     if (page === 'ops') {
         opsRefresh();
         opsConfigLoad();
-        _opsInterval = _opsInterval || setInterval(opsRefresh, 15000);
+        // Subscribe to Store for live ops updates; fall back to polling
+        if (typeof Store !== 'undefined' && !_opsStoreSubbed) {
+            Store.on('*', _opsStoreHandler);
+            _opsStoreSubbed = true;
+        } else {
+            _opsInterval = _opsInterval || setInterval(opsRefresh, 15000);
+        }
     } else {
         clearInterval(_opsInterval); _opsInterval = null;
+        if (_opsStoreSubbed && typeof Store !== 'undefined') {
+            Store.off('*', _opsStoreHandler);
+            _opsStoreSubbed = false;
+        }
     }
     if (page === 'fleet-monitor') {
         fleetMonitorStart();
@@ -1318,35 +1401,45 @@ function _buildDeviceCard(p) {
     const state = p.reachable ? (stale ? 'stale' : 'online') : 'offline';
     const stateLabel = stale ? 'STALE' : (p.reachable ? 'ONLINE' : 'OFFLINE');
 
+    // Novice-friendly battery label: Good / Low / Critical
+    const batNovice = batPct !== null ? (batPct >= 60 ? 'Good' : batPct >= 25 ? 'Low' : 'Critical') : null;
+    // Novice-friendly signal label: Strong / Fair / Weak / None
+    const rssiNovice = rssi > -999 ? (rssi >= -70 ? 'Strong' : rssi >= -85 ? 'Fair' : 'Weak') : null;
+
     const batBar = batPct !== null
         ? `<div class="dc-row">
-               <span class="dc-lbl">BAT</span>
+               <span class="dc-lbl am">BAT</span>
+               <span class="dc-lbl nm">Battery</span>
                <div class="dc-bar-wrap"><div class="dc-bar-fill" style="width:${batPct}%;background:${_batColor(batPct)}"></div></div>
-               <span class="dc-val" style="color:${_batColor(batPct)}">${batPct}%</span>
+               <span class="dc-val am" style="color:${_batColor(batPct)}">${batPct}%</span>
+               <span class="dc-val nm" style="color:${_batColor(batPct)}">${_esc(batNovice)}</span>
            </div>` : '';
 
     const rssiRow = rssi > -999
         ? `<div class="dc-row">
-               <span class="dc-lbl">RF</span>
+               <span class="dc-lbl am">RF</span>
+               <span class="dc-lbl nm">Signal</span>
                <div class="dc-rssi-bars">${_rssiBarsFill(rssi)}</div>
-               <span class="dc-val" style="color:${_rssiColor(rssi)};margin-left:4px">${rssi}</span>
+               <span class="dc-val am" style="color:${_rssiColor(rssi)};margin-left:4px">${rssi}</span>
+               <span class="dc-val nm" style="color:${_rssiColor(rssi)};margin-left:4px">${_esc(rssiNovice)}</span>
            </div>` : '';
 
     const neighbors = (p.neighbors || []).length;
     const ageStr    = p.reachable ? _fmtUptime(p.uptime_ms) : _fmtAge(p.last_seen || 0);
 
-    // Build card as DOM element (avoids innerHTML for trusted content; _esc used for device-sourced strings)
+    // .dm = debug-mode extras (MAC tail, raw node_id)
     return `<div class="dc dc-${state}"
                  title="${_esc(p.node_id)} &#10;MAC: ${_esc(p.mac_address||'—')} &#10;Last seen: ${_fmtAge(p.last_seen||0)}">
         <div class="dc-head">
-            <span class="dc-name">${_esc(p.node_id)}</span>
+            <span class="dc-name am">${_esc(p.node_id)}</span>
+            <span class="dc-name nm">${_esc(p.node_id.replace(/^NODE_/i,'').replace(/_/g,' '))}</span>
             <span class="dc-state">${stateLabel}</span>
         </div>
         ${batBar}${rssiRow}
         <div class="dc-foot">
             <span>${neighbors ? `&#8661; ${neighbors}` : '—'}</span>
             <span>${_esc(ageStr)}</span>
-            <span class="dc-mac">${_esc(_macShort(p.mac_address))}</span>
+            <span class="dc-mac dm">${_esc(_macShort(p.mac_address))}</span>
         </div>
     </div>`;
 }
@@ -1379,6 +1472,11 @@ function _renderFleet(peers) {
 }
 
 async function fleetMonitorRefresh() {
+    // Use Store cache first (fastest); fall back to direct fetch
+    if (Store && Store.state.topology) {
+        _renderFleet(Store.state.topology.peers || []);
+        return;
+    }
     try {
         const d = await (await fetch('http://localhost:8001/api/mesh/topology')).json();
         _renderFleet(d.peers || []);
@@ -1388,26 +1486,24 @@ async function fleetMonitorRefresh() {
     }
 }
 
+// Store subscriber for fleet monitor — receives topology data when Store emits
+function _fmTopologyHandler(data) {
+    _renderFleet((data && data.peers) || []);
+}
+
 function fleetMonitorStart() {
-    // Prefer SSE push; fall back to polling if daemon doesn't support it
-    if (_fmEventSource) return;
-    const es = new EventSource('http://localhost:8001/api/mesh/events');
-    es.onmessage = e => {
-        try { const d = JSON.parse(e.data); _renderFleet(d.peers || []); } catch (_) {}
-    };
-    es.onerror = () => {
-        // SSE failed — daemon may not support it yet; close and fall back to polling
-        es.close();
-        _fmEventSource = null;
-        if (document.getElementById('fm-grid')) {
-            fleetMonitorRefresh();
-            _fmEventSource = { _poll: setInterval(fleetMonitorRefresh, 8000), close() { clearInterval(this._poll); } };
-        }
-    };
-    _fmEventSource = es;
-    fleetMonitorRefresh(); // immediate render while SSE connects
+    // Subscribe to unified Store — Store handles SSE + polling fallback
+    if (typeof Store !== 'undefined') {
+        Store.on('topology', _fmTopologyHandler);
+        // Immediate render with cached data if we have it
+        if (!Store.state.topology) fleetMonitorRefresh();
+    } else {
+        fleetMonitorRefresh();
+    }
 }
 
 function fleetMonitorStop() {
-    if (_fmEventSource) { _fmEventSource.close(); _fmEventSource = null; }
+    if (typeof Store !== 'undefined') {
+        Store.off('topology', _fmTopologyHandler);
+    }
 }
