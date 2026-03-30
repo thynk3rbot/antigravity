@@ -9,6 +9,8 @@ This registry is driven by live network discovery. Identification is anchored to
 | **97D4** | loralink-Peer-V4 | 172.16.0.43 | V4 | 0.0.12 | [x] Online |
 | **7E34** | loralink-Peer5V2 | 172.16.0.30 | V4 | 0.0.12 | [x] Online |
 | **FCC4** | loralink-Peer2V3 | 172.16.0.26 | V3 | Unknown | [ ] Offline |
+| **TBD** | loralink-OldSlaveV3 | Pending | V3 | Unknown | [ ] Offline |
+| **TBD** | loralink-LilyGo | Pending | LilyGo | Unknown | [ ] DO NOT FLASH |
 
 ---
 

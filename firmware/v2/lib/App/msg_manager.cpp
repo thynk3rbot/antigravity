@@ -18,17 +18,17 @@ void MsgManager::init() {
     Serial.println("[MSG] MsgManager initialized");
 
     // Register MSG command: "MSG <dest_hex> <text>"
-    CommandManager::getInstance().registerCommand("MSG",
-        [](const String& args, TransportType source) {
-            int sp = args.indexOf(' ');
-            if (sp < 0) {
-                Serial.println("[MSG] Usage: MSG <dest_hex> <text>");
-                return;
-            }
-            uint8_t dest = (uint8_t)strtol(args.substring(0, sp).c_str(), nullptr, 16);
-            String text = args.substring(sp + 1);
-            MsgManager::getInstance().sendText(dest, text);
-        });
+    // CommandManager::getInstance().registerCommand("MSG",
+    //     [](const String& args, TransportType source) {
+    //         int sp = args.indexOf(' ');
+    //         if (sp < 0) {
+    //             Serial.println("[MSG] Usage: MSG <dest_hex> <text>");
+    //             return;
+    //         }
+    //         uint8_t dest = (uint8_t)strtol(args.substring(0, sp).c_str(), nullptr, 16);
+    //         String text = args.substring(sp + 1);
+    //         MsgManager::getInstance().sendText(dest, text);
+    //     });
 }
 
 // ── Dedup ─────────────────────────────────────────────────────────────
