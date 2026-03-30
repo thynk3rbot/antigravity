@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LoRaLink Cockpit</title>
+    <title>Magic — Autonomous Mesh</title>
     <link rel="stylesheet" href="/static/css/shared.css">
     <link rel="stylesheet" href="/static/css/plugins.css">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
@@ -201,7 +201,7 @@
         <!-- Sidebar -->
         <aside class="sidebar">
             <div class="sidebar-brand">
-                📡 LoRaLink
+                🐙 Magic
             </div>
             <nav class="sidebar-nav">
                 <a class="nav-item active" onclick="switchPage('dashboard')">📦 Dashboard</a>
@@ -236,7 +236,12 @@
                     <span id="fw-ver" class="text-xs text-dim" style="margin-left: 10px;"></span>
                 </div>
                 <div class="flex-row">
-                    <div class="badge" id="conn-status" style="padding: 4px 10px; background: rgba(0,212,255,0.1); color: var(--accent);">Searching...</div>
+                    <div class="mode-switcher">
+                        <button class="mode-pill" data-mode="novice" title="Plain English — hide technical detail">Novice</button>
+                        <button class="mode-pill" data-mode="admin"  title="Default — device IDs, dBm, raw values">Admin</button>
+                        <button class="mode-pill" data-mode="debug"  title="Show everything — raw data, heap, packet stats">Debug</button>
+                    </div>
+                    <div class="badge" id="conn-status" style="padding: 4px 10px; background: rgba(0,212,255,0.1); color: var(--accent); margin-left:10px;">Searching...</div>
                     <span id="daemon-status" style="font-size:10px; font-weight:700; letter-spacing:0.5px; color:var(--muted); margin-left:12px;">⬡ DAEMON  —</span>
                     <button class="btn sm secondary" onclick="openTransportModal()" style="margin-left: 10px;">⚙ Strategy</button>
                 </div>
@@ -336,7 +341,7 @@
                                 <div class="fhs-val" id="fm-offline" style="color:var(--err)">—</div>
                                 <div class="fhs-lbl">Offline</div>
                             </div>
-                            <div class="fleet-hdr-stat">
+                            <div class="fleet-hdr-stat am">
                                 <div class="fhs-val" id="fm-avg-rssi" style="color:var(--accent)">—</div>
                                 <div class="fhs-lbl">Avg RSSI</div>
                             </div>
@@ -377,7 +382,7 @@
                 <div class="flex-between">
                     <div>
                         <h2 class="text-accent uppercase">🧪 Message Transformation Test Harness</h2>
-                        <p class="text-dim text-sm">Trace the end-to-end transformation of a command through the LoRaLink stack.</p>
+                        <p class="text-dim text-sm">Trace the end-to-end transformation of a command through the Magic mesh.</p>
                     </div>
                 </div>
 
@@ -900,6 +905,7 @@
     }
     </script>
 
+    <script src="/static/js/store.js"></script>
     <script src="/static/js/test_harness.js"></script>
     <script src="/static/js/app.js"></script>
 </body>
