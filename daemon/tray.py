@@ -32,10 +32,10 @@ try:
 except ImportError:
     httpx = None
 
-from main import LoRaLinkDaemon
+from main import MagicDaemon
 
 # ── Global state ──────────────────────────────────────────────────────────────
-_daemon: LoRaLinkDaemon = None
+_daemon: MagicDaemon = None
 _loop: asyncio.AbstractEventLoop = None
 _tray_icon = None
 _status = "starting"  # starting | healthy | degraded | stopped
@@ -140,7 +140,7 @@ def _daemon_thread():
 
     port = _args.port if _args else 8001
     broker = _args.mqtt_broker if _args else "localhost:1883"
-    _daemon = LoRaLinkDaemon(port=port, mqtt_broker=broker)
+    _daemon = MagicDaemon(port=port, mqtt_broker=broker)
 
     try:
         _loop.run_until_complete(_daemon.initialize())

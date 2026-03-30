@@ -20,7 +20,6 @@ import logging
 import argparse
 import signal
 from pathlib import Path
-from typing import Optional
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -31,12 +30,16 @@ try:
     from .mesh_api import init_mesh_api
     from .service_manager import ServiceManager
     from .community import CommunityManager
+    from .tray_manager import TrayManager
+    from .infra_manager import InfraManager
     from . import mqtt_client
 except ImportError:
     from mesh_router import MeshTopology
     from mesh_api import init_mesh_api
     from service_manager import ServiceManager
     from community import CommunityManager
+    from tray_manager import TrayManager
+    from infra_manager import InfraManager
     import mqtt_client
 
 # Configure logging
@@ -47,9 +50,9 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-class LoRaLinkDaemon:
+class MagicDaemon:
     """
-    LoRaLink Daemon — the octopus.
+    Magic — the octopus.
 
     Central hub for all system services:
     - Manages service lifecycle (webapp, assistant, ollama_proxy, + any in config.json)
@@ -66,13 +69,27 @@ class LoRaLinkDaemon:
         self.port = port
         self.mqtt_broker = mqtt_broker
 
+        # Path Standardization (Root: Antigravity)
+        self.REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+        self._config_path = self.REPO_ROOT / "daemon" / "config.json"
+        self._branding_path = self.REPO_ROOT / "daemon" / "branding.json"
+
+        # Load branding configuration
+        try:
+            with open(self._branding_path, 'r') as f:
+                self.branding = json.load(f)
+        except Exception as e:
+            logger.warning(f"Failed to load branding.json: {e}. Using defaults.")
+            self.branding = {"name": "Magic", "tagline": "The Octopus Network", "accent_color": "#7c3aed"}
+
         # Core components
-        self._config_path = Path(__file__).parent.parent / "config.json"
         self.topology = MeshTopology(own_node_id="daemon-0")
         self.mqtt = None
         self.app = None
         self.services = ServiceManager()
         self.community = CommunityManager(self._config_path)
+        self.infra = InfraManager(self.REPO_ROOT)
+        self.tray = TrayManager(self)
 
         # Background tasks
         self.running = False
@@ -80,11 +97,11 @@ class LoRaLinkDaemon:
 
     async def initialize(self) -> None:
         """Initialize daemon components."""
-        logger.info("[Daemon] Initializing LoRaLink Daemon (Pure Mesh Gateway)...")
+        logger.info("[Magic] Initializing Magic (Pure Mesh Gateway)...")
 
         # Setup FastAPI app
         self.app = FastAPI(
-            title="LoRaLink Daemon",
+            title="Magic",
             description="The octopus — central hub for fleet, firmware, and services",
             version="0.1.0",
         )
@@ -129,6 +146,16 @@ class LoRaLinkDaemon:
 
         self.app.include_router(svc_router)
 
+        # ── Infrastructure API ───────────────────────────────────────────
+        @self.app.get("/api/infra")
+        async def get_infra_status():
+            return self.infra.status()
+
+        @self.app.post("/api/infra/restart")
+        async def restart_infra():
+            await self.infra.restart()
+            return {"ok": True}
+
         # ── Config API — read/write daemon/config.json live ──────────────
         from fastapi import Request as FRequest
         cfg_path = self._config_path
@@ -148,6 +175,12 @@ class LoRaLinkDaemon:
             svc_mgr._load_services()
             community_mgr.reload()
             return {"ok": True, "message": "Config saved. Services and community reloaded."}
+
+        # ── Branding API — client configuration ────────────────────────────
+        @self.app.get("/api/branding")
+        async def get_branding():
+            """Return branding configuration for clients (webapp, etc)."""
+            return self.branding
 
         # ── Community API — peer daemon registry ─────────────────────────
         @self.app.get("/api/community")
@@ -175,8 +208,14 @@ class LoRaLinkDaemon:
                 "community_online": community_mgr.online_count(),
             }
 
+        # 🏗️ Orchestrate Infrastructure (Docker)
+        logger.info("[Magic] Pulse: Checking Infrastructure...")
+        infra_ready = await self.infra.ensure_up()
+        if not infra_ready:
+            logger.warning("[Magic] Pulse: Infrastructure is starting slowly. Continuing to boot...")
+
         # Initialize MQTT client
-        logger.info(f"[Daemon] Connecting to MQTT broker at {self.mqtt_broker}...")
+        logger.info("[Magic] Pulse: Connecting to Magic Bus...")
         self.mqtt = mqtt_client.MQTTClientManager(
             broker=self.mqtt_broker,
             on_device_status=self._handle_device_status,
@@ -195,10 +234,15 @@ class LoRaLinkDaemon:
         # Start community polling (peer daemons)
         self.community.start()
 
-        logger.info("[Daemon] Octopus initialized.")
-        logger.info("  - Topology monitoring: ENABLED")
-        logger.info("  - Command gateway: ENABLED")
-        logger.info("  - Service manager: ENABLED")
+        # Start System Tray
+        self.tray.start()
+
+        logger.info("[Magic] ========================================")
+        logger.info("[Magic]    ALL SYSTEMS NOMINAL (🐙 ACTIVE)      ")
+        logger.info("[Magic] ========================================")
+        logger.info("[Magic] Dashboard: http://localhost:8000")
+        logger.info("[Magic] Client:    .\\magic_client.bat")
+        logger.info("[Magic] ========================================")
         svc_status = self.services.status_all()
         for name, s in svc_status.items():
             icon = "✓" if s["running"] else "○"
@@ -246,6 +290,10 @@ class LoRaLinkDaemon:
         # Disconnect MQTT
         if self.mqtt:
             await self.mqtt.disconnect()
+
+        # Stop Tray
+        if self.tray:
+            self.tray.stop()
 
         logger.info("[Daemon] Shutdown complete!")
 
@@ -319,7 +367,7 @@ async def main():
     logging.getLogger().setLevel(getattr(logging, args.log_level))
 
     # Create and start daemon
-    daemon = LoRaLinkDaemon(port=args.port, mqtt_broker=args.mqtt_broker)
+    daemon = MagicDaemon(port=args.port, mqtt_broker=args.mqtt_broker)
 
     # Handle signals
     def signal_handler(sig, frame):
