@@ -132,6 +132,9 @@ public:
     // Tick — call from periodic task (~50ms)
     void tick();
 
+    // Broadcast own capabilities to mesh neighbors (boot + every 60s)
+    void announceNode();
+
     // Callback fired when a complete message arrives (after reassembly if fragmented)
     typedef std::function<void(uint8_t src, const String& text, int hopsUsed)> MsgCallback;
     void setOnMessage(MsgCallback cb) { _onMessage = cb; }
@@ -167,15 +170,20 @@ private:
                          size_t payloadLen, TransportType source);
     void _checkReassemblyTimeouts();
 
+    // Neighbor capability table (populated by NODE_ANNOUNCE packets)
+    void _updateNeighbor(uint8_t src, uint8_t caps, uint32_t wifiIP, const char* name);
+
     static constexpr int MAX_PENDING = 5;
     LmxPendingAck        _pending[MAX_PENDING];
     LmxDedupEntry        _dedup[LMX_DEDUP_SIZE];
     LmxReassemblySlot    _reassembly[LMX_REASSEMBLY_SLOTS];
+    LmxNeighbor          _neighbors[LMX_NEIGHBOR_SLOTS];
     int                  _dedupHead = 0;
 
     uint32_t _nextPacketId = 1;
     uint32_t _txCount = 0;
     uint32_t _rxCount = 0;
+    unsigned long _lastAnnounceMs = 0;
 
     MsgCallback _onMessage = nullptr;
 };

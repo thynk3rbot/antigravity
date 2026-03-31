@@ -5,6 +5,9 @@
 #include "../Transport/wifi_transport.h"
 #include <Arduino.h>
 #include <esp_random.h>
+#ifndef UNIT_TEST
+#include <WiFi.h>
+#endif
 
 extern uint8_t g_ourNodeID;
 
@@ -12,12 +15,14 @@ MsgManager::MsgManager() {
     memset(_dedup,       0, sizeof(_dedup));
     memset(_pending,     0, sizeof(_pending));
     memset(_reassembly,  0, sizeof(_reassembly));
+    memset(_neighbors,   0, sizeof(_neighbors));
 }
 
 void MsgManager::init() {
     _nextPacketId = (uint32_t)(esp_random() & 0xFFFF);
     Serial.printf("[MSG] MsgManager ready — node 0x%02X\n", g_ourNodeID);
     // MSG command handled by CommandManager::_handleMsg()
+    announceNode();
 }
 
 // ── Dedup ─────────────────────────────────────────────────────────────
@@ -37,14 +42,24 @@ void MsgManager::_markSeen(uint8_t src, uint32_t packetId) {
 }
 
 // ── Transport Selection ───────────────────────────────────────────────
-// Priority: ESP-NOW (if peer MAC known) > LoRa (always available)
-// WiFi direct and BLE require neighbor table — stub for now, returns LoRa.
-// Extend: query MeshCoordinator neighbor table for peer capabilities.
+// Priority (per protocol.json): WiFi HTTP > ESP-NOW > BLE > LoRa
+// Checks neighbor capability table from NODE_ANNOUNCE first.
+// ESP-NOW is preferred for nearby peers; LoRa is always available fallback.
 
 TransportType MsgManager::_selectTransport(uint8_t dest) {
-    (void)dest;
-    // TODO: check neighbor capability table (NODE_ANNOUNCE bitmask)
-    // For now: prefer ESP-NOW if available, fall back to LoRa
+    if (dest != LMX_BROADCAST) {
+        unsigned long now = millis();
+        for (int i = 0; i < LMX_NEIGHBOR_SLOTS; i++) {
+            if (!_neighbors[i].active || _neighbors[i].src != dest) continue;
+            if ((now - _neighbors[i].lastSeenMs) > LMX_NEIGHBOR_TTL_MS) break;
+            if ((_neighbors[i].caps & LMX_CAP_ESPNOW) &&
+                ESPNowTransport::getInstance().isReady()) {
+                return TransportType::ESPNOW;
+            }
+            break;
+        }
+    }
+    // Broadcast or no neighbor entry: try ESP-NOW, fall back to LoRa
     if (ESPNowTransport::getInstance().isReady()) {
         return TransportType::ESPNOW;
     }
@@ -280,9 +295,18 @@ void MsgManager::handleLmxPacket(const uint8_t* data, size_t len, TransportType 
                 }
                 break;
             }
-            case LmxMsgType::NODE_ANNOUNCE:
-                // TODO: update neighbor capability table
+            case LmxMsgType::NODE_ANNOUNCE: {
+                // Payload: [caps:1][wifiIP:4][name:8]
+                if (payloadLen >= 5) {
+                    uint8_t  caps   = payload[0];
+                    uint32_t wifiIP = 0;
+                    memcpy(&wifiIP, payload + 1, 4);
+                    char name[9] = {};
+                    if (payloadLen >= 13) memcpy(name, payload + 5, 8);
+                    _updateNeighbor(hdr->src, caps, wifiIP, name);
+                }
                 break;
+            }
             default:
                 break;
         }
@@ -324,7 +348,66 @@ void MsgManager::_checkRetries() {
     }
 }
 
+// ── Neighbor Table ────────────────────────────────────────────────────
+
+void MsgManager::_updateNeighbor(uint8_t src, uint8_t caps, uint32_t wifiIP, const char* name) {
+    unsigned long now = millis();
+    for (int i = 0; i < LMX_NEIGHBOR_SLOTS; i++) {
+        if (_neighbors[i].active && _neighbors[i].src == src) {
+            _neighbors[i].caps       = caps;
+            _neighbors[i].wifiIP     = wifiIP;
+            _neighbors[i].lastSeenMs = now;
+            if (name && name[0]) strncpy(_neighbors[i].name, name, 8);
+            Serial.printf("[MSG] Neighbor updated: 0x%02X caps=0x%02X\n", src, caps);
+            return;
+        }
+    }
+    for (int i = 0; i < LMX_NEIGHBOR_SLOTS; i++) {
+        if (!_neighbors[i].active) {
+            _neighbors[i].active     = true;
+            _neighbors[i].src        = src;
+            _neighbors[i].caps       = caps;
+            _neighbors[i].wifiIP     = wifiIP;
+            _neighbors[i].lastSeenMs = now;
+            memset(_neighbors[i].name, 0, 9);
+            if (name && name[0]) strncpy(_neighbors[i].name, name, 8);
+            Serial.printf("[MSG] Neighbor added: 0x%02X caps=0x%02X\n", src, caps);
+            return;
+        }
+    }
+    Serial.println("[MSG] Neighbor table full");
+}
+
+void MsgManager::announceNode() {
+    uint8_t caps = LMX_CAP_LORA;
+    if (ESPNowTransport::getInstance().isReady()) caps |= LMX_CAP_ESPNOW;
+#ifndef UNIT_TEST
+    uint32_t wifiIP = 0;
+    if (WiFi.status() == WL_CONNECTED) {
+        caps |= LMX_CAP_WIFI;
+        wifiIP = (uint32_t)WiFi.localIP();
+    }
+#else
+    uint32_t wifiIP = 0;
+#endif
+    uint8_t payload[13] = {};
+    payload[0] = caps;
+    memcpy(payload + 1, &wifiIP, 4);
+    String nodeName = NVSManager::getNodeID("Node");
+    strncpy((char*)(payload + 5), nodeName.c_str(), 8);
+    _sendLmxPacket(LMX_BROADCAST, LmxMsgType::NODE_ANNOUNCE, false,
+                   payload, sizeof(payload), TransportType::LORA);
+    _lastAnnounceMs = millis();
+    Serial.printf("[MSG] NODE_ANNOUNCE caps=0x%02X\n", caps);
+}
+
+// ── Tick ──────────────────────────────────────────────────────────────
+
 void MsgManager::tick() {
     _checkRetries();
     _checkReassemblyTimeouts();
+    unsigned long now = millis();
+    if ((now - _lastAnnounceMs) >= 60000UL) {
+        announceNode();
+    }
 }
