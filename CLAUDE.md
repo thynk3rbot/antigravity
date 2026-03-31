@@ -153,18 +153,31 @@ python tools/multi-agent-framework/ollama_bridge.py search-replace "task descrip
 **What to offload to Ollama:** C++ structs, JSON boilerplate, test stubs, switch/case handlers,
 CSS/HTML templates, SQLite CRUD, FastAPI route stubs, search/replace across files.
 
-## OTA Firmware Delivery
+## OTA Firmware Delivery [MANDATORY WORKFLOW]
 
-Webapp at `http://localhost:8000` → **OTA Firmware Flash** panel (right sidebar).
+**ALWAYS use the device registry to flash. Never hardcode IPs. Never guess IPs.**
 
-1. Select target: V3 or V4
-2. Check devices to flash (auto-populated from fleet status)
-3. Click **Flash** — version increments automatically, job tracked by ID
-4. Poll `/api/ota/status/{job_id}` for progress — panel shows live output
-5. Confirm: `STATUS` on device returns new version number
+The registry exists so devices are identified by name, not address. If a device is
+not in the registry, ADD IT — do not work around it with a raw IP.
 
-**Backend:** `POST /api/ota/flash` `{env, ip}` → `{ok, job_id}`
-**Status:** `GET /api/ota/status/{job_id}` → `{status, version, progress, error}`
+**To flash a device:**
+1. Look up device in registry: `GET /api/devices` — find by name or hardware_class
+2. If missing: `POST /api/devices` to register it (device_id, hardware_class, ip_address)
+3. Flash by device_id: `POST /api/ota/flash` `{"device_id": "Magic-XXXXXX"}`
+4. Monitor: `GET /api/ota/status/{job_id}` — poll until done
+5. Confirm: device STATUS returns new version number
+
+**To flash all V4s at once:** `POST /api/ota/flash/by-class` `{"hardware_class": "V4"}`
+
+**Registry API:**
+- `GET  /api/devices`                    — list all devices
+- `POST /api/devices`                    — register device
+- `GET  /api/devices/{id}`               — get single device
+- `POST /api/ota/flash`                  — flash single device by device_id
+- `POST /api/ota/flash/by-class`         — flash all online devices of a class
+
+**Never do this:** `pio run -t upload -e heltec_v4_ota_29` (hardcoded IP, bypasses registry)
+**Always do this:** flash via daemon API using device_id from registry
 
 ## Shortcuts & Workflows
 
