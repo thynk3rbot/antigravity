@@ -1,4 +1,4 @@
-# LoRaLink Fleet Deploy Script
+# Magic Fleet Deploy Script
 # Build once, push to any device by IP.
 # Usage: .\tools\fleet_deploy.ps1 -IP 172.16.0.43
 # Or:    .\tools\fleet_deploy.ps1 -All   (deploys to all registry nodes)

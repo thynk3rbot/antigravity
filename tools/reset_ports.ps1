@@ -1,4 +1,4 @@
-# LoRaLink Port Reset Utility
+# Magic Port Reset Utility
 Write-Host "--- Releasing COM Port Locks ---" -ForegroundColor Cyan
 
 # Terminate WebApp backend

@@ -1,5 +1,5 @@
-# LoRaLink Fleet Deployment Script
-Write-Host "--- Starting LoRaLink Fleet Deployment ---" -ForegroundColor Cyan
+# Magic Fleet Deployment Script
+Write-Host "--- Starting Magic Fleet Deployment ---" -ForegroundColor Cyan
 
 # Gracefully terminate the WebApp backend to release all USB COM ports
 Write-Host "Releasing COM Ports..." -ForegroundColor DarkGray
