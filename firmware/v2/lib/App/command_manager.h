@@ -56,6 +56,7 @@ private:
     static String _handleGetConfig();
     static String _handleSetName(const String& args);
     static String _handleSetIP(const String& args);
+    static String _handleSetBroker(const String& args);
     static String _handleSched(const String& args);
     static String _handleFactoryReset();
     static String _handleAsk(const String& args);

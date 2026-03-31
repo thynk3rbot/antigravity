@@ -11,24 +11,51 @@
   <main class="doc-main">
     <div class="breadcrumb"><a href="index.html">Home</a><span class="sep">›</span>System Operations</div>
     <h1>⚙️ System Operations</h1>
-    <p>Management of the Magic PC ecosystem, including service orchestration, Docker integration, and automated startup.</p>
+    <p>Managing the Magic PC platform — service orchestration, supervised startup, and crash recovery.</p>
 
-    <h2>Ecosystem Launch Control</h2>
-    <p>Magic consists of several interconnected services: the MQTT Broker, Fleet Administrator, Corporate Website, and Documentation Server. These can be managed individually or as a unified stack.</p>
+    <h2>Service Architecture</h2>
+    <p>The Magic platform runs five coordinated services on a single Windows host. No containers or cloud dependencies are required.</p>
+    <table>
+      <thead><tr><th>Service</th><th>Port</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><strong>MQTT Broker</strong></td><td><code>1883</code></td><td>Mosquitto — local message bus for device telemetry</td></tr>
+        <tr><td><strong>Magic Daemon</strong></td><td><code>8001</code></td><td>FastAPI — REST API, fleet management, MQTT client</td></tr>
+        <tr><td><strong>Fleet Dashboard</strong></td><td><code>8000</code></td><td>Web UI — device monitoring, OTA firmware flash</td></tr>
+        <tr><td><strong>Magic Messenger</strong></td><td><code>8400</code></td><td>PWA mesh chat — WebSocket bridge to LoRa network</td></tr>
+        <tr><td><strong>AI Assistant</strong></td><td><code>8300</code></td><td>Local AI with mesh context and device awareness</td></tr>
+      </tbody>
+    </table>
 
-    <h3>The Master Launch Script</h3>
-    <p>To start the entire Magic ecosystem with a single click, use the root-level batch file:</p>
+    <h2>One-Click Launch</h2>
+    <p>To start the entire Magic stack with a single click, use the root-level batch file:</p>
     <pre><code>Start_Magic.bat</code></pre>
-    <p>This script performs the following automated sequence:</p>
+    <p>This performs the following sequence:</p>
     <ol>
-      <li><strong>Docker Check</strong>: Detects if Docker Desktop is running.</li>
-      <li><strong>Auto-Start Docker</strong>: Launches Docker Desktop if it is offline.</li>
-      <li><strong>Health Monitoring</strong>: Waits for the Docker engine to be fully responsive (heartbeat check).</li>
-      <li><strong>Service Orchestration</strong>: Launches all sub-services in separate windows.</li>
+      <li>Starts Mosquitto MQTT broker (port 1883)</li>
+      <li>Launches Magic Daemon with service manager (ports 8001/8000)</li>
+      <li>Starts Magic Messenger bridge (port 8400)</li>
+      <li>Opens Fleet Dashboard in the default browser</li>
     </ol>
+    <p>Individual service launchers are available in <code>tools/</code> if you need to start them separately.</p>
+
+    <h2>Background Mode (Supervised)</h2>
+    <p>For headless deployments where services must restart automatically after a crash:</p>
+    <pre><code>python tools/start_bg_services.py</code></pre>
+    <p>This runs a <strong>supervisor process</strong> that monitors each service in a background thread. If any service exits unexpectedly, it is restarted after a 5-second cooldown. All output is written to the <code>logs/</code> directory:</p>
+    <table>
+      <thead><tr><th>Log File</th><th>Service</th></tr></thead>
+      <tbody>
+        <tr><td><code>logs/daemon.log</code></td><td>Magic Daemon</td></tr>
+        <tr><td><code>logs/webapp.log</code></td><td>Fleet Dashboard</td></tr>
+        <tr><td><code>logs/loramsg.log</code></td><td>Magic Messenger</td></tr>
+        <tr><td><code>logs/assistant.log</code></td><td>AI Assistant</td></tr>
+      </tbody>
+    </table>
+    <p>Stop the supervisor (and all managed services):</p>
+    <pre><code>python tools/start_bg_services.py stop</code></pre>
 
     <h2>Automated Startup (Reboot Survival)</h2>
-    <p>For production deployments where the PC must resume operations after a power cycle or reboot, you can register Magic as a Windows Startup Task.</p>
+    <p>To register Magic as a Windows login-time startup task:</p>
     <div class="alert alert-warning">
       <div class="alert-title">⚠️ Admin Rights Required</div>
       <p>Registering a startup task requires Administrator privileges.</p>
@@ -36,42 +63,41 @@
     <ol class="steps">
       <li>Navigate to the <code>tools/</code> directory.</li>
       <li>Right-click <strong><code>Register_Startup_Task.bat</code></strong> and select "Run as Administrator".</li>
-      <li>Magic is now registered in the Windows Task Scheduler to launch automatically upon user login.</li>
+      <li>Magic is now registered in Windows Task Scheduler to launch on login.</li>
     </ol>
 
-    <h2>Fault Tolerance & Recovery</h2>
-    <p>All Magic services include built-in crash recovery loops. If a Python server or background process fails unexpectedly, the batch controller will automatically attempt to reinstantiate the process after a 5-second cooldown.</p>
-    <pre><code>[ERROR] Server crashed. Restarting in 5s...</code></pre>
-
-    <h2>Advanced Connectivity & Failover</h2>
-    <p>Magic v1.6.0 introduces a dual-layer protocol failover mechanism to ensure mission-critical commands reach their destination even in challenging RF environments.</p>
-
-    <h3>Protocol Failover Algorithm</h3>
-    <p>When a high-priority command is queued (e.g., via the <code>FPING</code> command or the <code>FAILOVER_PING</code> task type), the system follows this logic:</p>
+    <h2>Protocol Failover (LMX Transport Selection)</h2>
+    <p>The LMX mesh protocol selects the best available transport for each outbound message using a three-tier fallback ladder:</p>
     <ol>
-      <li><strong>Binary Phase</strong>: Attempt delivery using the optimized Binary Protocol (40% range boost). Retry up to 3 times if no ACK is received.</li>
-      <li><strong>Failover Phase</strong>: If binary delivery fails after all retries, the system automatically falls back to the <strong>Legacy LoRa Text (Boosted)</strong> protocol.</li>
-      <li><strong>Legacy Attempt</strong>: A standard text "PING" is sent using the slower but more resilient legacy framing.</li>
-      <li><strong>Alerting</strong>: If both protocols fail, a "Delivery Failed" alert is logged to the fleet dashboard.</li>
+      <li><strong>WiFi HTTP</strong> — used if the destination node has an active IP (from its NODE_ANNOUNCE capability advertisement).</li>
+      <li><strong>ESP-NOW</strong> — used if the destination is a known neighbor with ESP-NOW capability in the neighbor table (3-minute TTL).</li>
+      <li><strong>LoRa</strong> — always-available fallback for any reachable node in the mesh.</li>
     </ol>
+    <p>Nodes broadcast their capabilities (WiFi, ESP-NOW, BLE, LoRa) via <code>NODE_ANNOUNCE</code> packets every 60 seconds. The daemon aggregates these into the fleet device registry.</p>
 
-    <h2>Docker Integration</h2>
-    <p>The MQTT Broker (EMQX) and advanced networking tunnels run as containerized services for maximum stability and easy scaling.</p>
+    <h2>MQTT Topic Contract</h2>
+    <p>All device-to-daemon communication follows a fixed topic structure:</p>
+    <table>
+      <thead><tr><th>Topic</th><th>Direction</th><th>Payload</th></tr></thead>
+      <tbody>
+        <tr><td><code>magic/{node_id}/telemetry</code></td><td>Device → Daemon</td><td>JSON: battery, RSSI, uptime, temp</td></tr>
+        <tr><td><code>magic/{node_id}/status</code></td><td>Device → Daemon</td><td>JSON: connectivity, capabilities</td></tr>
+        <tr><td><code>magic/{node_id}/cmd</code></td><td>Daemon → Device</td><td>Plain text command (e.g. <code>RESTART</code>, <code>STATUS</code>)</td></tr>
+      </tbody>
+    </table>
+
+    <h2>Requirements</h2>
     <ul>
-      <li><strong>Standard Mode</strong>: <code>mqttdocker.yml</code> handles the core broker.</li>
-      <li><strong>Production Mode</strong>: <code>docker-compose.production.yml</code> provides a fully containerized stack for VPS or server deployments.</li>
+      <li>Python 3.10+ in PATH — <code>pip install -r daemon/requirements.txt</code></li>
+      <li>Mosquitto installed — <code>winget install mosquitto</code></li>
+      <li>PlatformIO for firmware builds — <code>pio run -t upload -e heltec_v4</code></li>
     </ul>
-
-    <h2>Packaging for Release</h2>
-    <p>To create a portable distribution of your current Magic configuration (including your custom UI themes and scripts), run:</p>
-    <pre><code>tools\Package_Release.bat</code></pre>
-    <p>This generates a <code>Release.zip</code> at the root of the project, pre-configured with the automated startup and fault-tolerance logic discussed above.</p>
 
     <h2>Next Steps</h2>
     <ul>
       <li><a href="admin-guide.html">Admin Guide</a> — Managing nodes and deployment profiles</li>
       <li><a href="troubleshooting.html">Troubleshooting</a> — FAQ and debug tips</li>
-      <li><a href="api-reference.html">API Reference</a> — Integrating with external tools</li>
+      <li><a href="api-reference.html">API Reference</a> — REST endpoints and MQTT topics</li>
     </ul>
   </main>
   <script src="js/docs.js"></script>

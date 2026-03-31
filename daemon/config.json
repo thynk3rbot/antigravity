@@ -51,6 +51,13 @@
       "auto": true,
       "description": "Magic Sentinel — Meshtastic-to-Native Telemetry Bridge",
       "meshtastic_host": "172.16.0.61"
+    },
+    {
+      "name": "tray_manager",
+      "cmd": "python daemon/src/tray_manager.py",
+      "port": null,
+      "auto": true,
+      "description": "Magic System Tray — Desktop control & notifications"
     }
   ],
   "community": [

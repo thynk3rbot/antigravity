@@ -1,68 +1,43 @@
-# STARTUP: Magic
+# Magic — Quick Start
 
-Starting **Magic** now automatically orchestrates the entire ecosystem, including the Docker-based infrastructure.
+Run the complete Magic platform with a single command.
 
-## 🌐 Networking & Ports
+## One-Click Launch
 
-| Component | Port | Description |
+Double-click **`Start_Magic.bat`** from the repo root. This starts:
+
+| Service | Port | Description |
 | :--- | :--- | :--- |
-| **Magic Bus** | `1883` | MQTT Broker (Mosquitto) |
-| **Magic DB** | `5432` | PostgreSQL (SQLAlchemy Target) |
-| **Magic Dashboard** | `8000` | User Management Interface |
-| **Magic API** | `8001` | Core REST API & Router Engine |
+| **MQTT Broker** | `1883` | Mosquitto (local, no Docker required) |
+| **Magic Daemon** | `8001` | Core REST API — fleet, mesh, service manager |
+| **Fleet Dashboard** | `8000` | Web UI for device management and OTA |
+| **Magic Messenger** | `8400` | PWA mesh chat — install on phone via browser |
+| **AI Assistant** | `8300` | Local AI assistant with mesh context |
 
----
+## Background Mode (Headless)
 
-## 🏗️ 0. Pre-Flight Check (Host OS)
-
-1. **Docker Desktop**: Must be running. Ensure the "Docker Desktop" engine is "Ready" in the dashboard.
-2. **Ports**: Ensure ports `1883, 5432, 8000, 8001` are free.
-
----
-
-## 🐙 1. The Singular Boot Command
-
-You no longer need to run `docker-compose` manually. Simply start **Magic**:
+For a fully supervised background stack with auto-restart on crash:
 
 ```powershell
-# Open ONE terminal
-cd daemon\src
-python main.py
+python tools/start_bg_services.py
+# Stop with:
+python tools/start_bg_services.py stop
 ```
 
-**Wait for the icon (🐙) to appear in the Windows System Tray.**
+All logs written to `logs/` in the repo root.
 
----
+## Requirements
 
-## 🖥️ 2. Control & Monitoring
+- Python 3.10+ in PATH
+- [Mosquitto](https://mosquitto.org/download/) installed (`winget install mosquitto`)
+- Run `pip install -r daemon/requirements.txt` once
 
-1. **Dashboard**: Open [http://localhost:8000](http://localhost:8000).
-2. **Magic Client (Recommended)**:
-   Launch the branded terminal to observe real-time mesh activity:
-   ```powershell
-   # Launch from repo root
-   .\magic_client.bat
-   ```
-   *Features: 🐙 branding, JSON syntax highlighting, and live streams.*
+## Quick Links (once running)
 
-3. **Magic Console (TUI)**:
-   Advanced view of the LVC state tree:
-   ```powershell
-   python daemon/src/console.py
-   ```
+- **Fleet Dashboard** → http://localhost:8000
+- **Daemon API** → http://localhost:8001/docs
+- **Magic Messenger** → http://localhost:8400 (add to home screen on phone)
 
-4. **Magic Tray**: Right-click the 🐙 icon for health status and infra recovery.
+## Firmware
 
----
-
-## 🛠️ Troubleshooting
-
-- **Docker Connectivity**: If Magic reports a timeout, ensure Docker Desktop is not still "Starting...".
-- **Python Dependencies**: If the client fails to launch, run `pip install -r daemon/requirements.txt`.
-
----
-
-**Magic Architecture v3.0**
-"Update-is-Replace"
-Unified Infrastructure & Native Observable Client
-Addressing: Subject-Based (e.g. IMDF.QUOTE.MSFT)
+Flash a device: `pio run -t upload -e heltec_v4` (version auto-increments).

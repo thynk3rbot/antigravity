@@ -105,6 +105,8 @@ void CommandManager::process(const String& input, CommandManager::ResponseCallba
         response = _handleSetWifi(args);
     } else if (cmd == "SETIP") {
         response = _handleSetIP(args);
+    } else if (cmd == "SETBROKER") {
+        response = _handleSetBroker(args);
     } else if (cmd == "BLINK") {
         response = _handleBlink();
     } else if (cmd == "REBOOT") {
@@ -256,7 +258,7 @@ String CommandManager::_handleReboot() {
 }
 
 String CommandManager::_handleHelp() {
-    return "Available commands: STATUS, VSTATUS, RELAY, SETNAME, SETWIFI, SETIP, BLINK, REBOOT, GETCONFIG, SCHED, FORWARD, GPS, ASK, LIST, LOAD, FACTORY_RESET, HELP";
+    return "Available commands: STATUS, VSTATUS, RELAY, SETNAME, SETWIFI, SETIP, SETBROKER, BLINK, REBOOT, GETCONFIG, SCHED, FORWARD, GPS, ASK, LIST, LOAD, FACTORY_RESET, HELP";
 }
 
 String CommandManager::_handleSetName(const String& args) {
@@ -274,7 +276,43 @@ String CommandManager::_handleGetConfig() {
 }
 
 String CommandManager::_handleSetIP(const String& args) {
-    return "{\"ok\":false,\"error\":\"Not implemented in this stub\"}";
+    // Usage: SETIP <IP> <GW> <SN>
+    String a = args; a.trim();
+    int sp1 = a.indexOf(' ');
+    if (sp1 < 0) return "{\"ok\":false,\"error\":\"Usage: SETIP <IP> <GW> <SN>\"}";
+    
+    String ip = a.substring(0, sp1);
+    String rem = a.substring(sp1 + 1); rem.trim();
+    int sp2 = rem.indexOf(' ');
+    if (sp2 < 0) return "{\"ok\":false,\"error\":\"Missing Gateway/Subnet\"}";
+    
+    String gw = rem.substring(0, sp2);
+    String sn = rem.substring(sp2 + 1); sn.trim();
+
+    if (NVSManager::setStaticIP(ip.c_str()) && 
+        NVSManager::setGateway(gw.c_str()) && 
+        NVSManager::setSubnet(sn.c_str())) {
+        return "{\"ok\":true,\"msg\":\"IP set. Rebooting...\"}";
+    }
+    return "{\"ok\":false,\"error\":\"NVS save failed\"}";
+}
+
+String CommandManager::_handleSetBroker(const String& args) {
+    // Usage: SETBROKER <host> [port]
+    String a = args; a.trim();
+    int sp = a.indexOf(' ');
+    String host = (sp < 0) ? a : a.substring(sp + 1);
+    uint16_t port = 1883;
+
+    if (sp >= 0) {
+        host = a.substring(0, sp);
+        port = (uint16_t)a.substring(sp + 1).toInt();
+    }
+
+    if (NVSManager::setMQTTBroker(host.c_str()) && NVSManager::setMQTTPort(port)) {
+        return "{\"ok\":true,\"msg\":\"Broker set.\"}";
+    }
+    return "{\"ok\":false,\"error\":\"NVS save failed\"}";
 }
 
 String CommandManager::_handleSched(const String& args) {

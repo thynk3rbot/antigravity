@@ -393,7 +393,7 @@ void MsgManager::announceNode() {
     uint8_t payload[13] = {};
     payload[0] = caps;
     memcpy(payload + 1, &wifiIP, 4);
-    String nodeName = NVSManager::getNodeID("Node");
+    std::string nodeName = NVSManager::getNodeID("Node");
     strncpy((char*)(payload + 5), nodeName.c_str(), 8);
     _sendLmxPacket(LMX_BROADCAST, LmxMsgType::NODE_ANNOUNCE, false,
                    payload, sizeof(payload), TransportType::LORA);

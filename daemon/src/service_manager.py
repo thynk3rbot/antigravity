@@ -136,7 +136,7 @@ class ServiceManager:
   async def _monitoring_loop(self):
     """Proactively restart crashed services marked with auto_restart."""
     while True:
-      await asyncio.sleep(10)
+      await asyncio.sleep(5)
       for name, state in self._services.items():
         if state.definition.auto_restart and not state.running and state.definition.auto:
           logger.warning(f"[Services] {name} detected as DOWN. Restarting...")
