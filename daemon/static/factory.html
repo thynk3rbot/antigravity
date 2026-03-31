@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Magic Factory Admin — Device Registry & OTA</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f1419; color: #e4e6eb; }
+        .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+        h1 { color: #fff; margin: 20px 0; font-size: 28px; }
+        h2 { color: #a8d5ff; margin: 15px 0 10px; font-size: 18px; border-bottom: 2px solid #264653; padding-bottom: 5px; }
+
+        .panel { background: #1a202c; border: 1px solid #2d3748; border-radius: 8px; padding: 20px; margin: 15px 0; }
+
+        .device-card {
+            background: #252f3d;
+            border-left: 4px solid #2a9d8f;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 4px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .device-card.v3 { border-left-color: #e76f51; }
+        .device-card.v4 { border-left-color: #2a9d8f; }
+        .device-card.offline { opacity: 0.6; }
+
+        .device-info { flex: 1; }
+        .device-id { font-weight: bold; color: #fff; font-size: 16px; }
+        .device-meta { font-size: 13px; color: #a0aec0; margin-top: 5px; }
+        .device-badge { display: inline-block; padding: 2px 8px; border-radius: 3px; font-size: 11px; font-weight: bold; margin-right: 8px; }
+        .badge-v3 { background: #e76f51; color: #fff; }
+        .badge-v4 { background: #2a9d8f; color: #fff; }
+        .badge-online { background: #52b788; color: #fff; }
+        .badge-offline { background: #d62828; color: #fff; }
+
+        .device-actions { display: flex; gap: 10px; }
+        button { padding: 8px 12px; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 500; transition: 0.2s; }
+        .btn-primary { background: #264653; color: #fff; }
+        .btn-primary:hover { background: #2a5b7f; }
+        .btn-success { background: #52b788; color: #fff; }
+        .btn-success:hover { background: #5fb896; }
+
+        .form-group { margin: 15px 0; }
+        label { display: block; margin-bottom: 5px; font-weight: 500; color: #cbd5e0; }
+        input, select { width: 100%; padding: 8px; background: #1a202c; border: 1px solid #2d3748; border-radius: 4px; color: #e4e6eb; font-size: 14px; }
+        input:focus, select:focus { outline: none; border-color: #264653; }
+
+        .warning { background: #744210; border: 1px solid #e76f51; padding: 12px; border-radius: 4px; color: #ffd6a5; margin: 10px 0; }
+        .success { background: #1b4332; border: 1px solid #52b788; padding: 12px; border-radius: 4px; color: #95d5b2; margin: 10px 0; }
+        .error { background: #5a1a1a; border: 1px solid #d62828; padding: 12px; border-radius: 4px; color: #ff6b6b; margin: 10px 0; }
+
+        .log { background: #0f1419; border: 1px solid #2d3748; padding: 10px; border-radius: 4px; font-family: 'Courier New', monospace; font-size: 12px; color: #a0aec0; max-height: 300px; overflow-y: auto; }
+        .log-line { margin: 2px 0; }
+        .log-error { color: #ff6b6b; }
+        .log-success { color: #52b788; }
+        .log-info { color: #a8d5ff; }
+
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        @media (max-width: 900px) { .grid-2 { grid-template-columns: 1fr; } }
+
+        .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin: 15px 0; }
+        .stat-card { background: #252f3d; padding: 15px; border-radius: 4px; text-align: center; }
+        .stat-value { font-size: 24px; font-weight: bold; color: #2a9d8f; }
+        .stat-label { font-size: 12px; color: #a0aec0; margin-top: 5px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>⚙️ Magic Factory Admin</h1>
+        <p style="color: #a0aec0; margin-bottom: 20px;">Device Registry & OTA Firmware Management</p>
+
+        <div class="grid-2">
+            <!-- Left Panel: Device Registry -->
+            <div>
+                <div class="panel">
+                    <h2>Device Registry</h2>
+                    <div class="stats">
+                        <div class="stat-card">
+                            <div class="stat-value" id="total-devices">0</div>
+                            <div class="stat-label">Total Devices</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="v3-count">0</div>
+                            <div class="stat-label">V3 Devices</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="v4-count">0</div>
+                            <div class="stat-label">V4 Devices</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="online-count">0</div>
+                            <div class="stat-label">Online</div>
+                        </div>
+                    </div>
+
+                    <h2>Add Device</h2>
+                    <form id="add-device-form">
+                        <div class="form-group">
+                            <label>Device Name</label>
+                            <input type="text" id="device-name" placeholder="e.g., Garden_V4" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Hardware Class</label>
+                            <select id="hardware-class" required>
+                                <option value="">Select...</option>
+                                <option value="V3">V3 (Heltec V3)</option>
+                                <option value="V4">V4 (Heltec V4)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>IP Address</label>
+                            <input type="text" id="device-ip" placeholder="172.16.0.27">
+                        </div>
+                        <div class="form-group">
+                            <label>Current Version</label>
+                            <input type="text" id="device-version" placeholder="0.0.16V4" required>
+                        </div>
+                        <button type="submit" class="btn-primary" style="width: 100%;">Register Device</button>
+                    </form>
+                </div>
+
+                <div class="panel">
+                    <h2>Device List</h2>
+                    <div id="device-list">Loading devices...</div>
+                </div>
+            </div>
+
+            <!-- Right Panel: OTA Flashing -->
+            <div>
+                <div class="panel">
+                    <h2>OTA Firmware Flash</h2>
+                    <div class="warning">
+                        <strong>⚠️ Guards Active</strong><br>
+                        V3 firmware can only flash V3 devices. V4 firmware only V4 devices.
+                    </div>
+
+                    <form id="flash-form">
+                        <div class="form-group">
+                            <label>Select Device</label>
+                            <select id="flash-device-id" required>
+                                <option value="">Loading devices...</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Firmware Environment</label>
+                            <select id="flash-env" disabled>
+                                <option>Auto-selected based on device class</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>IP Address</label>
+                            <input type="text" id="flash-ip" placeholder="Auto-filled" readonly>
+                        </div>
+                        <button type="submit" class="btn-success" style="width: 100%; padding: 10px;">🔄 Flash Firmware</button>
+                    </form>
+
+                    <div id="flash-status"></div>
+                    <div id="flash-log" class="log" style="display: none; margin-top: 15px;">
+                        <div class="log-line log-info">Waiting for flash operation...</div>
+                    </div>
+                </div>
+
+                <div class="panel">
+                    <h2>Registry Export</h2>
+                    <p style="font-size: 13px; color: #a0aec0; margin-bottom: 10px;">
+                        Export device registry to JSON for git versioning and backup.
+                    </p>
+                    <button onclick="exportRegistry()" class="btn-primary" style="width: 100%;">📥 Export to JSON</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api';
+
+        // Helper: Safe text insertion
+        function setText(elem, text) {
+            elem.textContent = text;
+        }
+
+        // Helper: Safe badge class
+        function getBadgeClass(value) {
+            const classes = { 'v3': 'badge-v3', 'v4': 'badge-v4', 'online': 'badge-online', 'offline': 'badge-offline' };
+            return classes[value.toLowerCase()] || '';
+        }
+
+        // Load devices on page load
+        loadDevices();
+        setInterval(loadDevices, 5000); // Refresh every 5s
+
+        async function loadDevices() {
+            try {
+                const res = await fetch(`${API_BASE}/registry/devices`);
+                const data = await res.json();
+                renderDeviceList(data.devices);
+                updateStats(data.devices);
+                populateFlashDevices(data.devices);
+            } catch (e) {
+                console.error('Failed to load devices:', e);
+                const elem = document.getElementById('device-list');
+                elem.innerHTML = '<div class="error">Failed to load devices</div>';
+            }
+        }
+
+        function renderDeviceList(devices) {
+            const list = document.getElementById('device-list');
+            if (devices.length === 0) {
+                list.innerHTML = '<p style="color: #a0aec0;">No devices registered yet.</p>';
+                return;
+            }
+
+            list.innerHTML = '';
+            devices.forEach(d => {
+                const card = document.createElement('div');
+                card.className = `device-card ${d.hardware_class.toLowerCase()} ${d.status === 'offline' ? 'offline' : ''}`;
+
+                const hwBadge = document.createElement('span');
+                hwBadge.className = `device-badge ${getBadgeClass(d.hardware_class)}`;
+                setText(hwBadge, d.hardware_class);
+
+                const statusBadge = document.createElement('span');
+                statusBadge.className = `device-badge ${getBadgeClass(d.status)}`;
+                setText(statusBadge, d.status);
+
+                const info = document.createElement('div');
+                info.className = 'device-info';
+
+                const id = document.createElement('div');
+                id.className = 'device-id';
+                setText(id, d.name);
+
+                const meta = document.createElement('div');
+                meta.className = 'device-meta';
+                meta.appendChild(hwBadge);
+                meta.appendChild(statusBadge);
+                meta.innerHTML += '<br>';
+                const versionSpan = document.createElement('span');
+                setText(versionSpan, `Version: ${d.current_version} | IP: ${d.ip_address || 'N/A'}`);
+                meta.appendChild(versionSpan);
+
+                info.appendChild(id);
+                info.appendChild(meta);
+
+                const actions = document.createElement('div');
+                actions.className = 'device-actions';
+                const btn = document.createElement('button');
+                btn.className = 'btn-primary';
+                setText(btn, 'Copy ID');
+                btn.onclick = () => copyDeviceId(d.device_id);
+                actions.appendChild(btn);
+
+                card.appendChild(info);
+                card.appendChild(actions);
+                list.appendChild(card);
+            });
+        }
+
+        function updateStats(devices) {
+            setText(document.getElementById('total-devices'), devices.length);
+            setText(document.getElementById('v3-count'), devices.filter(d => d.hardware_class === 'V3').length);
+            setText(document.getElementById('v4-count'), devices.filter(d => d.hardware_class === 'V4').length);
+            setText(document.getElementById('online-count'), devices.filter(d => d.status === 'online').length);
+        }
+
+        function populateFlashDevices(devices) {
+            const select = document.getElementById('flash-device-id');
+            select.innerHTML = '<option value="">Select device...</option>';
+            devices.forEach(d => {
+                const option = document.createElement('option');
+                option.value = d.device_id;
+                option.dataset.class = d.hardware_class;
+                option.dataset.ip = d.ip_address;
+                setText(option, `${d.name} (${d.hardware_class})`);
+                select.appendChild(option);
+            });
+        }
+
+        // Device selection updates IP and env
+        document.getElementById('flash-device-id').addEventListener('change', (e) => {
+            const option = e.target.options[e.target.selectedIndex];
+            const ip = option.dataset.ip;
+            const hwClass = option.dataset.class;
+            document.getElementById('flash-ip').value = ip;
+            document.getElementById('flash-env').value = `${hwClass === 'V3' ? 'heltec_v3' : 'heltec_v4'} (Auto)`;
+        });
+
+        // Add device form
+        document.getElementById('add-device-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const req = {
+                name: document.getElementById('device-name').value,
+                hardware_class: document.getElementById('hardware-class').value,
+                ip_address: document.getElementById('device-ip').value,
+                current_version: document.getElementById('device-version').value,
+            };
+
+            try {
+                const res = await fetch(`${API_BASE}/registry/devices`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(req)
+                });
+                if (res.ok) {
+                    document.getElementById('add-device-form').reset();
+                    loadDevices();
+                    alert('Device registered successfully!');
+                } else {
+                    alert('Failed to register device: ' + (await res.text()));
+                }
+            } catch (e) {
+                alert('Error: ' + e.message);
+            }
+        });
+
+        // Flash firmware
+        document.getElementById('flash-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const deviceId = document.getElementById('flash-device-id').value;
+            const ip = document.getElementById('flash-ip').value;
+
+            if (!deviceId) {
+                alert('Please select a device');
+                return;
+            }
+
+            try {
+                document.getElementById('flash-log').style.display = 'block';
+                const res = await fetch(`${API_BASE}/ota/flash`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ device_id: deviceId, ip })
+                });
+                const data = await res.json();
+                if (data.ok) {
+                    pollFlashStatus(data.job_id);
+                } else {
+                    const statusDiv = document.getElementById('flash-status');
+                    statusDiv.innerHTML = `<div class="error"></div>`;
+                    setText(statusDiv.querySelector('.error'), data.error || 'Flash failed');
+                }
+            } catch (e) {
+                const statusDiv = document.getElementById('flash-status');
+                statusDiv.innerHTML = `<div class="error"></div>`;
+                setText(statusDiv.querySelector('.error'), 'Error: ' + e.message);
+            }
+        });
+
+        async function pollFlashStatus(jobId) {
+            let count = 0;
+            const maxCount = 120; // 2 minutes
+
+            const poll = async () => {
+                if (count > maxCount) return;
+
+                try {
+                    const res = await fetch(`${API_BASE}/ota/status/${jobId}`);
+                    const data = await res.json();
+                    renderFlashLog(data.log);
+
+                    if (data.status === 'done') {
+                        const statusDiv = document.getElementById('flash-status');
+                        statusDiv.innerHTML = '<div class="success">✓ Flash completed successfully!</div>';
+                        loadDevices();
+                    } else if (data.status === 'error') {
+                        const statusDiv = document.getElementById('flash-status');
+                        statusDiv.innerHTML = `<div class="error"></div>`;
+                        setText(statusDiv.querySelector('.error'), '✗ Flash failed: ' + (data.error || 'Unknown error'));
+                    } else {
+                        count++;
+                        setTimeout(poll, 1000);
+                    }
+                } catch (e) {
+                    console.error('Poll error:', e);
+                    setTimeout(poll, 1000);
+                }
+            };
+
+            poll();
+        }
+
+        function renderFlashLog(log) {
+            const logDiv = document.getElementById('flash-log');
+            logDiv.innerHTML = '';
+            log.forEach(line => {
+                const lineDiv = document.createElement('div');
+                lineDiv.className = 'log-line';
+                if (line.includes('ERROR') || line.includes('failed')) lineDiv.className += ' log-error';
+                if (line.includes('SUCCESS') || line.includes('successfully')) lineDiv.className += ' log-success';
+                setText(lineDiv, line);
+                logDiv.appendChild(lineDiv);
+            });
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        function copyDeviceId(deviceId) {
+            navigator.clipboard.writeText(deviceId).then(() => alert('Device ID copied!'));
+        }
+
+        async function exportRegistry() {
+            try {
+                const res = await fetch(`${API_BASE}/registry/export`, { method: 'POST' });
+                const data = await res.json();
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `device_registry_${new Date().toISOString().split('T')[0]}.json`;
+                a.click();
+                alert('Registry exported!');
+            } catch (e) {
+                alert('Export failed: ' + e.message);
+            }
+        }
+    </script>
+</body>
+</html>

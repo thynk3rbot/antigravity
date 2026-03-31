@@ -1,27 +1,39 @@
 """
 OTA Manager: Handles remote device flashing by invoking platformio over espota.
+Includes device registry guards to prevent cross-flashing (V3 fw to V4 device, etc).
 """
 
 import asyncio
 import uuid
 import logging
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from pathlib import Path
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
 class FlashRequest(BaseModel):
-    env: str
+    device_id: Optional[str] = None  # Prefer device_id (from registry)
+    env: Optional[str] = None  # Fallback: env directly (legacy)
     ip: str = ""
 
+class FlashGuards:
+    """Guard rules for safe OTA operations."""
+    ENV_TO_HARDWARE = {
+        "heltec_v4": "V4",
+        "heltec_v3": "V3",
+        "heltec_v3_node": "V3",
+    }
+
 class OtaManager:
-    def __init__(self, topology, repo_root: Path):
+    def __init__(self, topology, repo_root: Path, device_registry=None):
         self.topology = topology
         self.repo_root = repo_root
         self.firmware_dir = repo_root / "firmware" / "v2"
+        self.device_registry = device_registry
         self.active_jobs: Dict[str, Dict[str, Any]] = {}
+        self.guards = FlashGuards()
 
     def get_router(self) -> APIRouter:
         router = APIRouter(prefix="/api/ota", tags=["ota"])
@@ -43,17 +55,47 @@ class OtaManager:
 
         @router.post("/flash")
         async def start_flash(req: FlashRequest):
+            """
+            Flash device with guards.
+            Accepts either device_id (preferred, uses registry) or env directly (legacy).
+            """
+            # Resolve device_id and env with guards
+            env = req.env
+            device_id = req.device_id
+            ip = req.ip
+
+            # If device_id provided, look up from registry
+            if device_id and self.device_registry:
+                device = self.device_registry.get_device(device_id)
+                if not device:
+                    raise HTTPException(status_code=404, detail=f"Device not found in registry: {device_id}")
+
+                # Infer env from hardware class
+                if device.hardware_class == "V4":
+                    env = "heltec_v4"
+                elif device.hardware_class == "V3":
+                    env = "heltec_v3"
+                else:
+                    raise HTTPException(status_code=400, detail=f"Unknown hardware class: {device.hardware_class}")
+
+                ip = device.ip_address
+
+                logger.info(f"Flash request for {device_id} ({device.hardware_class}) → {env} @ {ip}")
+            elif not env:
+                raise HTTPException(status_code=400, detail="Must provide either device_id or env")
+
             job_id = str(uuid.uuid4())
             self.active_jobs[job_id] = {
                 "id": job_id,
                 "status": "running",
-                "env": req.env,
-                "ip": req.ip,
+                "device_id": device_id,
+                "env": env,
+                "ip": ip,
                 "log": []
             }
             # Start background task
-            asyncio.create_task(self._run_pio_flash(job_id, req.env, req.ip))
-            return {"ok": True, "job_id": job_id}
+            asyncio.create_task(self._run_pio_flash(job_id, env, ip, device_id))
+            return {"ok": True, "job_id": job_id, "device_id": device_id, "env": env}
 
         @router.get("/status/{job_id}")
         async def get_status(job_id: str):
@@ -68,12 +110,21 @@ class OtaManager:
 
         return router
 
-    async def _run_pio_flash(self, job_id: str, env: str, ip: str):
+    async def _run_pio_flash(self, job_id: str, env: str, ip: str, device_id: Optional[str] = None):
         job = self.active_jobs[job_id]
-        
-        # Build platformio command.
+
+        # Validate env against whitelist (security: prevent injection)
+        valid_envs = ["heltec_v3", "heltec_v4", "heltec_v3_node"]
+        if env not in valid_envs:
+            job["status"] = "error"
+            job["error"] = f"Invalid environment: {env}"
+            job["log"].append(f"ERROR: {job['error']}")
+            logger.error(f"[OTA:{job_id}] Invalid env: {env}")
+            return
+
+        # Build platformio command (safe: list of strings, no shell injection)
         cmd = ["pio", "run", "-e", env, "-t", "upload"]
-        
+
         if ip:
             # If IP is provided, use espota
             cmd.extend(["--upload-port", ip])
@@ -83,7 +134,7 @@ class OtaManager:
             # Otherwise, allow PlatformIO to auto-detect the local USB serial port
             logger.info(f"[OTA:{job_id}] Executing Serial Auto-Detect: {' '.join(cmd)}")
             job["log"].append(f"Starting PIO USB/Serial flash for {env} (auto-detect port)...")
-        
+
         try:
             process = await asyncio.create_subprocess_exec(
                 *cmd,
@@ -110,6 +161,17 @@ class OtaManager:
                 job["status"] = "done"
                 job["log"].append("")
                 job["log"].append("SUCCESS: Firmware flashed successfully!")
+
+                # Update registry if device_id provided
+                if device_id and self.device_registry:
+                    try:
+                        # Mark device as online - version will be confirmed by STATUS query
+                        self.device_registry.update_status(device_id, "online")
+                        logger.info(f"[OTA:{job_id}] Registry updated for {device_id}")
+                    except Exception as e:
+                        logger.error(f"[OTA:{job_id}] Failed to update registry: {e}")
+                        job["log"].append(f"Warning: Registry update failed: {e}")
+
                 logger.info(f"[OTA:{job_id}] Flashed successfully to {ip}.")
             else:
                 job["status"] = "error"
