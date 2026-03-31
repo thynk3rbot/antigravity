@@ -206,12 +206,10 @@ float PowerManager::getBatteryVoltage() {
     float voltage = (readingAvg / 4095.0f) * 3.3f * BAT_ADC_VOLTAGE_DIVIDER; 
 #endif
 
-#ifdef BAT_ADC_CTRL
-#ifdef ARDUINO_HELTEC_WIFI_LORA_32_V4
-    digitalWrite(BAT_ADC_CTRL, LOW); // Disable
-#else
-    digitalWrite(BAT_ADC_CTRL, HIGH); // Disable
-#endif
+    // V4: GPIO 37 must stay HIGH — it enables both ADC sense AND battery power path.
+    // Never drive it LOW on V4 or the battery is disconnected from the board.
+#if defined(BAT_ADC_CTRL) && !defined(ARDUINO_HELTEC_WIFI_LORA_32_V4)
+    digitalWrite(BAT_ADC_CTRL, HIGH); // V2/V3 only: disable sense after read
 #endif
     _lastVoltage = voltage;
     return voltage;

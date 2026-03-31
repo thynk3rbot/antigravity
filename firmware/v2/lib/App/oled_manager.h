@@ -103,6 +103,7 @@ public:
     void setFreeHeap(uint32_t heapBytes);
 #ifdef HAS_GPS
     void setGPS(double lat, double lon, uint8_t sats, bool hasFix);
+    void setGPSAlt(float alt);
 #endif
     void setDiagnostics(uint32_t bootCount, const char* reason);
     void setMAC(const char* mac);

@@ -39,6 +39,7 @@ struct DisplayCache {
 #ifdef HAS_GPS
     double gpsLat;
     double gpsLon;
+    float  gpsAlt;
     uint8_t gpsSats;
     bool gpsFix;
 #endif
@@ -213,7 +214,7 @@ static void displayPage5() {
         }
         
         display.setCursor(0, 36);
-        display.printf("Alt: --- m\n"); // Placeholder for altitude
+        display.printf("Alt: %.0fm\n", g_cached.gpsAlt);
     }
     
     drawFooter(5);
@@ -500,6 +501,7 @@ void OLEDManager::setUptime(uint32_t uptimeMs) { g_cached.uptimeMs = uptimeMs; }
 void OLEDManager::setFreeHeap(uint32_t heapBytes) { g_cached.freeHeapBytes = heapBytes; }
 #ifdef HAS_GPS
 void OLEDManager::setGPS(double lat, double lon, uint8_t sats, bool hasFix) { g_cached.gpsLat = lat; g_cached.gpsLon = lon; g_cached.gpsSats = sats; g_cached.gpsFix = hasFix; }
+void OLEDManager::setGPSAlt(float alt) { g_cached.gpsAlt = alt; }
 #endif
 void OLEDManager::setDiagnostics(uint32_t bootCount, const char* reason) { g_cached.bootCount = bootCount; if (reason) strncpy(g_cached.resetReason, reason, 19); }
 void OLEDManager::setMAC(const char* mac) { if (mac) strncpy(g_cached.macSuffix, mac, 9); }

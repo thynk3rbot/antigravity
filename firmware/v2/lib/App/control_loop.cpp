@@ -140,6 +140,7 @@ void ControlLoop::updateOLED() {
     {
       auto gps = GPSManager::getData();
       oled.setGPS(gps.lat, gps.lon, gps.satellites, gps.hasFix);
+      oled.setGPSAlt(gps.alt);
     }
 #endif
 
