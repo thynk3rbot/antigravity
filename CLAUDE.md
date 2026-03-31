@@ -121,7 +121,12 @@ Follow these rules for all builds, bugs, and enhancements:
 **Plugin internal versions:** Each firmware module/plugin carries a `PLUGIN_VERSION` constant
 (e.g., `static const char* PLUGIN_VERSION = "1.0.0";`) — not tracked in git, available at runtime.
 
-**To flash:** `pio run -t upload -e heltec_v4` — version auto-increments, no manual step needed.
+**Flash checklist (Claude must follow every time):**
+1. Bump `FIRMWARE_VERSION` in `platformio.ini` to next version BEFORE flash
+2. Update `.version` file to match
+3. Run `pio run -t upload -e heltec_v4`
+4. Confirm boot log shows new version string
+5. Commit `platformio.ini` + `.version` + tag `vX.X.XVN`
 
 ## Three-Agent Team Process [MANDATORY]
 
