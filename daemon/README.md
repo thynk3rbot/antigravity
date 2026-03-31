@@ -1,4 +1,4 @@
-# LoRaLink Pure Mesh Gateway Daemon
+# Magic Pure Mesh Gateway Daemon
 
 **Command Gateway for Phase 50 Autonomous Mesh Sovereignty**
 
@@ -23,7 +23,7 @@ Devices mesh with each other (LoRa/BLE/ESP-NOW):
           ↑ status/ACK  ↓ commands
           │             │
     ┌─────┴─────────────┴────┐
-    │  LoRaLink Daemon       │
+    │  Magic Daemon       │
     │  (localhost:8001)      │
     │  - Topology Monitor    │
     │  - Command Gateway     │
@@ -43,7 +43,7 @@ Devices mesh with each other (LoRa/BLE/ESP-NOW):
 ### Prerequisites
 - Python 3.9+
 - MQTT Broker running on localhost:1883 (Mosquitto or equivalent)
-- LoRaLink devices flashing Phase 50 firmware with MQTT + ControlPacket support
+- Magic devices flashing Phase 50 firmware with MQTT + ControlPacket support
 
 ### Installation & Running
 
@@ -248,7 +248,7 @@ Response:
 
 Example output:
 ```
-[Daemon] Initializing LoRaLink Daemon (Pure Mesh Gateway)...
+[Daemon] Initializing Magic Daemon (Pure Mesh Gateway)...
 [Daemon] Connecting to MQTT broker at localhost:1883...
 [Daemon] Initialization complete! (Pure Mesh Mode)
 [Peer] node-30 registered: MAC=aa:bb:cc:dd:ee:ff, RSSI=-75dBm, neighbors=['node-28']

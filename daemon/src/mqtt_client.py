@@ -9,12 +9,12 @@ Handles:
 
 MQTT Topic Contract (Phase 50 - Aligned with firmware):
   Device → Daemon:
-    loralink/{node_id}/telemetry   → {"uptime_ms": ..., "battery_mv": ..., "neighbors": [...]}
-    loralink/{node_id}/status      → "ONLINE" / "OFFLINE"
-    loralink/{node_id}/msg         → {"cmd_id": "abc123", "status": "ok", "result": {...}}
+    magic/{node_id}/telemetry   → {"uptime_ms": ..., "battery_mv": ..., "neighbors": [...]}
+    magic/{node_id}/status      → "ONLINE" / "OFFLINE"
+    magic/{node_id}/msg         → {"cmd_id": "abc123", "status": "ok", "result": {...}}
 
   Daemon → Device:
-    loralink/{node_id}/cmd         ← {"cmd_id": "abc123", "action": "gpio_toggle", "pin": 32, ...}
+    magic/{node_id}/cmd         ← {"cmd_id": "abc123", "action": "gpio_toggle", "pin": 32, ...}
 """
 
 import asyncio
@@ -48,7 +48,7 @@ class BaseMQTTClient(ABC):
 
 class MQTTClientManager(BaseMQTTClient):
     """
-    Manager for MQTT communication with LoRaLink devices.
+    Manager for MQTT communication with Magic devices.
 
     Callbacks:
     - on_device_status(node_id, status_dict)
@@ -116,9 +116,9 @@ class MQTTClientManager(BaseMQTTClient):
             return
 
         topics = [
-            "loralink/+/telemetry",
-            "loralink/+/status",
-            "loralink/+/msg",
+            "magic/+/telemetry",
+            "magic/+/status",
+            "magic/+/msg",
         ]
 
         for topic in topics:
@@ -136,7 +136,7 @@ class MQTTClientManager(BaseMQTTClient):
             logger.warning(f"[MQTT] Not connected, cannot send command to {node_id}")
             return False
 
-        topic = f"loralink/cmd/{node_id}"
+        topic = f"magic/cmd/{node_id}"
         payload = json.dumps(cmd)
 
         try:
@@ -175,9 +175,9 @@ class MQTTClientManager(BaseMQTTClient):
     def _on_message(self, client, userdata, msg):
         """MQTT message callback."""
         try:
-            # Parse topic: loralink/{node_id}/{type}
+            # Parse topic: magic/{node_id}/{type}
             parts = msg.topic.split("/")
-            if len(parts) < 3 or parts[0] != "loralink":
+            if len(parts) < 3 or parts[0] != "magic":
                 logger.warning(f"[MQTT] Unknown topic format: {msg.topic}")
                 return
 

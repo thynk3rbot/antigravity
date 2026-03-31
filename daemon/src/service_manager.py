@@ -25,6 +25,7 @@ class ServiceDef:
   auto_restart: bool = True       # restart if it crashes
   cwd: Optional[str] = None       # working dir relative to repo root
   description: str = ""
+  meshtastic_host: Optional[str] = None
 
 @dataclass
 class ServiceState:
@@ -115,6 +116,7 @@ class ServiceManager:
             auto=o.get("auto", False),
             auto_restart=o.get("auto_restart", True),
             description=o.get("description", ""),
+            meshtastic_host=o.get("meshtastic_host"),
           ))
       except Exception as e:
         logger.warning(f"[Services] Failed to load config.json: {e}")
@@ -151,9 +153,13 @@ class ServiceManager:
     if state.definition.cwd:
       cwd = REPO_ROOT / state.definition.cwd
 
+    full_cmd = state.definition.cmd
+    if state.definition.name == "meshtastic_bridge" and state.definition.meshtastic_host:
+      full_cmd += f" --host {state.definition.meshtastic_host}"
+
     try:
       proc = await asyncio.create_subprocess_shell(
-        state.definition.cmd,
+        full_cmd,
         cwd=str(cwd),
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.STDOUT,

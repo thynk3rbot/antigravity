@@ -43,6 +43,14 @@
       "port": null,
       "auto": false,
       "description": "Magic Cache Data Spoofer"
+    },
+    {
+      "name": "meshtastic_bridge",
+      "cmd": "python daemon/src/meshtastic_bridge.py",
+      "port": null,
+      "auto": true,
+      "description": "Magic Sentinel — Meshtastic-to-Native Telemetry Bridge",
+      "meshtastic_host": "172.16.0.61"
     }
   ],
   "community": [

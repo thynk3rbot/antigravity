@@ -1,5 +1,5 @@
 """
-LoRaLink Daemon: Phase 50 Autonomous Mesh Sovereignty
+Magic Daemon: Phase 50 Autonomous Mesh Sovereignty
 
 Core modules:
 - mesh_router: MeshRouter class for peer discovery and intelligent routing

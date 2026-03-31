@@ -1,5 +1,5 @@
 """
-LoRaLink Daemon: Pure Mesh Gateway for Phase 50 Autonomous Mesh Sovereignty.
+Magic Daemon: Pure Mesh Gateway for Phase 50 Autonomous Mesh Sovereignty.
 
 Pure Mesh Architecture:
 - Devices mesh with each other via ControlPacket (LoRa/BLE/ESP-NOW)
@@ -32,6 +32,7 @@ try:
     from .community import CommunityManager
     from .tray_manager import TrayManager
     from .infra_manager import InfraManager
+    from .ota_manager import OtaManager
     from . import mqtt_client
 except ImportError:
     from mesh_router import MeshTopology
@@ -40,6 +41,7 @@ except ImportError:
     from community import CommunityManager
     from tray_manager import TrayManager
     from infra_manager import InfraManager
+    from ota_manager import OtaManager
     import mqtt_client
 
 # Configure logging
@@ -89,6 +91,7 @@ class MagicDaemon:
         self.services = ServiceManager()
         self.community = CommunityManager(self._config_path)
         self.infra = InfraManager(self.REPO_ROOT)
+        self.ota = OtaManager(self.topology, self.REPO_ROOT)
         self.tray = TrayManager(self)
 
         # Background tasks
@@ -118,6 +121,9 @@ class MagicDaemon:
         # Mount mesh API (pass MQTT publisher for command injection)
         mesh_api = init_mesh_api(self.topology, self.mqtt)
         self.app.include_router(mesh_api)
+
+        # Mount OTA API
+        self.app.include_router(self.ota.get_router())
 
         # Mount service management API
         from fastapi import APIRouter
@@ -355,7 +361,7 @@ class MagicDaemon:
 
 async def main():
     """Entry point."""
-    parser = argparse.ArgumentParser(description="LoRaLink Pure Mesh Gateway Daemon")
+    parser = argparse.ArgumentParser(description="Magic Pure Mesh Gateway Daemon")
     parser.add_argument(
         "--port", type=int, default=8001, help="REST API port (default: 8001)"
     )

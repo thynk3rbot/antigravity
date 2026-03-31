@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-LoRaLink System Tray — wraps the daemon with a Windows system tray icon.
+Magic System Tray — wraps the daemon with a Windows system tray icon.
 
 Usage:
     python daemon/tray.py [--port 8001] [--mqtt-broker localhost:1883]
@@ -112,7 +112,7 @@ def _quit(icon, _item):
 
 def _make_menu():
     return pystray.Menu(
-        item("LoRaLink Daemon", None, enabled=False),
+        item("Magic Daemon", None, enabled=False),
         item(_status_label(), None, enabled=False),
         pystray.Menu.SEPARATOR,
         item("Open Webapp  :8000", _open_webapp, default=True),
@@ -127,7 +127,7 @@ def _make_menu():
 def _refresh_tray():
     if _tray_icon:
         _tray_icon.icon = _make_icon(_status)
-        _tray_icon.title = f"LoRaLink — {_status_label()}"
+        _tray_icon.title = f"Magic — {_status_label()}"
         _tray_icon.menu = _make_menu()
 
 
@@ -154,7 +154,7 @@ def _daemon_thread():
 
 
 def _start_daemon_thread():
-    t = threading.Thread(target=_daemon_thread, daemon=True, name="LoRaLink-Daemon")
+    t = threading.Thread(target=_daemon_thread, daemon=True, name="Magic-Daemon")
     t.start()
 
 
@@ -190,7 +190,7 @@ def _health_poll_thread():
 def main():
     global _tray_icon, _args
 
-    parser = argparse.ArgumentParser(description="LoRaLink Daemon (system tray)")
+    parser = argparse.ArgumentParser(description="Magic Daemon (system tray)")
     parser.add_argument("--port", type=int, default=8001)
     parser.add_argument("--mqtt-broker", type=str, default="localhost:1883")
     _args = parser.parse_args()
@@ -198,14 +198,14 @@ def main():
     _start_daemon_thread()
 
     _tray_icon = pystray.Icon(
-        "loralink-daemon",
+        "magic-daemon",
         icon=_make_icon("starting"),
-        title="LoRaLink — Starting...",
+        title="Magic — Starting...",
         menu=_make_menu(),
     )
 
     # Health poll runs in background
-    threading.Thread(target=_health_poll_thread, daemon=True, name="LoRaLink-Health").start()
+    threading.Thread(target=_health_poll_thread, daemon=True, name="Magic-Health").start()
 
     # pystray.run() MUST be on the main thread on Windows
     _tray_icon.run()

@@ -47,6 +47,7 @@ class MeshPeer:
     neighbors: List[str] = field(default_factory=list)
     battery_mv: Optional[int] = None
     uptime_ms: Optional[int] = None
+    ip_address: Optional[str] = None
 
     def is_stale(self, threshold_ms: int = 30000) -> bool:
         """Check if peer hasn't been seen recently (default 30s)."""
@@ -129,6 +130,7 @@ class MeshTopology:
                 neighbors=status.get("neighbors", []),
                 battery_mv=status.get("battery_mv"),
                 uptime_ms=status.get("uptime_ms"),
+                ip_address=status.get("ip_address", status.get("ip")),
             )
             self.register_peer(peer)
         else:
@@ -139,6 +141,8 @@ class MeshTopology:
             peer.battery_mv = status.get("battery_mv", peer.battery_mv)
             peer.uptime_ms = status.get("uptime_ms", peer.uptime_ms)
             peer.neighbors = status.get("neighbors", peer.neighbors)
+            if "ip_address" in status or "ip" in status:
+                peer.ip_address = status.get("ip_address", status.get("ip"))
             if "rssi_dbm" in status:
                 peer.rssi_dbm = status["rssi_dbm"]
             elif "rssi" in status:

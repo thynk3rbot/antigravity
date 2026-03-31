@@ -27,8 +27,14 @@ class MagicLVCService:
         self.alerts = {}  # Alert management: {alert_id: {name, condition, enabled, triggered}}
         self.subscribers = []  # WebSocket subscribers for real-time updates
 
-        # MQTT Setup
-        self.client = mqtt.Client("MagicLVCService")
+        # MQTT Setup (paho-mqtt 2.1 compatible)
+        try:
+            from paho.mqtt.enums import CallbackAPIVersion
+            self.client = mqtt.Client(CallbackAPIVersion.VERSION2, "MagicLVCService")
+        except ImportError:
+            # Fallback for older paho-mqtt < 2.0
+            self.client = mqtt.Client("MagicLVCService")
+        
         self.client.on_connect = self.on_connect
         self.client.on_message = self.on_message
 

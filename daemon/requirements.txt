@@ -7,3 +7,5 @@ python-dotenv==1.0.0
 httpx>=0.25.0
 pystray>=0.19.5
 Pillow>=10.0.0
+meshtastic>=2.3.0
+pyserial>=3.5

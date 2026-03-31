@@ -1,11 +1,11 @@
 @echo off
 REM Phase 50 Daemon Startup Script
-REM Starts the LoRaLink Daemon with mesh sovereignty capabilities
+REM Starts the Magic Daemon with mesh sovereignty capabilities
 
 setlocal enabledelayedexpansion
 
 echo ================================================================
-echo LoRaLink Phase 50 Daemon
+echo Magic Phase 50 Daemon
 echo ================================================================
 echo.
 
