@@ -136,8 +136,13 @@ class MagicDaemon:
         self.app.include_router(mesh_api)
 
         # Initialize HTTP Gateway (for global 1000s device routing)
-        from .http_gateway import HTTPGateway
-        from .peer_ring import PeerRing
+        try:
+            from .http_gateway import HTTPGateway
+            from .peer_ring import PeerRing
+        except ImportError:
+            from http_gateway import HTTPGateway
+            from peer_ring import PeerRing
+
         self.http_gateway = HTTPGateway(self.device_registry)
         self.peer_ring = PeerRing(peers=[])
         logger.info("[Magic] HTTP Gateway initialized (global device routing enabled)")
@@ -163,6 +168,13 @@ class MagicDaemon:
         # Mount Deployment Configuration API
         deployment_router = get_deployment_router()
         self.app.include_router(deployment_router)
+
+        # Mount Dashboard Field Configuration API
+        try:
+            from .dashboard_config_api import router as config_router
+        except ImportError:
+            from dashboard_config_api import router as config_router
+        self.app.include_router(config_router)
 
         # Mount service management API
         from fastapi import APIRouter

@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Magic — Field Configurator</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0f0f0f;
+            color: #e0e0e0;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Header */
+        .header {
+            background: #1a1a1a;
+            border-bottom: 1px solid #333;
+            padding: 20px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header h1 {
+            font-size: 24px;
+            font-weight: 600;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: #7c3aed;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #6d28d9;
+        }
+
+        .btn-secondary {
+            background: #333;
+            color: #e0e0e0;
+        }
+
+        .btn-secondary:hover {
+            background: #444;
+        }
+
+        .btn-small {
+            padding: 4px 12px;
+            font-size: 12px;
+        }
+
+        /* Main content */
+        .content {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* Device class tabs */
+        .tabs {
+            background: #1a1a1a;
+            border-bottom: 1px solid #333;
+            display: flex;
+            padding: 0 30px;
+            gap: 0;
+        }
+
+        .tab {
+            padding: 15px 20px;
+            border: none;
+            background: none;
+            color: #888;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+        }
+
+        .tab:hover {
+            color: #e0e0e0;
+        }
+
+        .tab.active {
+            color: #7c3aed;
+            border-bottom-color: #7c3aed;
+        }
+
+        /* Main editor area */
+        .editor-area {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .editor-column {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid #333;
+            overflow: hidden;
+        }
+
+        .editor-column:last-child {
+            border-right: none;
+        }
+
+        .editor-header {
+            background: #1a1a1a;
+            padding: 15px 20px;
+            border-bottom: 1px solid #333;
+            font-size: 13px;
+            font-weight: 600;
+            text-transform: uppercase;
+            color: #888;
+        }
+
+        .field-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+        }
+
+        .field-item {
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 6px;
+            padding: 15px;
+            margin-bottom: 12px;
+            display: flex;
+            gap: 15px;
+            align-items: flex-start;
+        }
+
+        .field-drag-handle {
+            cursor: move;
+            color: #666;
+            font-size: 18px;
+            padding-top: 2px;
+        }
+
+        .field-content {
+            flex: 1;
+        }
+
+        .field-key {
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            color: #888;
+            margin-bottom: 4px;
+        }
+
+        .field-label {
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 8px;
+        }
+
+        .field-meta {
+            display: flex;
+            gap: 15px;
+            font-size: 12px;
+            color: #666;
+        }
+
+        .field-toggle {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            margin-top: 10px;
+        }
+
+        .toggle-checkbox {
+            cursor: pointer;
+            width: 16px;
+            height: 16px;
+        }
+
+        .field-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .field-actions button {
+            padding: 4px 8px;
+            font-size: 11px;
+            background: #333;
+            border: 1px solid #444;
+            color: #aaa;
+            cursor: pointer;
+            border-radius: 3px;
+            transition: all 0.2s;
+        }
+
+        .field-actions button:hover {
+            background: #444;
+            color: #e0e0e0;
+        }
+
+        .field-actions button.danger {
+            color: #f87171;
+        }
+
+        .field-actions button.danger:hover {
+            background: #7f1d1d;
+        }
+
+        /* Status badges */
+        .status-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 3px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .status-critical {
+            background: #7f1d1d;
+            color: #f87171;
+        }
+
+        .status-hidden {
+            background: #1f2937;
+            color: #9ca3af;
+        }
+
+        /* Summary */
+        .summary {
+            background: #1a1a1a;
+            border-top: 1px solid #333;
+            padding: 15px 20px;
+            font-size: 12px;
+            color: #888;
+        }
+
+        /* Empty state */
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100%;
+            color: #666;
+        }
+
+        /* Toast notifications */
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 6px;
+            padding: 15px 20px;
+            font-size: 13px;
+            max-width: 400px;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        .toast.success {
+            border-color: #22c55e;
+            color: #22c55e;
+        }
+
+        .toast.error {
+            border-color: #ef4444;
+            color: #ef4444;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        /* Loading */
+        .loading {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100%;
+            color: #666;
+        }
+
+        code {
+            background: #0f0f0f;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            color: #a0e7e5;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>🔧 Field Configurator</h1>
+            <div class="header-actions">
+                <button class="btn btn-secondary btn-small" onclick="resetToDefaults()">Reset to Defaults</button>
+                <button class="btn btn-primary btn-small" onclick="saveConfiguration()">Save Changes</button>
+            </div>
+        </div>
+
+        <!-- Device class tabs -->
+        <div class="tabs">
+            <button class="tab active" data-class="v3" onclick="switchClass('v3')">V3 Devices</button>
+            <button class="tab" data-class="v4" onclick="switchClass('v4')">V4 Devices</button>
+        </div>
+
+        <!-- Editor area -->
+        <div class="content">
+            <!-- STATUS (Overview) Editor -->
+            <div class="editor-column">
+                <div class="editor-header">STATUS — Overview Metrics</div>
+                <div id="status-list" class="field-list">
+                    <div class="loading">Loading...</div>
+                </div>
+                <div class="summary">
+                    <span id="status-count">0</span> fields visible for STATUS
+                </div>
+            </div>
+
+            <!-- VSTATUS (Detailed) Editor -->
+            <div class="editor-column">
+                <div class="editor-header">VSTATUS — Detailed Metrics</div>
+                <div id="vstatus-list" class="field-list">
+                    <div class="loading">Loading...</div>
+                </div>
+                <div class="summary">
+                    <span id="vstatus-count">0</span> fields visible for VSTATUS
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api/config';
+        let currentClass = 'v3';
+        let config = {};
+        let hasChanges = false;
+
+        // Initialize
+        async function init() {
+            await loadConfiguration();
+            renderFields('v3');
+        }
+
+        // Load configuration from API
+        async function loadConfiguration() {
+            try {
+                const response = await fetch(`${API_BASE}/fields/v3/all`);
+                if (response.ok) {
+                    const data = await response.json();
+                    config['v3'] = data;
+                }
+
+                const v4Response = await fetch(`${API_BASE}/fields/v4/all`);
+                if (v4Response.ok) {
+                    const data = await v4Response.json();
+                    config['v4'] = data;
+                }
+            } catch (error) {
+                showToast(`Failed to load configuration: ${error.message}`, 'error');
+            }
+        }
+
+        // Switch between V3 and V4
+        function switchClass(deviceClass) {
+            currentClass = deviceClass;
+
+            // Update tab styles
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            document.querySelector(`[data-class="${deviceClass}"]`).classList.add('active');
+
+            renderFields(deviceClass);
+        }
+
+        // Render fields for a device class
+        function renderFields(deviceClass) {
+            if (!config[deviceClass]) {
+                showToast(`No configuration found for ${deviceClass}`, 'error');
+                return;
+            }
+
+            const classConfig = config[deviceClass];
+
+            // Render STATUS
+            renderFieldList(
+                'status-list',
+                classConfig.status || [],
+                deviceClass,
+                'status'
+            );
+            document.getElementById('status-count').textContent =
+                (classConfig.status || []).filter(f => f.visible).length;
+
+            // Render VSTATUS
+            renderFieldList(
+                'vstatus-list',
+                classConfig.vstatus || [],
+                deviceClass,
+                'vstatus'
+            );
+            document.getElementById('vstatus-count').textContent =
+                (classConfig.vstatus || []).filter(f => f.visible).length;
+        }
+
+        // Render a field list using safe DOM methods
+        function renderFieldList(containerId, fields, deviceClass, statusType) {
+            const container = document.getElementById(containerId);
+            container.textContent = '';
+
+            if (!Array.isArray(fields) || fields.length === 0) {
+                const empty = document.createElement('div');
+                empty.className = 'empty-state';
+                empty.textContent = 'No fields configured';
+                container.appendChild(empty);
+                return;
+            }
+
+            // Sort by order
+            const sorted = [...fields].sort((a, b) => a.order - b.order);
+
+            sorted.forEach((field, idx) => {
+                const item = document.createElement('div');
+                item.className = 'field-item';
+
+                // Drag handle
+                const handle = document.createElement('div');
+                handle.className = 'field-drag-handle';
+                handle.textContent = '⋮⋮';
+                item.appendChild(handle);
+
+                // Content
+                const content = document.createElement('div');
+                content.className = 'field-content';
+
+                // Key
+                const keyEl = document.createElement('div');
+                keyEl.className = 'field-key';
+                keyEl.textContent = field.key;
+                content.appendChild(keyEl);
+
+                // Label
+                const labelEl = document.createElement('div');
+                labelEl.className = 'field-label';
+                labelEl.textContent = field.label;
+                content.appendChild(labelEl);
+
+                // Meta
+                const metaEl = document.createElement('div');
+                metaEl.className = 'field-meta';
+
+                const typeSpan = document.createElement('span');
+                typeSpan.textContent = 'Type: ';
+                const typeCode = document.createElement('code');
+                typeCode.textContent = field.type;
+                typeSpan.appendChild(typeCode);
+                metaEl.appendChild(typeSpan);
+
+                const orderSpan = document.createElement('span');
+                orderSpan.textContent = `Order: ${field.order}`;
+                metaEl.appendChild(orderSpan);
+
+                if (field.critical) {
+                    const criticalBadge = document.createElement('span');
+                    criticalBadge.className = 'status-badge status-critical';
+                    criticalBadge.textContent = 'Critical';
+                    metaEl.appendChild(criticalBadge);
+                }
+
+                if (!field.visible) {
+                    const hiddenBadge = document.createElement('span');
+                    hiddenBadge.className = 'status-badge status-hidden';
+                    hiddenBadge.textContent = 'Hidden';
+                    metaEl.appendChild(hiddenBadge);
+                }
+
+                content.appendChild(metaEl);
+
+                // Toggle
+                const toggleDiv = document.createElement('div');
+                toggleDiv.className = 'field-toggle';
+
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.className = 'toggle-checkbox';
+                checkbox.checked = field.visible;
+                checkbox.onchange = () => {
+                    field.visible = checkbox.checked;
+                    hasChanges = true;
+                    renderFields(deviceClass);
+                };
+                toggleDiv.appendChild(checkbox);
+
+                const label = document.createElement('label');
+                label.textContent = 'Visible on dashboard';
+                toggleDiv.appendChild(label);
+
+                content.appendChild(toggleDiv);
+
+                // Actions
+                const actionsDiv = document.createElement('div');
+                actionsDiv.className = 'field-actions';
+
+                const upBtn = document.createElement('button');
+                upBtn.textContent = '↑ Move up';
+                upBtn.onclick = () => moveFieldUp(deviceClass, statusType, idx);
+                actionsDiv.appendChild(upBtn);
+
+                const downBtn = document.createElement('button');
+                downBtn.textContent = '↓ Move down';
+                downBtn.onclick = () => moveFieldDown(deviceClass, statusType, idx);
+                actionsDiv.appendChild(downBtn);
+
+                const deleteBtn = document.createElement('button');
+                deleteBtn.className = 'danger';
+                deleteBtn.textContent = '✕ Delete';
+                deleteBtn.onclick = () => deleteField(deviceClass, statusType, idx);
+                actionsDiv.appendChild(deleteBtn);
+
+                content.appendChild(actionsDiv);
+                item.appendChild(content);
+                container.appendChild(item);
+            });
+        }
+
+        // Move field up
+        function moveFieldUp(deviceClass, statusType, fieldIdx) {
+            const fields = config[deviceClass][statusType];
+            const sorted = [...fields].sort((a, b) => a.order - b.order);
+            if (fieldIdx > 0) {
+                [sorted[fieldIdx].order, sorted[fieldIdx - 1].order] =
+                [sorted[fieldIdx - 1].order, sorted[fieldIdx].order];
+                hasChanges = true;
+                renderFields(deviceClass);
+            }
+        }
+
+        // Move field down
+        function moveFieldDown(deviceClass, statusType, fieldIdx) {
+            const fields = config[deviceClass][statusType];
+            const sorted = [...fields].sort((a, b) => a.order - b.order);
+            if (fieldIdx < sorted.length - 1) {
+                [sorted[fieldIdx].order, sorted[fieldIdx + 1].order] =
+                [sorted[fieldIdx + 1].order, sorted[fieldIdx].order];
+                hasChanges = true;
+                renderFields(deviceClass);
+            }
+        }
+
+        // Delete field
+        function deleteField(deviceClass, statusType, fieldIdx) {
+            if (!confirm('Remove this field?')) return;
+
+            const fields = config[deviceClass][statusType];
+            const sorted = [...fields].sort((a, b) => a.order - b.order);
+            fields.splice(fields.indexOf(sorted[fieldIdx]), 1);
+            hasChanges = true;
+            renderFields(deviceClass);
+        }
+
+        // Save configuration
+        async function saveConfiguration() {
+            if (!hasChanges) {
+                showToast('No changes to save', 'error');
+                return;
+            }
+
+            try {
+                // Save V3 STATUS
+                await saveSingleConfig('v3', 'status', config['v3']['status']);
+                // Save V3 VSTATUS
+                await saveSingleConfig('v3', 'vstatus', config['v3']['vstatus']);
+                // Save V4 STATUS
+                await saveSingleConfig('v4', 'status', config['v4']['status']);
+                // Save V4 VSTATUS
+                await saveSingleConfig('v4', 'vstatus', config['v4']['vstatus']);
+
+                hasChanges = false;
+                showToast('Configuration saved successfully', 'success');
+            } catch (error) {
+                showToast(`Failed to save: ${error.message}`, 'error');
+            }
+        }
+
+        // Save single config
+        async function saveSingleConfig(deviceClass, statusType, fieldConfig) {
+            const response = await fetch(
+                `${API_BASE}/fields/${deviceClass}/${statusType}`,
+                {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ fields: fieldConfig.fields || [] })
+                }
+            );
+
+            if (!response.ok) {
+                throw new Error(`Failed to save ${deviceClass}/${statusType}`);
+            }
+        }
+
+        // Reset to defaults
+        async function resetToDefaults() {
+            if (!confirm('Reset all configurations to defaults? This cannot be undone.')) return;
+
+            try {
+                await fetch(`${API_BASE}/reset/v3`, { method: 'POST' });
+                await fetch(`${API_BASE}/reset/v4`, { method: 'POST' });
+                await loadConfiguration();
+                hasChanges = false;
+                renderFields(currentClass);
+                showToast('Reset to defaults', 'success');
+            } catch (error) {
+                showToast(`Failed to reset: ${error.message}`, 'error');
+            }
+        }
+
+        // Show toast notification
+        function showToast(message, type = 'success') {
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+
+            setTimeout(() => {
+                toast.style.animation = 'slideOut 0.3s ease-out forwards';
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        // Initialize on load
+        window.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>

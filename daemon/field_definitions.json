@@ -1,0 +1,317 @@
+{
+  "version": "1.0",
+  "last_updated": "2026-03-31T00:00:00Z",
+  "description": "Field definitions for STATUS vs VSTATUS per device class. Edit via Configurator app.",
+  "defaults": {
+    "v3": {
+      "status": {
+        "display_name": "V3 Overview",
+        "fields": [
+          {
+            "key": "name",
+            "label": "Device Name",
+            "type": "string",
+            "visible": true,
+            "order": 1
+          },
+          {
+            "key": "ver",
+            "label": "Firmware",
+            "type": "string",
+            "visible": true,
+            "order": 2
+          },
+          {
+            "key": "bat_pct",
+            "label": "Battery %",
+            "type": "percent",
+            "visible": true,
+            "order": 3,
+            "critical": true
+          },
+          {
+            "key": "lora_rssi",
+            "label": "Signal dBm",
+            "type": "dbm",
+            "visible": true,
+            "order": 4
+          },
+          {
+            "key": "uptime",
+            "label": "Uptime",
+            "type": "duration",
+            "visible": true,
+            "order": 5
+          },
+          {
+            "key": "peer_cnt",
+            "label": "Peers",
+            "type": "integer",
+            "visible": false,
+            "order": 6
+          },
+          {
+            "key": "mode",
+            "label": "Mode",
+            "type": "string",
+            "visible": false,
+            "order": 7
+          }
+        ]
+      },
+      "vstatus": {
+        "display_name": "V3 Detailed",
+        "fields": [
+          {
+            "key": "name",
+            "label": "Device Name",
+            "type": "string",
+            "visible": true,
+            "order": 1
+          },
+          {
+            "key": "id",
+            "label": "Device ID",
+            "type": "string",
+            "visible": true,
+            "order": 2
+          },
+          {
+            "key": "ver",
+            "label": "Firmware Version",
+            "type": "string",
+            "visible": true,
+            "order": 3
+          },
+          {
+            "key": "ip",
+            "label": "IP Address",
+            "type": "ipv4",
+            "visible": true,
+            "order": 4
+          },
+          {
+            "key": "bat_mv",
+            "label": "Battery mV",
+            "type": "millivolts",
+            "visible": true,
+            "order": 5,
+            "critical": true
+          },
+          {
+            "key": "bat_pct",
+            "label": "Battery %",
+            "type": "percent",
+            "visible": true,
+            "order": 6,
+            "critical": true
+          },
+          {
+            "key": "lora_rssi",
+            "label": "LoRa RSSI",
+            "type": "dbm",
+            "visible": true,
+            "order": 7
+          },
+          {
+            "key": "lora_snr",
+            "label": "LoRa SNR",
+            "type": "float",
+            "visible": true,
+            "order": 8
+          },
+          {
+            "key": "wifi_rssi",
+            "label": "WiFi RSSI",
+            "type": "dbm",
+            "visible": true,
+            "order": 9
+          },
+          {
+            "key": "uptime",
+            "label": "Uptime",
+            "type": "duration",
+            "visible": true,
+            "order": 10
+          },
+          {
+            "key": "peer_cnt",
+            "label": "Peer Count",
+            "type": "integer",
+            "visible": true,
+            "order": 11
+          },
+          {
+            "key": "mode",
+            "label": "Operating Mode",
+            "type": "string",
+            "visible": true,
+            "order": 12
+          },
+          {
+            "key": "vext",
+            "label": "VEXT Power",
+            "type": "string",
+            "visible": false,
+            "order": 13
+          },
+          {
+            "key": "gps",
+            "label": "GPS Location",
+            "type": "string",
+            "visible": false,
+            "order": 14
+          }
+        ]
+      }
+    },
+    "v4": {
+      "status": {
+        "display_name": "V4 Overview",
+        "fields": [
+          {
+            "key": "name",
+            "label": "Device Name",
+            "type": "string",
+            "visible": true,
+            "order": 1
+          },
+          {
+            "key": "ver",
+            "label": "Firmware",
+            "type": "string",
+            "visible": true,
+            "order": 2
+          },
+          {
+            "key": "bat_pct",
+            "label": "Battery %",
+            "type": "percent",
+            "visible": true,
+            "order": 3,
+            "critical": true
+          },
+          {
+            "key": "lora_rssi",
+            "label": "Signal dBm",
+            "type": "dbm",
+            "visible": true,
+            "order": 4
+          },
+          {
+            "key": "uptime",
+            "label": "Uptime",
+            "type": "duration",
+            "visible": true,
+            "order": 5
+          },
+          {
+            "key": "peer_cnt",
+            "label": "Peers",
+            "type": "integer",
+            "visible": false,
+            "order": 6
+          }
+        ]
+      },
+      "vstatus": {
+        "display_name": "V4 Detailed",
+        "fields": [
+          {
+            "key": "name",
+            "label": "Device Name",
+            "type": "string",
+            "visible": true,
+            "order": 1
+          },
+          {
+            "key": "id",
+            "label": "Device ID",
+            "type": "string",
+            "visible": true,
+            "order": 2
+          },
+          {
+            "key": "ver",
+            "label": "Firmware Version",
+            "type": "string",
+            "visible": true,
+            "order": 3
+          },
+          {
+            "key": "ip",
+            "label": "IP Address",
+            "type": "ipv4",
+            "visible": true,
+            "order": 4
+          },
+          {
+            "key": "bat_mv",
+            "label": "Battery mV",
+            "type": "millivolts",
+            "visible": true,
+            "order": 5,
+            "critical": true
+          },
+          {
+            "key": "bat_pct",
+            "label": "Battery %",
+            "type": "percent",
+            "visible": true,
+            "order": 6,
+            "critical": true
+          },
+          {
+            "key": "lora_rssi",
+            "label": "LoRa RSSI",
+            "type": "dbm",
+            "visible": true,
+            "order": 7
+          },
+          {
+            "key": "lora_snr",
+            "label": "LoRa SNR",
+            "type": "float",
+            "visible": true,
+            "order": 8
+          },
+          {
+            "key": "wifi_rssi",
+            "label": "WiFi RSSI",
+            "type": "dbm",
+            "visible": true,
+            "order": 9
+          },
+          {
+            "key": "uptime",
+            "label": "Uptime",
+            "type": "duration",
+            "visible": true,
+            "order": 10
+          },
+          {
+            "key": "peer_cnt",
+            "label": "Peer Count",
+            "type": "integer",
+            "visible": true,
+            "order": 11
+          },
+          {
+            "key": "mode",
+            "label": "Operating Mode",
+            "type": "string",
+            "visible": true,
+            "order": 12
+          },
+          {
+            "key": "gps",
+            "label": "GPS Location",
+            "type": "string",
+            "visible": false,
+            "order": 13
+          }
+        ]
+      }
+    }
+  }
+}
