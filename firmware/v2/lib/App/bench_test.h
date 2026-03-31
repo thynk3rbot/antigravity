@@ -1,6 +1,6 @@
 /**
  * @file bench_test.h
- * @brief LoRaLink v2 Bench Mode - Diagnostic Hardware Testing
+ * @brief Magic v2 Bench Mode - Diagnostic Hardware Testing
  *
  * Provides compile-time selectable benchmark mode for testing:
  * - HAL components (radio, relays, GPIO)

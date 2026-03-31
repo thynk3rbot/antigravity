@@ -1,4 +1,4 @@
-# LoRaLink v2 - Bench Mode Diagnostic Testing
+# Magic v2 - Bench Mode Diagnostic Testing
 
 **Purpose:** Hardware validation and component testing during development and deployment
 
@@ -40,7 +40,7 @@ build_flags =
     -fexceptions
     -Wall -Wextra
     -D FIRMWARE_VERSION=\"0.2.0\"
-    -D LORALINK_V2
+    -D MAGIC_V2
     -D ROLE_HUB
     -D RADIO_SX1276
     -D ARDUINO_HELTEC_WIFI_LORA_32
@@ -53,7 +53,7 @@ Using the development workflow from BUILD.md:
 
 **Terminal 1: Watch build**
 ```bash
-cd loralink-v2
+cd magic-v2
 platformio run --environment heltec_v2_hub -w
 ```
 
@@ -66,7 +66,7 @@ platformio device monitor --baud 115200
 
 ```
 ╔════════════════════════════════════════╗
-║     LoRaLink v2 Bench Mode Suite       ║
+║     Magic v2 Bench Mode Suite       ║
 ╚════════════════════════════════════════╝
 
 ════════════════════════════════════════

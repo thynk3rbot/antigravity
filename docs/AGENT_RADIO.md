@@ -28,7 +28,7 @@ Claude (Reasoning)          Local Model (Execution)      AG (Hardware)
 - ✅ All variants build clean (V2, V3, V4)
 - ✅ Ready for Phase 50
 
-**Next:** Phase 50 (Autonomous Mesh) & LoRaLink Assistant (Orion)
+**Next:** Phase 50 (Autonomous Mesh) & Magic Assistant (Orion)
 
 ---
 
@@ -144,9 +144,9 @@ result = await proxy.query(
 | Finalize Phase 50 Mesh Specs | Claude | ✅ Done |
 | Implement ControlPacket Parser | AG | ⏳ Next |
 | Update Daemon to MAC-Primary | Claude | ⏳ Next |
-| Scaffold LoRaLink Assistant (P1) | AG + Ollama | ⏳ Next |
+| Scaffold Magic Assistant (P1) | AG + Ollama | ⏳ Next |
 
-**⚡ AG: Offload boilerplate to Ollama.** Don't hand-write CSS, SQLite CRUD, route stubs, test scaffolds, or repetitive patterns. Queue them to qwen2.5-coder:14b via the hybrid proxy — it's free and running 24/7. You decide architecture, Ollama generates code, you review and integrate. See `docs/plans/2026-03-26-loralink-assistant-design.md` → "IMPERATIVE: Offload to Ollama" section for specifics.
+**⚡ AG: Offload boilerplate to Ollama.** Don't hand-write CSS, SQLite CRUD, route stubs, test scaffolds, or repetitive patterns. Queue them to qwen2.5-coder:14b via the hybrid proxy — it's free and running 24/7. You decide architecture, Ollama generates code, you review and integrate. See `docs/plans/2026-03-26-magic-assistant-design.md` → "IMPERATIVE: Offload to Ollama" section for specifics.
 
 ---
 

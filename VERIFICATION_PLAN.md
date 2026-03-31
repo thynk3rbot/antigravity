@@ -1,5 +1,5 @@
 
-# LoRaLink v1.6.0 Verification & Next-Steps Plan
+# Magic v1.6.0 Verification & Next-Steps Plan
 
 This document outlines the validation steps for the **Range Boost (Binary Mode)** and **Power-Miser (Smart Ag)** features before the next firmware flash.
 

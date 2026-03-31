@@ -1,6 +1,6 @@
 # Internal: Plugin Development Guide
 
-This guide describes how to add a new hardware or logic module to the LoRaLink core as a `Plugin`.
+This guide describes how to add a new hardware or logic module to the Magic core as a `Plugin`.
 
 ## 1. Lifecycle of a Plugin
 

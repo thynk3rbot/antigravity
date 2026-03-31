@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document describes the complete Magic rebrand (from LoRaLink to Magic with octopus theming) and the integration of **MagicCache**, a real-time distributed cache system for mesh fleet data with alerting and export capabilities.
+This document describes the complete Magic rebrand (from Magic to Magic with octopus theming) and the integration of **MagicCache**, a real-time distributed cache system for mesh fleet data with alerting and export capabilities.
 
 **Status:** ✓ All 17 tasks completed
 
@@ -34,7 +34,7 @@ All branding is **client-facing only** and controlled via a centralized configur
 
 #### Daemon Changes
 
-- **Class renamed:** `LoRaLinkDaemon` → `MagicDaemon` (`daemon/src/main.py`)
+- **Class renamed:** `MagicDaemon` → `MagicDaemon` (`daemon/src/main.py`)
 - **New endpoint:** `GET /api/branding` — returns centralized branding config
 - **New endpoint:** `GET /api/services/status` — detects MagicCache service availability
 - **Config update:** `daemon/config.json` — updated all service descriptions to "Magic" theme
@@ -58,7 +58,7 @@ All branding is **client-facing only** and controlled via a centralized configur
 **JavaScript Updates (`tools/webapp/static/js/app.js`):**
 - Added `loadBrandingConfig()` function to fetch `/api/branding` on startup
 - Added `applyBranding()` function to dynamically apply color/name changes
-- Updated docstring: LoRaLink → Magic
+- Updated docstring: Magic → Magic
 
 **Assets:**
 - Logo: `media/magiclogo.png` copied to `tools/webapp/static/images/magiclogo.png`

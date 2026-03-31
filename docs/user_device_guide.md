@@ -1,6 +1,6 @@
 # User Guide: Adding Device Support (JSON)
 
-This guide explains how to add support for new hardware to LoRaLink without recompiling the firmware. This is done by creating a "Product Manifest" JSON file and uploading it to the device.
+This guide explains how to add support for new hardware to Magic without recompiling the firmware. This is done by creating a "Product Manifest" JSON file and uploading it to the device.
 
 ## 1. The Product Manifest (`/products/name.json`)
 

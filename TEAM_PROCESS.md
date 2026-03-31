@@ -1,4 +1,4 @@
-# LoRaLink Team Process
+# Magic Team Process
 **Three agents. One repo. No blocking.**
 
 ---

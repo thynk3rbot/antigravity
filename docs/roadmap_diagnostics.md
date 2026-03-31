@@ -1,6 +1,6 @@
 # Roadmap: Remote Field Diagnostics
 
-**Objective:** Integrate manufacturer-grade diagnostic routines into the production firmware to allow remote triage and health monitoring of LoRaLink nodes in the field.
+**Objective:** Integrate manufacturer-grade diagnostic routines into the production firmware to allow remote triage and health monitoring of Magic nodes in the field.
 
 ---
 

@@ -11,7 +11,7 @@
 - **Firmware:** Phase 50 (GPIO_SET + MessageHandler dispatch)
 - **MQTT Broker:** Running on localhost:1883 (Mosquitto)
 - **Daemon:** `python daemon/run.py`
-- **Devices:** 3+ LoRaLink boards (V2/V3/V4)
+- **Devices:** 3+ Magic boards (V2/V3/V4)
 
 ---
 
@@ -25,7 +25,7 @@ python run.py --mqtt-broker localhost:1883 --log-level DEBUG > daemon.log 2>&1 &
 
 **Watch for:**
 ```
-[Daemon] Initializing LoRaLink Daemon (Pure Mesh Gateway)...
+[Daemon] Initializing Magic Daemon (Pure Mesh Gateway)...
 [Daemon] Connecting to MQTT broker at localhost:1883...
 [Daemon] Initialization complete! (Pure Mesh Mode)
 ```

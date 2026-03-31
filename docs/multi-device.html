@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Multi-Device Swarm — LoRaLink Docs</title>
+  <title>Multi-Device Swarm — Magic Docs</title>
   <link rel="stylesheet" href="css/docs.css">
   <script src="config.js"></script>
 </head>
@@ -11,11 +11,11 @@
   <main class="doc-main">
     <div class="breadcrumb"><a href="index.html">Home</a><span class="sep">›</span>Multi-Device Swarm Support</div>
     <h1>Multi-Device Swarm Operations</h1>
-    <p>Scaling LoRaLink from a single gateway to a network of distributed edge nodes through the Swarm Dashboard.</p>
+    <p>Scaling Magic from a single gateway to a network of distributed edge nodes through the Swarm Dashboard.</p>
 
     <!-- Section 1: Docker Orchestration -->
     <h2>1. Docker Broker Orchestration (EMQX)</h2>
-    <p>To securely and efficiently route telemetry between multiple devices and the centralized Fleet Administrator, LoRaLink utilizes an external MQTT broker (EMQX). This handles all "System of Systems" transport over WiFi.</p>
+    <p>To securely and efficiently route telemetry between multiple devices and the centralized Fleet Administrator, Magic utilizes an external MQTT broker (EMQX). This handles all "System of Systems" transport over WiFi.</p>
 
     <h3>Deployment Configuration (<code>mqttdocker.yml</code>)</h3>
     <pre><code>version: '3.8'
@@ -23,7 +23,7 @@
 services:
   emqx:
     image: emqx:latest
-    container_name: loralink_emqx
+    container_name: magic_emqx
     ports:
       - "1883:1883"     # Standard MQTT routing between nodes
       - "8083:8083"     # WebSockets - Required for Swarm Dashboard UI
@@ -44,10 +44,10 @@ services:
     <table>
       <thead><tr><th>Namespace: Key</th><th>Value</th><th>Description</th></tr></thead>
       <tbody>
-        <tr><td><code>loralink:wifi_ssid</code></td><td>"YOUR_SSID"</td><td>Local network access.</td></tr>
-        <tr><td><code>loralink:mqtt_en</code></td><td><code>true</code></td><td>Brings up the MQTT client task loop.</td></tr>
-        <tr><td><code>loralink:mqtt_srv</code></td><td>"192.168.1.100"</td><td>The IP Address of your Docker Host running EMQX.</td></tr>
-        <tr><td><code>loralink:dev_name</code></td><td>Node-01</td><td>Unique identifier to prevent reporting collisions.</td></tr>
+        <tr><td><code>magic:wifi_ssid</code></td><td>"YOUR_SSID"</td><td>Local network access.</td></tr>
+        <tr><td><code>magic:mqtt_en</code></td><td><code>true</code></td><td>Brings up the MQTT client task loop.</td></tr>
+        <tr><td><code>magic:mqtt_srv</code></td><td>"192.168.1.100"</td><td>The IP Address of your Docker Host running EMQX.</td></tr>
+        <tr><td><code>magic:dev_name</code></td><td>Node-01</td><td>Unique identifier to prevent reporting collisions.</td></tr>
       </tbody>
     </table>
 
@@ -56,10 +56,10 @@ services:
     <p>The Swarm Dashboard is an isolated UI module that runs directly off of the WebSockets feed, rendering live telemetry without needing to query individual nodes via REST APIs.</p>
 
     <h3>Telemetry Reception</h3>
-    <p>Nodes broadcast lightweight JSON heartbeat packets to the <code>loralink/telemetry/{dev_name}</code> topic every 5 minutes (or as defined by <code>sched_int_global</code>). This maintains the dashboard's "Online/Offline" health indicators and tracks battery consumption dynamically.</p>
+    <p>Nodes broadcast lightweight JSON heartbeat packets to the <code>magic/telemetry/{dev_name}</code> topic every 5 minutes (or as defined by <code>sched_int_global</code>). This maintains the dashboard's "Online/Offline" health indicators and tracks battery consumption dynamically.</p>
 
     <h3>Global Command Injection</h3>
-    <p>Using the Sidebar "Broadcast Console", you can inject commands across the entire LoRa network. For example, broadcasting <code>RESTART</code> publishes the message to <code>loralink/cmd/all</code>, causing all connected edge modules to cleanly reboot.</p>
+    <p>Using the Sidebar "Broadcast Console", you can inject commands across the entire LoRa network. For example, broadcasting <code>RESTART</code> publishes the message to <code>magic/cmd/all</code>, causing all connected edge modules to cleanly reboot.</p>
 
     <!-- Section 4: Testing & Sync Validation -->
     <h2>4. Testing Fleet Sync</h2>

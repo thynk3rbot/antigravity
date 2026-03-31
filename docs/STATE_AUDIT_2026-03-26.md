@@ -82,10 +82,10 @@ firmware/v2/docs/AGENT_RADIO.md               ← Status notes
 
 ### My Work (ON FEATURE/HYBRID-PROXY-WEBAPP-INTEGRATION BRANCH)
 ```
-docs/plans/2026-03-26-loralink-assistant-design.md  ← ✅ Committed (4 commits)
+docs/plans/2026-03-26-magic-assistant-design.md  ← ✅ Committed (4 commits)
 tools/multi-agent-framework/                        ← ✅ Committed (Orion framework)
-docs/plans/2026-03-26-loralink-assistant-design.md  ← ✅ Committed (Branding)
-docs/plans/2026-03-26-loralink-assistant-design.md  ← ✅ Committed (Ollama offload)
+docs/plans/2026-03-26-magic-assistant-design.md  ← ✅ Committed (Branding)
+docs/plans/2026-03-26-magic-assistant-design.md  ← ✅ Committed (Ollama offload)
 ```
 
 **PROBLEM:** My work is on a FEATURE BRANCH, not merged to main. 4 commits behind.
@@ -141,10 +141,10 @@ tools/webapp/static/telemetry_registry.json ← NEW (registry)
 - Lives at `tools/multi-agent-framework/`
 - **Integration with firmware:** NONE YET
 
-### LoRaLink Assistant Spec
+### Magic Assistant Spec
 - ✅ Committed to feature/hybrid-proxy-webapp-integration
 - Production spec for FastAPI + system tray + WebSocket chat UI
-- Lives at `docs/plans/2026-03-26-loralink-assistant-design.md`
+- Lives at `docs/plans/2026-03-26-magic-assistant-design.md`
 - **Integration with firmware:** Expects REST API from daemon (not specified which firmware)
 
 ### Orion's Garden

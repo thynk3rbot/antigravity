@@ -1,0 +1,18 @@
+magic_bus:
+  transport: "mqtt"
+  host: "localhost"
+  port: 1883
+  topic_prefix: "magic"
+  subject_mapping:
+    # IMDF.QUOTE.MSFT -> magic/IMDF/QUOTE/MSFT
+    pattern: "([^.]+).([^.]+).([^.]+)"
+    replacement: "magic/{0}/{1}/{2}"
+
+persistence:
+  db_url: "sqlite:///data/magic.db"
+  write_through: true
+  auto_evolve_schema: true
+
+monitoring:
+  log_file: "./logs/magic.log"
+  log_level: "INFO"

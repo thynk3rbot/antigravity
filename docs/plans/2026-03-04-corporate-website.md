@@ -1,8 +1,8 @@
-# LoRaLink Corporate Website Implementation Plan
+# Magic Corporate Website Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Build a placeholder corporate website for LoRaLink with a marketing landing page, contact form, and live MQTT dashboard for customer devices.
+**Goal:** Build a placeholder corporate website for Magic with a marketing landing page, contact form, and live MQTT dashboard for customer devices.
 
 **Architecture:** FastAPI serves static marketing pages and a `/api/contact` endpoint (SQLite storage). The MQTT dashboard connects the browser directly to EMQX via mqtt.js over WebSocket — no backend MQTT polling. Nginx reverse-proxies the whole stack with TLS.
 
@@ -26,7 +26,7 @@
 - Create: `tools/website/db/.gitkeep`
 - Create: `tools/website/tests/__init__.py`
 - Create: `tools/website/tests/test_api.py`
-- Create: `tools/website/nginx/loralink.conf`
+- Create: `tools/website/nginx/magic.conf`
 
 **Step 1: Create requirements.txt**
 
@@ -45,7 +45,7 @@ pytest-asyncio>=0.23.0
 ```python
 #!/usr/bin/env python3
 """
-server.py — LoRaLink Corporate Website Backend
+server.py — Magic Corporate Website Backend
 
 Usage:
     python tools/website/server.py
@@ -68,7 +68,7 @@ BASE = Path(__file__).parent
 DB_PATH = BASE / "db" / "contacts.db"
 STATIC = BASE / "static"
 
-app = FastAPI(title="LoRaLink Website")
+app = FastAPI(title="Magic Website")
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
 
@@ -191,7 +191,7 @@ async def test_contact_submit():
             "name": "Ada Lovelace",
             "email": "ada@example.com",
             "company": "Acme",
-            "message": "Interested in LoRaLink",
+            "message": "Interested in Magic",
         })
     assert r.status_code == 200
     assert r.json()["ok"] is True
@@ -332,10 +332,10 @@ Three layout sections: broadcast bar, client card grid (`id="client-grid"`), con
 Key security rule: MQTT client IDs come from an external broker and must be treated as untrusted. Use a `sanitize()` helper for all untrusted strings inserted into the DOM, and always set values via `textContent` (not innerHTML) where possible. Build card elements via `document.createElement` to avoid injection.
 
 ```javascript
-// dashboard.js — LoRaLink MQTT Dashboard
+// dashboard.js — Magic MQTT Dashboard
 
 const BROKER_URL = window.MQTT_BROKER_URL || 'ws://localhost:8083/mqtt';
-const TOPIC_PREFIX = 'loralink';
+const TOPIC_PREFIX = 'magic';
 const clients = {};
 
 // Escapes untrusted strings for safe use as text node content
@@ -510,14 +510,14 @@ git commit -m "feat(website): MQTT dashboard with safe DOM construction, broadca
 ## Task 4: Nginx Config + Deploy Guide
 
 **Files:**
-- Create: `tools/website/nginx/loralink.conf`
+- Create: `tools/website/nginx/magic.conf`
 - Create: `tools/website/DEPLOY.md`
 
-**Step 1: Create `nginx/loralink.conf`**
+**Step 1: Create `nginx/magic.conf`**
 
 ```nginx
-# Deploy to: /etc/nginx/sites-available/loralink
-# Enable: sudo ln -s /etc/nginx/sites-available/loralink /etc/nginx/sites-enabled/
+# Deploy to: /etc/nginx/sites-available/magic
+# Enable: sudo ln -s /etc/nginx/sites-available/magic /etc/nginx/sites-enabled/
 # Replace YOUR_DOMAIN with your actual domain.
 
 server {

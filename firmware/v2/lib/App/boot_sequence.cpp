@@ -143,7 +143,7 @@ void BootSequence::initCore() {
 
   Serial.println("[BOOT] Device initialized.");
 
-  Serial.println("\n=== LoRaLink v2 Boot ===");
+  Serial.println("\n=== Magic v2 Boot ===");
   Serial.printf("Version: %s\n", FIRMWARE_VERSION);
   Serial.printf("Board: %s / Radio: %s\n", HW_VERSION, RADIO_MODEL);
   Serial.printf("Free Heap: %u bytes\n", esp_get_free_heap_size());
@@ -254,7 +254,7 @@ void BootSequence::initTransports() {
 
   std::string wifiSSID = NVSManager::getWiFiSSID();
   std::string wifiPass = NVSManager::getWiFiPassword();
-  std::string mdnsHostname = "loralink-" + nodeIDStr;
+  std::string mdnsHostname = "magic-" + nodeIDStr;
 
   // Unconditional WiFi Initialization (Starts AP if STA fails/is-empty)
   if (WiFiTransport::init(wifiSSID, wifiPass, mdnsHostname)) {

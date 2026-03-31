@@ -1,6 +1,6 @@
 # COMMAND_INDEX.md
 
-Canonical index of commands for LoRaLink firmware.
+Canonical index of commands for Magic firmware.
 
 This file is intended to be the shared command contract for:
 - firmware

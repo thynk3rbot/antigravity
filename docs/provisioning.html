@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Provisioning & Reliability — LoRaLink Docs</title>
+  <title>Provisioning & Reliability — Magic Docs</title>
   <link rel="stylesheet" href="css/docs.css">
   <script src="config.js"></script>
 </head>
@@ -36,7 +36,7 @@
     <h3>The Reconnect Loop</h3>
     <div class="alert alert-info">
       <div class="alert-title">🔄 Non-Blocking Reconnects</div>
-      <p>LoRaLink utilizes an asynchronous, non-blocking state machine in `WiFiManager` and `MQTTManager`. If a connection drops, the device does <strong>not</strong> freeze in a `while()` loop; it schedules connection attempts every 5-10 seconds, allowing local tasks (relays/sensors) to proceed uninterrupted.</p>
+      <p>Magic utilizes an asynchronous, non-blocking state machine in `WiFiManager` and `MQTTManager`. If a connection drops, the device does <strong>not</strong> freeze in a `while()` loop; it schedules connection attempts every 5-10 seconds, allowing local tasks (relays/sensors) to proceed uninterrupted.</p>
     </div>
 
     <h3>NVS State Saves</h3>
@@ -47,7 +47,7 @@
 
     <!-- SECTION 3: OEM Configuration & Bulk Flashing -->
     <h2>3. OEM Configuration vs. Bulk Production Flashing</h2>
-    <p>For manufacturers looking to build product lines on top of LoRaLink, two distinct stages occur: <strong>OEM Scaffolding</strong> and <strong>Bulk Flashing</strong>.</p>
+    <p>For manufacturers looking to build product lines on top of Magic, two distinct stages occur: <strong>OEM Scaffolding</strong> and <strong>Bulk Flashing</strong>.</p>
 
     <h3>Phase A: OEM Configuration (The Gold Standard)</h3>
     <p>The goal is to generate a "Gold Master" CSV or JSON configuration file representing the finished product's capabilities.</p>
@@ -71,7 +71,7 @@ esptool.py --port COM7 write_flash 0x10000 firmware.bin 0x210000 my_nvs.bin</cod
 
     <div class="alert alert-warn">
       <div class="alert-title">⚠️ Individual Provisioning</div>
-      <p>Even though Bulk Flashing sets all settings perfectly, it duplicates the `loralink:dev_name`. For large swarms, ensure each device is booted at least once to assign a unique suffix (e.g., `Node-A1`, `Node-A2`), or seed the UUID via the ESP32 MAC address upon first boot.</p>
+      <p>Even though Bulk Flashing sets all settings perfectly, it duplicates the `magic:dev_name`. For large swarms, ensure each device is booted at least once to assign a unique suffix (e.g., `Node-A1`, `Node-A2`), or seed the UUID via the ESP32 MAC address upon first boot.</p>
     </div>
 
   </main>

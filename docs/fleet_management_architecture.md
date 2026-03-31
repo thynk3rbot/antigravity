@@ -1,6 +1,6 @@
-# LoRaLink Fleet Management Architecture
+# Magic Fleet Management Architecture
 
-This document outlines the dual-track strategy for high-efficiency provisioning and operational management of LoRaLink device swarms.
+This document outlines the dual-track strategy for high-efficiency provisioning and operational management of Magic device swarms.
 
 ## 1. Primary Use Cases
 
@@ -28,7 +28,7 @@ To support these use cases, the mDNS TXT record schema is extended:
 | `id` | `String` | Human-friendly Node ID (e.g., "Peer1") |
 | `mac` | `String` | Immutable HW identifier (e.g., "A1:B2...") |
 | `state` | `provisioned` / `unconfigured` | Current setup status |
-| `type` | `loralink-gateway` | Device classification |
+| `type` | `magic-gateway` | Device classification |
 | `hw` | `V2` / `V3` / `V4` | Hardware generation |
 
 ## 3. Implementation Roadmap

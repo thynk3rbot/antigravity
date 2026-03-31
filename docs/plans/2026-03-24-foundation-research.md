@@ -105,7 +105,7 @@ pio run -e ota_master --target upload   # to 172.16.0.27
 
 3. **I2C Bus Isolation** — Wire bus (OLED) must not interfere with Wire1 (expanders)
    - Implies: No `Wire.begin()` re-initialization after `Heltec.begin()`
-   - Current status: ✅ Known and documented in `heltec-loralink` skill
+   - Current status: ✅ Known and documented in `heltec-magic` skill
 
 4. **Persistent Configuration** — NVS must reliably store device registry and user config
    - Implies: Atomic writes, wear leveling, CRC protection
@@ -211,7 +211,7 @@ pio run -e ota_master --target upload   # to 172.16.0.27
 
 | Document | Purpose | Status |
 |----------|---------|--------|
-| `heltec-loralink` skill | Hardware reference for Heltec V2/V3/V4 | ✅ Complete |
+| `heltec-magic` skill | Hardware reference for Heltec V2/V3/V4 | ✅ Complete |
 | This file | Research roadmap | ✅ Created |
 | TBD: Flash Stability Report | Findings from Phase A | ⏳ Pending |
 | TBD: Hardware Config Report | I2C/GPIO mapping from Phase B | ⏳ Pending |
@@ -224,12 +224,12 @@ pio run -e ota_master --target upload   # to 172.16.0.27
 **For this research task:**
 - Invoke `superpowers:systematic-debugging` when investigating flashing failures
 - Invoke `electronics-design-esp32` for brownout/power analysis
-- Invoke `loralink-production-monitoring` for reliability patterns
+- Invoke `magic-production-monitoring` for reliability patterns
 
 **For plugin architecture (after research):**
 - `superpowers:brainstorming` → design modular system
 - `superpowers:writing-plans` → multi-phase implementation
-- `heltec-loralink` skill → hardware specifics during implementation
+- `heltec-magic` skill → hardware specifics during implementation
 
 ---
 

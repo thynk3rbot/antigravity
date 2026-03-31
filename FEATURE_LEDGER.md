@@ -1,11 +1,11 @@
-# LoRaLink Feature Ledger (Chronological Build History)
+# Magic Feature Ledger (Chronological Build History)
 
 ---
 status: complete
 owner: antigravity
 ---
 
-This document tracks the consolidated feature set of the LoRaLink-AnyToAny 
+This document tracks the consolidated feature set of the Magic-AnyToAny 
 firmware from project origin, maintained from a build perspective.
 
 ## 1. Primary History (The v1.x Development Track)

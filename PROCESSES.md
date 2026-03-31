@@ -1,20 +1,20 @@
-# LoRaLink Fleet Deployment Processes
+# Magic Fleet Deployment Processes
 
-This document serves as the formal record for industrial deployment decisions and stabilized fleet workflows for the LoRaLink project.
+This document serves as the formal record for industrial deployment decisions and stabilized fleet workflows for the Magic project.
 
 ## 1. UI & Visual Standards (Industrial V1 Restoration)
 
 To ensure a premium, technically rigorous user experience across all hardware generations (V2, V3, V4), the following visual patterns are enforced:
 
-- **Restored Splash Screen**: All devices must maintain the "V1 Industrial" boot sequence, featuring a framed splash with "SYSTEM BOOT" and the core "LoRaLink" branding.
+- **Restored Splash Screen**: All devices must maintain the "V1 Industrial" boot sequence, featuring a framed splash with "SYSTEM BOOT" and the core "Magic" branding.
 - **Dynamic Boot Progress**: A real-time progress bar (e.g., `[Init Mesh.. 45%]`) is required throughout the `setup()` sequence.
 - **ID Methodology**: Nodes are identified by the **MAC-Suffix/Hardware ID** (e.g., `LL-A4B8D1`). Re-naming is strictly for the node-registry file in the WebApp; the firmware identity is bound to the hardware signature to prevent fleet-wide ID collisions.
-- **Branding**: "Any2Any" branding is suppressed in the current stable build to prioritize the primary LoRaLink identity.
+- **Branding**: "Any2Any" branding is suppressed in the current stable build to prioritize the primary Magic identity.
 
 ## 2. Fleet-Wide Operations
 
 ### A. Centralized Flashing (Webapp-Driven)
-The LoRaLink Fleet Admin webapp now includes a parallel deployment engine:
+The Magic Fleet Admin webapp now includes a parallel deployment engine:
 - **Parallel Builds**: PlatformIO is triggered by the backend to build and push binary environments (`heltec_v2`, `heltec_v3`, `heltec_v4`) simultaneously.
 - **Staggered Uploads**: Serially-attached and OTA devices are addressed in a managed batch to prevent OS port saturation or networking spikes.
 

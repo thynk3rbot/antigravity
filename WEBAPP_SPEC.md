@@ -1,6 +1,6 @@
-# LoRaLink Web Application Specification
+# Magic Web Application Specification
 
-This document serves as the primary technical and functional specification for the LoRaLink ecosystem's web interfaces. It consolidates the architectural requirements for both the **Fleet Administrator** (Centralized PC App) and the **Local Device Webserver** (Singleton/Gateway), ensuring they operate in harmony while serving distinct user needs.
+This document serves as the primary technical and functional specification for the Magic ecosystem's web interfaces. It consolidates the architectural requirements for both the **Fleet Administrator** (Centralized PC App) and the **Local Device Webserver** (Singleton/Gateway), ensuring they operate in harmony while serving distinct user needs.
 
 ---
 
@@ -50,14 +50,14 @@ Mechanism to confirm swarm health and synchronization.
 The system utilizes the ESP32 Preferences library with namespace partitioning.
 
 ### 3.1 NVS Namespaces
-- **`loralink`**: System core & network settings (`crypto_key`, `espnow_en`, `op_mode`, `pin_enabled`).
+- **`magic`**: System core & network settings (`crypto_key`, `espnow_en`, `op_mode`, `pin_enabled`).
 - **`espnow`**: Peer tracking and MAC address storage.
 - **`lora_hw`**: Physical hardware state persistence (`RLY1`, `LED`, `VEXT`).
 - **`pin_names`**: UI Labeling (e.g., `5 -> "Main Pump"`).
 - **`hw_registry`**: **READ-ONLY** hardware identity (Board ID, HW Rev, Capabilities).
 
 ### 3.2 Administrative Pin Configuration (APC)
-- **`pin_enabled` Flag**: Resides in `loralink`. The Fleet Admin is the sole authority to toggle this flag.
+- **`pin_enabled` Flag**: Resides in `magic`. The Fleet Admin is the sole authority to toggle this flag.
 - **Interest List**: On boot, the device builds a runtime list of pins where `pin_enabled == true`.
 - **Sparse Reporting**: Outgoing JSON payloads only contain keys for pins in the Interest List, minimizing "JSON Noise."
 

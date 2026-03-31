@@ -1,9 +1,9 @@
-# LoRaLink v2 - Lightweight Multi-Transport Mesh & Environment Controller
+# Magic v2 - Lightweight Multi-Transport Mesh & Environment Controller
 
 **Version:** 0.3.0
 **Status:** Feature Complete (Ready for Bench Testing)
 
-LoRaLink v2 is a decentralized IoT mesh networking system for ESP32-based controllers with multi-hop LoRa communication, local relay control, and optional cloud bridging.
+Magic v2 is a decentralized IoT mesh networking system for ESP32-based controllers with multi-hop LoRa communication, local relay control, and optional cloud bridging.
 
 ## Features
 
@@ -37,7 +37,7 @@ LoRaLink v2 is a decentralized IoT mesh networking system for ESP32-based contro
 
 ### Build for Hub (V2)
 ```bash
-cd loralink-v2
+cd magic-v2
 platformio run --environment heltec_v2_hub
 platformio run --environment heltec_v2_hub --target upload
 ```
@@ -115,7 +115,7 @@ lib/HAL/ (board_config.h, radio_hal.h, relay_hal.h)
 ## Project Structure
 
 ```
-loralink-v2/
+magic-v2/
 ├── src/
 │   └── main.cpp                    # FreeRTOS entry point, tasks
 ├── lib/
@@ -179,7 +179,7 @@ build_flags = -D ROLE_NODE -D RADIO_SX1262 -D BOARD_HAS_PSRAM -D ARDUINO_USB_MOD
 
 ## v1 Carryover Checklist
 
-From LoRaLink v0.1.0, the following **critical features** are inherited:
+From Magic v0.1.0, the following **critical features** are inherited:
 
 - ✅ **AES-128-GCM encryption** (moved to transport layer)
 - ✅ **Packet deduplication** (rolling hash in MessageRouter)
@@ -244,7 +244,7 @@ PubSubClient @ 2.8
 
 ## License & Attribution
 
-LoRaLink v2 is the next generation of the v0.1.0 firmware, redesigned for **clean architecture, strict HAL isolation, and multi-board support**.
+Magic v2 is the next generation of the v0.1.0 firmware, redesigned for **clean architecture, strict HAL isolation, and multi-board support**.
 
 Key design philosophy:
 - **Compile-time safety:** Invalid permutations caught at build, not runtime

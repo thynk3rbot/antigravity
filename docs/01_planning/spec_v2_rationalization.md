@@ -1,7 +1,7 @@
-# LoRaLink V2 Rationalization & Autonomous Mesh-First Spec
+# Magic V2 Rationalization & Autonomous Mesh-First Spec
 
 ## 1. Goal
-Rationalize the LoRaLink V2 firmware from a monolithic `main.cpp` into a modular, variant-agnostic architecture while implementing "Autonomous Mesh-First" discovery and security.
+Rationalize the Magic V2 firmware from a monolithic `main.cpp` into a modular, variant-agnostic architecture while implementing "Autonomous Mesh-First" discovery and security.
 
 ## 2. Architectural Decisions
 
@@ -14,7 +14,7 @@ Extract system logic from `main.cpp` into the following components:
 ### B. Autonomous Security (MAC-Seeded Derivation)
 Enable peer-to-peer AES encryption without a PC-based registration handler.
 - **Algorithm**: `shared_key = SHA256(sort(ourMAC, peerMAC) + network_secret)`
-- **NVS Storage**: `network_secret` (16-byte blob) stored in NVS `loralink` namespace under key `net_secret`.
+- **NVS Storage**: `network_secret` (16-byte blob) stored in NVS `magic` namespace under key `net_secret`.
 - **Identity**: Nodes identified by 6-byte MAC. `dev_name` key in NVS remains authoritative for local UI hostname.
 
 ### C. Discovery Protocol (LORA_BEACON)

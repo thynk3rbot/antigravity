@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>System Operations — LoRaLink Docs</title>
+  <title>System Operations — Magic Docs</title>
   <link rel="stylesheet" href="css/docs.css">
   <script src="config.js"></script>
 </head>
@@ -11,14 +11,14 @@
   <main class="doc-main">
     <div class="breadcrumb"><a href="index.html">Home</a><span class="sep">›</span>System Operations</div>
     <h1>⚙️ System Operations</h1>
-    <p>Management of the LoRaLink PC ecosystem, including service orchestration, Docker integration, and automated startup.</p>
+    <p>Management of the Magic PC ecosystem, including service orchestration, Docker integration, and automated startup.</p>
 
     <h2>Ecosystem Launch Control</h2>
-    <p>LoRaLink consists of several interconnected services: the MQTT Broker, Fleet Administrator, Corporate Website, and Documentation Server. These can be managed individually or as a unified stack.</p>
+    <p>Magic consists of several interconnected services: the MQTT Broker, Fleet Administrator, Corporate Website, and Documentation Server. These can be managed individually or as a unified stack.</p>
 
     <h3>The Master Launch Script</h3>
-    <p>To start the entire LoRaLink ecosystem with a single click, use the root-level batch file:</p>
-    <pre><code>Start_Loralink.bat</code></pre>
+    <p>To start the entire Magic ecosystem with a single click, use the root-level batch file:</p>
+    <pre><code>Start_Magic.bat</code></pre>
     <p>This script performs the following automated sequence:</p>
     <ol>
       <li><strong>Docker Check</strong>: Detects if Docker Desktop is running.</li>
@@ -28,7 +28,7 @@
     </ol>
 
     <h2>Automated Startup (Reboot Survival)</h2>
-    <p>For production deployments where the PC must resume operations after a power cycle or reboot, you can register LoRaLink as a Windows Startup Task.</p>
+    <p>For production deployments where the PC must resume operations after a power cycle or reboot, you can register Magic as a Windows Startup Task.</p>
     <div class="alert alert-warning">
       <div class="alert-title">⚠️ Admin Rights Required</div>
       <p>Registering a startup task requires Administrator privileges.</p>
@@ -36,15 +36,15 @@
     <ol class="steps">
       <li>Navigate to the <code>tools/</code> directory.</li>
       <li>Right-click <strong><code>Register_Startup_Task.bat</code></strong> and select "Run as Administrator".</li>
-      <li>LoRaLink is now registered in the Windows Task Scheduler to launch automatically upon user login.</li>
+      <li>Magic is now registered in the Windows Task Scheduler to launch automatically upon user login.</li>
     </ol>
 
     <h2>Fault Tolerance & Recovery</h2>
-    <p>All LoRaLink services include built-in crash recovery loops. If a Python server or background process fails unexpectedly, the batch controller will automatically attempt to reinstantiate the process after a 5-second cooldown.</p>
+    <p>All Magic services include built-in crash recovery loops. If a Python server or background process fails unexpectedly, the batch controller will automatically attempt to reinstantiate the process after a 5-second cooldown.</p>
     <pre><code>[ERROR] Server crashed. Restarting in 5s...</code></pre>
 
     <h2>Advanced Connectivity & Failover</h2>
-    <p>LoRaLink v1.6.0 introduces a dual-layer protocol failover mechanism to ensure mission-critical commands reach their destination even in challenging RF environments.</p>
+    <p>Magic v1.6.0 introduces a dual-layer protocol failover mechanism to ensure mission-critical commands reach their destination even in challenging RF environments.</p>
 
     <h3>Protocol Failover Algorithm</h3>
     <p>When a high-priority command is queued (e.g., via the <code>FPING</code> command or the <code>FAILOVER_PING</code> task type), the system follows this logic:</p>
@@ -63,7 +63,7 @@
     </ul>
 
     <h2>Packaging for Release</h2>
-    <p>To create a portable distribution of your current LoRaLink configuration (including your custom UI themes and scripts), run:</p>
+    <p>To create a portable distribution of your current Magic configuration (including your custom UI themes and scripts), run:</p>
     <pre><code>tools\Package_Release.bat</code></pre>
     <p>This generates a <code>Release.zip</code> at the root of the project, pre-configured with the automated startup and fault-tolerance logic discussed above.</p>
 

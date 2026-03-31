@@ -9,7 +9,7 @@
 
 /**
  * @class BootSequence
- * @brief Handles the orchestrated startup of all LoRaLink components
+ * @brief Handles the orchestrated startup of all Magic components
  *
  * This class encapsulates the logic previously held in setup(),
  * providing a modular, staged initialization process:

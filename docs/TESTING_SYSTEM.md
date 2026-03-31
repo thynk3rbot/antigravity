@@ -1,7 +1,7 @@
 # Nightly Automated Testing & Reporting System
 
 ## Overview
-A complete automation pipeline for long-term endurance testing and analytical reporting, integrated into the LoRaLink Webapp.
+A complete automation pipeline for long-term endurance testing and analytical reporting, integrated into the Magic Webapp.
 
 ## Components
 

@@ -1,4 +1,4 @@
-# LoRaLink-AnyToAny — AI Context [V2]
+# Magic-AnyToAny — AI Context [V2]
 
 Unified ESP32-S3 firmware focused on prioritized any-to-any command routing.
 
@@ -75,7 +75,7 @@ When modifying firmware, check this table and update all listed tool files in th
 3. **Never accumulate parallel long-lived branches.** If a feature branch is >2 days old without a PR, something is wrong.
 4. **Flash from `main` only.** All PlatformIO build environments target the `main` branch.
 5. **Both `firmware/v1/` and `firmware/v2/` coexist.** v1 is active development, v2 is test bed.
-6. **OTA deploy targets:** use mDNS — `pio run -e ota_master` or `pio run -e ota_slave` (resolves via `loralink-<id>.local`, no hardcoded IPs)
+6. **OTA deploy targets:** use mDNS — `pio run -e ota_master` or `pio run -e ota_slave` (resolves via `magic-<id>.local`, no hardcoded IPs)
 7. **Single build, multi-flash** — build once, OTA to all devices; never build separately per device.
 
 ### Directory Layout (canonical)
@@ -98,7 +98,7 @@ main/
 
 Follow these rules for all builds, bugs, and enhancements:
 
-- **Branding Consistency**: All branding/visual changes **must** propagate across LoRaLink Fleet Admin (`tools/webapp/static/index.html`), Device Webserver (`src/managers/WiFiManager.cpp`), documentation (`docs/`), and external website.
+- **Branding Consistency**: All branding/visual changes **must** propagate across Magic Fleet Admin (`tools/webapp/static/index.html`), Device Webserver (`src/managers/WiFiManager.cpp`), documentation (`docs/`), and external website.
 - **Iterative UI Assessment**: Prototype on one page if needed to assess algorithm/results, but finalize across all platforms.
 - **Bug Reporting**: Every bug must be preceeded by its **DEBUG ID**. Always reference the ID (e.g., `DASH-BATT`).
 - **Feature Specification Rule**: If the USER requests a feature enhancement, the ASSISTANT **must** demand a formal specification in a standard, non-pedantic format. **Do not proceed** with implementation until the user complies with the request.

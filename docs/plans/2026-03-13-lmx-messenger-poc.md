@@ -2,7 +2,7 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** End-to-end text messaging over LoRa mesh — PC daemon sends a message via BLE/Serial/WiFi to a LoRaLink device, which transmits over LoRa to another device, which delivers to a second PC daemon. ACK confirmation on delivery.
+**Goal:** End-to-end text messaging over LoRa mesh — PC daemon sends a message via BLE/Serial/WiFi to a Magic device, which transmits over LoRa to another device, which delivers to a second PC daemon. ACK confirmation on delivery.
 
 **Architecture:** New `MsgManager` firmware singleton handles LMX packet encode/decode/dedup/ACK. New `tools/loramsg/` Python daemon with SQLite message store, transport bridge, and WebSocket-served PWA chat UI. LMX packets use the existing AES-GCM encryption and are transport-agnostic (same packet over LoRa, BLE, Serial, WiFi).
 
@@ -664,7 +664,7 @@ def make_text_packet(dest: int, src: int, packet_id: int,
 
 ```python
 # tools/loramsg/transport_bridge.py
-"""Transport bridge — sends MSG commands to LoRaLink device via Serial or HTTP."""
+"""Transport bridge — sends MSG commands to Magic device via Serial or HTTP."""
 
 import asyncio
 import logging
@@ -674,7 +674,7 @@ import aiohttp
 log = logging.getLogger("loramsg.transport")
 
 class SerialTransport:
-    """Async serial connection to LoRaLink device."""
+    """Async serial connection to Magic device."""
 
     def __init__(self, port: str = "COM3", baud: int = 115200):
         self.port = port
@@ -728,7 +728,7 @@ class SerialTransport:
 
 
 class HttpTransport:
-    """HTTP transport to LoRaLink device (WiFi)."""
+    """HTTP transport to Magic device (WiFi)."""
 
     def __init__(self, host: str = "192.168.4.1"):
         self.host = host
@@ -983,7 +983,7 @@ class MessageStore:
 
 ```python
 # tools/loramsg/daemon.py
-"""LoRaLink Messenger daemon — WebSocket API + transport bridge."""
+"""Magic Messenger daemon — WebSocket API + transport bridge."""
 
 import asyncio
 import argparse
@@ -1007,7 +1007,7 @@ log = logging.getLogger("loramsg")
 
 # ── App State ────────────────────────────────────────────────────
 
-app = FastAPI(title="LoRaLink Messenger")
+app = FastAPI(title="Magic Messenger")
 store: MessageStore = None
 bridge: TransportBridge = None
 ws_clients: set[WebSocket] = set()
@@ -1139,7 +1139,7 @@ if static_dir.exists():
 def main():
     global store, bridge, my_node_id
 
-    parser = argparse.ArgumentParser(description="LoRaLink Messenger Daemon")
+    parser = argparse.ArgumentParser(description="Magic Messenger Daemon")
     parser.add_argument("--serial", "-s", default=None,
                         help="Serial port (e.g., COM3, /dev/ttyUSB0)")
     parser.add_argument("--http", default=None,
@@ -1166,7 +1166,7 @@ def main():
     async def app_startup():
         await startup()
 
-    log.info(f"Starting LoRaLink Messenger on port {args.port}")
+    log.info(f"Starting Magic Messenger on port {args.port}")
     log.info(f"Node ID: {my_node_id:02X}")
     uvicorn.run(app, host="0.0.0.0", port=args.port)
 
@@ -1278,7 +1278,7 @@ Open browser: `http://localhost:8200`
 
 ```bash
 git add -A
-git commit -m "feat(lmx): LoRaLink Messenger PoC — end-to-end text over LoRa mesh"
+git commit -m "feat(lmx): Magic Messenger PoC — end-to-end text over LoRa mesh"
 ```
 
 ---

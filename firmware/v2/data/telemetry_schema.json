@@ -1,6 +1,6 @@
 {
   "version": "0.1.0",
-  "name": "LoRaLink V2 Telemetry",
+  "name": "Magic V2 Telemetry",
   "fields": [
     { "key": "name", "label": "Device Name", "type": "string" },
     { "key": "ver", "label": "Firmware Version", "type": "string" },

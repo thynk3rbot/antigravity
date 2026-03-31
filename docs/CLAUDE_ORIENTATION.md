@@ -1,9 +1,9 @@
-# LoRaLink — Claude Orientation Guide
+# Magic — Claude Orientation Guide
 
-Welcome to the LoRaLink project. This document provides the definitive technical worldview for agents managing the development, deployment, and operation of our autonomous mesh fleet.
+Welcome to the Magic project. This document provides the definitive technical worldview for agents managing the development, deployment, and operation of our autonomous mesh fleet.
 
-## 📡 The Product: LoRaLink v2
-LoRaLink is an **Autonomous Any2Any Mesh** network built on the Heltec ESP32-S3 platform. It prioritizes decentralized sovereignty—every node is a peer, a relay, and a local agent.
+## 📡 The Product: Magic v2
+Magic is an **Autonomous Any2Any Mesh** network built on the Heltec ESP32-S3 platform. It prioritizes decentralized sovereignty—every node is a peer, a relay, and a local agent.
 
 ### Key Architecture: Phase 50
 - **Autonomous Sovereignty**: Nodes make relay and GPIO decisions locally based on mesh-wide state.

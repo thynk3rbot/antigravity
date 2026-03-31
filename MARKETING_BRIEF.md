@@ -1,11 +1,11 @@
-# LoRaLink-AnyToAny — Technical Marketing Brief
+# Magic-AnyToAny — Technical Marketing Brief
 > © 2026 Steven P Williams — spw1.com | Proprietary Firmware Framework
 
 ---
 
 ## Elevator Pitch
 
-**LoRaLink-AnyToAny** is a production-grade ESP32-S3 firmware framework that makes every wireless interface a first-class citizen — LoRa, ESP-NOW, Bluetooth, WiFi, and Serial all route commands to each other through a single, unified pipeline. One `$20` Heltec board becomes a multi-kilometer mesh node, a web-configured relay controller, a BLE terminal, an MQTT telemetry source, and an OTA-updatable device — simultaneously.
+**Magic-AnyToAny** is a production-grade ESP32-S3 firmware framework that makes every wireless interface a first-class citizen — LoRa, ESP-NOW, Bluetooth, WiFi, and Serial all route commands to each other through a single, unified pipeline. One `$20` Heltec board becomes a multi-kilometer mesh node, a web-configured relay controller, a BLE terminal, an MQTT telemetry source, and an OTA-updatable device — simultaneously.
 
 ---
 
@@ -13,7 +13,7 @@
 
 > Most IoT firmware is protocol-locked. You pick LoRa *or* BLE *or* WiFi. Bridging them requires custom glue code, hardware gateways, and endless integration headaches.
 
-LoRaLink-AnyToAny eliminates this entirely. A command sent via Bluetooth can trigger a relay via LoRa three kilometers away. A message received over ESP-NOW can be forwarded to an MQTT broker. No custom bridges. No protocol adapters. No compromises.
+Magic-AnyToAny eliminates this entirely. A command sent via Bluetooth can trigger a relay via LoRa three kilometers away. A message received over ESP-NOW can be forwarded to an MQTT broker. No custom bridges. No protocol adapters. No compromises.
 
 ---
 
@@ -111,7 +111,7 @@ Full serial command interface, dynamic task scheduling, and an open REST API mak
 
 ## Competitive Differentiation
 
-| Capability | LoRaLink-AnyToAny | Typical LoRa Firmware | Generic ESP32 Firmware |
+| Capability | Magic-AnyToAny | Typical LoRa Firmware | Generic ESP32 Firmware |
 |------------|:-----------------:|:---------------------:|:----------------------:|
 | Multi-protocol routing | ✅ | ❌ | ❌ |
 | AES-encrypted LoRa | ✅ | Sometimes | ❌ |
@@ -125,7 +125,7 @@ Full serial command interface, dynamic task scheduling, and an open REST API mak
 
 ## Firmware Version & Status
 
-- **Version:** v1.4.1 (`LoRaLink Any2Any`)
+- **Version:** v1.4.1 (`Magic Any2Any`)
 - **Platform:** PlatformIO / Arduino framework
 - **License:** Proprietary — © 2026 Steven P Williams. All rights reserved.
 - **Contact:** [spw1.com](https://spw1.com)

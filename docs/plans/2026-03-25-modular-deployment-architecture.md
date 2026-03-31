@@ -116,7 +116,7 @@ New daemon endpoint:
 ```
 POST /api/provision
 {
-  "device_id": "loralink-27",
+  "device_id": "magic-27",
   "carrier": "rv12v",
   "product": "greenhouse-valve",
   "identity": { "name": "Valve-North", "role": "node", "fleet_id": "farm-north" }
@@ -149,7 +149,7 @@ tools/daemon/firmware/
 ```
 POST /api/ota
 {
-  "device_id": "loralink-27",
+  "device_id": "magic-27",
   "firmware": "heltec_v3_0.5.00.bin"
 }
 

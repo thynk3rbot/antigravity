@@ -1,10 +1,10 @@
-# LoRaLink Corporate Website — Design Doc
+# Magic Corporate Website — Design Doc
 **Date:** 2026-03-04
 **Status:** Approved
 
 ## Summary
 
-A corporate website and customer-facing MQTT dashboard for LoRaLink, self-hosted on a VPS alongside an EMQX Community broker. Placeholder content throughout — priority is ecosystem integration, not content completeness. Firmware bugs and failing features are still being resolved.
+A corporate website and customer-facing MQTT dashboard for Magic, self-hosted on a VPS alongside an EMQX Community broker. Placeholder content throughout — priority is ecosystem integration, not content completeness. Firmware bugs and failing features are still being resolved.
 
 ---
 
@@ -18,7 +18,7 @@ VPS (Ubuntu 22.04)
 └── Certbot         → TLS cert for domain
 ```
 
-- EMQX handles broker auth: username/password per client, ACL per `loralink/<client_id>/#`
+- EMQX handles broker auth: username/password per client, ACL per `magic/<client_id>/#`
 - Nginx terminates SSL, routes `/api/*` and `/mqtt` to FastAPI/EMQX, serves static marketing files
 - FastAPI serves pages and handles contact form storage (SQLite)
 - Separate from existing cPanel/WordPress site
@@ -48,11 +48,11 @@ Accessed at `/dashboard`, protected by a single shared password (no per-client a
 ### Multi-Client View
 Card grid, one card per connected EMQX client:
 - Client ID, connection status, last seen timestamp
-- Last telemetry message received on `loralink/<client_id>/telemetry`
-- "Send Command" input → publishes to `loralink/<client_id>/cmd`
+- Last telemetry message received on `magic/<client_id>/telemetry`
+- "Send Command" input → publishes to `magic/<client_id>/cmd`
 
 ### Broadcast Panel
-Top of dashboard — type a message, publish to `loralink/+/cmd` (all clients).
+Top of dashboard — type a message, publish to `magic/+/cmd` (all clients).
 
 ### Contact Entries Panel
 Admin table of contact form submissions from `/contact`.

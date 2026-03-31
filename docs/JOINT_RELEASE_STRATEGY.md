@@ -1,4 +1,4 @@
-# 🛡️ LoRaLink Joint Release Strategy
+# 🛡️ Magic Joint Release Strategy
 
 This document defines the **Ironclad Operational Protocol** for coordinated development between Antigravity (Gemini) and Claude.
 

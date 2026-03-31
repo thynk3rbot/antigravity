@@ -3,7 +3,7 @@
 
 ## Purpose
 
-This repository contains LoRaLink firmware and associated tooling.  
+This repository contains Magic firmware and associated tooling.  
 AI agents working in this repository **must read the architecture and system prompt files first** before attempting analysis, refactoring, or code generation.
 
 These files establish the authoritative architectural context and operating rules for agents.
@@ -16,7 +16,7 @@ Before doing anything else, agents must read these files:
 
 1. **.ai/AGENT_SYSTEM_PROMPT.md**
 2. **ARCHITECTURE_MAP.md**
-3. **LoRaLink AI Context file (AI Context V2)**
+3. **Magic AI Context file (AI Context V2)**
 
 These files define:
 
@@ -33,7 +33,7 @@ Agents must treat these files as the **source of truth** for project structure.
 
 # Repository Mental Model
 
-LoRaLink is:
+Magic is:
 
 > a Heltec-first embedded command-and-automation platform with multiple transports and centralized command routing.
 

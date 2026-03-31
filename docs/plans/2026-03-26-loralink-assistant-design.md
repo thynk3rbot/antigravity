@@ -1,4 +1,4 @@
-# LoRaLink Assistant — Production Specification
+# Magic Assistant — Production Specification
 ### An Orion Framework Instance
 
 **Date:** 2026-03-26
@@ -6,16 +6,16 @@
 **Authors:** Claude + User (brainstorming), AG (implementation)
 **Target:** Standalone Windows app, evolving into cross-platform AI assistant
 **Framework:** Orion (tools/multi-agent-framework/)
-**Current Branding:** LoRaLink(tm) Copyright 2026 spw1.com. All Rights Reserved.
+**Current Branding:** Magic(tm) Copyright 2026 spw1.com. All Rights Reserved.
 
-> **IMPERATIVE — BRANDING IS CONFIG-DRIVEN:** All user-facing brand strings (app name, tagline, copyright, logo, accent color) MUST be read from `config.json` `"branding"` section at runtime. NEVER hardcode "LoRaLink", logo paths, or color values in HTML/CSS/JS/Python. The branding will change in the future. Every UI element, window title, tray tooltip, page header, and footer must pull from config. This is a hard requirement.
+> **IMPERATIVE — BRANDING IS CONFIG-DRIVEN:** All user-facing brand strings (app name, tagline, copyright, logo, accent color) MUST be read from `config.json` `"branding"` section at runtime. NEVER hardcode "Magic", logo paths, or color values in HTML/CSS/JS/Python. The branding will change in the future. Every UI element, window title, tray tooltip, page header, and footer must pull from config. This is a hard requirement.
 
 ## Problem
 
 The user has multiple local knowledge domains (garden, firmware, tax) stored in PDFs, markdown, and code files. They want a single, private, local-first AI assistant that:
 1. Queries any domain via natural language using Ollama + RAG
 2. Runs as a persistent Windows system tray app with a browser UI
-3. Evolves toward LoRaLink device communication and mobile apps
+3. Evolves toward Magic device communication and mobile apps
 
 Everything runs locally. No data leaves the machine unless Ollama is unavailable and the user explicitly enables cloud fallback.
 
@@ -57,10 +57,10 @@ Everything runs locally. No data leaves the machine unless Ollama is unavailable
 ```json
 {
     "branding": {
-        "app_name": "LoRaLink Assistant",
+        "app_name": "Magic Assistant",
         "tagline": "Your Local AI Knowledge Assistant",
-        "copyright": "LoRaLink(tm) Copyright 2026 spw1.com. All Rights Reserved.",
-        "icon_path": "static/media/loralink_icon.png",
+        "copyright": "Magic(tm) Copyright 2026 spw1.com. All Rights Reserved.",
+        "icon_path": "static/media/magic_icon.png",
         "accent_color": "#00b4d8",
         "theme": "dark"
     }
@@ -116,8 +116,8 @@ OLLAMA_URL = "http://localhost:11434"
 #   ---
 #   "Quit"               → stop server, exit tray
 
-# Icon: Reuse LoRaLink brand icon from:
-#   tools/webapp/static/media/loralink_icon.png
+# Icon: Reuse Magic brand icon from:
+#   tools/webapp/static/media/magic_icon.png
 ```
 
 **Startup sequence:**
@@ -136,7 +136,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 import uvicorn
 
-app = FastAPI(title="LoRaLink Assistant")
+app = FastAPI(title="Magic Assistant")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 @app.get("/")
@@ -211,7 +211,7 @@ class DomainManager:
 
 **Built-in domains to ship:**
 - `garden.json` — Garden knowledge (user's PDFs)
-- `firmware.json` — LoRaLink firmware docs and code
+- `firmware.json` — Magic firmware docs and code
 - Users can add more by dropping a JSON file into `domains/`
 
 ### 4. Chat API (`routes/chat.py`)
@@ -283,12 +283,12 @@ class SessionManager:
 
 ### 6. Chat UI (`static/index.html`)
 
-Single-page app. Dark theme matching LoRaLink branding.
+Single-page app. Dark theme matching Magic branding.
 
 **Layout:**
 ```
 ┌──────────────────────────────────────────────────┐
-│  LoRaLink Assistant          [Garden ▾] [⚙️]     │  ← Header: domain selector, settings
+│  Magic Assistant          [Garden ▾] [⚙️]     │  ← Header: domain selector, settings
 ├──────────┬───────────────────────────────────────┤
 │ Sessions │  Chat Area                            │
 │          │                                       │
@@ -447,13 +447,13 @@ tools/assistant/
 ├── static/                   # Frontend assets
 │   ├── index.html            # Single-page chat UI
 │   ├── css/
-│   │   └── style.css         # Dark theme matching LoRaLink
+│   │   └── style.css         # Dark theme matching Magic
 │   ├── js/
 │   │   ├── app.js            # Chat logic, WebSocket, session management
 │   │   ├── voice.js          # Web Speech API push-to-talk
 │   │   └── domains.js        # Domain selector logic
 │   └── media/
-│       └── (symlink or copy loralink_icon.png)
+│       └── (symlink or copy magic_icon.png)
 ├── data/                     # Runtime data (gitignored)
 │   ├── sessions.db           # SQLite chat history
 │   └── chromadb/             # Vector store per domain
@@ -514,7 +514,7 @@ Response:
 {
     "domains": [
         {"id": "garden", "name": "Garden Knowledge", "doc_count": 667, "description": "..."},
-        {"id": "firmware", "name": "LoRaLink Firmware", "doc_count": 1357, "description": "..."}
+        {"id": "firmware", "name": "Magic Firmware", "doc_count": 1357, "description": "..."}
     ],
     "active": "garden"
 }
@@ -646,7 +646,7 @@ AG should implement in this order. Each step is independently testable.
 
 These are NOT to be implemented now, but the architecture should not prevent them:
 
-1. **LoRaLink device comms** — WebSocket bridge from assistant to daemon (port 8001) for sending commands to mesh devices. The chat UI would gain a "Devices" panel.
+1. **Magic device comms** — WebSocket bridge from assistant to daemon (port 8001) for sending commands to mesh devices. The chat UI would gain a "Devices" panel.
 2. **Wake word** — Replace push-to-talk with always-listening wake word ("Hey LoRa"). Requires `vosk` or `pvporcupine` Python package.
 3. **TTS responses** — Stream audio back via Web Audio API. Requires `edge-tts` or `piper` Python package.
 4. **Android/iOS app** — The WebSocket API is already mobile-ready. Wrap in a WebView or build native UI consuming the same endpoints.
@@ -660,7 +660,7 @@ These are NOT to be implemented now, but the architecture should not prevent the
 - App name, tagline, copyright — in HTML, window titles, tray tooltips, logs
 - Icon path — in tray.py and favicon
 - Accent color — in CSS via JS override of `--accent` custom property
-- The branding WILL change. If you hardcode "LoRaLink" anywhere in UI code, it will need to be found and replaced later. Use config from day one.
+- The branding WILL change. If you hardcode "Magic" anywhere in UI code, it will need to be found and replaced later. Use config from day one.
 
 ### IMPERATIVE: Offload to Ollama
 **Use the local Ollama model (qwen2.5-coder:14b) for repetitive and boilerplate tasks.** AG should NOT hand-write everything — queue work to Ollama via the hybrid proxy for:

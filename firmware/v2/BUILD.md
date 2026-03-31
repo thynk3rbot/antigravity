@@ -1,9 +1,9 @@
-# LoRaLink v2 Build Guide
+# Magic v2 Build Guide
 
 ## Prerequisites
 
 ### 1. Install PlatformIO
-PlatformIO is required to build LoRaLink v2 for ESP32 boards.
+PlatformIO is required to build Magic v2 for ESP32 boards.
 
 #### Option A: Install via pip (Recommended)
 ```bash
@@ -38,7 +38,7 @@ This downloads the toolchain and libraries (~2GB).
 
 ### Build for Hub (Heltec V2 - SX1276)
 ```bash
-cd loralink-v2
+cd magic-v2
 platformio run --environment heltec_v2_hub
 ```
 
@@ -222,7 +222,7 @@ Data:       45,000 bytes
 Boot sequence (115200 baud):
 
 ```
-=== LoRaLink v2 Boot ===
+=== Magic v2 Boot ===
 Version: 0.3.0
 Role: HUB
 Radio: SX1276 (V2)
@@ -268,7 +268,7 @@ No manual installation needed.
 ## Files Generated After Build
 
 ```
-loralink-v2/
+magic-v2/
 ├── .pio/                          # PlatformIO work directory
 │   ├── build/
 │   │   ├── heltec_v2_hub/

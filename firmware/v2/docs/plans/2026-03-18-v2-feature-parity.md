@@ -1,8 +1,8 @@
-# LoRaLink v2 Feature Parity Implementation Plan
+# Magic v2 Feature Parity Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Bring LoRaLink v2 firmware to full feature parity with v0.1.0 so all 5 fleet devices can be safely migrated.
+**Goal:** Bring Magic v2 firmware to full feature parity with v0.1.0 so all 5 fleet devices can be safely migrated.
 
 **Architecture:** v2 keeps its clean 3-layer design (HAL → Transport → App) but adds back all missing managers as modules within those layers. Each feature is a separate `.h/.cpp` pair in `lib/` under the appropriate layer. No copy-paste from v1 — reimplement cleanly using v2 patterns.
 
@@ -134,7 +134,7 @@ Expected: All tests PASS.
 **Step 6: Create tools/run_tests.py — integration test runner**
 ```python
 #!/usr/bin/env python3
-"""LoRaLink v2 integration test runner. Run after each flash."""
+"""Magic v2 integration test runner. Run after each flash."""
 import subprocess, sys, requests, time
 
 BENCH_IP = "172.16.0.26"
@@ -158,7 +158,7 @@ def test_build_all():
         print(f"  Build OK: {env}")
 
 if __name__ == "__main__":
-    print("=== LoRaLink v2 Integration Tests ===")
+    print("=== Magic v2 Integration Tests ===")
     results = []
     for name, fn in [("build_all", test_build_all), ("http_status", test_http_status)]:
         try:
@@ -216,7 +216,7 @@ python -m platformio run --environment heltec_v3_node --target upload --upload-p
 **Step 5: Verify on serial monitor**
 Expected output (no more boot loop):
 ```
-=== LoRaLink v2 Boot ===
+=== Magic v2 Boot ===
 [1/6] Initializing HAL...
 [RadioHAL] SX1262 initialized
   ✓ HAL initialized
@@ -331,7 +331,7 @@ NVSStore& NVSStore::getInstance() {
 }
 
 bool NVSStore::init() {
-  _prefs.begin("loralink", false);
+  _prefs.begin("magic", false);
   _initialized = true;
   Serial.println("[NVS] Initialized");
   return true;
@@ -345,7 +345,7 @@ void NVSStore::setNodeID(uint8_t id) {
 }
 
 String NVSStore::getNodeName() {
-  return _prefs.getString("node_name", "LoRaLink");
+  return _prefs.getString("node_name", "Magic");
 }
 void NVSStore::setNodeName(const String& name) {
   _prefs.putString("node_name", name);
@@ -602,7 +602,7 @@ void DisplayManager::showBootMessage(const char* msg) {
   if (!_initialized) return;
   _oled.clearDisplay();
   _oled.setCursor(0, 0);
-  _oled.println("LoRaLink v2");
+  _oled.println("Magic v2");
   _oled.println(msg);
   _oled.display();
 }
@@ -625,7 +625,7 @@ void DisplayManager::nextPage() { _page++; }
 void DisplayManager::_drawHome() {
   _oled.clearDisplay();
   _oled.setCursor(0, 0);
-  _oled.printf("LoRaLink v2\n");
+  _oled.printf("Magic v2\n");
   _oled.printf("Bat: %.2fV %s\n",
     powerManager.getBatteryVoltage(),
     powerManager.getModeString());
@@ -675,7 +675,7 @@ displayManager.showBootMessage("Booting...");
 displayManager.update();
 ```
 
-**Step 4: Build and flash, verify OLED shows "LoRaLink v2"**
+**Step 4: Build and flash, verify OLED shows "Magic v2"**
 
 **Step 5: Commit**
 ```bash
@@ -827,7 +827,7 @@ void WiFiTransport::_handleStatus() {
 void WiFiTransport::_handleRoot() {
   // Minimal dashboard — expand with full v1 HTML from WiFiManager.cpp serveHome()
   _server->send(200, "text/html",
-    "<html><body><h1>LoRaLink v2</h1>"
+    "<html><body><h1>Magic v2</h1>"
     "<a href='/api/status'>Status JSON</a></body></html>");
 }
 
@@ -891,11 +891,11 @@ git commit -m "feat: add WiFi transport with HTTP API (/api/status), OTA support
 
 ### Task 6: Expand /api/status to match v0.1.0 response
 
-**Why:** `loralink_status.py` tool and the web dashboard depend on the full status object.
+**Why:** `magic_status.py` tool and the web dashboard depend on the full status object.
 
 **Step 1:** Compare `getStatusJson()` output against actual v0.1.0 response fields from the live fleet. Run:
 ```bash
-python tools\loralink_status.py 172.16.0.27 --json
+python tools\magic_status.py 172.16.0.27 --json
 ```
 Note all fields present in v0.1.0 response.
 
@@ -909,7 +909,7 @@ Note all fields present in v0.1.0 response.
 - `hw` — last 6 chars of MAC address
 - `log` — last N messages from a ring buffer
 
-**Step 3: Build, flash, run `loralink_status.py` — confirm table fills correctly**
+**Step 3: Build, flash, run `magic_status.py` — confirm table fills correctly**
 
 **Step 4: Commit**
 ```bash
@@ -1000,7 +1000,7 @@ bleTransport.poll();
 
 **Step 5: Verify with existing tool**
 ```bash
-python tools\loralink_status.py --scan-ble
+python tools\magic_status.py --scan-ble
 ```
 New device should appear as `GW-<NodeName>`.
 
@@ -1020,12 +1020,12 @@ git commit -m "feat: add BLE NUS transport — matches v0.1.0 GW-* naming, compa
 - Create: `lib/Transport/mqtt_transport.cpp`
 
 **Key topics to publish (match v0.1.0 exactly):**
-- `loralink/<nodeID>/status` → full status JSON
-- `loralink/<nodeID>/telemetry` → battery, RSSI, uptime
-- `loralink/<nodeID>/log` → last command/message
+- `magic/<nodeID>/status` → full status JSON
+- `magic/<nodeID>/telemetry` → battery, RSSI, uptime
+- `magic/<nodeID>/log` → last command/message
 
 **Subscribe:**
-- `loralink/<nodeID>/cmd` → incoming commands
+- `magic/<nodeID>/cmd` → incoming commands
 
 Wire after WiFi connects. Reconnect with backoff if disconnected.
 
@@ -1281,8 +1281,8 @@ python -m platformio run --environment heltec_v3_node --target upload --upload-p
 
 **Step 4: Verify full boot + all features on bench device**
 - Serial monitor: all 6 boot steps complete, no crashes
-- `python tools\loralink_status.py 172.16.0.26` — full table filled
-- `python tools\loralink_status.py --scan-ble` — device visible
+- `python tools\magic_status.py 172.16.0.26` — full table filled
+- `python tools\magic_status.py --scan-ble` — device visible
 - HTTP: `curl http://172.16.0.26/api/status` — matches v0.1.0 schema
 
 **Step 5: Flash remaining devices**
@@ -1301,14 +1301,14 @@ python -m platformio run --environment heltec_v2_hub --target upload --upload-po
 
 **Step 6: Run fleet status check**
 ```bash
-python tools\loralink_status.py --range 172.16.0.26-30 COM7 COM18
+python tools\magic_status.py --range 172.16.0.26-30 COM7 COM18
 ```
 Expected: All 5 devices online, all showing v0.3.0.
 
 **Step 7: Final commit + tag**
 ```bash
 git add -A
-git commit -m "release: LoRaLink v0.3.0 — full feature parity with v0.1.0 on clean v2 architecture"
+git commit -m "release: Magic v0.3.0 — full feature parity with v0.1.0 on clean v2 architecture"
 git tag v0.3.0
 ```
 

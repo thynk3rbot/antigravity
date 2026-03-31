@@ -1,6 +1,6 @@
 /**
  * @file bench_test.cpp
- * @brief LoRaLink v2 Bench Mode Implementation
+ * @brief Magic v2 Bench Mode Implementation
  *
  * Diagnostic tests for hardware validation during development.
  * Runs in bench mode when -D BENCH_MODE is set.
@@ -24,7 +24,7 @@ static int g_benchResultCount = 0;
 
 bool BenchTest::runAll() {
   Serial.println("\n╔════════════════════════════════════════╗");
-  Serial.println("║     LoRaLink v2 Bench Mode Suite       ║");
+  Serial.println("║     Magic v2 Bench Mode Suite       ║");
   Serial.println("╚════════════════════════════════════════╝\n");
 
   g_benchResultCount = 0;

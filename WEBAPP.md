@@ -270,7 +270,7 @@ If you want to paste a "sanitized" version of the NVS and GPIO sections, I can h
 
 #define FIRMWARE_VERSION "v1.4.1"
 
-#define FIRMWARE_NAME "LoRaLink Any2Any"
+#define FIRMWARE_NAME "Magic Any2Any"
 
 #define ALLOW_GPIO_CONTROL true
 
@@ -479,7 +479,7 @@ Pins 46, 6, 7 (12V Relays): These can be treated as standard toggles or PWM-capa
 
 Pin 15 (DHT Sensor): The spec should define an "Environment Namespace" in NVS to store calibration offsets for this specific sensor.
 
-2. NVS & State Specification (The "LoRaLink" Persistence)
+2. NVS & State Specification (The "Magic" Persistence)
 Since you are using LoRa and ESP-NOW, your NVS spec needs to handle Peer Persistence.
 
 App Mode	NVS Specification Role
@@ -691,7 +691,7 @@ NVS Schema Reference
 This project uses the ESP32 Preferences library to manage persistent settings in NVS (Non-Volatile Storage). The schema is divided into four main namespaces.
 
 
-1. loralink Namespace
+1. magic Namespace
 
 Primary system configuration and network settings.
 
@@ -769,7 +769,7 @@ Key	Type	Description
 
 Factory Reset
 
-Calling the WIPECONFIG command or holding the PRG button for 3 seconds during boot triggers DataManager::FactoryReset(), which clears the loralink, lora_hw, and espnow namespaces.
+Calling the WIPECONFIG command or holding the PRG button for 3 seconds during boot triggers DataManager::FactoryReset(), which clears the magic, lora_hw, and espnow namespaces.
 
 Gemini said
 Based on the config.h you provided and this NVS Schema Reference, we can now formalize the "Data Contract" for your two app modes.
@@ -788,11 +788,11 @@ fw_ver	String	Current Firmware Version (e.g., "1.4.1").
 cap_mask	uLong	Bitmask of onboard features (e.g., Bit 0: OLED, Bit 1: GPS).
 2. App Mode Integration Specifications
 App Mode A: Fleet Administrator (Macro Management)
-Version Auditing: The PC app must first read hw_registry/fw_ver. If the version is lower than the required spec for a new feature (like MQTT), it should prompt the user for an OTA update before allowing loralink/mqtt_en to be toggled.
+Version Auditing: The PC app must first read hw_registry/fw_ver. If the version is lower than the required spec for a new feature (like MQTT), it should prompt the user for an OTA update before allowing magic/mqtt_en to be toggled.
 
 Bulk Provisioning: The Fleet Admin uses the pin_names namespace to "push" a standardized naming convention across a fleet (e.g., setting Pin 5 to "MainPump" on 50 devices at once).
 
-Security: It is the only mode authorized to write to loralink/crypto_key.
+Security: It is the only mode authorized to write to magic/crypto_key.
 
 App Mode B: Local Webserver (Micro/Gateway)
 Pin Mapping: It reads hw_registry/board_id to determine which labels to show in the UI. If board_id matches a WiFi LoRa 32 V3, the UI automatically labels Pin 35 as "Built-in LED."
@@ -819,7 +819,7 @@ void initGPIO() {
 4. Updated Factory Reset Specification
 Since you are managing multiple versions, your DataManager::FactoryReset() should be modified:
 
-DO CLEAR: loralink, lora_hw, espnow, pin_names.
+DO CLEAR: magic, lora_hw, espnow, pin_names.
 
 DO NOT CLEAR: hw_registry.
 
@@ -830,7 +830,7 @@ Would you like me to generate the C++ struct and the corresponding JSON schema f
 i want this all to be consolidated into a technical/functional spec
 
 Gemini said
-This specification consolidates the architectural requirements for the LoRaLink Any2Any ecosystem. It defines how the shared C++ codebase differentiates between Fleet Administration (PC) and Local Device/Gateway (Micro) modes, specifically focusing on NVS persistence, hardware versioning, and safety.
+This specification consolidates the architectural requirements for the Magic Any2Any ecosystem. It defines how the shared C++ codebase differentiates between Fleet Administration (PC) and Local Device/Gateway (Micro) modes, specifically focusing on NVS persistence, hardware versioning, and safety.
 
 1. System Identification & Versioning
 To support multiple board types (e.g., WiFi LoRa 32 V3 vs. Wireless Tracker), the firmware must implement a Hardware Abstraction Registry within the NVS.
@@ -844,7 +844,7 @@ hw_rev	uChar	Numeric revision (e.g., 31 for V3.1).
 fw_ver	String	Semantic versioning (e.g., "1.4.1").
 cap_mask	uLong	Bitmask of features (Bit 0: OLED, 1: GPS, 2: 110V Relay, 3: Battery ADC).
 2. Functional App Modes
-The shared codebase branches its behavior based on the op_mode stored in the loralink namespace.
+The shared codebase branches its behavior based on the op_mode stored in the magic namespace.
 
 2.1 Mode A: Fleet Administrator (PC-Based)
 Role: Centralized Orchestrator & Multi-Transport Master.
@@ -868,7 +868,7 @@ Gateway Logic: When repeater is true, this mode encapsulates local Serial/WiFi t
 The project utilizes the ESP32 Preferences library across four primary functional namespaces.
 
 Namespace	Responsibility	Primary Key Examples
-loralink	System & Comms	crypto_key, espnow_en, op_mode, mqtt_srv
+magic	System & Comms	crypto_key, espnow_en, op_mode, mqtt_srv
 espnow	Peer Tracking	peer_mac_{i}, peer_name_{i}, peer_count
 lora_hw	Pin States	RLY1 (bool), LED (bool), VEXT (bool)
 pin_names	UI Labeling	5 -> "Main Relay", 35 -> "Status LED"
@@ -886,7 +886,7 @@ VExt Power Control (Pin 36): External sensors (DHT/GPS) must only be powered dur
 Relay Fail-Safe: On any reboot, the DataManager must read the lora_hw namespace. If no state is found, all relays must default to OFF (Safety-First initialization).
 
 5. Maintenance & Recovery
-Factory Reset: A 3-second PRG button hold triggers a wipe of loralink, lora_hw, espnow, and pin_names. The hw_registry is preserved.
+Factory Reset: A 3-second PRG button hold triggers a wipe of magic, lora_hw, espnow, and pin_names. The hw_registry is preserved.
 
 OTA Compatibility: Before an update is applied, the device compares the incoming board_id with its own to prevent cross-flashing incompatible hardware.
 
@@ -899,7 +899,7 @@ That is a critical distinction for the Multi-Transport Specification. If the PC-
 
 In this architecture, at least one V3 board must act as the "Bridge," translating WiFi/Serial commands from the PC into LoRa packets for the rest of the fleet.
 
-Consolidated Technical & Functional Specification: LoRaLink Any2Any
+Consolidated Technical & Functional Specification: Magic Any2Any
 1. System Architecture & Transport Mapping
 The system operates on a "Star-Mesh" hybrid. The Fleet Admin (PC) communicates exclusively via high-bandwidth pipes, while the field nodes utilize the SX1262 LoRa Node chip for long-range propagation.
 
@@ -919,7 +919,7 @@ fw_ver (String): The minimal version required for the current NVS schema (e.g., 
 3. NVS Namespace Specification
 The shared codebase uses the ESP32 Preferences library to partition data.
 
-3.1 loralink (System Core)
+3.1 magic (System Core)
 op_mode: Determines if the device acts as a Gateway (WiFi Active, listening for PC) or a Singleton (WiFi Disabled, LoRa/Task Manager only).
 
 repeater: If true, the device processes packets where hops < MAX_TTL.
@@ -1144,7 +1144,7 @@ Understood. I will strictly maintain the Technical and Functional Specification 
 Based on your requirement for a "Permanent Administrative Configuration" layer that is distinct from "Live State," here is the updated specification for the Pin Configuration & Broadcast Filtering.
 
 Functional Specification: Pin Configuration & Traffic Control
-1. Administrative Configuration Layer (loralink / pin_config)
+1. Administrative Configuration Layer (magic / pin_config)
 The system shall maintain a persistent "Master Enable" flag for every GPIO available on the board (e.g., WiFi LoRa 32 V3).
 
 Logic: A pin_enabled flag must exist in NVS for each pin.
@@ -1186,7 +1186,7 @@ Accepting a manual override command from the local webserver.
 
 5. Summary of Data Relations
 Data Point	Controlled By	NVS Namespace	Purpose
-pin_enabled	Admin Only	loralink	Determines if the pin "exists" to the software.
+pin_enabled	Admin Only	magic	Determines if the pin "exists" to the software.
 pin_name	Admin Only	pin_names	Human-readable label (e.g., "Main Valve").
 pin_state	Task/Admin	lora_hw	Current electrical state (High/Low).
 Maintenance Note
@@ -1199,7 +1199,7 @@ See the pin map picture
 Gemini said
 The pin map for the WiFi LoRa 32 (V3) provides the physical constraints that your technical specification must respect. Based on the provided hardware diagram and your requirements for administrative pin control, here is the consolidated Functional & Technical Specification.
 
-Consolidated Technical Specification: LoRaLink Any2Any
+Consolidated Technical Specification: Magic Any2Any
 1. Hardware Architecture & Pin Mapping
 The system is built on the Heltec V3 platform (ESP32-S3 + SX1262). The specification recognizes three distinct classes of pins:
 
@@ -1213,7 +1213,7 @@ Sensor Interfaces: DHT Sensor (Pin 15) and GPS (Pins 47, 48).
 The core of this specification is the Strict Administrative Filter, which governs how the device behaves and communicates.
 
 2.1 The pin_enabled Flag
-Storage: Resides in the loralink NVS namespace.
+Storage: Resides in the magic NVS namespace.
 
 Authority: The Fleet Admin (PC via WiFi) is the sole authority for modifying this flag.
 
@@ -1259,7 +1259,7 @@ yes
 Gemini said
 This technical specification is now updated to include the Administrative Pin Configuration (APC) layer, specifically tailored to the WiFi LoRa 32 (V3) hardware constraints and your requirement for minimized JSON overhead.
 
-Consolidated Technical Specification: LoRaLink Any2Any
+Consolidated Technical Specification: Magic Any2Any
 1. Hardware Definition & Versioning
 The codebase operates on a Hardware Abstraction Layer (HAL). The Heltec V3 (board_id: 0) uses the ESP32-S3 and SX1262 LoRa radio.
 
@@ -1309,7 +1309,7 @@ Battery ADC (Pin 1): Continuous monitoring. If voltage falls below 3.4V, the sys
 Attribute	State	Administrative Config
 Variable Name	pin_state	pin_enabled
 Authority	Task Manager / Admin	Fleet Admin (PC) Only
-NVS Namespace	lora_hw	loralink
+NVS Namespace	lora_hw	magic
 Traffic Impact	Updates Value	Enables/Disables Key in JSON
 Reset Logic	Wiped on Factory Reset	Persistent (Provisioned)
 This specification ensures the system remains efficient, secure, and easily maintainable across different hardware versions while keeping the communication pipes clear of unnecessary data.
@@ -1321,7 +1321,7 @@ yes
 Gemini said
 This technical specification is now updated to include the Handshake & Authentication Protocol, ensuring that only an authorized Fleet Admin can modify the Administrative Pin Configuration (APC) on the WiFi LoRa 32 (V3).
 
-Consolidated Technical Specification: LoRaLink Any2Any
+Consolidated Technical Specification: Magic Any2Any
 1. Hardware Identity & Capability Mask
 The system uses a Hardware Abstraction Layer (HAL) to identify the Heltec V3 (ESP32-S3 + SX1262).
 
@@ -1335,7 +1335,7 @@ cap_mask: A bitmask in the hw_registry NVS namespace that prevents the software 
 The APC layer is the primary filter for all system I/O and telemetry.
 
 2.1 The pin_enabled Flag
-Static Configuration: Resides in the loralink NVS namespace.
+Static Configuration: Resides in the magic NVS namespace.
 
 Admin Authority: This flag is "Read-Only" to the local device logic and "Write-Only" for the Fleet Admin.
 
@@ -1379,7 +1379,7 @@ Battery ADC (Pin 1): If voltage < 3.4V, the system forces all pin_enabled relays
 Vext (Pin 36): Automatically managed based on the pin_enabled status of external sensors (e.g., DHT on Pin 15).
 
 Specification Maintenance
-This document serves as the functional contract for the LoRaLink Any2Any project. It ensures that the WiFi LoRa 32 V3 remains a secure, efficient, and administratively-controlled node within a multi-board fleet.
+This document serves as the functional contract for the Magic Any2Any project. It ensures that the WiFi LoRa 32 V3 remains a secure, efficient, and administratively-controlled node within a multi-board fleet.
 
 Would you like me to finalize this into a structured Markdown document suitable for your project's SPEC.md file?
 
@@ -1388,7 +1388,7 @@ yes
 Gemini said
 This technical specification is now updated to include the Handshake, Authentication, and Provisioning Protocol, ensuring that only an authorized Fleet Admin can modify the Administrative Pin Configuration (APC) on the WiFi LoRa 32 (V3).
 
-Consolidated Technical Specification: LoRaLink Any2Any
+Consolidated Technical Specification: Magic Any2Any
 1. Hardware Identity & Capability Mask
 The system is anchored to the Heltec V3 (ESP32-S3 + SX1262) hardware profile.
 
@@ -1402,7 +1402,7 @@ cap_mask: A bitmask in the hw_registry NVS namespace that prevents the software 
 The APC layer is the primary filter for all system I/O and telemetry.
 
 2.1 The pin_enabled Flag
-Static Configuration: Resides in the loralink NVS namespace.
+Static Configuration: Resides in the magic NVS namespace.
 
 Admin Authority: This flag is "Read-Only" to local device logic and "Write-Only" for the Fleet Admin.
 
@@ -1448,16 +1448,16 @@ Battery ADC (Pin 1): Continuous monitoring. If voltage < 3.4V, the system forces
 Vext (Pin 36): Managed based on the pin_enabled status of external sensors. If Pin 15 (DHT) is disabled, Vext remains HIGH (Off).
 
 Specification Status: FINALIZED
-This document serves as the functional contract for the LoRaLink Any2Any project. It ensures that the WiFi LoRa 32 V3 remains a secure, efficient, and administratively-controlled node within your multi-board fleet.
+This document serves as the functional contract for the Magic Any2Any project. It ensures that the WiFi LoRa 32 V3 remains a secure, efficient, and administratively-controlled node within your multi-board fleet.
 
 Would you like me to compile this into a final, clean document for your records?
 
 yes, include links to this spec sheet and the picture of the pin map
 
 Gemini said
-This Functional and Technical Specification serves as the definitive contract for the LoRaLink Any2Any ecosystem, specifically optimized for the WiFi LoRa 32 (V3) hardware platform.
+This Functional and Technical Specification serves as the definitive contract for the Magic Any2Any ecosystem, specifically optimized for the WiFi LoRa 32 (V3) hardware platform.
 
-Technical Specification: LoRaLink Any2Any
+Technical Specification: Magic Any2Any
 1. Hardware Foundation
 The system is built upon the Heltec V3 development board, integrating the ESP32-S3 MCU with the SX1262 LoRa node chip.
 
@@ -1471,7 +1471,7 @@ Capability Mask (cap_mask): A persistent NVS bitmask defining available GPIOs (5
 The APC layer dictates the logical existence of hardware features to the software stack.
 
 2.1 The pin_enabled Flag
-Storage: Persistent within the loralink NVS namespace.
+Storage: Persistent within the magic NVS namespace.
 
 Authority: Only the Fleet Admin (PC via WiFi) may modify this flag.
 
@@ -1508,21 +1508,21 @@ Firmware Target: v1.4.1+
 
 Primary Documentation: WiFi LoRa 32 (V3) Product Page
 
-NVS Schema: Namespace-based (loralink, espnow, lora_hw, pin_names)
+NVS Schema: Namespace-based (magic, espnow, lora_hw, pin_names)
 
 This concludes the official specification. Would you like me to generate a checklist for your first deployment based on these hardware constraints?
 
 can you aggregate the requirements from this entire conversation into the specification, where is the document in aggregated normalized form?
 
 Gemini said
-This document now serves as the technical documentation for the **LoRaLink Fleet Administrator**, a PC-based multi-transport configuration tool. 
+This document now serves as the technical documentation for the **Magic Fleet Administrator**, a PC-based multi-transport configuration tool. 
 
 > [!IMPORTANT]
 > For the core firmware architecture, mesh protocols, and hardware specifications, please refer to the **[System Specification](SYSTEM.md)**.
 
 ## Fleet Administrator: Functional Specification
 
-The Fleet Administrator is the primary interface for managing a network of LoRaLink nodes from a centralized PC.
+The Fleet Administrator is the primary interface for managing a network of Magic nodes from a centralized PC.
 
 ### 1. Dashboard & Monitoring
 - **Live Pin Grid**: Real-time state visualization of all administratively enabled pins.

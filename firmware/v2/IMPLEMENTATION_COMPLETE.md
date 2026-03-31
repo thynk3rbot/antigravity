@@ -1,4 +1,4 @@
-# LoRaLink v2 - Implementation Complete (Phase 1)
+# Magic v2 - Implementation Complete (Phase 1)
 
 **Date:** 2026-03-16
 **Status:** ✅ All Core Code Written & Ready for Compilation
@@ -10,7 +10,7 @@
 
 ### 1. ✅ Project Structure
 ```
-loralink-v2/
+magic-v2/
 ├── src/
 │   └── main.cpp                    (350 LOC) - FreeRTOS entry point
 ├── lib/
@@ -65,7 +65,7 @@ Each fully configured in `platformio.ini`:
 
 ### 4. ✅ Integrated v1 Features
 
-From LoRaLink v0.1.0, the following are now in v2:
+From Magic v0.1.0, the following are now in v2:
 
 - ✅ AES-128-GCM encryption (LoRaTransport layer)
 - ✅ Packet deduplication (rolling hash in MessageRouter)
@@ -188,7 +188,7 @@ platformio run --environment heltec_v4_node
 ### ✅ Boots
 On serial console (115200 baud):
 ```
-=== LoRaLink v2 Boot ===
+=== Magic v2 Boot ===
 Version: 0.2.0
 Role: HUB
 Radio: SX1276 (V2)
@@ -277,7 +277,7 @@ platformio platform install espressif32
 
 ### Step 2: Build
 ```bash
-cd loralink-v2
+cd magic-v2
 platformio run --environment heltec_v2_hub
 ```
 

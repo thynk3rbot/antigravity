@@ -1,4 +1,4 @@
-# LoRaLink PC Daemon — Deployment Guide
+# Magic PC Daemon — Deployment Guide
 
 The PC Daemon is a lightweight background service that acts as the transport hub between
 clients (webapp, phone, cloud) and the ESP32 device swarm.
@@ -78,29 +78,29 @@ Download from https://nssm.cc/download and place `nssm.exe` in `C:\Windows\Syste
 
 ```powershell
 # Run as Administrator
-nssm install LoRaLinkDaemon "C:\Python311\python.exe"
-nssm set LoRaLinkDaemon AppParameters "-m tools.daemon.daemon --config C:\LoRaLink\daemon.config.json"
-nssm set LoRaLinkDaemon AppDirectory "C:\Users\<you>\Documents\Code\Antigravity"
-nssm set LoRaLinkDaemon DisplayName "LoRaLink PC Daemon"
-nssm set LoRaLinkDaemon Description "Transport hub for LoRaLink ESP32 swarm"
-nssm set LoRaLinkDaemon Start SERVICE_AUTO_START
-nssm set LoRaLinkDaemon AppStdout "C:\LoRaLink\daemon.log"
-nssm set LoRaLinkDaemon AppStderr "C:\LoRaLink\daemon-error.log"
+nssm install MagicDaemon "C:\Python311\python.exe"
+nssm set MagicDaemon AppParameters "-m tools.daemon.daemon --config C:\Magic\daemon.config.json"
+nssm set MagicDaemon AppDirectory "C:\Users\<you>\Documents\Code\Antigravity"
+nssm set MagicDaemon DisplayName "Magic PC Daemon"
+nssm set MagicDaemon Description "Transport hub for Magic ESP32 swarm"
+nssm set MagicDaemon Start SERVICE_AUTO_START
+nssm set MagicDaemon AppStdout "C:\Magic\daemon.log"
+nssm set MagicDaemon AppStderr "C:\Magic\daemon-error.log"
 ```
 
 ### Step 3: Start and verify
 
 ```powershell
-nssm start LoRaLinkDaemon
+nssm start MagicDaemon
 curl http://localhost:8001/health
 ```
 
 ### Manage the service
 
 ```powershell
-nssm stop LoRaLinkDaemon
-nssm restart LoRaLinkDaemon
-nssm remove LoRaLinkDaemon confirm
+nssm stop MagicDaemon
+nssm restart MagicDaemon
+nssm remove MagicDaemon confirm
 ```
 
 ---
@@ -110,12 +110,12 @@ nssm remove LoRaLinkDaemon confirm
 ### Step 1: Create the service unit
 
 ```bash
-sudo nano /etc/systemd/system/loralink-daemon.service
+sudo nano /etc/systemd/system/magic-daemon.service
 ```
 
 ```ini
 [Unit]
-Description=LoRaLink PC Daemon
+Description=Magic PC Daemon
 After=network.target
 
 [Service]
@@ -136,15 +136,15 @@ WantedBy=multi-user.target
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable loralink-daemon
-sudo systemctl start loralink-daemon
-sudo systemctl status loralink-daemon
+sudo systemctl enable magic-daemon
+sudo systemctl start magic-daemon
+sudo systemctl status magic-daemon
 ```
 
 ### Step 3: View logs
 
 ```bash
-journalctl -u loralink-daemon -f
+journalctl -u magic-daemon -f
 ```
 
 ---
@@ -233,8 +233,8 @@ are persisted and routed but delivery confirmation requires hardware connection.
 Only one daemon instance should run at a time. Stop any existing daemon:
 
 ```bash
-nssm stop LoRaLinkDaemon    # Windows
-systemctl stop loralink-daemon  # Linux
+nssm stop MagicDaemon    # Windows
+systemctl stop magic-daemon  # Linux
 ```
 
 ---

@@ -1,6 +1,6 @@
-# LoRaLink Project Roadmap
+# Magic Project Roadmap
 
-This document outlines the planned growth and development tracks for the LoRaLink system, including hardware, firmware, and the supporting cloud/web infrastructure.
+This document outlines the planned growth and development tracks for the Magic system, including hardware, firmware, and the supporting cloud/web infrastructure.
 
 ---
 
@@ -52,7 +52,7 @@ Focus: Ultra-low-power autonomous operation for solar-field units.
 
 - [x] **Cloudflare Quick Tunnels**: Implemented `Start_Public_Demo_Cloudflare.bat` for instant `.trycloudflare.com` URLs.
 - [x] **LocalTunnel Fallback**: Implemented `Start_Public_Demo.bat` as an alternative.
-- [x] **Master Launch Control**: Unified Docker engine health-checks and service orchestration into `Start_Loralink.bat`.
+- [x] **Master Launch Control**: Unified Docker engine health-checks and service orchestration into `Start_Magic.bat`.
 
 ### Phase 2: Branded Zero-Trust Deployment (Target: Next 30 Days)
 
@@ -88,7 +88,7 @@ Focus: Growing the user base and establishing the brand.
 
 ## 🏗️ Track 5: Unified Architecture (Industrial-Strength)
 
-Focus: LORALINK-UNIFIED "Architectural Anchors" for protocol-agnostic, peer-sovereign operations.
+Focus: MAGIC-UNIFIED "Architectural Anchors" for protocol-agnostic, peer-sovereign operations.
 
 - [ ] **Transport-Agnostic Envelope (LL-CORE-01)**: Implement HMAC-SHA256 signature verification at the gateway/router level before logic execution.
 - [ ] **The Fallback Ladder (LL-CORE-02)**: Intelligent radio stack pruning (Hardwire > WiFi > LoRa) to conserve power once a secure link is established.

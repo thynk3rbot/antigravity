@@ -1,4 +1,4 @@
-# LoRaLink Architecture Partition
+# Magic Architecture Partition
 ## Evidence-Based Responsibility Boundaries
 
 **Authored:** Claude (with AG input required)

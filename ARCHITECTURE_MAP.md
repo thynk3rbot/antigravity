@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This file gives an agentic IDE a fast, stable mental model of the LoRaLink firmware repository so it does not have to rediscover the entire architecture from scratch every time.
+This file gives an agentic IDE a fast, stable mental model of the Magic firmware repository so it does not have to rediscover the entire architecture from scratch every time.
 
 It is a working architecture index, not a substitute for reading source files.
 
@@ -10,7 +10,7 @@ It is a working architecture index, not a substitute for reading source files.
 
 ## 1. Project Identity
 
-**LoRaLink-AnyToAny** is unified firmware focused on prioritized **any-to-any command routing** across multiple communications interfaces.
+**Magic-AnyToAny** is unified firmware focused on prioritized **any-to-any command routing** across multiple communications interfaces.
 
 ### Current Supported Board
 - **Heltec WiFi LoRa 32 V2 / V3 / V4**

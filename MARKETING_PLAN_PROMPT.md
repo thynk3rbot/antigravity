@@ -1,4 +1,4 @@
-# Marketing Plan Prompt — LoRaLink-AnyToAny
+# Marketing Plan Prompt — Magic-AnyToAny
 
 Paste the following prompt into Claude, ChatGPT, Gemini, or any capable AI to generate a comprehensive go-to-market plan.
 
@@ -13,7 +13,7 @@ marketing plan for a technical firmware product.
 
 ## The Product
 
-**LoRaLink-AnyToAny** is a proprietary ESP32-S3 firmware framework that enables
+**Magic-AnyToAny** is a proprietary ESP32-S3 firmware framework that enables
 true any-to-any wireless protocol routing. Key facts:
 
 - Runs on Heltec WiFi LoRa 32 V3 (~$20–30/node)
@@ -121,7 +121,7 @@ After receiving the plan, extract maximum value with these follow-ups:
 - *"Write the actual positioning statement and tagline options (give me 5 variations)"*
 - *"Draft the GitHub README hero section using the positioning you recommended"*
 - *"Write a Hackster.io project post introduction for the smart agriculture use case"*
-- *"Create a comparison table: LoRaLink-AnyToAny vs. [competitor] for an industrial buyer"*
+- *"Create a comparison table: Magic-AnyToAny vs. [competitor] for an industrial buyer"*
 - *"Draft a cold outreach email to a small IoT integrator firm (under 150 words)"*
 - *"Generate 10 tweet-length hooks for the any-to-any routing concept"*
 - *"Write a PlatformIO library description (under 300 words)"*

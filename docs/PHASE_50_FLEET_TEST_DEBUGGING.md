@@ -18,7 +18,7 @@ cd daemon
 python run.py --mqtt-broker localhost:1883 --log-level DEBUG > test_daemon.log 2>&1 &
 
 # Expected output (within 3 seconds):
-# [Daemon] Initializing LoRaLink Daemon (Pure Mesh Gateway)...
+# [Daemon] Initializing Magic Daemon (Pure Mesh Gateway)...
 # [Daemon] Connecting to MQTT broker at localhost:1883...
 # [Daemon] Initialization complete! (Pure Mesh Mode)
 ```
@@ -51,7 +51,7 @@ curl -s http://localhost:8001/health | jq .
 # Expected:
 # {
 #   "status": "healthy",
-#   "service": "LoRaLink Pure Mesh Gateway",
+#   "service": "Magic Pure Mesh Gateway",
 #   "peers": 0,
 #   "model": "pure-mesh"
 # }

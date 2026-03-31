@@ -2,7 +2,7 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Separate device transport logic (PC Daemon) from UI logic (Webapp). Enable multiple clients (phone, webapp, cloud) to control LoRaLink swarm via unified daemon.
+**Goal:** Separate device transport logic (PC Daemon) from UI logic (Webapp). Enable multiple clients (phone, webapp, cloud) to control Magic swarm via unified daemon.
 
 **Architecture:** PC Daemon runs as a background service and exposes a REST API + WebSocket. All device communication (Serial, HTTP, BLE, MQTT) is routed through the daemon. Webapp and other clients talk *only* to the daemon, never directly to devices.
 
@@ -36,9 +36,9 @@ touch tools/daemon/__init__.py
 File: `tools/daemon/README.md`
 
 ```markdown
-# LoRaLink PC Daemon
+# Magic PC Daemon
 
-Central transport hub for LoRaLink device control.
+Central transport hub for Magic device control.
 
 ## Features
 - Multi-protocol transport (Serial, HTTP, BLE, LoRa, MQTT)
@@ -605,7 +605,7 @@ logger = logging.getLogger(__name__)
 def create_api_app(message_queue: MessageQueue, transport_manager: TransportManager) -> FastAPI:
     """Create FastAPI application with daemon endpoints"""
 
-    app = FastAPI(title="LoRaLink Daemon API")
+    app = FastAPI(title="Magic Daemon API")
 
     # In-memory node registry (TODO: persist to DB)
     nodes: List[Node] = []
@@ -733,7 +733,7 @@ import uvicorn
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-class LoRaLinkDaemon:
+class MagicDaemon:
     """Main daemon service"""
 
     def __init__(self, config_path: Path):
@@ -761,7 +761,7 @@ class LoRaLinkDaemon:
 
     def run(self):
         """Start daemon service"""
-        logger.info("Starting LoRaLink Daemon...")
+        logger.info("Starting Magic Daemon...")
         logger.info(f"API listening on {self.config['host']}:{self.config['port']}")
 
         uvicorn.run(
@@ -774,11 +774,11 @@ class LoRaLinkDaemon:
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="LoRaLink PC Daemon")
+    parser = argparse.ArgumentParser(description="Magic PC Daemon")
     parser.add_argument("--config", default="daemon.config.json", help="Config file path")
     args = parser.parse_args()
 
-    daemon = LoRaLinkDaemon(Path(args.config))
+    daemon = MagicDaemon(Path(args.config))
     daemon.run()
 ```
 
@@ -966,7 +966,7 @@ git commit -m "feat: update webapp to fetch node list from daemon"
 ```python
 import pytest
 import asyncio
-from tools.daemon.daemon import LoRaLinkDaemon
+from tools.daemon.daemon import MagicDaemon
 from tools.daemon.models import Node
 from tools.webapp.daemon_client import DaemonClient
 from pathlib import Path
@@ -979,7 +979,7 @@ async def test_send_command_daemon_to_device():
     with tempfile.TemporaryDirectory() as tmpdir:
         # Start daemon
         config_path = Path(tmpdir) / "daemon.config.json"
-        daemon = LoRaLinkDaemon(config_path)
+        daemon = MagicDaemon(config_path)
 
         # Add test node to daemon
         test_node = Node(id="test-node", name="Test", type="wifi", address="192.168.1.50")
@@ -1049,25 +1049,25 @@ python tools/daemon/daemon.py --config daemon.config.json
 Install as Windows service using NSSM:
 
 ```bash
-nssm install LoRaLinkDaemon "python" "C:\path\to\daemon.py"
-nssm set LoRaLinkDaemon AppDirectory "C:\path\to\tools\daemon"
-nssm start LoRaLinkDaemon
+nssm install MagicDaemon "python" "C:\path\to\daemon.py"
+nssm set MagicDaemon AppDirectory "C:\path\to\tools\daemon"
+nssm start MagicDaemon
 ```
 
 ## Linux systemd Service
 
-Create `/etc/systemd/system/loralink-daemon.service`:
+Create `/etc/systemd/system/magic-daemon.service`:
 
 ```ini
 [Unit]
-Description=LoRaLink PC Daemon
+Description=Magic PC Daemon
 After=network.target
 
 [Service]
 Type=simple
 User=pi
-WorkingDirectory=/home/pi/loralink
-ExecStart=/usr/bin/python3 /home/pi/loralink/tools/daemon/daemon.py
+WorkingDirectory=/home/pi/magic
+ExecStart=/usr/bin/python3 /home/pi/magic/tools/daemon/daemon.py
 Restart=always
 
 [Install]
@@ -1077,8 +1077,8 @@ WantedBy=multi-user.target
 Enable and start:
 
 ```bash
-sudo systemctl enable loralink-daemon
-sudo systemctl start loralink-daemon
+sudo systemctl enable magic-daemon
+sudo systemctl start magic-daemon
 ```
 
 ## Configuration

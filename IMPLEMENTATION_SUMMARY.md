@@ -50,7 +50,7 @@
 
 **Before working:**
 ```bash
-cd ~/loralink
+cd ~/magic
 python3 agent-tracking.py acquire Claude "Task description"
 ```
 
@@ -152,7 +152,7 @@ These were created in previous sessions and continue to work:
 
 3. **Create `.locks/` directory** — Ensure it exists:
    ```bash
-   mkdir -p ~/loralink/.locks
+   mkdir -p ~/magic/.locks
    mkdir -p ~/nutricalc/.locks
    ```
 
@@ -176,14 +176,14 @@ Run this monthly to verify everything is working:
 
 ```bash
 # Check if any locks are stuck
-ls -l ~/loralink/.locks/
-find ~/loralink/.locks -mmin +120 -type f  # >2 hours old
+ls -l ~/magic/.locks/
+find ~/magic/.locks -mmin +120 -type f  # >2 hours old
 
 # Verify backups exist
 ls -l ~/backups/ | tail -5
 
 # Check git status
-cd ~/loralink
+cd ~/magic
 git status
 git log --oneline -5
 

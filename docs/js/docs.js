@@ -1,5 +1,5 @@
 /**
- * LoRaLink Documentation — Runtime Logic
+ * Magic Documentation — Runtime Logic
  * Builds header, sidebar navigation, on-page TOC, and footer
  * from DOCS_CONFIG defined in config.js.
  */
@@ -19,8 +19,8 @@
       <div class="logo">
         <button class="hamburger" aria-label="Toggle menu">☰</button>
         <a href="${BASE}/index.html" style="text-decoration:none;display:flex;align-items:center;gap:0.75rem">
-          <img src="${BASE}/media/logo.png" alt="${C.productShort || 'LoRaLink'}" style="height:28px">
-          <span class="product-name">${C.productShort || "LoRaLink"}</span>
+          <img src="${BASE}/media/logo.png" alt="${C.productShort || 'Magic'}" style="height:28px">
+          <span class="product-name">${C.productShort || "Magic"}</span>
           <span class="version">${C.version || ""}</span>
         </a>
       </div>
@@ -96,7 +96,7 @@
     footer.className = "doc-footer";
     footer.innerHTML = `
       <span>${C.copyright || ""}</span>
-      <span>${C.productName || "LoRaLink"} ${C.version || ""}</span>`;
+      <span>${C.productName || "Magic"} ${C.version || ""}</span>`;
     document.body.appendChild(footer);
   }
 

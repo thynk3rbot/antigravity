@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  mosquitto:
+    image: eclipse-mosquitto:latest
+    container_name: magic_bus
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf
+    restart: unless-stopped
+
+  db:
+    image: postgres:15-alpine
+    container_name: magic_db
+    environment:
+      POSTGRES_USER: magic
+      POSTGRES_PASSWORD: magic
+      POSTGRES_DB: magic_cache
+    ports:
+      - "5432:5432"
+    volumes:
+      - magic_db_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+volumes:
+  magic_db_data:

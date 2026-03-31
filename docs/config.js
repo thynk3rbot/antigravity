@@ -1,5 +1,5 @@
 /**
- * LoRaLink Documentation — Site Configuration
+ * Magic Documentation — Site Configuration
  * Edit these values to match your deployment.
  */
 const DOCS_CONFIG = {
@@ -8,8 +8,8 @@ const DOCS_CONFIG = {
   baseUrl: ".",
 
   // Product branding
-  productName: "LoRaLink-AnyToAny",
-  productShort: "LoRaLink",
+  productName: "Magic-AnyToAny",
+  productShort: "Magic",
   tagline: "Connected Where the Map Ends.",
   version: "v1.5",
 

@@ -1,6 +1,6 @@
 /**
  * @file control_packet.h
- * @brief LoRaLink v2 Control Packet Definition (Packed C-struct)
+ * @brief Magic v2 Control Packet Definition (Packed C-struct)
  *
  * Defines the binary protocol for all mesh communications.
  * No Protocol Buffers - direct memory mapping for efficiency.
@@ -159,7 +159,7 @@ static_assert(sizeof(GpioPayload) == 8, "GpioPayload must be 8 bytes");
 
 /**
  * @struct ControlPacket
- * @brief Complete LoRaLink v2 packet (14 bytes)
+ * @brief Complete Magic v2 packet (14 bytes)
  *
  * Memory layout:
  *   Bytes 0-5:   PacketHeader (6 bytes)
