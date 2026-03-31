@@ -123,6 +123,27 @@
                 </div>
 
                 <div class="panel">
+                    <h2>Bulk Import</h2>
+                    <p style="font-size: 13px; color: #a0aec0; margin-bottom: 10px;">
+                        Import devices from JSON, CSV, or XLSX file. Auto-adds to registry.
+                    </p>
+                    <div class="form-group">
+                        <label>Select File Format</label>
+                        <select id="import-format">
+                            <option value="json">JSON (Recommended)</option>
+                            <option value="csv">CSV</option>
+                            <option value="xlsx">XLSX / Excel</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Choose File</label>
+                        <input type="file" id="import-file" accept=".json,.csv,.xlsx">
+                    </div>
+                    <button onclick="importDevices()" class="btn-success" style="width: 100%;">📤 Import Devices</button>
+                    <div id="import-status"></div>
+                </div>
+
+                <div class="panel">
                     <h2>Device List</h2>
                     <div id="device-list">Loading devices...</div>
                 </div>
@@ -413,6 +434,54 @@
                 alert('Registry exported!');
             } catch (e) {
                 alert('Export failed: ' + e.message);
+            }
+        }
+
+        async function importDevices() {
+            const format = document.getElementById('import-format').value;
+            const file = document.getElementById('import-file').files[0];
+            const statusDiv = document.getElementById('import-status');
+
+            if (!file) {
+                statusDiv.innerHTML = '<div class="error">Please select a file to import</div>';
+                return;
+            }
+
+            statusDiv.innerHTML = '<div class="log-line log-info">Importing...</div>';
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const endpoint = `${API_BASE}/registry/import/${format}`;
+                const res = await fetch(endpoint, { method: 'POST', body: formData });
+                const result = await res.json();
+
+                if (result.ok) {
+                    let html = `<div class="success">✓ Import complete: ${result.added} devices added`;
+                    if (result.errors && result.errors.length > 0) {
+                        html += `<br><strong>Errors:</strong><ul style="margin-top: 8px;">`;
+                        result.errors.slice(0, 5).forEach(e => {
+                            const li = document.createElement('li');
+                            li.textContent = e;
+                            html += '<li>' + e + '</li>';
+                        });
+                        if (result.errors.length > 5) {
+                            html += `<li>... and ${result.errors.length - 5} more errors</li>`;
+                        }
+                        html += '</ul>';
+                    }
+                    html += '</div>';
+                    statusDiv.innerHTML = html;
+
+                    // Clear form and reload devices
+                    document.getElementById('import-file').value = '';
+                    setTimeout(loadDevices, 1000);
+                } else {
+                    statusDiv.innerHTML = `<div class="error">✗ Import failed: ${result.error}</div>`;
+                }
+            } catch (e) {
+                statusDiv.innerHTML = `<div class="error">✗ Error: ${e.message}</div>`;
             }
         }
     </script>

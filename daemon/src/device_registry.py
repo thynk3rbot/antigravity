@@ -11,8 +11,9 @@ from pathlib import Path
 from typing import Dict, List, Optional
 from dataclasses import dataclass, asdict
 from datetime import datetime
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, UploadFile, File
 from pydantic import BaseModel
+import tempfile
 
 logger = logging.getLogger(__name__)
 
@@ -264,5 +265,71 @@ class DeviceRegistry:
         async def export_registry():
             """Export registry to JSON file (git-tracked)."""
             return self.export_to_json()
+
+        @router.post("/import/json")
+        async def import_json_file(file: UploadFile = File(...)):
+            """Import devices from JSON file."""
+            try:
+                from .registry_importer import RegistryImporter
+            except ImportError:
+                from registry_importer import RegistryImporter
+
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.json') as tmp:
+                content = await file.read()
+                tmp.write(content)
+                tmp.flush()
+                tmp_path = Path(tmp.name)
+
+            try:
+                importer = RegistryImporter(self)
+                result = importer.import_json(tmp_path)
+                self.export_to_json()
+                return result
+            finally:
+                tmp_path.unlink()
+
+        @router.post("/import/csv")
+        async def import_csv_file(file: UploadFile = File(...)):
+            """Import devices from CSV file."""
+            try:
+                from .registry_importer import RegistryImporter
+            except ImportError:
+                from registry_importer import RegistryImporter
+
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.csv') as tmp:
+                content = await file.read()
+                tmp.write(content)
+                tmp.flush()
+                tmp_path = Path(tmp.name)
+
+            try:
+                importer = RegistryImporter(self)
+                result = importer.import_csv(tmp_path)
+                self.export_to_json()
+                return result
+            finally:
+                tmp_path.unlink()
+
+        @router.post("/import/xlsx")
+        async def import_xlsx_file(file: UploadFile = File(...)):
+            """Import devices from XLSX file."""
+            try:
+                from .registry_importer import RegistryImporter
+            except ImportError:
+                from registry_importer import RegistryImporter
+
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx') as tmp:
+                content = await file.read()
+                tmp.write(content)
+                tmp.flush()
+                tmp_path = Path(tmp.name)
+
+            try:
+                importer = RegistryImporter(self)
+                result = importer.import_xlsx(tmp_path)
+                self.export_to_json()
+                return result
+            finally:
+                tmp_path.unlink()
 
         return router
