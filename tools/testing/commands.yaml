@@ -1,323 +1,242 @@
-# Command Metadata & Test Configuration
-# Used by integration_test.py, nightly_test.py, overdrive.py
-# Last updated: 2026-03-31
+# Magic Fleet — Command Metadata Registry
+# Single source of truth for all firmware commands.
+# Drives integration testing, coverage reporting, and wiring validation.
+#
+# Fields:
+#   name               - exact command string as firmware expects it (uppercase)
+#   transports         - which transports can deliver it: http/serial/ble/lora/mqtt/espnow
+#   critical           - true if failure has physical consequence or leaves device unreachable
+#   wiring_status      - implemented / partial / stub / unknown
+#   expected_response_field - one key field to assert in the JSON response
+#   display:
+#     page             - OLED page where effect is visible (null = no screen effect)
+#                        page_1_network | page_2_power | page_3_transports |
+#                        page_4_system  | page_5_gps   | page_6_diag       |
+#                        header (all pages) | footer (all pages) | splash | off
+#     field            - the specific cached field that changes on screen
 
 commands:
-
-  # ───────────────────────────────────────────────────────────────────
-  # CRITICAL COMMANDS (core functionality, must work)
-  # ───────────────────────────────────────────────────────────────────
-
-  STATUS:
-    description: "System status (battery, LoRa signal, peer count, uptime)"
-    transports: [http, mqtt]
+  - name: STATUS
+    transports: [http, serial, ble, mqtt, espnow]
     critical: true
     wiring_status: implemented
-    args: ""
-    expected_response:
-      json: true
-      fields: ["name", "ver", "bat_pct", "lora_rssi", "uptime"]
+    expected_response_field: version
+    display:
+      page: footer
+      field: version
 
-  GPIO:
-    description: "GPIO control (set pin HIGH/LOW, MCP expander pins)"
-    transports: [http, mqtt]
+  - name: VSTATUS
+    transports: [http, serial, ble, mqtt, lora, espnow]
+    critical: false
+    wiring_status: implemented
+    expected_response_field: version
+    display:
+      page: footer
+      field: version
+
+  - name: RELAY
+    transports: [http, serial, ble, lora, mqtt, espnow]
     critical: true
     wiring_status: implemented
-    args: "<pin> <state>"
-    expected_response:
-      json: true
-      fields: ["ok", "pin", "state"]
+    expected_response_field: state
+    display:
+      page: null
+      field: null  # relayOn cached but not rendered on any page yet
 
-  READ:
-    description: "Read pin state (digital input, ADC analog read)"
-    transports: [http, mqtt]
+  - name: SETWIFI
+    transports: [http, serial, ble]
     critical: true
     wiring_status: implemented
-    args: "<pin>"
-    expected_response:
-      json: true
-      fields: ["ok", "pin", "value"]
+    expected_response_field: ok
+    display:
+      page: page_1_network
+      field: ip
 
-  RELAY:
-    description: "Control relay (12V relay switching)"
-    transports: [http, mqtt]
+  - name: SETIP
+    transports: [http, serial, ble]
     critical: true
     wiring_status: implemented
-    args: "<relay_num> <on|off>"
-    expected_response:
-      json: true
-      fields: ["ok", "relay", "state"]
+    expected_response_field: ok
+    display:
+      page: page_1_network
+      field: ip
 
-  SCHED:
-    description: "Schedule management (list, add, clear scheduled tasks)"
-    transports: [http, mqtt]
+  - name: SETBROKER
+    transports: [http, serial, ble]
     critical: true
     wiring_status: implemented
-    args: "<list|add|clear> [args]"
-    expected_response:
-      json: true
-      fields: ["ok"]
+    expected_response_field: ok
+    display:
+      page: page_3_transports
+      field: mqttActive
 
-  REBOOT:
-    description: "System reboot"
-    transports: [http, mqtt]
+  - name: BLINK
+    transports: [http, serial, ble, lora, mqtt, espnow]
+    critical: false
+    wiring_status: implemented
+    expected_response_field: ok
+    display:
+      page: null
+      field: null  # LED blink only — no screen change
+
+  - name: REBOOT
+    transports: [http, serial, ble, lora, mqtt, espnow]
     critical: true
     wiring_status: implemented
-    args: ""
-    expected_response:
-      json: true
-      fields: ["ok"]
+    expected_response_field: ok
+    display:
+      page: splash
+      field: null  # triggers full boot splash
 
-  # ───────────────────────────────────────────────────────────────────
-  # IMPORTANT COMMANDS (secondary functionality)
-  # ───────────────────────────────────────────────────────────────────
-
-  NODES:
-    description: "List mesh nodes (peer discovery, neighbor table)"
-    transports: [http, mqtt]
+  - name: HELP
+    transports: [http, serial, ble, lora, mqtt]
     critical: false
     wiring_status: implemented
-    args: ""
-    expected_response:
-      json: true
-      fields: ["ok", "nodes"]
+    expected_response_field: available
+    display:
+      page: null
+      field: null  # serial/BLE response only
 
-  MSG:
-    description: "Send message (LoRa, mesh, MQTT relay)"
-    transports: [http, mqtt]
+  - name: GETCONFIG
+    transports: [http, serial, ble, lora, mqtt]
     critical: false
     wiring_status: implemented
-    args: "<target> <message>"
-    expected_response:
-      json: true
-      fields: ["ok"]
+    expected_response_field: node_id
+    display:
+      page: header
+      field: deviceName
 
-  SETNAME:
-    description: "Set node name (device ID)"
-    transports: [http, mqtt]
+  - name: SETNAME
+    transports: [http, serial, ble]
+    critical: true
+    wiring_status: implemented
+    expected_response_field: ok
+    display:
+      page: header
+      field: deviceName
+
+  - name: SCHED
+    transports: [http, serial, ble, lora, mqtt]
+    critical: false
+    wiring_status: stub
+    expected_response_field: error
+    display:
+      page: null
+      field: null
+
+  - name: FORWARD
+    transports: [http, serial, ble, lora, mqtt, espnow]
+    critical: false
+    wiring_status: stub
+    expected_response_field: error
+    display:
+      page: null
+      field: null
+
+  - name: GPS
+    transports: [http, serial, ble, lora, mqtt]
     critical: false
     wiring_status: implemented
-    args: "<name>"
-    expected_response:
-      json: true
-      fields: ["ok"]
+    expected_response_field: ok
+    display:
+      page: page_5_gps
+      field: gpsLat  # also gpsLon, gpsSats, gpsFix
 
-  GETCONFIG:
-    description: "Get configuration (WiFi, broker, NVS settings)"
-    transports: [http, mqtt]
+  - name: ASK
+    transports: [http, serial, ble, lora, mqtt]
     critical: false
     wiring_status: implemented
-    args: ""
-    expected_response:
-      json: true
-      fields: ["ok"]
+    expected_response_field: ok
+    display:
+      page: null
+      field: null
 
-  HELP:
-    description: "Command help (list all commands)"
-    transports: [http, mqtt]
+  - name: FACTORY_RESET
+    transports: [http, serial, ble]
+    critical: true
+    wiring_status: implemented
+    expected_response_field: ok
+    display:
+      page: splash
+      field: null  # triggers reboot → splash
+
+  - name: LIST
+    transports: [http, serial, ble, lora, mqtt]
     critical: false
     wiring_status: implemented
-    args: ""
-    expected_response:
-      json: false
-      format: text
+    expected_response_field: products
+    display:
+      page: null
+      field: null
 
-  VSTATUS:
-    description: "Verbose status (extended telemetry)"
-    transports: [http, mqtt]
-    critical: false
+  - name: LOAD
+    transports: [http, serial, ble, lora, mqtt]
+    critical: true
     wiring_status: implemented
-    args: ""
-    expected_response:
-      json: true
-      fields: ["ok"]
+    expected_response_field: ok
+    display:
+      page: null
+      field: null
 
-  # ───────────────────────────────────────────────────────────────────
-  # CONFIGURATION COMMANDS (setup, network, security)
-  # ───────────────────────────────────────────────────────────────────
+  - name: SETKEY
+    transports: [http, serial, ble]
+    critical: true
+    wiring_status: partial
+    expected_response_field: ok
+    display:
+      page: null
+      field: null
 
-  SETWIFI:
-    description: "Configure WiFi (SSID and password)"
-    transports: [http, mqtt]
+  - name: GPIO
+    transports: [http, serial, ble]
+    critical: true
+    wiring_status: partial
+    expected_response_field: ok
+    display:
+      page: null
+      field: null
+
+  - name: READ
+    transports: [http, serial, ble]
     critical: false
-    wiring_status: implemented
-    args: "<ssid> <password>"
-    expected_response:
-      json: true
-      fields: ["ok"]
+    wiring_status: partial
+    expected_response_field: ok
+    display:
+      page: null
+      field: null
 
-  SETIP:
-    description: "Set static IP address"
-    transports: [http, mqtt]
+  - name: NODES
+    transports: [http, serial, ble, lora, mqtt, espnow]
     critical: false
+    wiring_status: partial
+    expected_response_field: ok
+    display:
+      page: page_1_network
+      field: peerCount
+
+  - name: REPEATER
+    transports: [http, serial, ble, lora, mqtt, espnow]
+    critical: true
+    wiring_status: partial
+    expected_response_field: ok
+    display:
+      page: page_3_transports
+      field: loraActive
+
+  - name: SLEEP
+    transports: [http, serial, ble, lora, mqtt, espnow]
+    critical: true
+    wiring_status: partial
+    expected_response_field: ok
+    display:
+      page: off
+      field: null  # display goes dark
+
+  - name: MSG
+    transports: [http, serial, ble, lora, mqtt, espnow]
+    critical: true
     wiring_status: implemented
-    args: "<ip> <gateway> <subnet>"
-    expected_response:
-      json: true
-      fields: ["ok"]
-
-  SETBROKER:
-    description: "Set MQTT broker address"
-    transports: [http, mqtt]
-    critical: false
-    wiring_status: implemented
-    args: "<host> <port>"
-    expected_response:
-      json: true
-      fields: ["ok"]
-
-  SETKEY:
-    description: "Set encryption key (LoRa AES)"
-    transports: [http, mqtt]
-    critical: false
-    wiring_status: implemented
-    args: "<key_hex>"
-    expected_response:
-      json: true
-      fields: ["ok"]
-
-  FACTORY_RESET:
-    description: "Factory reset (clear all NVS, restore defaults)"
-    transports: [http, mqtt]
-    critical: false
-    wiring_status: implemented
-    args: ""
-    expected_response:
-      json: true
-      fields: ["ok"]
-
-  # ───────────────────────────────────────────────────────────────────
-  # ADVANCED / UTILITY COMMANDS
-  # ───────────────────────────────────────────────────────────────────
-
-  BLINK:
-    description: "LED blink (diagnostic, confirm responsiveness)"
-    transports: [http, mqtt]
-    critical: false
-    wiring_status: implemented
-    args: ""
-    expected_response:
-      json: true
-      fields: ["ok"]
-
-  GPS:
-    description: "Get GPS coordinates (if GPS module present)"
-    transports: [http, mqtt]
-    critical: false
-    wiring_status: implemented
-    args: "[args]"
-    expected_response:
-      json: true
-      fields: ["ok"]
-
-  ASK:
-    description: "AI query (Magic AI, local inference)"
-    transports: [http, mqtt]
-    critical: false
-    wiring_status: implemented
-    args: "<prompt>"
-    expected_response:
-      json: true
-      fields: ["ok", "response"]
-
-  FORWARD:
-    description: "Message forwarding (relay to target node)"
-    transports: [http, mqtt]
-    critical: false
-    wiring_status: implemented
-    args: "<target> <message>"
-    expected_response:
-      json: true
-      fields: ["ok"]
-
-  REPEATER:
-    description: "Mesh repeater mode (relay all messages)"
-    transports: [http, mqtt]
-    critical: false
-    wiring_status: implemented
-    args: "<on|off>"
-    expected_response:
-      json: true
-      fields: ["ok"]
-
-  SLEEP:
-    description: "Deep sleep (power saving)"
-    transports: [http, mqtt]
-    critical: false
-    wiring_status: implemented
-    args: "<duration_ms>"
-    expected_response:
-      json: true
-      fields: ["ok"]
-
-  LIST:
-    description: "List loaded products/profiles"
-    transports: [http, mqtt]
-    critical: false
-    wiring_status: implemented
-    args: ""
-    expected_response:
-      json: true
-      fields: ["ok"]
-
-  LOAD:
-    description: "Load product/profile (activate feature set)"
-    transports: [http, mqtt]
-    critical: false
-    wiring_status: implemented
-    args: "<product_name>"
-    expected_response:
-      json: true
-      fields: ["ok"]
-
-# ───────────────────────────────────────────────────────────────────
-# Test Configuration
-# ───────────────────────────────────────────────────────────────────
-
-test_config:
-  # Timeout for single command response (seconds)
-  timeout: 5
-
-  # Timeout for mesh commands (peers must respond)
-  mesh_timeout: 12
-
-  # MQTT response topic subscription pattern
-  mqtt_response_topic: "magic/+/response"
-
-  # HTTP endpoint base
-  http_endpoint: "/api/cmd"
-
-  # Number of retry attempts per command
-  retry_attempts: 3
-
-  # Delay between retries (seconds)
-  retry_delay: 1
-
-# ───────────────────────────────────────────────────────────────────
-# Test Profiles
-# ───────────────────────────────────────────────────────────────────
-
-profiles:
-  critical_only:
-    description: "Critical command tests only (fast validation)"
-    filters:
-      critical: true
-
-  full_suite:
-    description: "All commands (comprehensive validation)"
-    filters:
-      critical: [true, false]
-
-  http_only:
-    description: "HTTP transport tests"
-    filters:
-      transports: [http]
-
-  mqtt_only:
-    description: "MQTT transport tests"
-    filters:
-      transports: [mqtt]
-
-  quick_health:
-    description: "Quick health check (STATUS + NODES + GPIO)"
-    commands: [STATUS, NODES, GPIO]
+    expected_response_field: ok
+    display:
+      page: null
+      field: null
