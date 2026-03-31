@@ -1,97 +1,125 @@
+"""
+Magic Background Services Supervisor
+Starts all Magic platform services as supervised background processes.
+Each service auto-restarts on crash.
+
+Usage:
+    python tools/start_bg_services.py          # start all
+    python tools/start_bg_services.py stop     # stop all (via PID file)
+"""
+
 import subprocess
 import os
 import sys
 import time
 import threading
 
-def start_docker(repo_dir):
-    CREATE_NO_WINDOW = 0x08000000
-    try:
-        print("Starting MQTT Broker (Docker)...")
-        subprocess.run(
-            ["docker", "compose", "-f", "mqttdocker.yml", "up", "-d"],
-            cwd=repo_dir,
-            creationflags=CREATE_NO_WINDOW
-        )
-    except Exception as e:
-        print(f"Failed to start docker compose: {e}")
+ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+TOOLS = os.path.join(ROOT, "tools")
+DAEMON = os.path.join(ROOT, "daemon")
+PID_FILE = os.path.join(TOOLS, "bg_services.pid")
 
-def worker(cmd, cwd, log_file):
-    CREATE_NO_WINDOW = 0x08000000
-    while True:
+
+def stop_existing():
+    if os.path.exists(PID_FILE):
         try:
-            with open(log_file, "a") as out:
-                out.write("\n--- STARTING SERVICE ---\n")
-                p = subprocess.Popen(
-                    cmd,
-                    cwd=cwd,
-                    creationflags=CREATE_NO_WINDOW,
-                    stdout=out,
-                    stderr=subprocess.STDOUT
-                )
-                p.wait()
-                out.write(f"\n--- STOPPED with code {p.returncode} ---\n")
-        except Exception as e:
-            with open(log_file, "a") as out:
-                out.write(f"\n--- ERROR: {e} ---\n")
-        time.sleep(5)
+            with open(PID_FILE) as f:
+                old_pid = int(f.read().strip())
+            subprocess.run(["taskkill", "/PID", str(old_pid), "/F"], capture_output=True)
+            print(f"[*] Stopped previous supervisor (PID {old_pid})")
+        except Exception:
+            pass
+        os.remove(PID_FILE)
 
-def write_pid(pid_file):
-    with open(pid_file, "w") as f:
+
+def write_pid():
+    with open(PID_FILE, "w") as f:
         f.write(str(os.getpid()))
 
-def main():
-    repo_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-    tools_dir = os.path.join(repo_dir, "tools")
-    
-    # Check if already running
-    pid_file = os.path.join(tools_dir, "bg_services.pid")
-    if os.path.exists(pid_file):
+
+def worker(name, cmd, cwd, log_path):
+    """Supervised service worker — restarts on crash with 5s backoff."""
+    os.makedirs(os.path.dirname(log_path), exist_ok=True)
+    while True:
+        print(f"[{name}] Starting...")
         try:
-            with open(pid_file, "r") as f:
-                old_pid = int(f.read().strip())
-            # Basic process check (Windows)
-            subprocess.run(["taskkill", "/PID", str(old_pid), "/F"], capture_output=True)
-        except:
-            pass
-            
-    write_pid(pid_file)
+            with open(log_path, "a") as out:
+                out.write(f"\n--- START {time.strftime('%Y-%m-%d %H:%M:%S')} ---\n")
+                p = subprocess.Popen(
+                    cmd, cwd=cwd,
+                    stdout=out, stderr=subprocess.STDOUT,
+                    creationflags=0x08000000  # CREATE_NO_WINDOW on Windows
+                )
+                p.wait()
+                out.write(f"\n--- EXIT code={p.returncode} {time.strftime('%Y-%m-%d %H:%M:%S')} ---\n")
+        except Exception as e:
+            print(f"[{name}] Error: {e}")
+        print(f"[{name}] Restarting in 5s...")
+        time.sleep(5)
 
-    start_docker(repo_dir)
 
-    services = [
-        {
-            "cmd": [sys.executable, "-m", "http.server", "8001", "-d", "docs"],
-            "cwd": repo_dir,
-            "log": os.path.join(repo_dir, "docs_startup.log")
-        },
-        {
-            "cmd": [sys.executable, "server.py"],
-            "cwd": os.path.join(tools_dir, "webapp"),
-            "log": os.path.join(tools_dir, "webapp", "server_out.log")
-        },
-        {
-            "cmd": [sys.executable, "server.py"],
-            "cwd": os.path.join(tools_dir, "website"),
-            "log": os.path.join(tools_dir, "website", "server_out.log")
-        }
-    ]
+SERVICES = [
+    {
+        "name": "daemon",
+        "cmd": [sys.executable, os.path.join(DAEMON, "src", "main.py")],
+        "cwd": ROOT,
+        "log": os.path.join(ROOT, "logs", "daemon.log"),
+    },
+    {
+        "name": "webapp",
+        "cmd": [sys.executable, "server.py"],
+        "cwd": os.path.join(TOOLS, "webapp"),
+        "log": os.path.join(ROOT, "logs", "webapp.log"),
+    },
+    {
+        "name": "loramsg",
+        "cmd": [sys.executable, os.path.join(TOOLS, "loramsg", "server.py")],
+        "cwd": ROOT,
+        "log": os.path.join(ROOT, "logs", "loramsg.log"),
+    },
+    {
+        "name": "assistant",
+        "cmd": [sys.executable, "main.py"],
+        "cwd": os.path.join(TOOLS, "assistant"),
+        "log": os.path.join(ROOT, "logs", "assistant.log"),
+    },
+]
 
-    for s in services:
-        t = threading.Thread(target=worker, args=(s["cmd"], s["cwd"], s["log"]), daemon=True)
+
+def main():
+    if len(sys.argv) > 1 and sys.argv[1] == "stop":
+        stop_existing()
+        print("[*] Done.")
+        return
+
+    stop_existing()
+    write_pid()
+
+    print()
+    print("  Magic Background Services")
+    print("  ==========================")
+    for s in SERVICES:
+        print(f"  {s['name']:<12}  log: logs/{s['name']}.log")
+    print()
+
+    threads = []
+    for s in SERVICES:
+        t = threading.Thread(
+            target=worker,
+            args=(s["name"], s["cmd"], s["cwd"], s["log"]),
+            daemon=True
+        )
         t.start()
-        time.sleep(1) # Stagger startups slightly
+        threads.append(t)
+        time.sleep(1)
 
-    print("All services started in background successfully.")
-    
-    # Stay alive to supervise
+    print("[*] All services started. Press Ctrl+C to stop supervisor.")
     try:
         while True:
-            time.sleep(3600)
+            time.sleep(60)
     except KeyboardInterrupt:
-        pass
-    except Exception:
-        pass
+        print("\n[*] Supervisor stopped.")
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()

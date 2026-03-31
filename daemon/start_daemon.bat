@@ -1,56 +1,59 @@
 @echo off
-REM Phase 50 Daemon Startup Script
-REM Starts the Magic Daemon with mesh sovereignty capabilities
+TITLE Magic Daemon
+color 0D
+cls
 
-setlocal enabledelayedexpansion
-
-echo ================================================================
-echo Magic Phase 50 Daemon
-echo ================================================================
+echo.
+echo   ================================================
+echo    Magic Daemon  —  Fleet Orchestrator
+echo   ================================================
 echo.
 
-REM Check if Python is available
+cd /d "%~dp0.."
+
+:: Verify Python
 python --version >nul 2>&1
 if errorlevel 1 (
-    echo ERROR: Python not found in PATH
+    echo [ERROR] Python not found in PATH.
+    pause
     exit /b 1
 )
 
-REM Check if requirements are installed
-echo Checking dependencies...
+:: Install deps if needed
 pip show fastapi >nul 2>&1
 if errorlevel 1 (
     echo Installing requirements...
-    pip install -r requirements.txt
+    pip install -r daemon\requirements.txt
     if errorlevel 1 (
-        echo ERROR: Failed to install requirements
+        echo [ERROR] Failed to install requirements.
+        pause
         exit /b 1
     )
 )
 
-REM Parse arguments
+:: Allow overrides: start_daemon.bat [port] [mqtt_broker] [log_level]
 set PORT=8001
-set MQTT_BROKER=localhost:1883
-set LOG_LEVEL=INFO
+set MQTT=localhost:1883
+set LOG=INFO
 
 if not "%~1"=="" set PORT=%~1
-if not "%~2"=="" set MQTT_BROKER=%~2
-if not "%~3"=="" set LOG_LEVEL=%~3
+if not "%~2"=="" set MQTT=%~2
+if not "%~3"=="" set LOG=%~3
+
+echo    API Port:    %PORT%
+echo    MQTT:        %MQTT%
+echo    Log Level:   %LOG%
+echo.
+echo    Dashboard:   http://localhost:8000
+echo    API:         http://localhost:%PORT%
+echo.
+echo Starting...
+echo.
+
+:loop
+python daemon\src\main.py --port %PORT% --mqtt-broker %MQTT% --log-level %LOG%
 
 echo.
-echo Configuration:
-echo   API Port:      %PORT%
-echo   MQTT Broker:   %MQTT_BROKER%
-echo   Log Level:     %LOG_LEVEL%
-echo.
-echo Starting daemon...
-echo.
-
-REM Start daemon
-python src/main.py --port %PORT% --mqtt-broker %MQTT_BROKER% --log-level %LOG_LEVEL%
-
-if errorlevel 1 (
-    echo.
-    echo ERROR: Daemon failed to start
-    exit /b 1
-)
+echo [!] Daemon stopped. Restarting in 5s...
+timeout /t 5 /nobreak >nul
+goto loop
