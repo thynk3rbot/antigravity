@@ -27,7 +27,7 @@
 #include <vector>
 #include <map>
 #include <cstring>
-#include "../../src/config.h"
+#include "../HAL/board_config.h"
 
 #define GOSSIP_MAX_PEERS 100
 #define GOSSIP_BROADCAST_INTERVAL_MS 300000  // 5 minutes

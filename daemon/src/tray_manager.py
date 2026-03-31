@@ -1,6 +1,7 @@
 import threading
 import webbrowser
 import os
+import time
 from pathlib import Path
 import pystray
 from PIL import Image

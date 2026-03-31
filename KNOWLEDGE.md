@@ -47,3 +47,14 @@ oled_manager.cpp SLEEP_TIMEOUT_MS (30s) fires regardless of power source. When p
 **Rule:** Never use unconditional display sleep. Always respect isPowered(). Init button ISR flags to false.
 
 ---
+
+## [2026-03-31 07:37:58] Self-Diagnosis of Agent Configuration and Verification Protocols
+
+**Technical Context:**
+Next startup MUST include a deep-dive into mcp_config.json and tool-use validation. The agent suffered from cognitive failures (Confidently Wrong reports) due to shallow log auditing and over-reliance on Exit Code 0. Verification protocols must be hardened to require 100% data write confirmation and service heartbeats before reporting success.
+
+**Actionable Rule:**
+- [ ] Added to AGENTS.md / PROCESSES.md
+- [ ] Verified in current branch
+
+---

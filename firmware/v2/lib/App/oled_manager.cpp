@@ -4,6 +4,9 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 #include "../HAL/i2c_mutex.h"
+#include "power_manager.h"
+#include <cstring>
+#include <cstdint>
 
 // Display configuration
 #define OLED_WIDTH    128
@@ -74,7 +77,14 @@ static void drawHeader(const char* title) {
     display.setTextColor(SSD1306_WHITE);
     display.setTextSize(1);
     display.setCursor(0, 0);
-    display.printf("%s | %s", g_cached.deviceName, title);
+    
+    // Show [USB] if plugged in
+    if (PowerManager::isPowered()) {
+        display.printf("%s [USB] : %s", g_cached.deviceName, title);
+    } else {
+        display.printf("%s : %s", g_cached.deviceName, title);
+    }
+    
     display.drawFastHLine(0, 10, 128, SSD1306_WHITE);
 }
 
@@ -94,20 +104,20 @@ static void displayPage1() {
     display.clearDisplay();
     drawHeader("Network");
     display.setCursor(0, 14);
-    display.printf("IP:    %s\n", g_cached.ip);
-    display.printf("Peers: %u connected\n", g_cached.peerCount);
-    display.printf("WiFi:  %s\n", g_cached.wifiActive ? "ACTIVE" : "OFF");
+    display.printf("%s\n", g_cached.ip);
+    display.printf("%u connected\n", g_cached.peerCount);
+    display.printf("%s\n", g_cached.wifiActive ? "ACTIVE" : "OFF");
     drawFooter(1);
     display.display();
 }
 
 static void displayPage2() {
     display.clearDisplay();
-    drawHeader("Power");
+    drawHeader("Power & LoRa");
     display.setCursor(0, 14);
-    display.printf("Batt: %.2f V\n", g_cached.batVoltage);
-    display.printf("RSSI: %d dBm\n", g_cached.loraRSSI);
-    display.printf("SNR:  %.1f dB\n", g_cached.loraSNR);
+    display.printf("%.2f V\n", g_cached.batVoltage);
+    display.printf("%d dBm\n", g_cached.loraRSSI);
+    display.printf("%.1f dB SNR\n", g_cached.loraSNR);
     drawFooter(2);
     display.display();
 }
@@ -116,10 +126,10 @@ static void displayPage3() {
     display.clearDisplay();
     drawHeader("Transports");
     display.setCursor(0, 14);
-    display.printf("BLE:   %s\n", g_cached.bleActive ? "ON" : "OFF");
-    display.printf("MQTT:  %s\n", g_cached.mqttActive ? "ON" : "OFF");
-    display.printf("LoRa:  %s\n", g_cached.loraActive ? "ON" : "OFF");
-    display.printf("ESPNW: %s\n", g_cached.espnowActive ? "ON" : "OFF");
+    display.printf("BLE   %s\n", g_cached.bleActive ? "ON" : "OFF");
+    display.printf("MQTT  %s\n", g_cached.mqttActive ? "ON" : "OFF");
+    display.printf("LoRa  %s\n", g_cached.loraActive ? "ON" : "OFF");
+    display.printf("ESPNW %s\n", g_cached.espnowActive ? "ON" : "OFF");
     drawFooter(3);
     display.display();
 }
@@ -128,9 +138,9 @@ static void displayPage4() {
     display.clearDisplay();
     drawHeader("System");
     display.setCursor(0, 14);
-    display.printf("Temp:  %.1f C\n", g_cached.tempC);
-    display.printf("Heap:  %u KB\n", g_cached.freeHeapBytes / 1024);
-    display.printf("MAC:   %s\n", g_cached.macSuffix);
+    display.printf("%.1f C\n", g_cached.tempC);
+    display.printf("%u KB Free\n", g_cached.freeHeapBytes / 1024);
+    display.printf("%s\n", g_cached.macSuffix);
     drawFooter(4);
     display.display();
 }
@@ -143,7 +153,13 @@ static void displayPage5() {
     display.setTextColor(SSD1306_WHITE);
     display.setTextSize(1);
     display.setCursor(0, 0);
-    display.printf("%s | GPS", g_cached.deviceName);
+    
+    if (PowerManager::isPowered()) {
+        display.printf("%s [USB] | GPS", g_cached.deviceName);
+    } else {
+        display.printf("%s | GPS", g_cached.deviceName);
+    }
+    
     display.drawFastHLine(0, 10, 128, SSD1306_WHITE);
 
     if (!g_cached.gpsFix && g_cached.gpsSats == 0) {
@@ -233,9 +249,9 @@ bool OLEDManager::init() {
     if (OLED_RESET_PIN != -1) {
         pinMode(OLED_RESET_PIN, OUTPUT);
         digitalWrite(OLED_RESET_PIN, LOW);
-        delay(100);
+        delay(200);   // v0.4.0: Increased reset pulse duration for S3-V4 hardware
         digitalWrite(OLED_RESET_PIN, HIGH);
-        delay(100);
+        delay(200);   // Stability delay after reset
     }
     
     pinMode(BUTTON_PIN, INPUT_PULLUP);
@@ -244,9 +260,8 @@ bool OLEDManager::init() {
 #endif
     attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), buttonISR, FALLING);
     
-    // Wire.begin should have happened in BootSequence, but we'll re-verify at 100k
+    // Wire.begin should have happened in BootSequence, we MUST NOT call it again (prevents OLED glitch)
     I2C_LOCK();
-    Wire.begin(I2C_SDA, I2C_SCL, 100000); 
     
     if (display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDRESS)) {
         display.ssd1306_command(SSD1306_SETCONTRAST);
@@ -273,8 +288,6 @@ bool OLEDManager::init() {
     g_displayOn = true;
     return true;
 }
-
-#include "power_manager.h"
 
 void OLEDManager::_processInit() {
     uint32_t now = millis();

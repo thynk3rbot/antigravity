@@ -6,7 +6,7 @@ cls
 echo.
 echo   ================================================
 echo    M A G I C   Fleet Control Center
-echo    Sovereign Connectivity Platform
+echo               Connectivity Platform
 echo   ================================================
 echo.
 
@@ -18,15 +18,14 @@ start "Magic MQTT Broker" cmd /k "mosquitto -c mosquitto.conf"
 timeout /t 2 /nobreak >nul
 
 echo [2/4] Starting Magic Daemon (API port 8001, Dashboard port 8000)...
-start "Magic Daemon" cmd /k "python daemon\src\main.py"
+start "Magic Daemon" cmd /k "python daemon\run.py"
 timeout /t 3 /nobreak >nul
 
 echo [3/4] Starting Magic Messenger Bridge (port 8400)...
 start "Magic Messenger" cmd /k "python tools\loramsg\server.py"
 timeout /t 1 /nobreak >nul
 
-echo [4/4] Opening Magic Dashboard...
-start http://localhost:8000
+echo [4/4] Tray icon active in system notification area.
 
 echo.
 echo   ================================================

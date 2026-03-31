@@ -7,6 +7,10 @@ void IRAM_ATTR MCPManager::_isr() {
 }
 
 bool MCPManager::init() {
+    if (_ready) {
+        Serial.println("[MCP] Already initialized");
+        return true;
+    }
     _chipCount = 0;
     _ready = false;
 
@@ -31,7 +35,11 @@ bool MCPManager::init() {
     // Attach interrupt if configured and not on V4/colliding hardware
     if (PIN_MCP_INT != -1) {
         pinMode(PIN_MCP_INT, INPUT_PULLUP);
+#ifndef ARDUINO_HELTEC_WIFI_LORA_32_V4
         attachInterrupt(digitalPinToInterrupt(PIN_MCP_INT), _isr, FALLING);
+#else
+        Serial.println("[MCP] V4 Conflict: Pin 38 used by GPS. Interrupt disabled.");
+#endif
         Serial.printf("[MCP] Interrupt attached on GPIO %d\n", PIN_MCP_INT);
     } else {
         Serial.println("[MCP] Interrupt disabled (V4/Conflict guard)");

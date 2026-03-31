@@ -11,7 +11,10 @@
 #include <Arduino.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
+#include <esp_system.h>
+#include <stdio.h>
 
+#include "../lib/App/nvs_manager.h"
 #include "../lib/App/boot_sequence.h"
 #include "../lib/App/control_loop.h"
 #include "../lib/HAL/probe_manager.h"
@@ -199,7 +202,18 @@ void wifiTask(void* param) {
 void loop() {
   // Pure idle loop - WiFi service moved to wifiTask
   // This allows FreeRTOS scheduler to run uninterrupted
-  vTaskDelay(pdMS_TO_TICKS(100));
+  vTaskDelay(pdMS_TO_TICKS(10));
+
+  // Handle Serial Commands (Simple CLI)
+  if (Serial.available()) {
+    String input = Serial.readStringUntil('\n');
+    input.trim();
+    if (input.length() > 0) {
+      CommandManager::process(input, [](const String& response) {
+        Serial.println(response);
+      });
+    }
+  }
 
   // Periodic status output (every ~10 seconds)
   static uint32_t lastStatus = 0;

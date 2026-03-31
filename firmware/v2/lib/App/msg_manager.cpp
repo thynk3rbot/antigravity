@@ -1,9 +1,14 @@
+#include <Arduino.h>
+#include <string.h>
+#include <stdio.h>
+#include <stddef.h>
+#include <string>
+#include <functional>
 #include "msg_manager.h"
 #include "nvs_manager.h"
 #include "../Transport/lora_transport.h"
 #include "../Transport/espnow_transport.h"
 #include "../Transport/wifi_transport.h"
-#include <Arduino.h>
 #include <esp_random.h>
 #ifndef UNIT_TEST
 #include <WiFi.h>
@@ -12,17 +17,17 @@
 extern uint8_t g_ourNodeID;
 
 MsgManager::MsgManager() {
-    memset(_dedup,       0, sizeof(_dedup));
-    memset(_pending,     0, sizeof(_pending));
-    memset(_reassembly,  0, sizeof(_reassembly));
-    memset(_neighbors,   0, sizeof(_neighbors));
+    ::memset(_dedup,       0, sizeof(_dedup));
+    ::memset(_pending,     0, sizeof(_pending));
+    ::memset(_reassembly,  0, sizeof(_reassembly));
+    ::memset(_neighbors,   0, sizeof(_neighbors));
 }
 
 void MsgManager::init() {
     _nextPacketId = (uint32_t)(esp_random() & 0xFFFF);
     Serial.printf("[MSG] MsgManager ready — node 0x%02X\n", g_ourNodeID);
-    // MSG command handled by CommandManager::_handleMsg()
-    announceNode();
+    // Schedule first announce 5s after init to avoid boot contention
+    _lastAnnounceMs = millis() - 60000UL + 5000UL;
 }
 
 // ── Dedup ─────────────────────────────────────────────────────────────

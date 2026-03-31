@@ -69,6 +69,10 @@
   #define HW_VERSION "V2"
 #endif
 
+// Firmware Identification Constants (Gossip-Ready)
+#define FIRMWARE_DEVICE_ID      DEVICE_NAME
+#define FIRMWARE_VERSION_PACKED 0x001204  // 0.0.18V4
+
 // ============================================================================
 // LoRa Radio SPI Interface Pins
 // ============================================================================
@@ -198,7 +202,7 @@
   #define ADC_VBATT     35
 #endif
 
-#define ADC_VBATT_DIV 6.6f      // Voltage divider ratio (Heltec standard)
+#define ADC_VBATT_DIV 5.1f      // Updated for V4 S3-calibrated ADC
 #define ADC_TEMP      36        // ESP32 internal temperature sensor
 
 // Battery voltage monitoring (Power Management)
@@ -216,7 +220,7 @@
   #define BAT_ADC_CTRL 37        // V4 requires GPIO 37 HIGH for battery sense
 #endif
 
-#define BAT_ADC_VOLTAGE_DIVIDER 2.0f    // External divider: Vbat/2 = ADC input
+#define BAT_ADC_VOLTAGE_DIVIDER 5.1f    // Updated for V4 S3 scaling
 #ifdef RADIO_SX1262
   #define VEXT_PIN              36       // V3 and V4 use GPIO 36 for VEXT control
 #else
@@ -231,12 +235,12 @@
 // GPS / GNSS UART Interface Pins
 // ============================================================================
 #ifdef ARDUINO_HELTEC_WIFI_LORA_32_V4
-  #define GPS_RX_PIN       39
-  #define GPS_TX_PIN       38
+  #define GPS_RX_PIN       47       // ESP32 RX <- GPS TX (SH1.25 UART)
+  #define GPS_TX_PIN       48       // ESP32 TX -> GPS RX (SH1.25 UART)
   #define GPS_PPS_PIN      41
   #define GPS_RST_PIN      42
   #define GPS_WAKE_PIN     40
-  #define GPS_EN_PIN       34       // Power enable (Active LOW)
+  #define GPS_EN_PIN       45       // V4 Standard Power Enable (Active LOW)
 #elif defined(ARDUINO_TTGO_T_BEAM_V1_1)
   #define GPS_RX_PIN       12       // ESP32 RX <- GPS TX
   #define GPS_TX_PIN       34       // ESP32 TX -> GPS RX
@@ -294,7 +298,9 @@
 #endif
 
 #ifdef ROLE_HUB
-  #define ENABLE_MQTT_TRANSPORT
+  #ifndef ENABLE_MQTT_TRANSPORT
+    #define ENABLE_MQTT_TRANSPORT
+  #endif
 #endif
 
 // V4-only features (PSRAM available)

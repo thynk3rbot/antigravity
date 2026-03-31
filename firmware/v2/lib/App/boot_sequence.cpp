@@ -1,13 +1,15 @@
-/**
- * @file boot_sequence.cpp
- * @brief Implementation of device startup logic
- */
-
-#include "boot_sequence.h"
-#include <LittleFS.h>
+#include <Arduino.h>
+#include <string>
+#include <cstdio>
+#include <functional>
 #include <WiFi.h>
+#include <LittleFS.h>
+#include <Wire.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
+
+#include "boot_sequence.h"
+#include "nvs_manager.h"
 
 // HAL Layer
 #include "../HAL/board_config.h"
@@ -28,7 +30,6 @@
 #include "../Transport/espnow_transport.h"
 
 // Application Layer
-#include "nvs_manager.h"
 #include "power_manager.h"
 #include "oled_manager.h"
 #include "http_api.h"
@@ -115,8 +116,13 @@ void BootSequence::initCore() {
 
   Serial.println("[TRACE] PowerManager::init()");
   PowerManager::init();
-  Serial.println("[TRACE] PowerManager::enableVEXT()");
-  PowerManager::enableVEXT();
+  
+  // v0.4.0: V4 Hardware needs stable rail before I2C/OLED
+  uint8_t stableRetry = 0;
+  while (!PowerManager::isVEXTStable() && stableRetry < 20) {
+    vTaskDelay(pdMS_TO_TICKS(50));
+    stableRetry++;
+  }
   vTaskDelay(pdMS_TO_TICKS(500)); // Enforce rail stability
   
   Serial.println("[CHECK] Initializing I2C Mutex...");
@@ -130,32 +136,91 @@ void BootSequence::initCore() {
   Wire.setTimeOut(100); // Prevent bus hangs on collision/error
   Serial.println("  ✓ I2C Wire started");
 
+  // v0.4.0 EMERGENCY: Move OLED to front to reduce black-screen time
+  // Hardened for V4: Double try with extra delay
+  Serial.println("[v0.4.0] Priority OLED Init...");
+  
 #ifdef ARDUINO_HELTEC_WIFI_LORA_32_V4
-  Serial.println("[V4] Enabling GPS Power (GPIO 34)...");
-  pinMode(34, OUTPUT);
-  digitalWrite(34, LOW); // GPS_EN is Active LOW on V4
+  Serial.printf("[V4-TRACE] Initial VEXT pin: %d (Logic: LOW=ON, HIGH=OFF)\n", digitalRead(VEXT_PIN));
+#endif
+
+  bool oledOk = false;
+  if (PluginManager::isEnabled("oled")) {
+    oledOk = OLEDManager::getInstance().init();
+    if (!oledOk) {
+      Serial.println("  ! OLED Initial fail, retrying after VEXT toggle...");
+      PowerManager::disableVEXT();
+      vTaskDelay(pdMS_TO_TICKS(500));
+      PowerManager::enableVEXT();
+      vTaskDelay(pdMS_TO_TICKS(1000));
+      oledOk = OLEDManager::getInstance().init();
+    }
+  }
+
+  if (oledOk) {
+    OLEDManager::getInstance().showSplash(FIRMWARE_VERSION, "BOOTING...");
+    Serial.println("  ✓ OLED splash active");
+  } else {
+    Serial.printf("  ! OLED Hard Fail (VEXT: %d)\n", digitalRead(VEXT_PIN));
+  }
+
+#ifdef ARDUINO_HELTEC_WIFI_LORA_32_V4
+  Serial.printf("[V4] Activating Battery Sense (GPIO %d)...\n", BAT_ADC_CTRL);
+  pinMode(BAT_ADC_CTRL, OUTPUT);
+  digitalWrite(BAT_ADC_CTRL, HIGH); // V4 requires 37 HIGH to enable the divider
+
+  Serial.printf("[V4] Enabling GPS Power (GPIO %d)...\n", GPS_EN_PIN);
+  pinMode(GPS_EN_PIN, OUTPUT);
+  digitalWrite(GPS_EN_PIN, LOW); // V4 GPS Power is Active LOW
 #endif
 
   Serial.println("[CHECK] Initializing MCP...");
+  // Restore core init (safe-mode guard implemented in HAL)
   MCPManager::getInstance().init();
-  Serial.println("  ✓ MCP Done");
   vTaskDelay(pdMS_TO_TICKS(200));
 
-  Serial.println("[BOOT] Device initialized.");
-
-  Serial.println("\n=== Magic v2 Boot ===");
+  // (Identity resolution moved to initCore to ensure OLED shows correct name immediately)
+  ProductManager::getInstance().init();
   Serial.printf("Version: %s\n", FIRMWARE_VERSION);
   Serial.printf("Board: %s / Radio: %s\n", HW_VERSION, RADIO_MODEL);
   Serial.printf("Free Heap: %u bytes\n", esp_get_free_heap_size());
+
+  // [Standard] Identity Resolution (Enforce project identity before UI/OLED name display)
+  String nodeIDStr = String(NVSManager::getNodeID("").c_str());
+  
+  // Only override if identity is a generic placeholder, missing, or null
+  bool idInvalid = nodeIDStr.length() == 0 || nodeIDStr == "Unknown" || 
+                   nodeIDStr == "Node" || nodeIDStr == "Peer" || 
+                   nodeIDStr == "peer" || nodeIDStr == "Magic-Node";
+  
+  if (idInvalid) {
+    uint8_t mac[6];
+    esp_efuse_mac_get_default(mac);
+    
+    // Standard format: Magic-XXXX where XXXX is last 4 of MAC
+    nodeIDStr = "Magic-";
+    const char* hexChars = "0123456789ABCDEF";
+    for (int i = 4; i < 6; i++) {
+      nodeIDStr += hexChars[(mac[i] >> 4) & 0x0F];
+      nodeIDStr += hexChars[mac[i] & 0x0F];
+    }
+    
+    NVSManager::setNodeID(nodeIDStr.c_str());
+    Serial.print("  ! Identity enforced (Standard): ");
+    Serial.println(nodeIDStr);
+  } else {
+    Serial.print("  ✓ Identity preserved: ");
+    Serial.println(nodeIDStr);
+  }
 }
 
 void BootSequence::initHAL() {
-  Serial.println("\n[1/7] Initializing UI layer...");
-  if (PluginManager::isEnabled("oled") && OLEDManager::getInstance().init()) {
-    OLEDManager::getInstance().showSplash(FIRMWARE_VERSION, DEVICE_ROLE);
-    Serial.println("  ✓ OLED initialized");
+  Serial.println("\n[1/7] UI Layer check...");
+  if (PluginManager::isEnabled("oled")) {
+    OLEDManager::getInstance().drawBootProgress("CORE READY", 10);
+    Serial.println("  ✓ OLED status verified");
   } else {
-    Serial.println("  ! OLED skipped or init failed");
+    Serial.println("  ! OLED disabled in plugin config");
   }
 
   ProductManager::getInstance().init();
@@ -169,12 +234,23 @@ void BootSequence::initHAL() {
 
   uint8_t mac_raw[6];
   esp_efuse_mac_get_default(mac_raw);
+  
+  // Manual hex formatting for diagnostics to avoid missing snprintf
   char mac_buf[16];
-  snprintf(mac_buf, sizeof(mac_buf), "[%02X:%02X]", mac_raw[4], mac_raw[5]);
+  const char* hex = "0123456789ABCDEF";
+  mac_buf[0] = '[';
+  mac_buf[1] = hex[(mac_raw[4] >> 4) & 0x0F];
+  mac_buf[2] = hex[mac_raw[4] & 0x0F];
+  mac_buf[3] = ':';
+  mac_buf[4] = hex[(mac_raw[5] >> 4) & 0x0F];
+  mac_buf[5] = hex[mac_raw[5] & 0x0F];
+  mac_buf[6] = ']';
+  mac_buf[7] = '\0';
 
   OLEDManager::getInstance().setMAC(mac_buf);
   OLEDManager::getInstance().setVersion(FIRMWARE_VERSION);
-  OLEDManager::getInstance().setDeviceName(NVSManager::getNodeID("Node").c_str());
+  String currentName = String(NVSManager::getNodeID("Magic-Node").c_str());
+  OLEDManager::getInstance().setDeviceName(currentName.c_str());
   OLEDManager::getInstance().addLog("System Initialized");
   OLEDManager::getInstance().setDiagnostics(NVSManager::getBootCount(), NVSManager::getResetReason().c_str());
 
@@ -208,21 +284,12 @@ void BootSequence::initTransports() {
   PluginManager::getInstance().initAll();
   Serial.println("  ✓ Core HAL & Plugins initialized");
 
-  std::string nodeIDStr = NVSManager::getNodeID("Node");
-  if (nodeIDStr.empty() || nodeIDStr == "Unknown") {
-    uint8_t mac[6];
-    esp_efuse_mac_get_default(mac);
-    char fallback[16];
-    snprintf(fallback, sizeof(fallback), "Peer-%02X%02X", mac[4], mac[5]);
-    nodeIDStr = fallback;
-    Serial.printf("  ! NVS NodeID missing, using fallback: %s\n", nodeIDStr.c_str());
-  }
-
+  // Core Transport: LoRa (Enforced ON by Default)
   if (!LoRaTransport::getInstance().init()) {
-    Serial.println("  ! LoRa transport failed");
+    Serial.println("  ! LoRa transport failed init");
   } else {
-    MessageRouter::instance().registerTransport(&LoRaTransport::getInstance());
-    Serial.println("  ✓ LoRa transport initialized");
+    MessageRouter::instance().registerTransport((TransportInterface*)&LoRaTransport::getInstance());
+    Serial.println("  ✓ LoRa transport active (Default)");
   }
   vTaskDelay(pdMS_TO_TICKS(1000));
   OLEDManager::getInstance().drawBootProgress("LORA COMM", 50);
@@ -238,8 +305,10 @@ void BootSequence::initTransports() {
   vTaskDelay(pdMS_TO_TICKS(500));
   if (PluginManager::isEnabled("ble") && BLETransport::initStatic()) {
     Serial.println("  ✓ BLE transport initialized");
-    BLETransport::setRxCallback([](const String& data) {
-      Serial.printf("[BLE] Command received: '%s'\n", data.c_str());
+    BLETransport::setRxCallback([&](const String& data) {
+      Serial.print("[BLE] Command received: '");
+      Serial.print(data);
+      Serial.println("'");
       CommandManager::process(data, [](const String& resp) {
         BLETransport::sendStringStatic(resp);
       });
@@ -248,17 +317,19 @@ void BootSequence::initTransports() {
   } else {
     Serial.println("  - BLE skipped");
   }
+  vTaskDelay(pdMS_TO_TICKS(2000)); // 0.4.0 Stabilization: BLE protocol settle
   OLEDManager::getInstance().drawBootProgress("BLE MESH", 65);
 
   vTaskDelay(pdMS_TO_TICKS(2000)); 
 
-  std::string wifiSSID = NVSManager::getWiFiSSID();
-  std::string wifiPass = NVSManager::getWiFiPassword();
-  std::string mdnsHostname = "magic-" + nodeIDStr;
+  String currentID = String(NVSManager::getNodeID("").c_str());
+  String wifiSSID = String(NVSManager::getWiFiSSID().c_str());
+  String wifiPass = String(NVSManager::getWiFiPassword().c_str());
+  String mdnsHostname = "magic-" + currentID;
 
-  // Unconditional WiFi Initialization (Starts AP if STA fails/is-empty)
-  if (WiFiTransport::init(wifiSSID, wifiPass, mdnsHostname)) {
-    Serial.println("  ✓ WiFi transport initialized");
+  // Core Transport: WiFi (Enforced ON by Default - STA with Fallback to AP)
+  if (WiFiTransport::init(wifiSSID.c_str(), wifiPass.c_str(), mdnsHostname.c_str())) {
+    Serial.println("  ✓ WiFi transport active (Default)");
   } else {
     Serial.println("  - WiFi STA failed, using SoftAP for provisioning");
   }
@@ -273,8 +344,9 @@ void BootSequence::initTransports() {
   vTaskDelay(pdMS_TO_TICKS(500));
   Serial.println("[4.5/8] Initializing ESP-NOW...");
   if (PluginManager::isEnabled("espnow") && ESPNowTransport::getInstance().init()) {
-    MessageRouter::instance().registerTransport(&ESPNowTransport::getInstance());
-    ESPNowTransport::getInstance().startDiscovery(); // Explicitly start discovery
+    // Explicit pointer cast to TransportInterface*
+    MessageRouter::instance().registerTransport((TransportInterface*)&ESPNowTransport::getInstance());
+    ESPNowTransport::getInstance().startDiscovery();
     Serial.println("  ✓ ESP-NOW transport initialized + Discovery Active");
   } else {
     Serial.println("  - ESP-NOW skipped");
@@ -292,8 +364,8 @@ void BootSequence::initTransports() {
 
 #ifdef ENABLE_MQTT_TRANSPORT
   if (PluginManager::isEnabled("mqtt") && MQTTTransport::initStatic()) {
-    MQTTTransport::onCommand([](const std::string& cmd) {
-      CommandManager::process(String(cmd.c_str()), [](const String& resp) {
+    MQTTTransport::onCommand([](const String& cmd) {
+      CommandManager::process(cmd, [](const String& resp) {
         MQTTTransport::instance()->publishResponse(resp);
       });
     });

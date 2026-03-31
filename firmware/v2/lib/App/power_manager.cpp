@@ -53,10 +53,10 @@ void PowerManager::begin() {
 
 #ifdef VEXT_PIN
     pinMode(VEXT_PIN, OUTPUT);
-#ifdef ARDUINO_HELTEC_WIFI_LORA_32_V4
-    digitalWrite(VEXT_PIN, LOW);   // V4 is Active HIGH -> Start OFF
+#if defined(ARDUINO_HELTEC_WIFI_LORA_32_V4) || defined(ARDUINO_HELTEC_WIFI_LORA_32_V3) || defined(ARDUINO_HELTEC_WIFI_LORA_32)
+    digitalWrite(VEXT_PIN, HIGH);  // Heltec V2/V3/V4 all use Active LOW -> Start OFF
 #else
-    digitalWrite(VEXT_PIN, HIGH);  // V2/V3 is Active LOW -> Start OFF
+    digitalWrite(VEXT_PIN, LOW);   // Default assumes Active HIGH
 #endif
 #endif
 
@@ -113,7 +113,7 @@ bool PowerManager::init() {
     _lastVoltage = getBatteryVoltage();
     // If USB powered, override any persisted CRITICAL/CONSERVE mode
     if (isPowered() && _mode != PowerMode::NORMAL) {
-        Serial.printf("[Power] USB detected (%.2fV) — overriding %s → NORMAL\n",
+        Serial.printf("[Power] USB detected (%.2fV)  overriding %s  NORMAL\n",
                       _lastVoltage, _mode == PowerMode::CRITICAL ? "CRITICAL" : "CONSERVE");
         _mode = PowerMode::NORMAL;
         NVSManager::setPowerMode(static_cast<uint8_t>(PowerMode::NORMAL));
@@ -143,14 +143,14 @@ void PowerManager::enableVEXT() {
     pinMode(VEXT_PIN, OUTPUT);
     
     // Pulse sequence for rail stabilization
-#ifdef ARDUINO_HELTEC_WIFI_LORA_32_V4
-    digitalWrite(VEXT_PIN, LOW);  delay(50);
-    digitalWrite(VEXT_PIN, HIGH); delay(50);
-    digitalWrite(VEXT_PIN, HIGH); // V4 Active HIGH -> Leave ON
+#if defined(ARDUINO_HELTEC_WIFI_LORA_32_V4) || defined(ARDUINO_HELTEC_WIFI_LORA_32_V3) || defined(ARDUINO_HELTEC_WIFI_LORA_32)
+    digitalWrite(VEXT_PIN, HIGH);  delay(100);
+    digitalWrite(VEXT_PIN, LOW);   delay(100);
+    digitalWrite(VEXT_PIN, LOW);   // Heltec Active LOW -> Leave ON
 #else
-    digitalWrite(VEXT_PIN, HIGH);  delay(50);
-    digitalWrite(VEXT_PIN, LOW);   delay(50);
-    digitalWrite(VEXT_PIN, LOW);   // V2/V3 Active LOW -> Leave ON
+    digitalWrite(VEXT_PIN, LOW);   delay(100);
+    digitalWrite(VEXT_PIN, HIGH);  delay(100);
+    digitalWrite(VEXT_PIN, HIGH);  // Default Active HIGH -> Leave ON
 #endif
     
 #ifdef ARDUINO_HELTEC_WIFI_LORA_32_V4
@@ -165,10 +165,10 @@ void PowerManager::enableVEXT() {
 
 void PowerManager::disableVEXT() {
 #ifdef VEXT_PIN
-#ifdef ARDUINO_HELTEC_WIFI_LORA_32_V4
-    digitalWrite(VEXT_PIN, LOW);   // V4 Reference is Active HIGH -> OFF
+#if defined(ARDUINO_HELTEC_WIFI_LORA_32_V4) || defined(ARDUINO_HELTEC_WIFI_LORA_32_V3) || defined(ARDUINO_HELTEC_WIFI_LORA_32)
+    digitalWrite(VEXT_PIN, HIGH);  // Heltec Active LOW -> OFF
 #else
-    digitalWrite(VEXT_PIN, HIGH);  // V2/V3 is Active LOW -> OFF
+    digitalWrite(VEXT_PIN, LOW);   // Default assumes Active HIGH
 #endif
 #endif
 }
@@ -191,11 +191,21 @@ float PowerManager::getBatteryVoltage() {
 #endif
     delay(5);
 #endif
-    // Average 5 readings for stability
+
+#ifdef ARDUINO_HELTEC_WIFI_LORA_32_V4
+    // Use factory-calibrated millivolts reading for S3-V4 accuracy
+    float readingRaw = static_cast<float>(analogReadMilliVolts(BAT_ADC_PIN));
+    float voltage = (readingRaw / 1000.0f) * BAT_ADC_VOLTAGE_DIVIDER; 
+#else
+    // Average 5 readings for stability on legacy ESP32
     uint32_t sum = 0;
     for (uint8_t i = 0; i < 5; i++) {
         sum += analogRead(BAT_ADC_PIN);
     }
+    float readingAvg = static_cast<float>(sum) / 5.0f;
+    float voltage = (readingAvg / 4095.0f) * 3.3f * BAT_ADC_VOLTAGE_DIVIDER; 
+#endif
+
 #ifdef BAT_ADC_CTRL
 #ifdef ARDUINO_HELTEC_WIFI_LORA_32_V4
     digitalWrite(BAT_ADC_CTRL, LOW); // Disable
@@ -203,12 +213,10 @@ float PowerManager::getBatteryVoltage() {
     digitalWrite(BAT_ADC_CTRL, HIGH); // Disable
 #endif
 #endif
-    float reading = static_cast<float>(sum) / 5.0f;
-    float voltage = (reading / 4095.0f) * 3.3f * 2.0f; // V4/V3 Standard Divider (6.6V Full Scale)
     _lastVoltage = voltage;
     return voltage;
 #else
-    // No ADC pin defined — return fake full battery
+    // No ADC pin defined  return fake full battery
     return 4.2f;
 #endif
 }
@@ -217,16 +225,26 @@ uint8_t PowerManager::getBatteryPercent() {
 #ifdef HAS_PMIC
     return _pmic.getBatteryPercent();
 #else
-    // Map voltage 3.0V -> 0%, 4.2V -> 100%
-    constexpr float V_MIN = 3.0f;
-    constexpr float V_MAX = 4.2f;
-
     float voltage = getBatteryVoltage();
-    float percent = (voltage - V_MIN) / (V_MAX - V_MIN) * 100.0f;
+    
+    // Non-linear Li-Ion discharge curve (Standard 3.7V Cell)
+    // 4.2V = 100%, 3.7V = 50%, 3.0V = 0%
+    if (voltage >= 4.20f) return 100;
+    if (voltage >= 4.15f) return 98;
+    if (voltage >= 4.10f) return 95;
+    if (voltage >= 4.05f) return 90;
+    if (voltage >= 3.95f) return 80;
+    if (voltage >= 3.85f) return 60;
+    if (voltage >= 3.75f) return 40;
+    if (voltage >= 3.70f) return 20;
+    if (voltage >= 3.60f) return 10;
+    if (voltage >= 3.50f) return 5;
+    if (voltage < 3.00f)  return 0;
 
-    if (percent < 0.0f) percent = 0.0f;
+    // Linear fallback for middle ranges to avoid stair-stepping
+    float percent = (voltage - 3.0f) / (4.2f - 3.0f) * 100.0f;
     if (percent > 100.0f) percent = 100.0f;
-
+    if (percent < 0.0f) percent = 0.0f;
     return static_cast<uint8_t>(percent);
 #endif
 }
@@ -254,7 +272,7 @@ void PowerManager::autoUpdateMode() {
     if (isPowered()) {
         // USB/External power detected - Always force NORMAL mode
         if (_mode != PowerMode::NORMAL) {
-            Serial.printf("[Power] USB power detected (%.2fV) — restoring NORMAL mode\n", _lastVoltage);
+            Serial.printf("[Power] USB power detected (%.2fV)  restoring NORMAL mode\n", _lastVoltage);
         }
         newMode = PowerMode::NORMAL;
     } else if (voltage >= VOLT_NORMAL + (_mode > PowerMode::NORMAL ? hysteresis : 0)) {
@@ -264,7 +282,7 @@ void PowerManager::autoUpdateMode() {
     } else {
         newMode = PowerMode::CRITICAL;
         if (_mode != PowerMode::CRITICAL) {
-             Serial.printf("[Power] Low Battery (%.2fV) — entering CRITICAL mode\n", _lastVoltage);
+             Serial.printf("[Power] Low Battery (%.2fV)  entering CRITICAL mode\n", _lastVoltage);
         }
     }
 
@@ -294,7 +312,7 @@ uint32_t PowerManager::getSleepIntervalMs() {
     switch (_mode) {
         case PowerMode::CONSERVE: return 5000;
         case PowerMode::CRITICAL: return 30000;
-        default:                  return 0;      // NORMAL — no sleep
+        default:                  return 0;      // NORMAL  no sleep
     }
 }
 
