@@ -40,4 +40,30 @@ All logs written to `logs/` in the repo root.
 
 ## Firmware
 
-Flash a device: `pio run -t upload -e heltec_v4` (version auto-increments).
+### Virgin Device Commissioning (Factory / AG Only)
+
+To provision never-before-flashed devices:
+
+```powershell
+# Interactive: double-click
+Factory_USB_Flasher.bat
+
+# Or command-line:
+python tools/usb_flasher.py
+
+# Batch commissioning from CSV:
+python tools/usb_flasher.py --batch devices.csv
+```
+
+See **[FACTORY_COMMISSIONING.md](docs/FACTORY_COMMISSIONING.md)** for detailed workflow.
+
+### Subsequent Updates
+
+For devices already commissioned, update via OTA:
+- **Daemon:** Open Fleet Dashboard → select device → OTA Flash
+- **Bulk:** Use Swarm OTA panel to flash multiple devices at once
+
+To manually flash via USB:
+```powershell
+pio run -t upload -e heltec_v4  # Version auto-increments
+```
