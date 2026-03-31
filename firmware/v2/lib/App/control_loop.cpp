@@ -122,7 +122,7 @@ void ControlLoop::updateOLED() {
     );
 
     // Relay, temperature, peers
-    oled.setRelayStatus(RelayHAL::getInstance().getState() != 0);
+    oled.setRelayStatus(RelayHAL::getInstance().getState());  // full 8-ch bitmask
 
     auto sensorData = SensorHAL::getInstance().readAll();
     for (const auto& r : sensorData) {

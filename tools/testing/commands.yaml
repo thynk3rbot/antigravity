@@ -40,8 +40,8 @@ commands:
     wiring_status: implemented
     expected_response_field: state
     display:
-      page: null
-      field: null  # relayOn cached but not rendered on any page yet
+      page: page_4_relays
+      field: relayMask  # 8-bit bitmask rendered as ■/□ grid, channels 1-8
 
   - name: SETWIFI
     transports: [http, serial, ble]

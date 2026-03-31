@@ -35,7 +35,7 @@ struct DisplayCache {
     uint32_t freeHeapBytes;
     uint32_t bootCount;
     char resetReason[20];
-    bool relayOn;
+    uint8_t relayMask;   // 8-bit bitmask, bit N = relay channel N
 #ifdef HAS_GPS
     double gpsLat;
     double gpsLon;
@@ -136,11 +136,31 @@ static void displayPage3() {
 
 static void displayPage4() {
     display.clearDisplay();
-    drawHeader("System");
+    drawHeader("Relays");
     display.setCursor(0, 14);
-    display.printf("%.1f C\n", g_cached.tempC);
-    display.printf("%u KB Free\n", g_cached.freeHeapBytes / 1024);
-    display.printf("%s\n", g_cached.macSuffix);
+
+    // Relay bitmask — 8 channels as filled/empty squares, 14px wide each
+    // ■ = ON (filled),  □ = OFF (outline)
+    for (uint8_t i = 0; i < 8; i++) {
+        int16_t x = i * 15;
+        bool on = (g_cached.relayMask >> i) & 0x01;
+        if (on) {
+            display.fillRect(x, 14, 12, 12, SSD1306_WHITE);
+        } else {
+            display.drawRect(x, 14, 12, 12, SSD1306_WHITE);
+        }
+        // Channel label below box
+        display.setCursor(x + 3, 27);
+        display.printf("%u", i + 1);
+    }
+
+    // Active count + temp on line below
+    display.setCursor(0, 38);
+    display.printf("%u active  %.1fC  %uKB",
+        g_cached.relayMask ? __builtin_popcount(g_cached.relayMask) : 0,
+        g_cached.tempC,
+        g_cached.freeHeapBytes / 1024);
+
     drawFooter(4);
     display.display();
 }
@@ -473,7 +493,7 @@ void OLEDManager::setTransportStatus(bool wifi, bool ble, bool mqtt, bool lora, 
     g_cached.wifiActive = wifi; g_cached.bleActive = ble; g_cached.mqttActive = mqtt; g_cached.loraActive = lora; g_cached.espnowActive = espnow;
 }
 
-void OLEDManager::setRelayStatus(bool relayOn) { g_cached.relayOn = relayOn; }
+void OLEDManager::setRelayStatus(uint8_t relayMask) { g_cached.relayMask = relayMask; }
 void OLEDManager::setTemperature(float tempC) { g_cached.tempC = tempC; }
 void OLEDManager::setPeerCount(uint8_t count) { g_cached.peerCount = count; }
 void OLEDManager::setUptime(uint32_t uptimeMs) { g_cached.uptimeMs = uptimeMs; }

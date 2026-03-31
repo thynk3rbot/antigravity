@@ -96,7 +96,7 @@ public:
     void setLoRaSignal(int8_t rssi, int8_t snr);
     void setTransportStatus(bool wifi, bool ble, bool mqtt, bool lora);
     void setTransportStatus(bool wifi, bool ble, bool mqtt, bool lora, bool espnow);
-    void setRelayStatus(bool relayOn);
+    void setRelayStatus(uint8_t relayMask);  // 8-bit bitmask, bit N = relay N
     void setTemperature(float tempC);
     void setPeerCount(uint8_t count);
     void setUptime(uint32_t uptimeMs);
