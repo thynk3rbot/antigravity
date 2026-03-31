@@ -12,6 +12,10 @@ PowerManager::PowerModeCallback  PowerManager::_modeChangeCallback  = nullptr;
 void*                            PowerManager::_vextTimer           = nullptr;
 uint8_t                          PowerManager::_vextPulseState       = 0; // 0 = IDLE, 1-3 = PULSING
 
+#ifdef HAS_PMIC
+XPowersPMIC                      PowerManager::_pmic;
+#endif
+
 // ============================================================================
 // VEXT control timer callback
 // ============================================================================
@@ -71,6 +75,27 @@ void PowerManager::begin() {
 #else
     digitalWrite(BAT_ADC_CTRL, LOW);    // On V2/V3, LOW typically enables sense
 #endif
+#endif
+
+#ifdef HAS_PMIC
+    Wire.begin(I2C_SDA, I2C_SCL);
+    if (_pmic.init(Wire, I2C_SDA, I2C_SCL, AXP192_SLAVE_ADDRESS)) {
+        Serial.println("[PMIC] AXP192 Initialized Successfully!");
+        _pmic.setChargeControlCur(300); // 300mA charge
+        _pmic.enableVbusVoltageMeasure();
+        _pmic.enableBattVoltageMeasure();
+        _pmic.enableSystemVoltageMeasure();
+        
+        // Turn on GPS Power Rail (LDO3 on T-Beam V1.1 is GPS, typically 3.3V)
+        _pmic.setLDO3Voltage(3300);
+        _pmic.enableLDO3();
+        
+        // Turn on LoRa Power Rail (LDO2 on T-Beam V1.1 is LoRa, typically 3.3V)
+        _pmic.setLDO2Voltage(3300);
+        _pmic.enableLDO2();
+    } else {
+        Serial.println("[PMIC] FAILED to initialize AXP PMIC!");
+    }
 #endif
 
     // Restore persisted power mode from NVS
@@ -153,7 +178,11 @@ void PowerManager::disableVEXT() {
 // ============================================================================
 
 float PowerManager::getBatteryVoltage() {
-#ifdef BAT_ADC_PIN
+#ifdef HAS_PMIC
+    float voltage = _pmic.getBattVoltage() / 1000.0f; // mV to V
+    _lastVoltage = voltage;
+    return voltage;
+#elif defined(BAT_ADC_PIN)
 #ifdef BAT_ADC_CTRL
 #ifdef ARDUINO_HELTEC_WIFI_LORA_32_V4
     digitalWrite(BAT_ADC_CTRL, HIGH); // Enable
@@ -185,6 +214,9 @@ float PowerManager::getBatteryVoltage() {
 }
 
 uint8_t PowerManager::getBatteryPercent() {
+#ifdef HAS_PMIC
+    return _pmic.getBatteryPercent();
+#else
     // Map voltage 3.0V -> 0%, 4.2V -> 100%
     constexpr float V_MIN = 3.0f;
     constexpr float V_MAX = 4.2f;
@@ -196,6 +228,7 @@ uint8_t PowerManager::getBatteryPercent() {
     if (percent > 100.0f) percent = 100.0f;
 
     return static_cast<uint8_t>(percent);
+#endif
 }
 
 // ============================================================================
@@ -266,10 +299,14 @@ uint32_t PowerManager::getSleepIntervalMs() {
 }
 
 bool PowerManager::isPowered() {
+#ifdef HAS_PMIC
+    return _pmic.isVbusIn();
+#else
     float volt = _lastVoltage;
     // USB/Mains: battery reads near 0V-0.8V (no battery) or > 4.25V (charging/bus)
     // LiPo cells should never be below 2.5V; anything under 1.5V is considered "USB only"
     return (volt < 1.5f || volt > 4.25f);
+#endif
 }
 
 // ============================================================================

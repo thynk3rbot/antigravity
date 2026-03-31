@@ -3,7 +3,7 @@
  * @brief Multi-Hop Mesh Routing Coordinator
  *
  * Manages neighbor discovery, hop count tracking, and relay decisions
- * for LoRaLink v2's multi-hop mesh network.
+ * for Magic v2's multi-hop mesh network.
  * Uses greedy routing: always forward via neighbor with best RSSI + lowest hop count.
  */
 

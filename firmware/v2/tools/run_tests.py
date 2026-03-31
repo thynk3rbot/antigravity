@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""LoRaLink v2 test runner — runs native unit tests + integration checks."""
+"""Magic v2 test runner — runs native unit tests + integration checks."""
 import subprocess, sys, time, os, json, urllib.request
 
 # Configuration with environment variable overrides
 REPO_ROOT = os.environ.get(
-    "LORALINK_REPO",
+    "MAGIC_REPO",
     "C:\\Users\\spw1\\Documents\\Code\\Antigravity\\firmware\\v2"
 )
 BENCH_IP = os.environ.get("BENCH_IP", "172.16.0.26")
@@ -60,7 +60,7 @@ def test_http_status():
                 raise  # All retries exhausted
 
 if __name__ == "__main__":
-    print("=== LoRaLink v2 Test Suite ===\n")
+    print("=== Magic v2 Test Suite ===\n")
     print(f"Using repository root: {REPO_ROOT}")
     print(f"Bench IP: {BENCH_IP}:{BENCH_PORT}, timeout: {BENCH_TIMEOUT}s\n")
 

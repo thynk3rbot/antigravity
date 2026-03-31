@@ -1,15 +1,15 @@
 /**
  * @file mqtt_transport.h
- * @brief MQTT Transport Layer for LoRaLink v2
+ * @brief MQTT Transport Layer for Magic v2
  *
  * Implements MQTT client for publishing device telemetry and subscribing to
  * commands. Uses PubSubClient library over WiFiClient.
  *
  * Topics (v0.1.0 convention):
- * - Publish:   loralink/{nodeId}/telemetry   (retain=true)
- * - Publish:   loralink/{nodeId}/response
- * - Subscribe: loralink/{nodeId}/command
- * - Subscribe: loralink/broadcast/command
+ * - Publish:   magic/{nodeId}/telemetry   (retain=true)
+ * - Publish:   magic/{nodeId}/response
+ * - Subscribe: magic/{nodeId}/command
+ * - Subscribe: magic/broadcast/command
  */
 
 #pragma once
@@ -41,7 +41,7 @@ struct MQTTConfig {
 
 /**
  * @class MQTTTransport
- * @brief MQTT client transport for LoRaLink telemetry and command handling
+ * @brief MQTT client transport for Magic telemetry and command handling
  *
  * Inherits from TransportInterface. MQTT communication is optional and
  * gracefully degrades if the broker is unavailable or unconfigured.
@@ -111,7 +111,7 @@ public:
     /**
      * @brief Publish a telemetry JSON payload (retained)
      *
-     * Topic: loralink/{nodeId}/telemetry
+     * Topic: magic/{nodeId}/telemetry
      *
      * @param jsonPayload  Fully-formed JSON string
      * @return true if broker accepted the publish
@@ -121,7 +121,7 @@ public:
     /**
      * @brief Publish a command response
      *
-     * Topic: loralink/{nodeId}/response
+     * Topic: magic/{nodeId}/response
      *
      * @param jsonPayload  Response JSON string
      * @return true if broker accepted the publish
@@ -131,7 +131,7 @@ public:
     /**
      * @brief Publish ONLINE/OFFLINE status for an external Mesh Node
      *
-     * Topic: loralink/status/{nodeId}
+     * Topic: magic/status/{nodeId}
      *
      * @param nodeId Node ID
      * @param isOnline True if node joined, false if it timed out
@@ -143,7 +143,7 @@ public:
      * @brief Register callback invoked when a command arrives
      *
      * The callback receives the raw payload string from either
-     * loralink/{nodeId}/command or loralink/broadcast/command.
+     * magic/{nodeId}/command or magic/broadcast/command.
      */
     using CommandCallback = std::function<void(const String& cmd)>;
     void setCommandCallback(CommandCallback cb);

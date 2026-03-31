@@ -1,6 +1,6 @@
 /**
  * @file main.cpp
- * @brief LoRaLink v2 Main Sketch (Arduino Entry Point)
+ * @brief Magic v2 Main Sketch (Arduino Entry Point)
  *
  * FreeRTOS-based architecture with task separation:
  * - Radio RX task (high priority) - listens for incoming LoRa packets

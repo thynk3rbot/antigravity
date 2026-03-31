@@ -311,7 +311,7 @@ void StatusBuilder::addSystemInfo(ArduinoJson::JsonDocument& doc) {
     doc["friendly_name"] = String(nodeID.c_str());
 
     // Location tag (optional, from NVS)
-    doc["location"] = String(NVSManager::getString("loralink", "location", "Home").c_str());
+    doc["location"] = String(NVSManager::getString("magic", "location", "Home").c_str());
 
     // Last executed command
     doc["last_command"] = "STATUS";  // TODO: Track in CommandManager

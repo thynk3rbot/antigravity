@@ -1,6 +1,6 @@
 /**
  * @file plugin_manager.h
- * @brief Standardized Plugin Infrastructure for LoRaLink
+ * @brief Standardized Plugin Infrastructure for Magic
  */
 
 #pragma once

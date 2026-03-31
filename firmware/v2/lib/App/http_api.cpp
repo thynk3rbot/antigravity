@@ -164,9 +164,9 @@ void HttpAPI::handleRoot(AsyncWebServerRequest* request) {
   const char* html = R"html(
 <!DOCTYPE html>
 <html>
-<head><title>LoRaLink API</title></head>
+<head><title>Magic API</title></head>
 <body>
-<h1>LoRaLink Device API</h1>
+<h1>Magic Device API</h1>
 <p><a href="/api/status">View Device Status</a></p>
 <p>Available endpoints:</p>
 <ul>

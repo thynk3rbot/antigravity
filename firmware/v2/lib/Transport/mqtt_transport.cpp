@@ -1,13 +1,13 @@
 /**
  * @file mqtt_transport.cpp
- * @brief MQTT Transport Layer Implementation for LoRaLink v2
+ * @brief MQTT Transport Layer Implementation for Magic v2
  *
  * PubSubClient-based MQTT over WiFi.
  * Topics (v0.1.0 convention):
- *   loralink/{nodeId}/telemetry   — device publishes (retain=true)
- *   loralink/{nodeId}/command     — device subscribes
- *   loralink/{nodeId}/response    — device publishes responses
- *   loralink/broadcast/command    — device subscribes (broadcast)
+ *   magic/{nodeId}/telemetry   — device publishes (retain=true)
+ *   magic/{nodeId}/command     — device subscribes
+ *   magic/{nodeId}/response    — device publishes responses
+ *   magic/broadcast/command    — device subscribes (broadcast)
  */
 
 #include "mqtt_transport.h"
@@ -18,7 +18,7 @@
 // (Preferences.h is an Arduino framework library not always auto-included
 // when nvs_config.h is pulled into a different PlatformIO lib context)
 #ifndef MQTT_NVS_NAMESPACE
-#define MQTT_NVS_NAMESPACE "loralink"
+#define MQTT_NVS_NAMESPACE "magic"
 #endif
 static const char* _kNodeId     = "node_id";
 static const char* _kMqttBroker = "mqtt_broker";
@@ -76,7 +76,7 @@ bool MQTTTransport::init() {
             _config.port = 1883;
         }
     }
-    _config.clientId = "loralink-" + _nodeId;
+    _config.clientId = "magic-" + _nodeId;
 
     if (_config.broker.length() == 0) {
         Serial.println("[MQTT] No broker configured in NVS — defaulting to 172.16.0.25");
@@ -171,7 +171,7 @@ const char* MQTTTransport::getStatus() const {
 void MQTTTransport::configure(const MQTTConfig& config) {
     _config = config;
     if (_config.clientId.length() == 0) {
-        _config.clientId = "loralink-" + _nodeId;
+        _config.clientId = "magic-" + _nodeId;
     }
 
     _configured = (_config.broker.length() > 0);
@@ -229,7 +229,7 @@ bool MQTTTransport::publishResponse(const String& jsonPayload) {
 bool MQTTTransport::publishNodeStatus(uint8_t nodeId, bool isOnline) {
     if (!_mqttClient.connected()) return false;
 
-    String topic = "loralink/" + String(nodeId) + "/status";
+    String topic = "magic/" + String(nodeId) + "/status";
     String payload = isOnline ? "ONLINE" : "OFFLINE";
     bool ok = _mqttClient.publish(topic.c_str(),
                                   (const uint8_t*)payload.c_str(),
@@ -310,7 +310,7 @@ bool MQTTTransport::_connect() {
 void MQTTTransport::_subscribe() {
     String deviceCmd = _commandTopic();
     _mqttClient.subscribe(deviceCmd.c_str());
-    _mqttClient.subscribe("loralink/broadcast/command");
+    _mqttClient.subscribe("magic/broadcast/command");
     
     // Subscribe to all plugin-registered topics
     for (auto const& it : _topicRegistry) {
@@ -318,7 +318,7 @@ void MQTTTransport::_subscribe() {
     }
 
     Serial.printf("[MQTT] Subscribed: %s\n", deviceCmd.c_str());
-    Serial.println("[MQTT] Subscribed: loralink/broadcast/command");
+    Serial.println("[MQTT] Subscribed: magic/broadcast/command");
     if (!_topicRegistry.empty()) {
         Serial.printf("[MQTT] Subscribed to %u plugin topics\n", _topicRegistry.size());
     }
@@ -362,9 +362,9 @@ void MQTTTransport::_mqttCallback(char* topic, byte* payload,
         }
     }
 
-    // 2. Fallback to default command handling (LoRaLink convention)
+    // 2. Fallback to default command handling (Magic convention)
     String deviceCmd = _instance->_commandTopic();
-    if (topicStr == deviceCmd || topicStr == "loralink/broadcast/command") {
+    if (topicStr == deviceCmd || topicStr == "magic/broadcast/command") {
         if (_instance->_commandCallback) {
             _instance->_commandCallback(payloadStr);
         }
@@ -376,19 +376,19 @@ void MQTTTransport::_mqttCallback(char* topic, byte* payload,
 // ============================================================================
 
 String MQTTTransport::_telemetryTopic() const {
-    return "loralink/" + _nodeId + "/telemetry";
+    return "magic/" + _nodeId + "/telemetry";
 }
 
 String MQTTTransport::_commandTopic() const {
-    return "loralink/" + _nodeId + "/cmd";
+    return "magic/" + _nodeId + "/cmd";
 }
 
 String MQTTTransport::_responseTopic() const {
-    return "loralink/" + _nodeId + "/msg";
+    return "magic/" + _nodeId + "/msg";
 }
 
 String MQTTTransport::_statusTopic() const {
-    return "loralink/" + _nodeId + "/status";
+    return "magic/" + _nodeId + "/status";
 }
 
 // ============================================================================

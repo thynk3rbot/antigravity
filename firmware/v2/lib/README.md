@@ -1,4 +1,4 @@
-# LoRaLink v2 Library Structure
+# Magic v2 Library Structure
 
 This directory contains the core embedded firmware libraries organized in three layers: **HAL** (Hardware Abstraction), **Transport**, and **App** (Application).
 

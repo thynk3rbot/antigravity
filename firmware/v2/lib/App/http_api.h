@@ -1,6 +1,6 @@
 /**
  * @file http_api.h
- * @brief HTTP API server interface for LoRaLink v2 device control
+ * @brief HTTP API server interface for Magic v2 device control
  *
  * Provides REST API endpoints for:
  * - Device status reporting (/api/status)

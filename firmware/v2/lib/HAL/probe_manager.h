@@ -1,5 +1,5 @@
-#ifndef LORALINK_HAL_PROBE_MANAGER_H
-#define LORALINK_HAL_PROBE_MANAGER_H
+#ifndef MAGIC_HAL_PROBE_MANAGER_H
+#define MAGIC_HAL_PROBE_MANAGER_H
 
 #include <Arduino.h>
 #include <esp_wifi.h>
@@ -102,4 +102,4 @@ private:
   static const size_t MAX_DEVICES = 50;
 };
 
-#endif // LORALINK_HAL_PROBE_MANAGER_H
+#endif // MAGIC_HAL_PROBE_MANAGER_H

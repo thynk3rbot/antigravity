@@ -1,10 +1,10 @@
 /**
  * @file ble_transport.h
- * @brief Bluetooth Low Energy (BLE) NUS Transport for LoRaLink v2
+ * @brief Bluetooth Low Energy (BLE) NUS Transport for Magic v2
  *
  * Implements Nordic UART Service (NUS) for wireless communication with:
  * - Mobile apps (iOS/Android BLE scanners)
- * - loralink_status.py fleet management tool
+ * - magic_status.py fleet management tool
  * - ble_instrument.py test harness
  *
  * Service: 6E400001-B5A3-F393-E0A9-E50E24DCCA9E (Nordic UART Service)
@@ -12,7 +12,7 @@
  * RX (write):   6E400002-B5A3-F393-E0A9-E50E24DCCA9E  (phone → device)
  *
  * Features:
- * - Device name: "GW-{NODEID}" (e.g., "GW-Peer1") — required by loralink_status.py
+ * - Device name: "GW-{NODEID}" (e.g., "GW-Peer1") — required by magic_status.py
  * - Single concurrent connection (peripheral mode)
  * - Automatic fragmentation for payloads > 20 bytes
  * - Line-buffering for newline-terminated command processing
@@ -32,7 +32,7 @@
  * @class BLETransport
  * @brief Bluetooth Low Energy NUS (Nordic UART Service) transport layer
  *
- * Provides peripheral BLE communication compatible with loralink_status.py
+ * Provides peripheral BLE communication compatible with magic_status.py
  * and standard BLE terminal applications. Uses NimBLE-Arduino stack.
  */
 class BLETransport : public TransportInterface {

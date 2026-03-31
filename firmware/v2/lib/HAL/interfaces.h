@@ -1,6 +1,6 @@
 /**
  * @file interfaces.h
- * @brief Abstract Hardware Interfaces for LoRaLink HAL
+ * @brief Abstract Hardware Interfaces for Magic HAL
  */
 
 #pragma once

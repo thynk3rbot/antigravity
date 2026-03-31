@@ -1,6 +1,11 @@
 #pragma once
 #include <Arduino.h>
 #include <functional>
+#include "../HAL/board_config.h"
+
+#ifdef HAS_PMIC
+#include <XPowersLib.h>
+#endif
 
 enum class PowerMode : uint8_t {
     NORMAL   = 0,  // Full operation, all features enabled
@@ -18,7 +23,7 @@ public:
     // Legacy init (alias for begin, returns true always)
     static bool init();
 
-    // VEXT control
+    // VEXT control / GPS Power control
     static void enableVEXT();
     static void disableVEXT();
 
@@ -55,6 +60,10 @@ private:
     static void* _vextTimer;
     static uint8_t _vextPulseState;
     static void _vextTimerCallback(void* xTimer);
+
+#ifdef HAS_PMIC
+    static XPowersPMIC _pmic;
+#endif
 
     // Voltage thresholds (User requested V1 parity)
     static constexpr float VOLT_NORMAL   = 3.80f;  // Above this = NORMAL

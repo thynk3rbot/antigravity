@@ -1,6 +1,6 @@
 /**
  * @file wifi_transport.h
- * @brief WiFi Transport Layer for LoRaLink v2
+ * @brief WiFi Transport Layer for Magic v2
  *
  * Manages WiFi connectivity, ArduinoOTA, mDNS, and integrates with
  * TransportInterface for the message routing system.
@@ -9,7 +9,7 @@
  * HTTP endpoints are handled by HttpAPI (lib/App/http_api.h).
  *
  * Usage (from main.cpp):
- *   WiFiTransport::init(ssid, pass, "loralink-Peer1");
+ *   WiFiTransport::init(ssid, pass, "magic-Peer1");
  *   // In loop / FreeRTOS task:
  *   WiFiTransport::poll();   // drives OTA + reconnect
  */
@@ -61,12 +61,12 @@ public:
      *
      * @param ssid     WiFi network name
      * @param password WiFi password
-     * @param mdnsHostname mDNS hostname (e.g. "loralink-Peer1")
+     * @param mdnsHostname mDNS hostname (e.g. "magic-Peer1")
      * @return true if WiFi connected at init time, false on timeout/error
      *         (transport continues retrying in poll())
      */
     static bool init(const std::string& ssid, const std::string& password,
-                     const std::string& mdnsHostname = "loralink");
+                     const std::string& mdnsHostname = "magic");
 
     /**
      * @brief Drive OTA handler and reconnect logic

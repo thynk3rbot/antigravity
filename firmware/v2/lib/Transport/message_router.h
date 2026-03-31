@@ -2,7 +2,7 @@
  * @file message_router.h
  * @brief Message Router Singleton (Any-to-Any Packet Dispatch)
  *
- * Central hub for all inter-transport communication in LoRaLink v2.
+ * Central hub for all inter-transport communication in Magic v2.
  * Routes raw bytes between active transports (LoRa, MQTT, Serial, BLE, etc.)
  * and feeds packets to the application layer.
  */

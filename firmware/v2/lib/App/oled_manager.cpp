@@ -138,15 +138,48 @@ static void displayPage4() {
 #ifdef HAS_GPS
 static void displayPage5() {
     display.clearDisplay();
-    drawHeader("GNSS/GPS");
-    display.setCursor(0, 14);
+    
+    // Custom Meshtastic-Style GPS UI Header
+    display.setTextColor(SSD1306_WHITE);
+    display.setTextSize(1);
+    display.setCursor(0, 0);
+    display.printf("%s | GPS", g_cached.deviceName);
+    display.drawFastHLine(0, 10, 128, SSD1306_WHITE);
+
     if (!g_cached.gpsFix && g_cached.gpsSats == 0) {
-        display.println("Searching...");
+        // No Sats View
+        display.setCursor(20, 30);
+        display.print("No Satellites");
+        display.drawCircle(64, 34, 15, SSD1306_WHITE);
+        display.drawLine(54, 34, 74, 34, SSD1306_WHITE); // Horizontal
+        display.drawLine(64, 24, 64, 44, SSD1306_WHITE); // Vertical
     } else {
-        display.printf("Sats: %u Lock: %s\n", g_cached.gpsSats, g_cached.gpsFix ? "YES" : "NO");
-        display.printf("Lat: %.6f\n", g_cached.gpsLat);
-        display.printf("Lon: %.6f\n", g_cached.gpsLon);
+        // Detailed GPS View
+        display.setCursor(0, 14);
+        display.printf("Lat: %.5f\n", g_cached.gpsLat);
+        display.setCursor(0, 24);
+        display.printf("Lon: %.5f\n", g_cached.gpsLon);
+        
+        // Status Right Side
+        display.setCursor(85, 14);
+        display.printf("Sats:%u\n", g_cached.gpsSats);
+        display.setCursor(85, 24);
+        if (g_cached.gpsFix) {
+            display.print("Fix:3D");
+            // Draw a tiny compass/radar graphic for 3D Fix
+            display.drawCircle(110, 42, 10, SSD1306_WHITE);
+            display.fillCircle(110, 42, 2, SSD1306_WHITE);
+            // Simulated Heading Needle
+            display.drawLine(110, 42, 110, 32, SSD1306_WHITE); 
+        } else {
+            display.print("Fix:NO");
+            display.drawCircle(110, 42, 10, SSD1306_WHITE);
+        }
+        
+        display.setCursor(0, 36);
+        display.printf("Alt: --- m\n"); // Placeholder for altitude
     }
+    
     drawFooter(5);
     display.display();
 }
@@ -223,7 +256,7 @@ bool OLEDManager::init() {
         display.setTextColor(SSD1306_WHITE);
         display.setTextSize(1);
         display.setCursor(0,0);
-        display.println("LoRaLink v2");
+        display.println("Magic v2");
         display.println("Starting Mesh...");
         display.display();
         _initState = InitState::RUNNING;
@@ -307,7 +340,7 @@ void OLEDManager::showSplash(const char* ver, const char* role) {
     
     display.setTextSize(2);
     display.setCursor(15, 22);
-    display.print("LoRaLink");
+    display.print("Magic");
     
     display.setTextSize(1);
     display.setCursor(5, 52);

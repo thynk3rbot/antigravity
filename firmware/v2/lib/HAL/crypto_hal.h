@@ -1,6 +1,6 @@
 /**
  * @file crypto_hal.h
- * @brief AES-128-GCM Encryption HAL for LoRaLink v2
+ * @brief AES-128-GCM Encryption HAL for Magic v2
  */
 
 #pragma once

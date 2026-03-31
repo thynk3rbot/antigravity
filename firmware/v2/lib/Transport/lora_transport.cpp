@@ -40,7 +40,7 @@ bool LoRaTransport::init() {
   _dedupIndex = 0;
 
   // Default encryption key (16 bytes = 32 hex chars)
-  const char* defaultKey = "LoRaLinkDefault!";
+  const char* defaultKey = "MagicDefault!";
   setEncryptionKey(defaultKey);
 
   _encryptEnabled = true;

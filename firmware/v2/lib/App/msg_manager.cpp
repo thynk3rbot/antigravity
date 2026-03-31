@@ -45,7 +45,7 @@ TransportType MsgManager::_selectTransport(uint8_t dest) {
     (void)dest;
     // TODO: check neighbor capability table (NODE_ANNOUNCE bitmask)
     // For now: prefer ESP-NOW if available, fall back to LoRa
-    if (EspNowTransport::getInstance().isReady()) {
+    if (ESPNowTransport::getInstance().isReady()) {
         return TransportType::ESPNOW;
     }
     return TransportType::LORA;
@@ -91,8 +91,8 @@ bool MsgManager::_sendLmxPacket(uint8_t dest, LmxMsgType type, bool wantAck,
                               ? _selectTransport(dest)
                               : preferredTransport;
 
-    if (transport == TransportType::ESPNOW && EspNowTransport::getInstance().isReady()) {
-        sent = EspNowTransport::getInstance().send(raw, totalLen);
+    if (transport == TransportType::ESPNOW && ESPNowTransport::getInstance().isReady()) {
+        sent = ESPNowTransport::getInstance().send(raw, totalLen);
     }
     if (sent <= 0) {
         // Always fall back to LoRa

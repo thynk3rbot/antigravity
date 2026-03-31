@@ -64,6 +64,25 @@ struct __attribute__((packed)) LmxFragHeader {
 };
 static_assert(sizeof(LmxFragHeader) == LMX_FRAG_HDR_SIZE, "LmxFragHeader size mismatch");
 
+// ── Capability Bitmask (NODE_ANNOUNCE) ───────────────────────────────
+#define LMX_CAP_WIFI    0x08
+#define LMX_CAP_ESPNOW  0x04
+#define LMX_CAP_BLE     0x02
+#define LMX_CAP_LORA    0x01
+
+// ── Neighbor Capability Entry ─────────────────────────────────────────
+#define LMX_NEIGHBOR_SLOTS  8
+#define LMX_NEIGHBOR_TTL_MS 180000UL  // 3 minutes
+
+struct LmxNeighbor {
+    bool          active;
+    uint8_t       src;
+    uint8_t       caps;        // bitmask: wifi|espnow|ble|lora
+    uint32_t      wifiIP;      // network-order IPv4, 0 if none
+    char          name[9];     // null-terminated, 8 chars max
+    unsigned long lastSeenMs;
+};
+
 // ── Reassembly Slot ───────────────────────────────────────────────────
 struct LmxReassemblySlot {
     bool          active;

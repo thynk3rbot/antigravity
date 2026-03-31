@@ -1,9 +1,9 @@
 /**
  * @file ble_transport.cpp
- * @brief BLE NUS Transport Implementation for LoRaLink v2
+ * @brief BLE NUS Transport Implementation for Magic v2
  *
  * Implements Nordic UART Service (NUS) over NimBLE-Arduino.
- * Advertises as "GW-{NODEID}" (compatible with loralink_status.py).
+ * Advertises as "GW-{NODEID}" (compatible with magic_status.py).
  * RX/TX characteristics for bidirectional string comms.
  * Auto-restarts advertising on disconnect.
  */

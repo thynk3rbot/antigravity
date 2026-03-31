@@ -1,6 +1,6 @@
 /**
  * @file message_handler.h
- * @brief Dispatch logic for incoming LoRaLink packets
+ * @brief Dispatch logic for incoming Magic packets
  */
 
 #pragma once

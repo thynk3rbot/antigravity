@@ -6,7 +6,7 @@
  * - Node ID, WiFi credentials, encryption keys
  * - MQTT broker settings, hardware version
  *
- * Uses ESP-IDF's built-in NVS API with "loralink" namespace.
+ * Uses ESP-IDF's built-in NVS API with "magic" namespace.
  * All operations are thread-safe and include error checking.
  */
 
@@ -25,13 +25,13 @@
  * Thread-safe: NVS operations are protected by ESP-IDF's internal locking.
  * Each call opens/closes NVS handle (small overhead, acceptable for config reads).
  *
- * @note NVS namespace: "loralink" - all keys are grouped under this partition
+ * @note NVS namespace: "magic" - all keys are grouped under this partition
  * @note Maximum string length in NVS: 4000 bytes
  */
 class NVSManager {
 public:
     /**
-     * @brief Initialize NVS partition and open "loralink" namespace
+     * @brief Initialize NVS partition and open "magic" namespace
      *
      * Must be called once during boot before any other NVS operations.
      * Initializes NVS flash partition if not already done.
@@ -256,7 +256,7 @@ public:
     static std::string getString(const char* nsName, const char* key, const std::string& defaultVal);
 
 private:
-    static constexpr const char* NVS_NAMESPACE     = "loralink";
+    static constexpr const char* NVS_NAMESPACE     = "magic";
     static constexpr const char* NS_FEATURES       = "features";
     static constexpr const char* NS_HW             = "hw";
     static constexpr const char* NS_MESH           = "mesh";

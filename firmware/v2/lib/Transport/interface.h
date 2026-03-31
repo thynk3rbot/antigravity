@@ -1,6 +1,6 @@
 /**
  * @file interface.h
- * @brief Abstract Transport Interface for LoRaLink v2
+ * @brief Abstract Transport Interface for Magic v2
  *
  * Defines the base interface for all transport layers (LoRa, MQTT, BLE, Serial).
  * All transports inherit from this interface and are managed by MessageRouter.

@@ -5,7 +5,7 @@
  * Provides:
  *   - WiFi STA connection with 10-second initial timeout
  *   - Auto-reconnect every 30 seconds on disconnect
- *   - ArduinoOTA on hostname loralink-{nodeId}
+ *   - ArduinoOTA on hostname magic-{nodeId}
  *   - mDNS advertisement as {hostname}.local
  *
  * HTTP REST API endpoints (GET /api/status, POST /api/relay, POST /api/config,
@@ -23,7 +23,7 @@
 
 std::string WiFiTransport::_ssid                  = "";
 std::string WiFiTransport::_password              = "";
-std::string WiFiTransport::_hostname              = "loralink";
+std::string WiFiTransport::_hostname              = "magic";
 bool        WiFiTransport::_otaStarted            = false;
 bool        WiFiTransport::_mdnsStarted           = false;
 bool        WiFiTransport::_apActive              = false;
@@ -237,7 +237,7 @@ bool WiFiTransport::_connect(uint32_t timeoutMs) {
 void WiFiTransport::_startOTA() {
     if (_otaStarted) return;
 
-    // Hostname shown in PlatformIO OTA targets: loralink-{nodeId}.local
+    // Hostname shown in PlatformIO OTA targets: magic-{nodeId}.local
     ArduinoOTA.setHostname(_hostname.c_str());
 
     ArduinoOTA.onStart([]() {
@@ -281,10 +281,10 @@ void WiFiTransport::_startMDNS() {
     // Advertise HTTP service so network browsers can discover the device
     MDNS.addService("http", "tcp", 80);
     
-    // Add TXT records for LoRaLink discovery
+    // Add TXT records for Magic discovery
     // These allow the webapp to identify the device without an HTTP probe
     MDNS.addServiceTxt("http", "tcp", "id", _hostname.c_str());
-    MDNS.addServiceTxt("http", "tcp", "type", "loralink-gateway");
+    MDNS.addServiceTxt("http", "tcp", "type", "magic-gateway");
     MDNS.addServiceTxt("http", "tcp", "ver", FIRMWARE_VERSION);
     
     MDNS.addServiceTxt("http", "tcp", "hw", NVSManager::getHardwareVersion("V3").c_str());

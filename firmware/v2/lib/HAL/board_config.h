@@ -1,6 +1,6 @@
 /**
  * @file board_config.h
- * @brief LoRaLink v2 Hardware Abstraction Layer (HAL)
+ * @brief Magic v2 Hardware Abstraction Layer (HAL)
  *
  * Centralizes all GPIO pin assignments and enforces compile-time validation
  * to prevent invalid permutations (e.g., V2-code on V3 hardware).
@@ -63,6 +63,8 @@
   #define HW_VERSION "V4"
 #elif defined(ARDUINO_HELTEC_WIFI_LORA_32_V3)
   #define HW_VERSION "V3"
+#elif defined(ARDUINO_TTGO_T_BEAM_V1_1)
+  #define HW_VERSION "TBEAM"
 #else
   #define HW_VERSION "V2"
 #endif
@@ -72,15 +74,19 @@
 // ============================================================================
 
 #ifdef RADIO_SX1276
-  // Heltec V2: SX1276 pinout
+  // Heltec V2 / T-Beam: SX1276 pinout
   #define LORA_MOSI     27
   #define LORA_MISO     19
   #define LORA_SCLK     5
   #define LORA_CS       18
-  #define LORA_RESET    14
+#ifdef ARDUINO_TTGO_T_BEAM_V1_1
+  #define LORA_RESET    23       // T-Beam V1.1 reset pin
+#else
+  #define LORA_RESET    14       // Heltec V2 reset pin
+#endif
   #define LORA_DIO0     26
   #define LORA_DIO1     33       // For future FHSS support
-  #define LORA_BUSY     -1       // V2 does not have BUSY pin
+  #define LORA_BUSY     -1       // V2/TBeam does not have BUSY pin
   #define LORA_FREQ_MHZ 915.0    // ISM band
   #define LORA_BW_KHZ   125.0    // Bandwidth
 
@@ -117,6 +123,11 @@
   // Heltec V3/V4: OLED on GPIO 17/18
   #define I2C_SDA                 17
   #define I2C_SCL                 18
+#elif defined(ARDUINO_TTGO_T_BEAM_V1_1)
+  // T-Beam V1.1: I2C (AXP192 + OLED) on GPIO 21/22
+  #define I2C_SDA                 21
+  #define I2C_SCL                 22
+  #define PMIC_IRQ                35
 #else
   // Heltec V2: OLED on GPIO 4/15
   #define I2C_SDA                 4
@@ -226,6 +237,9 @@
   #define GPS_RST_PIN      42
   #define GPS_WAKE_PIN     40
   #define GPS_EN_PIN       34       // Power enable (Active LOW)
+#elif defined(ARDUINO_TTGO_T_BEAM_V1_1)
+  #define GPS_RX_PIN       12       // ESP32 RX <- GPS TX
+  #define GPS_TX_PIN       34       // ESP32 TX -> GPS RX
 #endif
 
 #define GPS_SERIAL_BAUD    9600
@@ -341,7 +355,7 @@
 // ============================================================================
 
 #define DEVICE_NAME             "peer"
-#define HARDWARE_DESCRIPTION    "LoRaLink v2 Peer"
+#define HARDWARE_DESCRIPTION    "Magic v2 Peer"
 #define DEVICE_ROLE             "Peer"
 
 #ifdef RADIO_SX1276
