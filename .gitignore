@@ -66,3 +66,7 @@ tools/webapp/.nodes.json
 .locks/
 agent-audit.log
 tools/OllamaSetup.exe
+
+# Superseded third-party tools (replaced by Magic daemon)
+tools/dify/
+tools/emqx/
