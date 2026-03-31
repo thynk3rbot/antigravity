@@ -240,7 +240,7 @@
   #define GPS_PPS_PIN      41
   #define GPS_RST_PIN      42
   #define GPS_WAKE_PIN     40
-  #define GPS_EN_PIN       45       // V4 Standard Power Enable (Active LOW)
+  #define GPS_EN_PIN       34       // V4 GPS Power Enable (Active LOW) — verified working
 #elif defined(ARDUINO_TTGO_T_BEAM_V1_1)
   #define GPS_RX_PIN       12       // ESP32 RX <- GPS TX
   #define GPS_TX_PIN       34       // ESP32 TX -> GPS RX
