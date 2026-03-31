@@ -1,0 +1,323 @@
+# Command Metadata & Test Configuration
+# Used by integration_test.py, nightly_test.py, overdrive.py
+# Last updated: 2026-03-31
+
+commands:
+
+  # ───────────────────────────────────────────────────────────────────
+  # CRITICAL COMMANDS (core functionality, must work)
+  # ───────────────────────────────────────────────────────────────────
+
+  STATUS:
+    description: "System status (battery, LoRa signal, peer count, uptime)"
+    transports: [http, mqtt]
+    critical: true
+    wiring_status: implemented
+    args: ""
+    expected_response:
+      json: true
+      fields: ["name", "ver", "bat_pct", "lora_rssi", "uptime"]
+
+  GPIO:
+    description: "GPIO control (set pin HIGH/LOW, MCP expander pins)"
+    transports: [http, mqtt]
+    critical: true
+    wiring_status: implemented
+    args: "<pin> <state>"
+    expected_response:
+      json: true
+      fields: ["ok", "pin", "state"]
+
+  READ:
+    description: "Read pin state (digital input, ADC analog read)"
+    transports: [http, mqtt]
+    critical: true
+    wiring_status: implemented
+    args: "<pin>"
+    expected_response:
+      json: true
+      fields: ["ok", "pin", "value"]
+
+  RELAY:
+    description: "Control relay (12V relay switching)"
+    transports: [http, mqtt]
+    critical: true
+    wiring_status: implemented
+    args: "<relay_num> <on|off>"
+    expected_response:
+      json: true
+      fields: ["ok", "relay", "state"]
+
+  SCHED:
+    description: "Schedule management (list, add, clear scheduled tasks)"
+    transports: [http, mqtt]
+    critical: true
+    wiring_status: implemented
+    args: "<list|add|clear> [args]"
+    expected_response:
+      json: true
+      fields: ["ok"]
+
+  REBOOT:
+    description: "System reboot"
+    transports: [http, mqtt]
+    critical: true
+    wiring_status: implemented
+    args: ""
+    expected_response:
+      json: true
+      fields: ["ok"]
+
+  # ───────────────────────────────────────────────────────────────────
+  # IMPORTANT COMMANDS (secondary functionality)
+  # ───────────────────────────────────────────────────────────────────
+
+  NODES:
+    description: "List mesh nodes (peer discovery, neighbor table)"
+    transports: [http, mqtt]
+    critical: false
+    wiring_status: implemented
+    args: ""
+    expected_response:
+      json: true
+      fields: ["ok", "nodes"]
+
+  MSG:
+    description: "Send message (LoRa, mesh, MQTT relay)"
+    transports: [http, mqtt]
+    critical: false
+    wiring_status: implemented
+    args: "<target> <message>"
+    expected_response:
+      json: true
+      fields: ["ok"]
+
+  SETNAME:
+    description: "Set node name (device ID)"
+    transports: [http, mqtt]
+    critical: false
+    wiring_status: implemented
+    args: "<name>"
+    expected_response:
+      json: true
+      fields: ["ok"]
+
+  GETCONFIG:
+    description: "Get configuration (WiFi, broker, NVS settings)"
+    transports: [http, mqtt]
+    critical: false
+    wiring_status: implemented
+    args: ""
+    expected_response:
+      json: true
+      fields: ["ok"]
+
+  HELP:
+    description: "Command help (list all commands)"
+    transports: [http, mqtt]
+    critical: false
+    wiring_status: implemented
+    args: ""
+    expected_response:
+      json: false
+      format: text
+
+  VSTATUS:
+    description: "Verbose status (extended telemetry)"
+    transports: [http, mqtt]
+    critical: false
+    wiring_status: implemented
+    args: ""
+    expected_response:
+      json: true
+      fields: ["ok"]
+
+  # ───────────────────────────────────────────────────────────────────
+  # CONFIGURATION COMMANDS (setup, network, security)
+  # ───────────────────────────────────────────────────────────────────
+
+  SETWIFI:
+    description: "Configure WiFi (SSID and password)"
+    transports: [http, mqtt]
+    critical: false
+    wiring_status: implemented
+    args: "<ssid> <password>"
+    expected_response:
+      json: true
+      fields: ["ok"]
+
+  SETIP:
+    description: "Set static IP address"
+    transports: [http, mqtt]
+    critical: false
+    wiring_status: implemented
+    args: "<ip> <gateway> <subnet>"
+    expected_response:
+      json: true
+      fields: ["ok"]
+
+  SETBROKER:
+    description: "Set MQTT broker address"
+    transports: [http, mqtt]
+    critical: false
+    wiring_status: implemented
+    args: "<host> <port>"
+    expected_response:
+      json: true
+      fields: ["ok"]
+
+  SETKEY:
+    description: "Set encryption key (LoRa AES)"
+    transports: [http, mqtt]
+    critical: false
+    wiring_status: implemented
+    args: "<key_hex>"
+    expected_response:
+      json: true
+      fields: ["ok"]
+
+  FACTORY_RESET:
+    description: "Factory reset (clear all NVS, restore defaults)"
+    transports: [http, mqtt]
+    critical: false
+    wiring_status: implemented
+    args: ""
+    expected_response:
+      json: true
+      fields: ["ok"]
+
+  # ───────────────────────────────────────────────────────────────────
+  # ADVANCED / UTILITY COMMANDS
+  # ───────────────────────────────────────────────────────────────────
+
+  BLINK:
+    description: "LED blink (diagnostic, confirm responsiveness)"
+    transports: [http, mqtt]
+    critical: false
+    wiring_status: implemented
+    args: ""
+    expected_response:
+      json: true
+      fields: ["ok"]
+
+  GPS:
+    description: "Get GPS coordinates (if GPS module present)"
+    transports: [http, mqtt]
+    critical: false
+    wiring_status: implemented
+    args: "[args]"
+    expected_response:
+      json: true
+      fields: ["ok"]
+
+  ASK:
+    description: "AI query (Magic AI, local inference)"
+    transports: [http, mqtt]
+    critical: false
+    wiring_status: implemented
+    args: "<prompt>"
+    expected_response:
+      json: true
+      fields: ["ok", "response"]
+
+  FORWARD:
+    description: "Message forwarding (relay to target node)"
+    transports: [http, mqtt]
+    critical: false
+    wiring_status: implemented
+    args: "<target> <message>"
+    expected_response:
+      json: true
+      fields: ["ok"]
+
+  REPEATER:
+    description: "Mesh repeater mode (relay all messages)"
+    transports: [http, mqtt]
+    critical: false
+    wiring_status: implemented
+    args: "<on|off>"
+    expected_response:
+      json: true
+      fields: ["ok"]
+
+  SLEEP:
+    description: "Deep sleep (power saving)"
+    transports: [http, mqtt]
+    critical: false
+    wiring_status: implemented
+    args: "<duration_ms>"
+    expected_response:
+      json: true
+      fields: ["ok"]
+
+  LIST:
+    description: "List loaded products/profiles"
+    transports: [http, mqtt]
+    critical: false
+    wiring_status: implemented
+    args: ""
+    expected_response:
+      json: true
+      fields: ["ok"]
+
+  LOAD:
+    description: "Load product/profile (activate feature set)"
+    transports: [http, mqtt]
+    critical: false
+    wiring_status: implemented
+    args: "<product_name>"
+    expected_response:
+      json: true
+      fields: ["ok"]
+
+# ───────────────────────────────────────────────────────────────────
+# Test Configuration
+# ───────────────────────────────────────────────────────────────────
+
+test_config:
+  # Timeout for single command response (seconds)
+  timeout: 5
+
+  # Timeout for mesh commands (peers must respond)
+  mesh_timeout: 12
+
+  # MQTT response topic subscription pattern
+  mqtt_response_topic: "magic/+/response"
+
+  # HTTP endpoint base
+  http_endpoint: "/api/cmd"
+
+  # Number of retry attempts per command
+  retry_attempts: 3
+
+  # Delay between retries (seconds)
+  retry_delay: 1
+
+# ───────────────────────────────────────────────────────────────────
+# Test Profiles
+# ───────────────────────────────────────────────────────────────────
+
+profiles:
+  critical_only:
+    description: "Critical command tests only (fast validation)"
+    filters:
+      critical: true
+
+  full_suite:
+    description: "All commands (comprehensive validation)"
+    filters:
+      critical: [true, false]
+
+  http_only:
+    description: "HTTP transport tests"
+    filters:
+      transports: [http]
+
+  mqtt_only:
+    description: "MQTT transport tests"
+    filters:
+      transports: [mqtt]
+
+  quick_health:
+    description: "Quick health check (STATUS + NODES + GPIO)"
+    commands: [STATUS, NODES, GPIO]
