@@ -23,14 +23,20 @@ import json
 
 try:
     from .mesh_router import MeshTopology, MeshCommand, CommandStatus
+    from .http_gateway import HTTPGateway
+    from .peer_ring import PeerRing
 except ImportError:
     from mesh_router import MeshTopology, MeshCommand, CommandStatus
+    from http_gateway import HTTPGateway
+    from peer_ring import PeerRing
 
 logger = logging.getLogger(__name__)
 
-# Global topology instance
+# Global instances
 topology_instance: Optional[MeshTopology] = None
 mqtt_publisher = None  # Will be set by main.py
+http_gateway: Optional[HTTPGateway] = None  # Will be set by main.py
+peer_ring: Optional[PeerRing] = None  # Will be set by main.py
 
 
 class SendCommandRequest(BaseModel):
@@ -91,33 +97,37 @@ class DeviceStatusResponse(BaseModel):
 api = APIRouter(prefix="/api/mesh", tags=["mesh"])
 
 
-def init_mesh_api(topology: MeshTopology, mqtt_pub=None) -> APIRouter:
-    """Initialize mesh API with topology instance and MQTT publisher."""
-    global topology_instance, mqtt_publisher
+def init_mesh_api(topology: MeshTopology, mqtt_pub=None, device_registry=None) -> APIRouter:
+    """Initialize mesh API with topology instance, MQTT publisher, and HTTP gateway."""
+    global topology_instance, mqtt_publisher, http_gateway, peer_ring
     topology_instance = topology
     mqtt_publisher = mqtt_pub
+
+    # Initialize HTTP gateway for global device routing
+    if device_registry:
+        http_gateway = HTTPGateway(device_registry)
+        # Peer ring for consistent hashing (start with empty, will be populated)
+        peer_ring = PeerRing(peers=[])
+
     return api
 
 
 @api.post("/command", response_model=SendCommandResponse)
 async def send_command(request: SendCommandRequest) -> SendCommandResponse:
     """
-    Inject a command into the mesh.
+    Inject a command into the mesh with intelligent routing.
 
-    Command is published to MQTT topic: device/{target_node}/mesh/command
-    Devices will relay it to the target via ControlPacket routing.
+    Routes via:
+    1. HTTP (if device has IP and is reachable)
+    2. MQTT (if device is in local mesh)
+    3. Consistent hash ring (for future peer-to-peer at scale)
+
+    Enables global device control without firmware changes.
     """
     if not topology_instance:
         raise HTTPException(status_code=500, detail="Topology not initialized")
 
-    # Validate target exists
-    if request.target_node not in topology_instance.peer_registry:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Target node {request.target_node} not in mesh"
-        )
-
-    # Create command
+    # Create command (tracks in topology)
     cmd = topology_instance.create_command(
         target_node=request.target_node,
         action=request.action,
@@ -125,26 +135,71 @@ async def send_command(request: SendCommandRequest) -> SendCommandResponse:
         duration_ms=request.duration_ms,
     )
 
-    # Publish to MQTT
+    # Prepare command payload
+    cmd_payload = {
+        "cmd_id": cmd.cmd_id,
+        "action": cmd.action,
+        "pin": cmd.pin,
+        "duration_ms": cmd.duration_ms,
+        "timestamp": time.time(),
+    }
+
+    # Routing decision logic
+    transport_used = "unknown"
+    device_in_local_mesh = request.target_node in topology_instance.peer_registry
+
+    # Try HTTP first (best for global devices)
+    if http_gateway and not device_in_local_mesh:
+        logger.info(
+            f"[Mesh] Routing {request.target_node} via HTTP "
+            f"(not in local mesh, has HTTP gateway)"
+        )
+        http_result = await http_gateway.send_command(
+            target_node=request.target_node,
+            cmd=cmd_payload,
+            fallback_mqtt=mqtt_publisher
+        )
+
+        if http_result.get("success"):
+            transport_used = http_result.get("transport", "http")
+            topology_instance.publish_command(cmd)
+            return SendCommandResponse(
+                cmd_id=cmd.cmd_id,
+                status="published",
+                target_node=request.target_node,
+                message=f"Command routed via {transport_used} to {request.target_node}",
+            )
+        else:
+            logger.warning(
+                f"[Mesh] HTTP routing failed for {request.target_node}: "
+                f"{http_result.get('error')}"
+            )
+
+    # Fallback to MQTT (local mesh relay)
     if mqtt_publisher:
-        mqtt_payload = {
-            "cmd_id": cmd.cmd_id,
-            "action": cmd.action,
-            "pin": cmd.pin,
-            "duration_ms": cmd.duration_ms,
-        }
-        success = await mqtt_publisher.publish_command(request.target_node, mqtt_payload)
-        if not success:
-            raise HTTPException(status_code=500, detail="Failed to publish to MQTT")
+        logger.info(
+            f"[Mesh] Routing {request.target_node} via MQTT "
+            f"(local mesh or HTTP failed)"
+        )
+        success = await mqtt_publisher.publish_command(request.target_node, cmd_payload)
 
-    # Track in topology
-    topology_instance.publish_command(cmd)
+        if success:
+            transport_used = "mqtt"
+            topology_instance.publish_command(cmd)
+            return SendCommandResponse(
+                cmd_id=cmd.cmd_id,
+                status="published",
+                target_node=request.target_node,
+                message=f"Command published via {transport_used} for {request.target_node}",
+            )
+        else:
+            raise HTTPException(status_code=500, detail="Failed to publish via MQTT")
 
-    return SendCommandResponse(
-        cmd_id=cmd.cmd_id,
-        status=cmd.status.value,
-        target_node=request.target_node,
-        message=f"Command published to mesh for {request.target_node}",
+    # No transport available
+    raise HTTPException(
+        status_code=503,
+        detail=f"No route to {request.target_node} "
+        f"(not in local mesh, HTTP unavailable, MQTT unavailable)"
     )
 
 
@@ -235,6 +290,66 @@ async def health_check() -> Dict:
         "peers_total": stats["total_peers"],
         "peers_online": stats["online_peers"],
         "active_commands": stats["active_commands"],
+    }
+
+
+# ── Peer Ring: Consistent Hash for 1000s of Devices ────────────────────────────
+
+@api.get("/ring/export")
+async def export_peer_ring() -> Dict:
+    """
+    Export peer ring for devices to sync (gossip protocol support).
+
+    Devices download this and apply same hash function for routing.
+    Enables: Device-to-device routing without central registry.
+    """
+    if not peer_ring:
+        return {"peers": [], "virtual_nodes": 3, "message": "Peer ring not initialized"}
+
+    return peer_ring.export()
+
+
+@api.post("/ring/update")
+async def update_peer_ring(peers: List[str]) -> Dict:
+    """Update peer ring with new list of devices."""
+    global peer_ring
+
+    if not peer_ring:
+        raise HTTPException(status_code=500, detail="Peer ring not initialized")
+
+    peer_ring.peers = peers
+    peer_ring.rebuild()
+
+    logger.info(f"[PeerRing] Updated with {len(peers)} peers")
+    return {
+        "status": "updated",
+        "peers_count": len(peers),
+        "ring_size": len(peer_ring.ring)
+    }
+
+
+@api.get("/ring/route/{target_device_id}")
+async def get_route(target_device_id: str) -> Dict:
+    """
+    Query: Which peer should handle this device?
+
+    Example: /ring/route/DEV042
+    Response: {"target": "DEV042", "responsible_peer": "DEV001", "replicas": ["DEV001", "DEV003"]}
+
+    Useful for: Debugging routing, understanding consistent hash behavior.
+    """
+    if not peer_ring:
+        raise HTTPException(status_code=500, detail="Peer ring not initialized")
+
+    primary = peer_ring.get_peer(target_device_id)
+    replicas = peer_ring.get_peers(target_device_id, replicas=3)
+
+    return {
+        "target": target_device_id,
+        "responsible_peer": primary,
+        "replicas": replicas,
+        "ring_size": len(peer_ring.peers),
+        "virtual_nodes": peer_ring.virtual_nodes
     }
 
 

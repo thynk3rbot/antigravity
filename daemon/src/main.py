@@ -131,9 +131,28 @@ class MagicDaemon:
         if static_dir.exists():
             self.app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
-        # Mount mesh API (pass MQTT publisher for command injection)
-        mesh_api = init_mesh_api(self.topology, self.mqtt)
+        # Mount mesh API (pass MQTT publisher + device registry for global routing)
+        mesh_api = init_mesh_api(self.topology, self.mqtt, self.device_registry)
         self.app.include_router(mesh_api)
+
+        # Initialize HTTP Gateway (for global 1000s device routing)
+        from .http_gateway import HTTPGateway
+        from .peer_ring import PeerRing
+        self.http_gateway = HTTPGateway(self.device_registry)
+        self.peer_ring = PeerRing(peers=[])
+        logger.info("[Magic] HTTP Gateway initialized (global device routing enabled)")
+
+        # Startup event: Initialize HTTP gateway session
+        @self.app.on_event("startup")
+        async def startup_http_gateway():
+            await self.http_gateway.initialize()
+            logger.info("[Magic] HTTP Gateway session started")
+
+        # Shutdown event: Close HTTP gateway session
+        @self.app.on_event("shutdown")
+        async def shutdown_http_gateway():
+            await self.http_gateway.shutdown()
+            logger.info("[Magic] HTTP Gateway session closed")
 
         # Mount OTA API
         self.app.include_router(self.ota.get_router())
