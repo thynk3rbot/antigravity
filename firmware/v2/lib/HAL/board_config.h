@@ -71,7 +71,9 @@
 
 // Firmware Identification Constants (Gossip-Ready)
 #define FIRMWARE_DEVICE_ID      DEVICE_NAME
-#define FIRMWARE_VERSION_PACKED 0x001204  // 0.0.18V4
+#ifndef FIRMWARE_VERSION_PACKED
+  #define FIRMWARE_VERSION_PACKED 0x001500  // 0.0.21
+#endif
 
 // ============================================================================
 // LoRa Radio SPI Interface Pins
@@ -235,8 +237,8 @@
 // GPS / GNSS UART Interface Pins
 // ============================================================================
 #ifdef ARDUINO_HELTEC_WIFI_LORA_32_V4
-  #define GPS_RX_PIN       47       // ESP32 RX <- GPS TX (SH1.25 UART)
-  #define GPS_TX_PIN       48       // ESP32 TX -> GPS RX (SH1.25 UART)
+  #define GPS_RX_PIN       39       // ESP32 RX <- GPS TX (SH1.25 UART) — verified working
+  #define GPS_TX_PIN       38       // ESP32 TX -> GPS RX (SH1.25 UART) — verified working
   #define GPS_PPS_PIN      41
   #define GPS_RST_PIN      42
   #define GPS_WAKE_PIN     40
