@@ -30,6 +30,18 @@ __pycache__/
 # Firmware artifacts
 firmware.zip
 firmware_extract/
+firmware_extract_*/
+firmware-*.zip
+meshtastic_firmware.zip
+meshtastic_s3.zip
+meshtastic_latest/
+*_fw_dump.bin
+cable_test.bin
+tbeam_s3_backup.bin
+*.bin
+
+# Large media
+media/*.mp4
 
 # Upload/Serial logs
 upload_log*.txt
