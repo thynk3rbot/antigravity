@@ -33,6 +33,9 @@ try:
     from .tray_manager import TrayManager
     from .infra_manager import InfraManager
     from .ota_manager import OtaManager
+    from .device_registry import DeviceRegistry
+    from .deployment_config import get_deployment_config
+    from .deployment_router import get_deployment_router
     from . import mqtt_client
 except ImportError:
     from mesh_router import MeshTopology
@@ -42,6 +45,9 @@ except ImportError:
     from tray_manager import TrayManager
     from infra_manager import InfraManager
     from ota_manager import OtaManager
+    from device_registry import DeviceRegistry
+    from deployment_config import get_deployment_config
+    from deployment_router import get_deployment_router
     import mqtt_client
 
 # Configure logging
@@ -91,7 +97,8 @@ class MagicDaemon:
         self.services = ServiceManager()
         self.community = CommunityManager(self._config_path)
         self.infra = InfraManager(self.REPO_ROOT)
-        self.ota = OtaManager(self.topology, self.REPO_ROOT)
+        self.device_registry = DeviceRegistry(self.REPO_ROOT / "daemon" / "data" / "device_registry.db")
+        self.ota = OtaManager(self.topology, self.REPO_ROOT, device_registry=self.device_registry)
         self.tray = TrayManager(self)
 
         # Background tasks
@@ -118,12 +125,25 @@ class MagicDaemon:
             allow_headers=["*"],
         )
 
+        # Mount static files (factory.html, index.html)
+        from fastapi.staticfiles import StaticFiles
+        static_dir = Path(__file__).parent.parent / "static"
+        if static_dir.exists():
+            self.app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+
         # Mount mesh API (pass MQTT publisher for command injection)
         mesh_api = init_mesh_api(self.topology, self.mqtt)
         self.app.include_router(mesh_api)
 
         # Mount OTA API
         self.app.include_router(self.ota.get_router())
+
+        # Mount Device Registry API
+        self.app.include_router(self.device_registry.get_router())
+
+        # Mount Deployment Configuration API
+        deployment_router = get_deployment_router()
+        self.app.include_router(deployment_router)
 
         # Mount service management API
         from fastapi import APIRouter

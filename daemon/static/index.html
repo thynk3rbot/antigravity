@@ -1,0 +1,861 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Magic — Mesh Dashboard</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0f0f0f;
+            color: #e0e0e0;
+        }
+
+        /* Layout */
+        .container {
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 300px;
+            background: #1a1a1a;
+            border-right: 1px solid #333;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sidebar-header {
+            padding: 20px;
+            border-bottom: 1px solid #333;
+        }
+
+        .sidebar-header h1 {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .sidebar-header p {
+            font-size: 12px;
+            color: #888;
+        }
+
+        .sidebar-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 15px 0;
+        }
+
+        .sidebar-section {
+            margin-bottom: 20px;
+        }
+
+        .sidebar-section-title {
+            padding: 10px 20px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            color: #666;
+            letter-spacing: 0.5px;
+        }
+
+        .sidebar-item {
+            padding: 12px 20px;
+            cursor: pointer;
+            border-left: 3px solid transparent;
+            transition: all 0.2s;
+        }
+
+        .sidebar-item:hover {
+            background: #242424;
+            border-left-color: #7c3aed;
+        }
+
+        .sidebar-item.active {
+            background: #2a2a2a;
+            border-left-color: #7c3aed;
+            color: #fff;
+        }
+
+        .sidebar-item span {
+            display: block;
+            font-size: 13px;
+        }
+
+        /* Swarm OTA Panel */
+        .panel-swarm-ota {
+            padding: 15px 20px;
+            background: #242424;
+            border: 1px solid #333;
+            border-radius: 6px;
+            margin: 10px 15px;
+        }
+
+        .panel-swarm-ota h3 {
+            font-size: 13px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: #fff;
+        }
+
+        .device-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-bottom: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .device-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px;
+            background: #1a1a1a;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s;
+            font-size: 12px;
+        }
+
+        .device-item:hover {
+            background: #2a2a2a;
+        }
+
+        .device-item input[type="checkbox"] {
+            cursor: pointer;
+            width: 16px;
+            height: 16px;
+        }
+
+        .device-badge {
+            display: inline-block;
+            padding: 2px 6px;
+            font-size: 10px;
+            background: #333;
+            border-radius: 3px;
+            margin-left: 4px;
+        }
+
+        .device-badge.online {
+            background: #10b981;
+            color: #fff;
+        }
+
+        .device-badge.offline {
+            background: #6b7280;
+            color: #fff;
+        }
+
+        .device-controls {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 12px;
+        }
+
+        .device-controls button {
+            flex: 1;
+            padding: 6px 8px;
+            font-size: 11px;
+            background: #333;
+            border: none;
+            color: #e0e0e0;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .device-controls button:hover {
+            background: #444;
+        }
+
+        .flash-btn {
+            background: #7c3aed !important;
+            color: #fff !important;
+            font-weight: 600;
+        }
+
+        .flash-btn:hover {
+            background: #6d28d9 !important;
+        }
+
+        .flash-btn:disabled {
+            background: #4b5563 !important;
+            cursor: not-allowed;
+        }
+
+        .flash-progress {
+            display: none;
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid #333;
+        }
+
+        .flash-progress.active {
+            display: block;
+        }
+
+        .progress-item {
+            margin-bottom: 10px;
+            font-size: 11px;
+        }
+
+        .progress-label {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 4px;
+            color: #aaa;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 4px;
+            background: #333;
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: #10b981;
+            width: 0%;
+            transition: width 0.3s;
+        }
+
+        .progress-fill.error {
+            background: #ef4444;
+        }
+
+        .flash-message {
+            margin-top: 12px;
+            padding: 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            text-align: center;
+        }
+
+        .flash-message.success {
+            background: #10b981;
+            color: #fff;
+        }
+
+        .flash-message.error {
+            background: #ef4444;
+            color: #fff;
+        }
+
+        /* Main Content Area */
+        .main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .header {
+            padding: 20px;
+            background: #1a1a1a;
+            border-bottom: 1px solid #333;
+        }
+
+        .header h2 {
+            font-size: 24px;
+            font-weight: 600;
+        }
+
+        .content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+        }
+
+        .card {
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .card h3 {
+            margin-bottom: 15px;
+            font-size: 16px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .stat {
+            background: #242424;
+            padding: 15px;
+            border-radius: 6px;
+            border: 1px solid #333;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: #888;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .stat-value {
+            font-size: 28px;
+            font-weight: 600;
+            color: #7c3aed;
+        }
+
+        .status-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        .status-table th {
+            text-align: left;
+            padding: 10px;
+            border-bottom: 1px solid #333;
+            font-weight: 600;
+            color: #aaa;
+        }
+
+        .status-table td {
+            padding: 12px 10px;
+            border-bottom: 1px solid #333;
+        }
+
+        .status-table tr:hover {
+            background: #242424;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 3px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .status-badge.online {
+            background: #10b981;
+            color: #fff;
+        }
+
+        .status-badge.offline {
+            background: #6b7280;
+            color: #fff;
+        }
+
+        /* Loading & Error States */
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .error-box {
+            background: #7f1d1d;
+            border: 1px solid #dc2626;
+            color: #fca5a5;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <h1 id="branding-name">Magic</h1>
+                <p id="branding-tagline">Mesh Dashboard</p>
+            </div>
+
+            <div class="sidebar-content">
+                <!-- Navigation -->
+                <div class="sidebar-section">
+                    <div class="sidebar-section-title">Navigation</div>
+                    <div class="sidebar-item active" data-view="fleet">
+                        <span>🚀 Fleet Status</span>
+                    </div>
+                    <div class="sidebar-item" data-view="devices">
+                        <span>📱 Devices</span>
+                    </div>
+                    <div class="sidebar-item" data-view="commands">
+                        <span>⚡ Commands</span>
+                    </div>
+                </div>
+
+                <!-- Swarm OTA Panel -->
+                <div class="panel-swarm-ota" id="ota-panel">
+                    <h3>📦 Swarm OTA</h3>
+                    <div class="device-controls">
+                        <button id="select-all-btn">Select All</button>
+                        <button id="clear-sel-btn">Clear</button>
+                    </div>
+                    <div class="device-list" id="device-list">
+                        <div class="loading">Loading devices...</div>
+                    </div>
+                    <button class="flash-btn" id="flash-btn" disabled>Flash Selected</button>
+                    <div class="flash-progress" id="flash-progress"></div>
+                    <div id="flash-message"></div>
+                </div>
+
+                <!-- Settings -->
+                <div class="sidebar-section">
+                    <div class="sidebar-section-title">System</div>
+                    <div class="sidebar-item" data-view="settings">
+                        <span>⚙️ Settings</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main">
+            <div class="header">
+                <h2 id="view-title">Fleet Status</h2>
+            </div>
+            <div class="content">
+                <!-- Fleet View -->
+                <div id="view-fleet" class="view">
+                    <div class="stats-grid">
+                        <div class="stat">
+                            <div class="stat-label">Total Devices</div>
+                            <div class="stat-value" id="stat-total">0</div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-label">Online</div>
+                            <div class="stat-value" id="stat-online">0</div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-label">V4 Devices</div>
+                            <div class="stat-value" id="stat-v4">0</div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-label">V3 Devices</div>
+                            <div class="stat-value" id="stat-v3">0</div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <h3>Device Status</h3>
+                        <table class="status-table" id="device-table">
+                            <thead>
+                                <tr>
+                                    <th>Device ID</th>
+                                    <th>Hardware</th>
+                                    <th>Version</th>
+                                    <th>Status</th>
+                                    <th>IP Address</th>
+                                </tr>
+                            </thead>
+                            <tbody id="device-tbody">
+                                <tr><td colspan="5" style="text-align: center; color: #666;">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Devices View -->
+                <div id="view-devices" class="view" style="display: none;">
+                    <div class="card">
+                        <h3>Device Registry</h3>
+                        <p style="color: #888; margin-bottom: 15px;">Manage devices in fleet registry</p>
+                        <div id="devices-content">Loading...</div>
+                    </div>
+                </div>
+
+                <!-- Commands View -->
+                <div id="view-commands" class="view" style="display: none;">
+                    <div class="card">
+                        <h3>Command Status</h3>
+                        <p style="color: #888;">Command integration test results</p>
+                        <div id="commands-content">Coming soon...</div>
+                    </div>
+                </div>
+
+                <!-- Settings View -->
+                <div id="view-settings" class="view" style="display: none;">
+                    <div class="card">
+                        <h3>System Settings</h3>
+                        <div id="deployment-mode">
+                            <p>Deployment Mode: <strong id="deployment-value">Loading...</strong></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ─────────────────────────────────────────────────────────
+        // Configuration & State
+        // ─────────────────────────────────────────────────────────
+
+        const API_BASE = '';
+        let deploymentConfig = null;
+        let selectedDevices = new Set();
+
+        // ─────────────────────────────────────────────────────────
+        // Branding
+        // ─────────────────────────────────────────────────────────
+
+        async function loadBranding() {
+            try {
+                const response = await fetch(`${API_BASE}/api/branding`);
+                const branding = await response.json();
+                document.getElementById('branding-name').textContent = branding.name || 'Magic';
+                document.getElementById('branding-tagline').textContent = branding.tagline || 'Mesh Dashboard';
+            } catch (e) {
+                console.warn('Failed to load branding:', e);
+            }
+        }
+
+        // ─────────────────────────────────────────────────────────
+        // Deployment Configuration
+        // ─────────────────────────────────────────────────────────
+
+        async function loadDeploymentConfig() {
+            try {
+                const response = await fetch(`${API_BASE}/api/deployment/config`);
+                deploymentConfig = await response.json();
+                console.log('[Deployment]', deploymentConfig.mode, deploymentConfig.description);
+                document.getElementById('deployment-value').textContent = deploymentConfig.mode;
+
+                // Show/hide OTA panel based on deployment
+                const otaPanel = document.getElementById('ota-panel');
+                if (deploymentConfig.features.ota_flashing) {
+                    otaPanel.style.display = 'block';
+                    loadOTADevices();
+                } else {
+                    otaPanel.style.display = 'none';
+                }
+            } catch (e) {
+                console.error('[Deployment] Failed to load config:', e);
+            }
+        }
+
+        // ─────────────────────────────────────────────────────────
+        // Device Registry & Fleet Status
+        // ─────────────────────────────────────────────────────────
+
+        async function loadDevices() {
+            try {
+                const response = await fetch(`${API_BASE}/api/registry/devices`);
+                const devices = await response.json();
+
+                // Update stats
+                const online = devices.filter(d => d.status === 'online').length;
+                const v4 = devices.filter(d => d.hardware_class === 'V4').length;
+                const v3 = devices.filter(d => d.hardware_class === 'V3').length;
+
+                document.getElementById('stat-total').textContent = devices.length;
+                document.getElementById('stat-online').textContent = online;
+                document.getElementById('stat-v4').textContent = v4;
+                document.getElementById('stat-v3').textContent = v3;
+
+                // Update table
+                const tbody = document.getElementById('device-tbody');
+                tbody.innerHTML = '';
+
+                if (devices.length === 0) {
+                    const row = document.createElement('tr');
+                    const cell = document.createElement('td');
+                    cell.colSpan = 5;
+                    cell.style.textAlign = 'center';
+                    cell.style.color = '#666';
+                    cell.textContent = 'No devices registered';
+                    row.appendChild(cell);
+                    tbody.appendChild(row);
+                    return;
+                }
+
+                devices.forEach(device => {
+                    const row = document.createElement('tr');
+                    const statusClass = device.status === 'online' ? 'online' : 'offline';
+
+                    const idCell = document.createElement('td');
+                    idCell.textContent = device.device_id;
+
+                    const hwCell = document.createElement('td');
+                    hwCell.textContent = device.hardware_class || 'Unknown';
+
+                    const verCell = document.createElement('td');
+                    verCell.textContent = device.current_version || '-';
+
+                    const statusCell = document.createElement('td');
+                    const badge = document.createElement('span');
+                    badge.className = `status-badge ${statusClass}`;
+                    badge.textContent = device.status;
+                    statusCell.appendChild(badge);
+
+                    const ipCell = document.createElement('td');
+                    ipCell.textContent = device.ip_address || '-';
+
+                    row.appendChild(idCell);
+                    row.appendChild(hwCell);
+                    row.appendChild(verCell);
+                    row.appendChild(statusCell);
+                    row.appendChild(ipCell);
+                    tbody.appendChild(row);
+                });
+            } catch (e) {
+                console.error('[Devices] Failed to load:', e);
+                const tbody = document.getElementById('device-tbody');
+                tbody.innerHTML = '';
+                const row = document.createElement('tr');
+                const cell = document.createElement('td');
+                cell.colSpan = 5;
+                cell.style.color = '#f87171';
+                cell.textContent = 'Error loading devices';
+                row.appendChild(cell);
+                tbody.appendChild(row);
+            }
+        }
+
+        // ─────────────────────────────────────────────────────────
+        // Swarm OTA
+        // ─────────────────────────────────────────────────────────
+
+        async function loadOTADevices() {
+            try {
+                const response = await fetch(`${API_BASE}/api/registry/devices`);
+                const devices = await response.json();
+
+                const deviceList = document.getElementById('device-list');
+                deviceList.innerHTML = '';
+
+                if (devices.length === 0) {
+                    const emptyMsg = document.createElement('div');
+                    emptyMsg.style.cssText = 'color: #666; text-align: center; padding: 20px;';
+                    emptyMsg.textContent = 'No devices registered';
+                    deviceList.appendChild(emptyMsg);
+                    return;
+                }
+
+                devices.forEach(device => {
+                    const item = document.createElement('div');
+                    item.className = 'device-item';
+
+                    const checkbox = document.createElement('input');
+                    checkbox.type = 'checkbox';
+                    checkbox.value = device.device_id;
+                    checkbox.onchange = (e) => {
+                        if (e.target.checked) {
+                            selectedDevices.add(device.device_id);
+                        } else {
+                            selectedDevices.delete(device.device_id);
+                        }
+                        updateFlashButtonState();
+                    };
+
+                    const label = document.createElement('span');
+                    label.textContent = device.name || device.device_id;
+
+                    const badge = document.createElement('span');
+                    badge.className = `device-badge ${device.status === 'online' ? 'online' : 'offline'}`;
+                    badge.textContent = device.hardware_class;
+
+                    item.appendChild(checkbox);
+                    item.appendChild(label);
+                    label.appendChild(badge);
+                    deviceList.appendChild(item);
+                });
+            } catch (e) {
+                console.error('[OTA] Failed to load devices:', e);
+            }
+        }
+
+        function updateFlashButtonState() {
+            const flashBtn = document.getElementById('flash-btn');
+            flashBtn.disabled = selectedDevices.size === 0;
+        }
+
+        document.getElementById('select-all-btn').onclick = () => {
+            document.querySelectorAll('#device-list input[type="checkbox"]').forEach(cb => {
+                cb.checked = true;
+                selectedDevices.add(cb.value);
+            });
+            updateFlashButtonState();
+        };
+
+        document.getElementById('clear-sel-btn').onclick = () => {
+            document.querySelectorAll('#device-list input[type="checkbox"]').forEach(cb => {
+                cb.checked = false;
+            });
+            selectedDevices.clear();
+            updateFlashButtonState();
+        };
+
+        document.getElementById('flash-btn').onclick = async () => {
+            if (selectedDevices.size === 0) return;
+
+            const flashBtn = document.getElementById('flash-btn');
+            const progressDiv = document.getElementById('flash-progress');
+            const messageDiv = document.getElementById('flash-message');
+
+            flashBtn.disabled = true;
+            messageDiv.textContent = '';
+            progressDiv.innerHTML = '';
+            progressDiv.classList.add('active');
+
+            const jobIds = {};
+
+            try {
+                // Start flash jobs for each selected device
+                for (const deviceId of selectedDevices) {
+                    const response = await fetch(`${API_BASE}/api/ota/flash`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ device_id: deviceId })
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`Failed to start flash for ${deviceId}`);
+                    }
+
+                    const result = await response.json();
+                    jobIds[deviceId] = result.job_id;
+                }
+
+                // Poll for progress
+                const statusChecks = Object.entries(jobIds).map(([deviceId, jobId]) =>
+                    pollFlashStatus(deviceId, jobId, progressDiv)
+                );
+
+                await Promise.all(statusChecks);
+
+                messageDiv.textContent = '✓ All devices flashed successfully!';
+                messageDiv.className = 'flash-message success';
+
+                // Reload devices after flash
+                setTimeout(() => {
+                    loadOTADevices();
+                    loadDevices();
+                }, 2000);
+            } catch (e) {
+                messageDiv.textContent = `✗ Flash failed: ${e.message}`;
+                messageDiv.className = 'flash-message error';
+            } finally {
+                flashBtn.disabled = false;
+                setTimeout(() => {
+                    progressDiv.classList.remove('active');
+                }, 3000);
+            }
+        };
+
+        async function pollFlashStatus(deviceId, jobId, progressDiv) {
+            return new Promise((resolve) => {
+                let itemDiv = document.getElementById(`progress-${jobId}`);
+                if (!itemDiv) {
+                    itemDiv = document.createElement('div');
+                    itemDiv.id = `progress-${jobId}`;
+                    itemDiv.className = 'progress-item';
+                    progressDiv.appendChild(itemDiv);
+                }
+
+                const pollInterval = setInterval(async () => {
+                    try {
+                        const response = await fetch(`${API_BASE}/api/ota/status/${jobId}`);
+                        const status = await response.json();
+
+                        let label = itemDiv.querySelector('.progress-label');
+                        if (!label) {
+                            label = document.createElement('div');
+                            label.className = 'progress-label';
+                            const nameSpan = document.createElement('span');
+                            const percentSpan = document.createElement('span');
+                            label.appendChild(nameSpan);
+                            label.appendChild(percentSpan);
+                            itemDiv.appendChild(label);
+                        }
+
+                        label.querySelector('span:first-child').textContent = deviceId;
+
+                        if (status.status === 'running') {
+                            const progress = Math.min(status.progress || 0, 100);
+                            let progressBar = itemDiv.querySelector('.progress-bar');
+                            if (!progressBar) {
+                                progressBar = document.createElement('div');
+                                progressBar.className = 'progress-bar';
+                                const fill = document.createElement('div');
+                                fill.className = 'progress-fill';
+                                progressBar.appendChild(fill);
+                                itemDiv.appendChild(progressBar);
+                            }
+                            progressBar.querySelector('.progress-fill').style.width = progress + '%';
+                            label.querySelector('span:last-child').textContent = progress + '%';
+                        } else if (status.status === 'done') {
+                            const progressBar = itemDiv.querySelector('.progress-bar');
+                            if (progressBar) {
+                                progressBar.querySelector('.progress-fill').style.width = '100%';
+                            }
+                            label.querySelector('span:last-child').textContent = '✓ Done';
+                            clearInterval(pollInterval);
+                            resolve();
+                        } else if (status.status === 'error') {
+                            const progressBar = itemDiv.querySelector('.progress-bar');
+                            if (progressBar) {
+                                progressBar.querySelector('.progress-fill').classList.add('error');
+                            }
+                            label.querySelector('span:last-child').textContent = '✗ Error';
+                            clearInterval(pollInterval);
+                            resolve();
+                        }
+                    } catch (e) {
+                        console.error('[Status Poll] Error:', e);
+                        clearInterval(pollInterval);
+                        resolve();
+                    }
+                }, 500);
+            });
+        }
+
+        // ─────────────────────────────────────────────────────────
+        // View Navigation
+        // ─────────────────────────────────────────────────────────
+
+        document.querySelectorAll('.sidebar-item[data-view]').forEach(item => {
+            item.onclick = () => {
+                // Update sidebar
+                document.querySelectorAll('.sidebar-item[data-view]').forEach(i => i.classList.remove('active'));
+                item.classList.add('active');
+
+                // Update content
+                const viewName = item.dataset.view;
+                document.querySelectorAll('.view').forEach(v => v.style.display = 'none');
+                document.getElementById(`view-${viewName}`).style.display = 'block';
+                document.getElementById('view-title').textContent = item.textContent;
+            };
+        });
+
+        // ─────────────────────────────────────────────────────────
+        // Initialization
+        // ─────────────────────────────────────────────────────────
+
+        async function init() {
+            await loadBranding();
+            await loadDeploymentConfig();
+            await loadDevices();
+
+            // Refresh devices every 10 seconds
+            setInterval(loadDevices, 10000);
+        }
+
+        init();
+    </script>
+</body>
+</html>

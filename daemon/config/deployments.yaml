@@ -1,0 +1,102 @@
+# Deployment Configurations
+# Controls which features are enabled per deployment mode
+# Load via: DEPLOYMENT_MODE=factory or DEPLOYMENT_MODE=user
+
+deployments:
+  factory:
+    description: "Full-featured factory/development deployment with IDE integration"
+    roles: [factory, admin, developer]
+    features:
+      device_registry: true       # Manage device registry
+      usb_flashing: true          # Flash virgin devices via USB
+      ota_flashing: true          # OTA firmware updates
+      diagnostics: true           # Full logs, metrics, debug info
+      testing: true               # Run test commands, validate
+      build_integration: true      # Firmware build management
+      firmware_management: true    # Version tracking, rollback
+      mqtt_management: true        # MQTT broker config
+      system_monitoring: true      # CPU, memory, processes
+    ui:
+      sidebar: full               # Show all sidebar items
+      panels: [registry, ota, diagnostics, testing, build, mqtt, system]
+      theme: dark
+    api_access:
+      registry: full              # Full read/write
+      ota: full                   # Can flash any device
+      diagnostics: full           # All endpoints
+      mqtt: full
+    default_view: "registry"
+
+  user:
+    description: "User-facing deployment - swarm OTA updates and monitoring only"
+    roles: [user]
+    features:
+      device_registry: false      # Hidden - no device management
+      usb_flashing: false         # Hidden - no USB access
+      ota_flashing: true          # Swarm OTA updates enabled
+      diagnostics: false          # Minimal diagnostics
+      testing: false              # No testing
+      build_integration: false    # No build access
+      firmware_management: false  # No version management
+      mqtt_management: false      # No MQTT config
+      system_monitoring: false    # No system info
+    ui:
+      sidebar: minimal             # Simplified sidebar
+      panels: [fleet, ota, status]
+      theme: light
+    api_access:
+      registry: read-only         # Can see device list only
+      ota: swarm-only             # Can only do batch OTA to known devices
+      diagnostics: minimal        # Status endpoint only
+      mqtt: none
+    default_view: "fleet"
+
+  # Future: Manager mode for swarm oversight
+  manager:
+    description: "Manager deployment - swarm control and monitoring"
+    roles: [manager]
+    features:
+      device_registry: false
+      usb_flashing: false
+      ota_flashing: true
+      diagnostics: true
+      testing: false
+      build_integration: false
+      firmware_management: true
+      mqtt_management: false
+      system_monitoring: true
+    ui:
+      sidebar: moderate
+      panels: [fleet, ota, monitoring, diagnostics]
+      theme: dark
+    api_access:
+      registry: read-only
+      ota: swarm-only
+      diagnostics: full
+      mqtt: read-only
+    default_view: "fleet"
+
+  # Future: Homeowner mode for basic control
+  homeowner:
+    description: "Homeowner deployment - basic device control"
+    roles: [homeowner]
+    features:
+      device_registry: false
+      usb_flashing: false
+      ota_flashing: false        # No firmware updates
+      diagnostics: false
+      testing: false
+      build_integration: false
+      firmware_management: false
+      mqtt_management: false
+      system_monitoring: false
+    ui:
+      sidebar: minimal
+      panels: [status, control]
+      theme: light
+    api_access:
+      registry: read-only
+      ota: none
+      diagnostics: minimal
+      mqtt: none
+    default_view: "status"
