@@ -18,6 +18,9 @@ class FlashRequest(BaseModel):
     env: Optional[str] = None  # Fallback: env directly (legacy)
     ip: str = ""
 
+class BatchFlashRequest(BaseModel):
+    hardware_class: str  # "V3" or "V4"
+
 class FlashGuards:
     """Guard rules for safe OTA operations."""
     ENV_TO_HARDWARE = {
@@ -96,6 +99,47 @@ class OtaManager:
             # Start background task
             asyncio.create_task(self._run_pio_flash(job_id, env, ip, device_id))
             return {"ok": True, "job_id": job_id, "device_id": device_id, "env": env}
+
+        @router.post("/flash/by-class")
+        async def flash_by_class(req: BatchFlashRequest):
+            """Flash all online devices of a given hardware class in parallel."""
+            if req.hardware_class not in ("V3", "V4"):
+                raise HTTPException(status_code=400, detail="hardware_class must be 'V3' or 'V4'")
+            if not self.device_registry:
+                raise HTTPException(status_code=500, detail="Device registry not available")
+
+            devices = self.device_registry.list_devices(hardware_class=req.hardware_class)
+            online = [d for d in devices if d.status == "online" and d.ip_address]
+            if not online:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"No online {req.hardware_class} devices found in registry"
+                )
+
+            batch_id = str(uuid.uuid4())
+            jobs = []
+            for device in online:
+                env = "heltec_v4" if device.hardware_class == "V4" else "heltec_v3"
+                job_id = str(uuid.uuid4())
+                self.active_jobs[job_id] = {
+                    "id": job_id,
+                    "status": "running",
+                    "device_id": device.device_id,
+                    "env": env,
+                    "ip": device.ip_address,
+                    "log": [],
+                    "batch_id": batch_id,
+                }
+                asyncio.create_task(
+                    self._run_pio_flash(job_id, env, device.ip_address, device.device_id)
+                )
+                jobs.append({"device_id": device.device_id, "job_id": job_id})
+                logger.info(
+                    f"[OTA:batch:{batch_id}] Spawned {job_id} for "
+                    f"{device.device_id} ({env}) @ {device.ip_address}"
+                )
+
+            return {"batch_id": batch_id, "jobs": jobs}
 
         @router.get("/status/{job_id}")
         async def get_status(job_id: str):

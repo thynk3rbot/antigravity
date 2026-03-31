@@ -405,6 +405,10 @@
                         <button id="select-all-btn">Select All</button>
                         <button id="clear-sel-btn">Clear</button>
                     </div>
+                    <div class="device-controls" style="margin-top:6px;gap:6px;">
+                        <button class="flash-btn" id="flash-all-v3-btn">&#9889; Flash All V3</button>
+                        <button class="flash-btn" id="flash-all-v4-btn">&#9889; Flash All V4</button>
+                    </div>
                     <div class="device-list" id="device-list">
                         <div class="loading">Loading devices...</div>
                     </div>
@@ -555,7 +559,8 @@
         async function loadDevices() {
             try {
                 const response = await fetch(`${API_BASE}/api/registry/devices`);
-                const devices = await response.json();
+                const data = await response.json();
+                const devices = data.devices || [];
 
                 // Update stats
                 const online = devices.filter(d => d.status === 'online').length;
@@ -633,7 +638,8 @@
         async function loadOTADevices() {
             try {
                 const response = await fetch(`${API_BASE}/api/registry/devices`);
-                const devices = await response.json();
+                const data = await response.json();
+                const devices = data.devices || [];
 
                 const deviceList = document.getElementById('device-list');
                 deviceList.innerHTML = '';
@@ -823,6 +829,51 @@
                 }, 500);
             });
         }
+
+        async function flashAllByClass(hardwareClass) {
+            const progressDiv = document.getElementById('flash-progress');
+            const messageDiv  = document.getElementById('flash-message');
+            const v3Btn  = document.getElementById('flash-all-v3-btn');
+            const v4Btn  = document.getElementById('flash-all-v4-btn');
+            const flashBtn = document.getElementById('flash-btn');
+
+            v3Btn.disabled = v4Btn.disabled = flashBtn.disabled = true;
+            messageDiv.textContent = '';
+            progressDiv.innerHTML = '';
+            progressDiv.classList.add('active');
+
+            try {
+                const resp = await fetch(`${API_BASE}/api/ota/flash/by-class`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ hardware_class: hardwareClass })
+                });
+                if (!resp.ok) {
+                    const err = await resp.json();
+                    throw new Error(err.detail || `Server error ${resp.status}`);
+                }
+                const { batch_id, jobs } = await resp.json();
+                console.log(`[OTA] Batch ${batch_id}: ${jobs.length} job(s) started`);
+
+                await Promise.all(jobs.map(({ device_id, job_id }) =>
+                    pollFlashStatus(device_id, job_id, progressDiv)
+                ));
+
+                messageDiv.textContent = `\u2713 All ${hardwareClass} devices flashed!`;
+                messageDiv.className = 'flash-message success';
+                setTimeout(() => { loadOTADevices(); loadDevices(); }, 2000);
+            } catch (e) {
+                messageDiv.textContent = `\u2717 Flash all ${hardwareClass} failed: ${e.message}`;
+                messageDiv.className = 'flash-message error';
+            } finally {
+                v3Btn.disabled = v4Btn.disabled = false;
+                updateFlashButtonState();
+                setTimeout(() => progressDiv.classList.remove('active'), 3000);
+            }
+        }
+
+        document.getElementById('flash-all-v3-btn').onclick = () => flashAllByClass('V3');
+        document.getElementById('flash-all-v4-btn').onclick = () => flashAllByClass('V4');
 
         // ─────────────────────────────────────────────────────────
         // View Navigation
