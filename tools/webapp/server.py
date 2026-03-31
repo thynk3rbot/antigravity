@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-server.py — LoRaLink PC Control Webapp Backend
+server.py — Magic PC Control Webapp Backend
 
 Serves the 4-panel browser dashboard at http://localhost:8000.
 Talks to the ESP32 over HTTP (primary) and BLE (fallback).
@@ -173,7 +173,7 @@ try:
 except ImportError:
     SIMULATOR_AVAILABLE = False
 
-# ── Daemon client — communicates with LoRaLink PC Daemon on :8001 ─────────────
+# ── Daemon client — communicates with Magic PC Daemon on :8001 ─────────────
 try:
     from tools.webapp.daemon_client import DaemonClient, BaseDeviceClient
     DAEMON_CLIENT_AVAILABLE = True
@@ -585,7 +585,7 @@ class WebSocketManager:
 # ════════════════════════════════════════════════════════════════════════════
 
 
-class LoRaLinkListener(ServiceListener):
+class MagicListener(ServiceListener):
     def __init__(self, registry: NodeRegistry, discovered_list: list) -> None:
         self.registry = registry
         self.discovered = discovered_list
@@ -600,10 +600,10 @@ class LoRaLinkListener(ServiceListener):
                 val = info.properties.get(key.encode() if isinstance(key, str) else key)
                 return val.decode("utf-8") if val else default
 
-            # Filter to LoRaLink-compatible devices
+            # Filter to Magic-compatible devices
             dev_type = get_prop("type", "unknown").lower()
-            is_loralink = "loralink" in dev_type or dev_type == "gateway" or "loralink" in name.lower()
-            if not is_loralink:
+            is_magic = "magic" in dev_type or dev_type == "gateway" or "magic" in name.lower()
+            if not is_magic:
                 return
 
             node_id = get_prop("id") or name.split(".")[0]
@@ -756,13 +756,13 @@ class SerialHub:
                         desc = (p.description or "").upper()
                         hwid = (p.hwid or "").upper()
                         
-                        is_loralink = (
+                        is_magic = (
                             any(sig in desc for sig in ["CP210", "USB SERIAL", "CH340", "ESP32", "HELTEC"]) or \
                             any(vid in hwid for vid in ["303A", "10C4", "1A86", "2341"])  # 2341 = Arduino
                         )
                         
-                        if is_loralink:
-                            print(f"[SerialHub] New LoRaLink port detected: {p.device} ({p.description})")
+                        if is_magic:
+                            print(f"[SerialHub] New Magic port detected: {p.device} ({p.description})")
                             # Auto-add to registry if not already there
                             node = self.registry.add(p.device, "serial", p.device, online=True)
                             
@@ -802,7 +802,7 @@ class SerialHub:
                             print(f"[SerialHub] Probed {port}: Hardware={hw}, MAC={mac}")
                             break
                         except: pass
-                    elif "LoRaLink V" in line:
+                    elif "Magic V" in line:
                         # Fallback for boot strings
                         if "V4" in line: node.hardware = "V4"
                         elif "V3" in line: node.hardware = "V3"
@@ -1374,7 +1374,7 @@ def build_app(
         if ZEROCONF:
             try:
                 _zc = Zeroconf()
-                listener = LoRaLinkListener(node_reg, state.discovered_devices)
+                listener = MagicListener(node_reg, state.discovered_devices)
                 _browser = ServiceBrowser(_zc, "_http._tcp.local.", listener)
                 print("[mDNS] Browser started listening for _http._tcp.local.")
             except Exception as e:
@@ -1412,7 +1412,7 @@ def build_app(
         # Disconnect daemon client
         await _daemon_client.disconnect()
 
-    app = FastAPI(title="LoRaLink PC Control", lifespan=lifespan)
+    app = FastAPI(title="Magic PC Control", lifespan=lifespan)
 
     async def _handle_message(line_raw: str, source: str) -> None:
         """Unified handler for all incoming radio/serial traffic."""
@@ -1960,7 +1960,7 @@ def build_app(
             s = state.status or {}
             node = state.active_node or "Gateway"
             bat = s.get("bat", "??")
-            return f"✨ LoRaLink Status:\nNode: {node}\nBat: {bat}V\nAll systems operational."
+            return f"✨ Magic Status:\nNode: {node}\nBat: {bat}V\nAll systems operational."
 
         # 2. Simple on/off mapping
         pin = None
@@ -2049,7 +2049,7 @@ def build_app(
 
     @app.get("/api/discover")
     async def _discover() -> JSONResponse:
-        """Network discovery: scan subnet for LoRaLink devices. Runs in background."""
+        """Network discovery: scan subnet for Magic devices. Runs in background."""
         if not AIOHTTP:
             return JSONResponse(
                 {"ok": False, "error": "aiohttp not available"}, status_code=503
@@ -2089,7 +2089,7 @@ def build_app(
             state.discovery_time = time.time()
 
         async def _probe_device(session: Any, ip: str) -> Optional[dict]:
-            """Probe a single IP and return device info if it's a LoRaLink device."""
+            """Probe a single IP and return device info if it's a Magic device."""
             try:
                 async with session.get(
                     f"http://{ip}/api/status",
@@ -2097,7 +2097,7 @@ def build_app(
                 ) as r:
                     if r.status == 200:
                         data = await r.json()
-                        if "myId" in data or "id" in data:  # LoRaLink device
+                        if "myId" in data or "id" in data:  # Magic device
                             return {
                                 "ip": ip,
                                 "name": data.get("myId") or data.get("id", "Unknown"),
@@ -2326,7 +2326,7 @@ def build_app(
         for p in serial.tools.list_ports.comports():
             desc = (p.description or "").lower()
             hwid = (p.hwid or "").lower()
-            # Positive tokens for LoRaLink hardware
+            # Positive tokens for Magic hardware
             if any(t in desc or t in hwid for t in ["esp", "silicon", "cp21", "ch34", "usb-serial", "jlink"]):
                 ports.append(p.device)
             # Exclude known-noisy system ports
@@ -2748,7 +2748,7 @@ def build_app(
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="LoRaLink PC Control Webapp",
+        description="Magic PC Control Webapp",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )
@@ -2799,7 +2799,7 @@ def main() -> None:
             print(f"[DNS] Failed to resolve '{device_ip}': {e}")
             print(f"[DNS] Will retry during operation...")
 
-    print("LoRaLink PC Control Webapp")
+    print("Magic PC Control Webapp")
     print(f"  Peer A     : {args.device}")
     print(f"  Peer B     : {args.device2 or '(single-device mode)'}")
     print(f"  Device IP  : {device_ip or 'not set (BLE only)'}")

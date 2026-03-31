@@ -1,10 +1,10 @@
 @echo off
 TITLE Package Release
 echo =======================================================
-echo          LoRaLink Release Packager
+echo          Magic Release Packager
 echo =======================================================
 echo.
-echo Packaging LoRaLink into Release.zip...
+echo Packaging Magic into Release.zip...
 
 REM Check if ngrok token is set, warn if it's not
 if not exist ".env" (
@@ -17,7 +17,7 @@ cd /d "%~dp0\.."
 
 REM Use PowerShell to zip the necessary folders/files
 echo Compressing folders...
-powershell -Command "Compress-Archive -Path Start_Loralink.bat, docker-compose.production.yml, mqttdocker.yml, tools, docs -DestinationPath Release.zip -Force"
+powershell -Command "Compress-Archive -Path Start_Magic.bat, docker-compose.production.yml, mqttdocker.yml, tools, docs -DestinationPath Release.zip -Force"
 
 if exist Release.zip (
     echo.

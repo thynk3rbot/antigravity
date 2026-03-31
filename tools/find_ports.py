@@ -1,5 +1,5 @@
 """
-find_ports.py — List all connected ESP32/LoRaLink devices and their COM ports.
+find_ports.py — List all connected ESP32/Magic devices and their COM ports.
 
 Usage:
     python tools/find_ports.py

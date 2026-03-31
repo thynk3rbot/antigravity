@@ -5,7 +5,7 @@ import os
 
 # -- Vibe Test Configuration --
 ENVIRONMENTS = {
-    "LoRaLink": {"url": "http://127.0.0.1:8000", "path": "/api/nodes"},
+    "Magic": {"url": "http://127.0.0.1:8000", "path": "/api/nodes"},
     "NutriCalc": {"url": "http://127.0.0.1:8100", "path": "/"},
     "Rag-Router": {"url": "http://127.0.0.1:8200", "path": "/health"},
     "viai.club": {"url": "http://127.0.0.1:8010", "path": "/"}

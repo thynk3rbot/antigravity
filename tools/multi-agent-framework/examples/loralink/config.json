@@ -1,16 +1,16 @@
 {
   "project": {
-    "name": "LoRaLink-AnyToAny",
+    "name": "Magic-AnyToAny",
     "description": "Unified ESP32-S3 firmware for prioritized any-to-any command routing",
-    "repo_url": "https://github.com/antigravity/loralink",
+    "repo_url": "https://github.com/antigravity/magic",
     "build_command": "pio run",
     "test_command": "pio test"
   },
   "branding": {
-    "app_name": "LoRaLink",
+    "app_name": "Magic",
     "tagline": "Autonomous Mesh Intelligence",
-    "copyright": "LoRaLink(tm) Copyright 2026 spw1.com. All Rights Reserved.",
-    "icon_path": "tools/webapp/static/media/loralink_icon.png",
+    "copyright": "Magic(tm) Copyright 2026 spw1.com. All Rights Reserved.",
+    "icon_path": "tools/webapp/static/media/magic_icon.png",
     "accent_color": "#00b4d8",
     "theme": "dark"
   },
@@ -85,7 +85,7 @@
     "enabled": true,
     "vector_store": "chromadb",
     "persist_directory": ".rag_store",
-    "collection_name": "loralink_knowledge",
+    "collection_name": "magic_knowledge",
     "embedding_model": "nomic-embed-text",
     "chunk_size": 512,
     "chunk_overlap": 50,

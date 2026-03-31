@@ -1,8 +1,8 @@
 @echo off
-TITLE LoRaLink Fleet Administrator
+TITLE Magic Fleet Administrator
 color 0A
 echo =======================================================
-echo          LoRaLink Fleet Administrator
+echo          Magic Fleet Administrator
 echo =======================================================
 echo.
 echo Starting services...
@@ -14,10 +14,10 @@ echo.
 cd /d "%~dp0\.."
 
 :: Start daemon in minimized window
-start "LoRaLink Daemon :8001" /min cmd /k "python -m tools.daemon.daemon"
+start "Magic Daemon :8001" /min cmd /k "python -m tools.daemon.daemon"
 
 :: Start webapp in minimized window
-start "LoRaLink Webapp :8000" /min cmd /k "cd tools\webapp && python server.py"
+start "Magic Webapp :8000" /min cmd /k "cd tools\webapp && python server.py"
 
 :: Wait for services to start, then launch tray icon
 timeout /t 3 /nobreak >nul

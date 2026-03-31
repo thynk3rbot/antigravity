@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
 """
-loralink_status.py — LoRaLink Fleet Status Tool
+magic_status.py — Magic Fleet Status Tool
 
-Query status from LoRaLink devices via WiFi (HTTP), BLE, or Serial (COM port).
+Query status from Magic devices via WiFi (HTTP), BLE, or Serial (COM port).
 Auto-detects address type from format.
 
 Usage:
-    python tools\loralink_status.py 172.16.0.26 172.16.0.27
-    python tools\loralink_status.py --range 172.16.0.26-30
-    python tools\loralink_status.py COM7 COM18
-    python tools\loralink_status.py "HT-LoRa" aa:bb:cc:dd:ee:ff
-    python tools\loralink_status.py --range 172.16.0.26-30 --json
-    python tools\loralink_status.py --scan-ble
-    python tools\loralink_status.py --range 172.16.0.26-30 --watch 5
+    python tools\magic_status.py 172.16.0.26 172.16.0.27
+    python tools\magic_status.py --range 172.16.0.26-30
+    python tools\magic_status.py COM7 COM18
+    python tools\magic_status.py "HT-LoRa" aa:bb:cc:dd:ee:ff
+    python tools\magic_status.py --range 172.16.0.26-30 --json
+    python tools\magic_status.py --scan-ble
+    python tools\magic_status.py --range 172.16.0.26-30 --watch 5
 
 Address types (auto-detected):
     192.168.x.x / 172.x.x.x  →  WiFi  (HTTP GET /api/status)
@@ -338,10 +338,10 @@ async def scan_ble(timeout: float = 8.0) -> list[str]:
     addrs = []
     for d in sorted(devices, key=lambda x: x.name or "~"):
         name = d.name or "(no name)"
-        # Identify LoRaLink devices by NUS service UUID — name-independent
+        # Identify Magic devices by NUS service UUID — name-independent
         uuids = [str(u).lower() for u in (d.metadata.get("uuids") or [])]
-        is_loralink = NUS_SERVICE_UUID.lower() in uuids
-        marker = " <-- LoRaLink" if is_loralink else ""
+        is_magic = NUS_SERVICE_UUID.lower() in uuids
+        marker = " <-- Magic" if is_magic else ""
         print(f"  {d.address}  {name}{marker}")
         addrs.append(d.address)
     return addrs
@@ -396,7 +396,7 @@ def print_table(results: list[DeviceStatus], show_time: bool = True):
 
     if RICH:
         t = Table(
-            title=f"LoRaLink Fleet Status  [{timestamp}]",
+            title=f"Magic Fleet Status  [{timestamp}]",
             box=box.SIMPLE_HEAVY,
             show_lines=False,
             header_style="bold cyan",
@@ -450,7 +450,7 @@ def print_table(results: list[DeviceStatus], show_time: bool = True):
     else:
         # Plain text fallback
         print(f"\n{'='*90}")
-        print(f"  LoRaLink Fleet Status  [{timestamp}]")
+        print(f"  Magic Fleet Status  [{timestamp}]")
         print(f"{'='*90}")
         fmt = "{:<18} {:<7} {:<12} {:<8} {:<12} {:<6} {:<5} {:<10} {:<8} {}"
         print(fmt.format("Address","Trans","ID","Version","Uptime","Heap","LoRa","TX/RX/Drop","Power","Last Cmd"))
@@ -483,7 +483,7 @@ def print_json(results: list[DeviceStatus]):
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        description="LoRaLink fleet status tool",
+        description="Magic fleet status tool",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )

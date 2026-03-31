@@ -35,7 +35,7 @@ async def test_contact_submit():
             "name": "Ada Lovelace",
             "email": "ada@example.com",
             "company": "Acme",
-            "message": "Interested in LoRaLink",
+            "message": "Interested in Magic",
         })
     assert r.status_code == 200
     assert r.json()["ok"] is True

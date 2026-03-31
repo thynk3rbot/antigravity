@@ -1,8 +1,8 @@
 @echo off
-TITLE LoRaLink Nightly Overdrive
+TITLE Magic Nightly Overdrive
 
 echo =========================================================
-echo          LoRaLink Nightly Endurance ^& Analysis
+echo          Magic Nightly Endurance ^& Analysis
 echo =========================================================
 echo.
 echo This protocol runs automated tests repeatedly to simulate 

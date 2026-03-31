@@ -4,7 +4,7 @@ import sys
 
 # Antigravity Global Environment Map
 ENVIRONMENTS = {
-    "LORALINK": "http://localhost:8000",
+    "MAGIC": "http://localhost:8000",
     "NUTRICYCLE": "http://localhost:8100",
     "RAG_ROUTER": "http://localhost:8200", 
     "VIAI_CLUB": "http://localhost:8010"
@@ -33,9 +33,9 @@ async def run_harness():
     print("="*60 + "\n")
     
     tasks = [
-        # 1. LoRaLink Suite
-        check_endpoint("LoRaLink", ENVIRONMENTS["LORALINK"], "/", "LoRaLink"),
-        check_endpoint("LoRa API", ENVIRONMENTS["LORALINK"], "/api/nodes"),
+        # 1. Magic Suite
+        check_endpoint("Magic", ENVIRONMENTS["MAGIC"], "/", "Magic"),
+        check_endpoint("LoRa API", ENVIRONMENTS["MAGIC"], "/api/nodes"),
         
         # 2. NutriCalc
         check_endpoint("NutriCalc", ENVIRONMENTS["NUTRICYCLE"], "/", "NutriCalc"),

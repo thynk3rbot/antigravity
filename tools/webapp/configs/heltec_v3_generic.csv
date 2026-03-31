@@ -1,6 +1,6 @@
 schema,1.0
 hardware_id,Heltec ESP32 LoRa V3
-dev_name,LoRaLink-TestUnit-V3
+dev_name,Magic-TestUnit-V3
 wifi_ssid,
 wifi_pass,
 static_ip,

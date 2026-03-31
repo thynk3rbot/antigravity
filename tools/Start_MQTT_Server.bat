@@ -9,10 +9,10 @@ if errorlevel 1 (
     pause
 )
 
-TITLE LoRaLink MQTT Broker (EMQX)
+TITLE Magic MQTT Broker (EMQX)
 color 09
 echo =======================================================
-echo          LoRaLink MQTT Broker (EMQX via Docker)
+echo          Magic MQTT Broker (EMQX via Docker)
 echo =======================================================
 echo.
 echo Starting EMQX MQTT broker...

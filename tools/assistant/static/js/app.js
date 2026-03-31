@@ -1,5 +1,5 @@
 /**
- * LoRaLink Assistant - Core App Logic
+ * Magic Assistant - Core App Logic
  */
 
 let currentSessionId = null;

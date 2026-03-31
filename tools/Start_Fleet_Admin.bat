@@ -1,8 +1,8 @@
 @echo off
-TITLE LoRaLink Fleet Administrator
+TITLE Magic Fleet Administrator
 color 0A
 echo =======================================================
-echo          LoRaLink Fleet Administrator Backend
+echo          Magic Fleet Administrator Backend
 echo =======================================================
 echo.
 echo Starting PC backend server on port 8000...

@@ -30,7 +30,7 @@ async def verify_node(ip):
     return False
 
 async def main():
-    print(f"--- LoRaLink Fleet Verification: {EXPECTED_VERSION} ---")
+    print(f"--- Magic Fleet Verification: {EXPECTED_VERSION} ---")
     results = await asyncio.gather(*(verify_node(ip) for ip in TARGETS))
     success_count = sum(1 for r in results if r)
     print(f"\nSummary: {success_count}/{len(TARGETS)} nodes verified.")

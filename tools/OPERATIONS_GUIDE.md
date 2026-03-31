@@ -295,7 +295,7 @@ type test_daemon.log
 ### Ollama Queue Stuck
 ```bash
 REM Check queue file
-type %APPDATA%\LoRaLink\ollama_queue.txt
+type %APPDATA%\Magic\ollama_queue.txt
 
 REM Manually process
 ollama_queue.bat process
@@ -328,7 +328,7 @@ daemon/
     ├── mesh_router.py
     └── mesh_api.py
 
-%APPDATA%\LoRaLink\
+%APPDATA%\Magic\
 ├── ollama_queue.txt                ← Queued tasks
 └── ollama_results/
     ├── task_1.txt

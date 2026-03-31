@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-LoRaLink PC AI Daemon
+Magic PC AI Daemon
 Listens on the designated Serial port for incoming `AI_QUERY:` requests 
 originating from the mesh network, routes them to the local Ollama instance, 
 and pipes the response back across the mesh.
@@ -45,7 +45,7 @@ def query_local_ai(prompt, model):
         
         if response.status_code == 200:
             result = response.json().get('response', '').strip()
-            # LoRaLink expects single-line commands. Strip newlines to play nice with Serial routing.
+            # Magic expects single-line commands. Strip newlines to play nice with Serial routing.
             result = result.replace('\n', ' ').replace('\r', '')
             
             # Truncate if it exceeds reasonable packet sizes for LoRa/ESP-NOW
@@ -63,7 +63,7 @@ def query_local_ai(prompt, model):
 
 def start_daemon(port, baud, model):
     print("==========================================")
-    print("   LoRaLink Local AI Workstation Daemon   ")
+    print("   Magic Local AI Workstation Daemon   ")
     print("==========================================")
     print(f"[*] Target Port : {port}")
     print(f"[*] Baud Rate   : {baud}")
@@ -130,8 +130,8 @@ def start_daemon(port, baud, model):
             time.sleep(1)
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="LoRaLink to Ollama Bridge Daemon")
-    parser.add_argument("-p", "--port", type=str, default="COM3", help="Serial COM port attached to the LoRaLink Master/Gateway")
+    parser = argparse.ArgumentParser(description="Magic to Ollama Bridge Daemon")
+    parser.add_argument("-p", "--port", type=str, default="COM3", help="Serial COM port attached to the Magic Master/Gateway")
     parser.add_argument("-b", "--baud", type=int, default=115200, help="Baud rate (default 115200)")
     parser.add_argument("-m", "--model", type=str, default=DEFAULT_MODEL, help="Local Ollama model to query (default qwen2.5-coder:14b)")
     

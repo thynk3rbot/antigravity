@@ -1089,28 +1089,36 @@ async function proxySaveConfig() {
 function otaUpdateDeviceList(peers) {
     const el = document.getElementById('ota-device-list');
     if (!el) return;
-    if (!peers || peers.length === 0) { el.innerHTML = '<span class="text-dim">No devices online</span>'; return; }
-    el.innerHTML = peers.map(p => {
-        const ip = p.ip || p.ipAddr || '';
-        const ver = p.ver || p.version || '?';
-        const name = p.name || p.node_id || p.nodeId || ip;
-        if (!ip) return '';
-        return `<label class="flex gap-2 items-center mb-1 cursor-pointer"><input type="checkbox" class="ota-device-cb" data-ip="${ip}" checked><span>${name}</span><span class="text-dim ml-auto">${ver}&nbsp;·&nbsp;${ip}</span></label>`;
-    }).join('');
+    let html = '';
+    if (peers && peers.length > 0) {
+        html = peers.map(p => {
+            const ip = p.ip || p.ipAddr || '';
+            const ver = p.ver || p.version || '?';
+            const name = p.name || p.node_id || p.nodeId || ip;
+            if (!ip) return '';
+            return `<label class="flex gap-2 items-center mb-1 cursor-pointer"><input type="checkbox" class="ota-device-cb" data-ip="${ip}"><span>${name}</span><span class="text-dim ml-auto">${ver}&nbsp;·&nbsp;${ip}</span></label>`;
+        }).join('');
+    } else {
+        html = '<span class="text-dim block mb-2">No remote OTA devices found in fleet.</span>';
+    }
+    // Always provide the local USB flash option
+    html += `<label class="flex gap-2 items-center mt-2 pt-2 border-t" style="border-top:1px solid var(--border); cursor:pointer;"><input type="checkbox" class="ota-device-cb" data-ip="" checked><span>🔌 Local USB Device</span><span class="text-dim ml-auto">Auto-detect Serial Port</span></label>`;
+    el.innerHTML = html;
 }
 
 async function otaFlashSelected() {
     const env = document.getElementById('ota-env').value;
-    const ips = Array.from(document.querySelectorAll('.ota-device-cb:checked')).map(cb => cb.dataset.ip).filter(Boolean);
+    const ips = Array.from(document.querySelectorAll('.ota-device-cb:checked')).map(cb => cb.dataset.ip);
     if (ips.length === 0) { otaLog('No devices selected', 'warn'); return; }
-    otaLog(`Flashing ${ips.length} device(s) with ${env}...`);
+    otaLog(`Deploying ${env} to ${ips.length} target(s)...`);
     for (const ip of ips) {
+        const targetName = ip ? ip : 'Local USB';
         try {
             const res = await fetch('/api/ota/flash', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({env, ip}) });
             const data = await res.json();
-            if (data.ok) { otaLog(`→ ${ip} started (job ${data.job_id})`); otaPollJob(data.job_id, ip); }
-            else otaLog(`✗ ${ip}: ${data.error || 'failed'}`, 'err');
-        } catch (e) { otaLog(`✗ ${ip}: ${e.message}`, 'err'); }
+            if (data.ok) { otaLog(`→ ${targetName} started (job ${data.job_id})`); otaPollJob(data.job_id, targetName); }
+            else otaLog(`✗ ${targetName}: ${data.error || 'failed'}`, 'err');
+        } catch (e) { otaLog(`✗ ${targetName}: ${e.message}`, 'err'); }
     }
 }
 

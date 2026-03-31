@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-server.py — LoRaLink Corporate Website Backend
+server.py — Magic Corporate Website Backend
 
 Usage:
     python tools/website/server.py
@@ -46,7 +46,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="LoRaLink Website", lifespan=lifespan)
+app = FastAPI(title="Magic Website", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
 

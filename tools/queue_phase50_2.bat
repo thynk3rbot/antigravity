@@ -50,6 +50,6 @@ echo   2. Check progress: ollama_queue.bat check
 echo   3. Review generated code in results directory
 echo   4. Integrate into Phase 50.2 implementation
 echo.
-echo Results location: %%APPDATA%%\LoRaLink\ollama_results\
+echo Results location: %%APPDATA%%\Magic\ollama_results\
 echo.
 pause

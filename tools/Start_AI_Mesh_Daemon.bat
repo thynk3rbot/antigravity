@@ -1,9 +1,9 @@
 @echo off
-TITLE LoRaLink AI Mesh Daemon
+TITLE Magic AI Mesh Daemon
 color 0E
 
 echo =======================================================
-echo          LoRaLink AI Mesh Daemon (Ollama Bridge)
+echo          Magic AI Mesh Daemon (Ollama Bridge)
 echo =======================================================
 echo.
 

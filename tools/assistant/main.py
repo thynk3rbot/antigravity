@@ -4,10 +4,10 @@ import time
 from pathlib import Path
 
 def main():
-    """Main entry point for the LoRaLink Assistant."""
+    """Main entry point for the Magic Assistant."""
     root = Path(__file__).parent.resolve()
     
-    print("--- Starting LoRaLink Assistant ---")
+    print("--- Starting Magic Assistant ---")
     print(f"Root: {root}")
 
     # 1. Start Server

@@ -1,6 +1,6 @@
 # Deployment & Configuration Testing Guide
 
-This guide walks through testing the LoRaLink configuration management system using the provided test configurations. It validates the complete config lifecycle: export → modify → import → persistence → deployment.
+This guide walks through testing the Magic configuration management system using the provided test configurations. It validates the complete config lifecycle: export → modify → import → persistence → deployment.
 
 ---
 
@@ -78,7 +78,7 @@ This guide walks through testing the LoRaLink configuration management system us
 3. **Verify device response**:
    - Device should briefly disconnect (applies config, reboots internally)
    - Webapp should reconnect automatically
-   - New device name should show: `"LoRaLink-TestUnit-V3"`
+   - New device name should show: `"Magic-TestUnit-V3"`
 
 4. **Validate on device**:
    - Open Config Files page
@@ -108,10 +108,10 @@ This guide walks through testing the LoRaLink configuration management system us
    - Use a JSON diff tool or visual comparison
    - Expected: `after_reboot.json` == `heltec_v3_generic.json`
    - Verify all pin names are preserved
-   - Verify device name is still `"LoRaLink-TestUnit-V3"`
+   - Verify device name is still `"Magic-TestUnit-V3"`
 
 4. **Check device name**:
-   - Dashboard should still show `LoRaLink-TestUnit-V3` as hostname
+   - Dashboard should still show `Magic-TestUnit-V3` as hostname
    - Confirms NVS (non-volatile storage) persisted the config
 
 **Expected Result**: Config survives reboot unchanged.

@@ -3,7 +3,7 @@ import sys
 import json
 
 def run_fake_sim():
-    print("=== LoRaLink Fake Simulator (Test Script) ===")
+    print("=== Magic Fake Simulator (Test Script) ===")
     sys.stdout.flush()
     
     last_query = 0

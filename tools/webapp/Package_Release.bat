@@ -1,10 +1,10 @@
 @echo off
 TITLE Package Release
 echo =======================================================
-echo          LoRaLink Release Packager
+echo          Magic Release Packager
 echo =======================================================
 echo.
-echo Packaging LoRaLink into Release.zip...
+echo Packaging Magic into Release.zip...
 
 REM Check if ngrok token is set, warn if it's not
 if not exist ".env" (

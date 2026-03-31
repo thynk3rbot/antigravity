@@ -24,7 +24,7 @@ services:
       - "1883:1883"
       - "18083:18083"
     environment:
-      EMQX_NAME: loralink-broker
+      EMQX_NAME: magic-broker
       EMQX_LOADED_PLUGINS: "emqx_dashboard"
     volumes:
       - emqx_data:/opt/emqx/data

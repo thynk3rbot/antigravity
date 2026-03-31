@@ -17,8 +17,8 @@ DEFAULT_CONFIG = {
 }
 
 
-class LoRaLinkDaemon:
-    """Main LoRaLink PC Daemon service.
+class MagicDaemon:
+    """Main Magic PC Daemon service.
 
     Wires together: SQLite persistence + transport routing + FastAPI REST API.
     """
@@ -55,7 +55,7 @@ class LoRaLinkDaemon:
 
         host = self.config["host"]
         port = self.config["port"]
-        logger.info(f"Starting LoRaLink Daemon on {host}:{port}")
+        logger.info(f"Starting Magic Daemon on {host}:{port}")
 
         uvicorn.run(
             self.api_app,
@@ -68,9 +68,9 @@ class LoRaLinkDaemon:
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="LoRaLink PC Daemon")
+    parser = argparse.ArgumentParser(description="Magic PC Daemon")
     parser.add_argument("--config", default="daemon.config.json", help="Config file path")
     args = parser.parse_args()
 
-    daemon = LoRaLinkDaemon(Path(args.config))
+    daemon = MagicDaemon(Path(args.config))
     daemon.run()

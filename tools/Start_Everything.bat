@@ -1,9 +1,9 @@
 @echo off
-TITLE LoRaLink Ecosystem Launch Control
+TITLE Magic Ecosystem Launch Control
 color 0B
 
 echo =======================================================
-echo          LoRaLink Ecosystem Launch Control
+echo          Magic Ecosystem Launch Control
 echo =======================================================
 echo.
 
@@ -19,7 +19,7 @@ if %errorlevel% neq 0 (
         timeout /t 2 /nobreak >nul
         goto waitLoop
     )
-    echo [3/3] Docker is READY. Proceeding with LoRaLink services...
+    echo [3/3] Docker is READY. Proceeding with Magic services...
     echo.
 )
 
@@ -29,7 +29,7 @@ call "%~dp0Start_All_Services.bat"
 
 echo.
 echo =====================================================
-echo LoRaLink Stack is starting!
+echo Magic Stack is starting!
 echo Dashboard: http://localhost:8000
 echo Website:   http://localhost:8010
 echo Magic App: http://localhost:8500

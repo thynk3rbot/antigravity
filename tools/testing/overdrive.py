@@ -142,7 +142,7 @@ async def run_overdrive(args):
         console.print(f"[red]Failed to generate dashboard: {e}[/]")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="LoRaLink Overnight Endurance Engine")
+    parser = argparse.ArgumentParser(description="Magic Overnight Endurance Engine")
     parser.add_argument("--ip", type=str, default="172.16.0.27", help="Gateway IP")
     parser.add_argument("--target", type=str, default=None, help="LoRa Mesh Target Node ID")
     parser.add_argument("--name", type=str, default="LocalNet", help="Target Name")

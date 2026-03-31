@@ -4,8 +4,8 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 
 # Predefined fleet IDs based on user's mDNS hostnames
-# loralink-26, loralink-27, loralink-28, loralink-29, loralink-30
-FLEET_HOSTS = [f"loralink-{i}.local" for i in range(26, 31)]
+# magic-26, magic-27, magic-28, magic-29, magic-30
+FLEET_HOSTS = [f"magic-{i}.local" for i in range(26, 31)]
 
 def check_node(host):
     url = f"http://{host}/api/status"
@@ -33,7 +33,7 @@ def check_node(host):
 
 def report():
     print("\n" + "="*80)
-    print(f"{'LoRaLink Multi-Location Fleet Health Report':^80}")
+    print(f"{'Magic Multi-Location Fleet Health Report':^80}")
     print("="*80)
     print(f"{'Hostname':<18} | {'Status':<8} | {'ID':<6} | {'Ver':<6} | {'Bat':<6} | {'RSSI':<6} | {'Latency'}")
     print("-" * 80)

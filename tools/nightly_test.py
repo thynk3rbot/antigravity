@@ -140,7 +140,7 @@ async def run_nightly_regression(args):
         console.print(f"\n[bold red]FAILED: REGRESSION DETECTED: {total - passed} failures[/bold red]")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="LoRaLink Headless Nightly Test")
+    parser = argparse.ArgumentParser(description="Magic Headless Nightly Test")
     parser.add_argument("--ip", type=str, default="172.16.0.27", help="Target Gateway IP (WiFi)")
     parser.add_argument("--port", type=str, default="COM7", help="Target Serial Port (Headless)")
     parser.add_argument("--transport", type=str, default="http", choices=["http", "serial"], help="Physical transport")

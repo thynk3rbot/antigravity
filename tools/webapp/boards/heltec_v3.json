@@ -4,7 +4,7 @@
   "width": 100,
   "height": 180,
   "silkscreen": [
-    {"type": "text", "x": 50, "y": 10, "label": "LoRaLink HT-LoRa", "style": "font-weight:bold; font-size: 6px; fill:#fff;"},
+    {"type": "text", "x": 50, "y": 10, "label": "Magic HT-LoRa", "style": "font-weight:bold; font-size: 6px; fill:#fff;"},
     {"type": "rect", "x": 20, "y": 30, "w": 60, "h": 15, "label": "OLED Display", "style": "fill:#111; stroke:#333;"},
     {"type": "rect", "x": 40, "y": 165, "w": 20, "h": 12, "label": "USB-C", "style": "fill:#444;"}
   ],

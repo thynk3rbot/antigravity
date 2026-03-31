@@ -1,8 +1,8 @@
 @echo off
-TITLE LoRaLink Master Control
+TITLE Magic Master Control
 color 0D
 echo =======================================================
-echo          LoRaLink All Services Starter
+echo          Magic All Services Starter
 echo =======================================================
 echo.
 
@@ -18,23 +18,23 @@ if %errorlevel% neq 0 (
         timeout /t 2 /nobreak >nul
         goto waitLoop
     )
-    echo [3/3] Docker is READY. Proceeding with Loralink services...
+    echo [3/3] Docker is READY. Proceeding with Magic services...
     echo.
 )
 echo Launching MQTT Broker (EMQX Docker - Ports 1883 / 8083)...
-start "LoRaLink MQTT Broker" cmd /c "%~dp0Start_MQTT_Server.bat"
+start "Magic MQTT Broker" cmd /c "%~dp0Start_MQTT_Server.bat"
 echo.
 echo Launching RAG Router (Port 8200)...
-start "LoRaLink RAG Router" cmd /c "%~dp0Start_RAG_Router.bat"
+start "Magic RAG Router" cmd /c "%~dp0Start_RAG_Router.bat"
 echo.
 echo Launching Documentation Server (Port 8001)...
-start "LoRaLink Docs Server" cmd /c "%~dp0Start_Docs_Server.bat"
+start "Magic Docs Server" cmd /c "%~dp0Start_Docs_Server.bat"
 echo.
 echo Launching Fleet Administrator (Port 8000)...
-start "LoRaLink Fleet Admin" cmd /c "%~dp0Start_Fleet_Admin.bat"
+start "Magic Fleet Admin" cmd /c "%~dp0Start_Fleet_Admin.bat"
 echo.
 echo Launching Corporate Website (Port 8010)...
-start "LoRaLink Website" cmd /c "%~dp0Start_Website.bat"
+start "Magic Website" cmd /c "%~dp0Start_Website.bat"
 echo.
 echo Launching Local AI Workstation (Port 3000)...
 start "AI Workstation" cmd /c "%~dp0Start_AI_Workstation.bat"

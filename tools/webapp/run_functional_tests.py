@@ -5,7 +5,7 @@ import sys
 BASE_URL = "http://localhost:8000"
 
 async def test_webapp_functional():
-    print(f"🚀 Starting LoRaLink Webapp Functional Tests on {BASE_URL}...")
+    print(f"🚀 Starting Magic Webapp Functional Tests on {BASE_URL}...")
     
     success_all = True
     async with httpx.AsyncClient(timeout=10.0) as client:
@@ -13,7 +13,7 @@ async def test_webapp_functional():
         try:
             resp = await client.get(BASE_URL)
             assert resp.status_code == 200
-            assert "LoRaLink" in resp.text
+            assert "Magic" in resp.text
             print("✅ Root Page: OK")
         except Exception as e:
             print(f"❌ Root Page Failed: {e}")

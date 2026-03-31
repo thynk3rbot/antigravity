@@ -29,7 +29,7 @@ async def discovery_and_reboot():
             
             # Check mDNS for Peer1
             for dev in snapshot.get('mdns', []):
-                if "Peer1" in dev['name'] or "loralink" in dev['name'].lower():
+                if "Peer1" in dev['name'] or "magic" in dev['name'].lower():
                     print(f"    [+] Registering WiFi Peer: {dev['name']} @ {dev['ip']}")
                     await client.post(f"{BASE_URL}/api/discovery/register", json={
                         "name": dev['name'], "type": "wifi", "address": dev['ip']

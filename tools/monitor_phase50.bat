@@ -47,9 +47,9 @@ echo.
 call ollama_queue.bat check
 echo.
 echo === QUEUE FILE STATUS ===
-if exist "%APPDATA%\LoRaLink\ollama_queue.txt" (
+if exist "%APPDATA%\Magic\ollama_queue.txt" (
     echo Queue exists, tasks:
-    findstr "TASK_ID=" "%APPDATA%\LoRaLink\ollama_queue.txt" | wc -l
+    findstr "TASK_ID=" "%APPDATA%\Magic\ollama_queue.txt" | wc -l
 ) else (
     echo No queue file yet
 )
@@ -114,16 +114,16 @@ call ollama_queue.bat check
 
 echo.
 echo === QUEUE FILE ===
-if exist "%APPDATA%\LoRaLink\ollama_queue.txt" (
-    type "%APPDATA%\LoRaLink\ollama_queue.txt"
+if exist "%APPDATA%\Magic\ollama_queue.txt" (
+    type "%APPDATA%\Magic\ollama_queue.txt"
 ) else (
     echo No queue file yet
 )
 
 echo.
 echo === RESULTS STATUS ===
-if exist "%APPDATA%\LoRaLink\ollama_results" (
-    dir /b "%APPDATA%\LoRaLink\ollama_results"
+if exist "%APPDATA%\Magic\ollama_results" (
+    dir /b "%APPDATA%\Magic\ollama_results"
 ) else (
     echo No results directory yet
 )

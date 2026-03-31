@@ -109,7 +109,7 @@ class AssistantTray:
         )
 
         self.icon = pystray.Icon(
-            "loralink-assistant",
+            "magic-assistant",
             _make_icon_image(False, False),
             f"{self.app_name} — starting...",
             menu

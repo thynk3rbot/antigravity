@@ -2,7 +2,7 @@ import socket
 import time
 from zeroconf import ServiceBrowser, Zeroconf
 
-class LoRaLinkDiscovery:
+class MagicDiscovery:
     def __init__(self):
         self.devices = []
 
@@ -29,9 +29,9 @@ class LoRaLinkDiscovery:
 
 if __name__ == "__main__":
     zeroconf = Zeroconf()
-    discovery = LoRaLinkDiscovery()
+    discovery = MagicDiscovery()
     browser = ServiceBrowser(zeroconf, "_http._tcp.local.", discovery)
-    print("Scanning for LoRaLink devices (5s)...")
+    print("Scanning for Magic devices (5s)...")
     time.sleep(5)
     zeroconf.close()
     

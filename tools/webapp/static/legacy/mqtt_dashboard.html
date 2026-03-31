@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>LoRaLink Swarm Dashboard</title>
+    <title>Magic Swarm Dashboard</title>
     <link
       href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=JetBrains+Mono&display=swap"
       rel="stylesheet"
@@ -449,7 +449,7 @@
       <div class="logo">
         <span class="dbg-id">MQ-LOGO</span>
         <i class="fas fa-tower-broadcast"></i>
-        <span>LoRaLink</span>
+        <span>Magic</span>
       </div>
 
       <nav class="nav-links">
@@ -551,9 +551,9 @@
             `Broker: ${MQTT_CONFIG.host}`;
 
           // Subscribe to all topics for monitoring
-          client.subscribe("loralink/telemetry/#");
-          client.subscribe("loralink/msg/#");
-          client.subscribe("loralink/status/#");
+          client.subscribe("magic/telemetry/#");
+          client.subscribe("magic/msg/#");
+          client.subscribe("magic/status/#");
 
           addLog("System", "Connected to EMQX Broker", "cmd");
         });
@@ -673,7 +673,7 @@
           showToast("Not connected to broker", "danger");
           return;
         }
-        const topic = `loralink/cmd/${id}`;
+        const topic = `magic/cmd/${id}`;
         client.publish(topic, cmd);
         addLog("System", `Sent ${cmd} to ${id}`, "cmd");
         showToast(`Sent ${cmd} to ${id}`, "cmd");
@@ -686,7 +686,7 @@
         }
         const cmd = document.getElementById("global-cmd").value;
         if (!cmd) return;
-        client.publish("loralink/cmd/all", cmd);
+        client.publish("magic/cmd/all", cmd);
         addLog("System", `BROADCAST: ${cmd}`, "cmd");
         showToast(`Broadcast: ${cmd}`, "cmd");
         document.getElementById("global-cmd").value = "";

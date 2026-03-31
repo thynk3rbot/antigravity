@@ -1,6 +1,6 @@
 # RAG Router -- Universal IoT-to-RAG Routing Microservice
 
-**Bridge LoRaLink MQTT telemetry to Dify knowledge bases with domain-aware routing.**
+**Bridge Magic MQTT telemetry to Dify knowledge bases with domain-aware routing.**
 
 Pipeline: MQTT Ingest → Domain Classification → Completeness Guard → Dify RAG → Response
 
@@ -38,7 +38,7 @@ Open http://localhost:8200 in your browser. You'll see:
 3. Create a new **Knowledge Base** for each domain:
    - **Nutrient KB**: Upload hydroponic protocol PDFs (Bugbee, USU docs)
    - **Botanical KB**: Upload crop growth guides, VPD references
-   - **Hardware KB**: Upload LoRaLink firmware manual, schematic PDFs
+   - **Hardware KB**: Upload Magic firmware manual, schematic PDFs
 4. Copy each knowledge base ID to `.env`:
    ```env
    KNOWLEDGE_ID_NUTRIENT=dataset-xxxx-yyyy-zzzz
@@ -62,11 +62,11 @@ curl -X POST http://localhost:8200/api/ingest-and-query \
 Open the query console at http://localhost:8200 and click "pH+EC OK" under "Test Data Injection". The RAG response will appear in real-time.
 
 **Via MQTT** (production):
-Publish sensor readings to `loralink/<nodeId>/sensor/<key>`:
+Publish sensor readings to `magic/<nodeId>/sensor/<key>`:
 ```bash
-mosquitto_pub -h localhost -t "loralink/PH-01/sensor/ph" -m "6.1"
-mosquitto_pub -h localhost -t "loralink/PH-01/sensor/ec" -m "1.8"
-mosquitto_pub -h localhost -t "loralink/PH-01/sensor/temp" -m "22.5"
+mosquitto_pub -h localhost -t "magic/PH-01/sensor/ph" -m "6.1"
+mosquitto_pub -h localhost -t "magic/PH-01/sensor/ec" -m "1.8"
+mosquitto_pub -h localhost -t "magic/PH-01/sensor/temp" -m "22.5"
 
 # Then query the node
 curl -X POST http://localhost:8200/api/query \
@@ -142,7 +142,7 @@ Each domain has a hardcoded system prompt that's prepended to the Dify query:
 
 - **NUTRIENT**: "You are a hydroponic nutrient analyst trained on the Bruce Bugbee/USU protocols..."
 - **BOTANICAL**: "You are an environmental botanist. Analyze temperature, humidity, and light readings..."
-- **HARDWARE**: "You are a LoRaLink hardware diagnostics specialist..."
+- **HARDWARE**: "You are a Magic hardware diagnostics specialist..."
 
 Custom domains can override these via `POST /api/products/register`.
 
@@ -325,22 +325,22 @@ curl -X POST http://localhost:8200/api/ingest-and-query \
 
 ---
 
-## Integration with LoRaLink Firmware
+## Integration with Magic Firmware
 
 The RAG Router listens on two MQTT patterns:
 
-1. **Per-sensor**: `loralink/<nodeId>/sensor/<key> = <value>`
-   - Emitted by LoRaLink firmware for each sensor reading
+1. **Per-sensor**: `magic/<nodeId>/sensor/<key> = <value>`
+   - Emitted by Magic firmware for each sensor reading
    - Aggregated in-memory per node
 
-2. **Telemetry bundle**: `loralink/telemetry/<nodeId> = {key:value, ...}`
+2. **Telemetry bundle**: `magic/telemetry/<nodeId> = {key:value, ...}`
    - Optional: batch updates in one message
 
-**Firmware Side** (already implemented in LoRaLink):
+**Firmware Side** (already implemented in Magic):
 ```cpp
 // When a sensor reading arrives:
 MQTTManager::getInstance().publish(
-  "loralink/" + nodeId + "/sensor/ph",
+  "magic/" + nodeId + "/sensor/ph",
   phReading
 );
 ```
@@ -388,7 +388,7 @@ A: No, every query hits Dify. For caching, add Redis middleware to `server.py` (
 
 ## License & Attribution
 
-LoRaLink + RAG Router — Part of the [thynk3rbot/nutricalc](https://github.com/thynk3rbot/nutricalc) unified repository.
+Magic + RAG Router — Part of the [thynk3rbot/nutricalc](https://github.com/thynk3rbot/nutricalc) unified repository.
 
 Dify integration uses the [Dify](https://dify.ai) open-source platform.
 
@@ -401,11 +401,11 @@ Vector store: [Weaviate](https://weaviate.io) (or your choice)
 ## Next Steps
 
 1. **Upload Knowledge Bases**: Use Dify UI to ingest your hydroponic, botanical, and hardware PDFs
-2. **Test Integration**: Send MQTT data from your LoRaLink device or use test presets
+2. **Test Integration**: Send MQTT data from your Magic device or use test presets
 3. **Customize Expert Prompts**: Fine-tune domain prompts in `server.py` if needed
 4. **Monitor Production**: Set up alerts on query failures, slow responses
 
 ---
 
 **Last Updated**: 2026-03-10
-**Maintained By**: Claude (LoRaLink RAG Integration)
+**Maintained By**: Claude (Magic RAG Integration)

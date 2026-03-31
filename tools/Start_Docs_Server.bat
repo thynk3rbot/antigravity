@@ -1,8 +1,8 @@
 @echo off
-TITLE LoRaLink Documentation Server
+TITLE Magic Documentation Server
 color 0B
 echo =======================================================
-echo          LoRaLink Documentation Server Setup
+echo          Magic Documentation Server Setup
 echo =======================================================
 echo.
 echo Starting local web server for documentation on port 8001...

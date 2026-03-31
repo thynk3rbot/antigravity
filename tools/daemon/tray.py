@@ -1,5 +1,5 @@
 """
-tray.py — LoRaLink Daemon System Tray Icon
+tray.py — Magic Daemon System Tray Icon
 
 Runs in the background on Windows. Shows daemon + webapp health.
 Left-click  → Open Fleet Admin in browser
@@ -42,7 +42,7 @@ COLOR_BLACK  = (0, 0, 0)
 # Paths to look for the brand icon
 _HERE = Path(__file__).parent
 ICON_PATHS = [
-    _HERE.parent / "webapp" / "static" / "media" / "loralink_icon.png",
+    _HERE.parent / "webapp" / "static" / "media" / "magic_icon.png",
     _HERE.parent / "webapp" / "static" / "media" / "logo.png",
 ]
 
@@ -114,7 +114,7 @@ class DaemonTray:
     def _title(self) -> str:
         d = "Daemon ✓" if self._daemon_ok else "Daemon ✗"
         w = "UI ✓" if self._webapp_ok else "UI ✗"
-        return f"LoRaLink Fleet — {d}  {w}"
+        return f"Magic Fleet — {d}  {w}"
 
     def _open_ui(self, icon=None, item=None):
         webbrowser.open(WEBAPP_URL)
@@ -166,9 +166,9 @@ class DaemonTray:
         )
 
         self._icon = pystray.Icon(
-            name="loralink-daemon",
+            name="magic-daemon",
             icon=initial_icon,
-            title="LoRaLink Fleet — starting...",
+            title="Magic Fleet — starting...",
             menu=menu,
         )
 

@@ -2,7 +2,7 @@
 TITLE Local AI Workstation
 color 0A
 echo =======================================================
-echo          LoRaLink Local AI Workstation Initializer
+echo          Magic Local AI Workstation Initializer
 echo =======================================================
 echo.
 echo Launching workstation setup...

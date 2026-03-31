@@ -12,7 +12,7 @@ def run_cmd(cmd):
     return True, result.stdout
 
 def sync():
-    print(f"\n--- LoRaLink Daily Sync [{datetime.now().strftime('%Y-%m-%d %H:%M')}] ---")
+    print(f"\n--- Magic Daily Sync [{datetime.now().strftime('%Y-%m-%d %H:%M')}] ---")
     
     # 1. Update Repository (DEACTIVATED FOR MANUAL CONTROL)
     print("Checking for remote updates... [SKIPPED]")

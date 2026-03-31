@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-simulator.py — LoRaLink Digital Twin / Local Process Simulator Bridge
+simulator.py — Magic Digital Twin / Local Process Simulator Bridge
 Connects the webapp to the native C++ firmware runner.
 """
 

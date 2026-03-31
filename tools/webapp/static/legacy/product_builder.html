@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>LoRaLink — Product Builder</title>
+<title>Magic — Product Builder</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
@@ -194,7 +194,7 @@
 
 <header class="hdr" data-debug-id="PB-HDR">
   <div class="hdr-title" data-debug-id="PB-HDR-TITLE">
-    LoRaLink <span>/ Product Builder</span>
+    Magic <span>/ Product Builder</span>
   </div>
   <span class="badge" id="pb-save-badge" data-debug-id="PB-HDR-BADGE">unsaved</span>
   <nav class="hdr-nav" data-debug-id="PB-HDR-NAV">
@@ -289,7 +289,7 @@
         <div class="form-grid cols-2">
           <div class="field">
             <label data-debug-id="PB-CFG-DEVNAME-LBL">Device Name</label>
-            <input type="text" id="pb-devname" placeholder="LORALINK-PROD"
+            <input type="text" id="pb-devname" placeholder="MAGIC-PROD"
                    data-debug-id="PB-CFG-DEVNAME" oninput="markDirty()">
             <span class="input-hint">Max 15 chars, no spaces</span>
           </div>
@@ -300,7 +300,7 @@
           </div>
           <div class="field">
             <label data-debug-id="PB-CFG-SSID-LBL">WiFi SSID</label>
-            <input type="text" id="pb-wifi-ssid" placeholder="loralink-mesh"
+            <input type="text" id="pb-wifi-ssid" placeholder="magic-mesh"
                    data-debug-id="PB-CFG-SSID" oninput="markDirty()">
           </div>
           <div class="field">
@@ -735,7 +735,7 @@ function productSlug() {
 
 function collectManifest(cfgFile, schedFile) {
   return {
-    _schema: 'loralink-product-v1',
+    _schema: 'magic-product-v1',
     name:    document.getElementById('pb-name').value.trim(),
     hw:      document.getElementById('pb-hw').value,
     version: document.getElementById('pb-version').value.trim() || '1.0',

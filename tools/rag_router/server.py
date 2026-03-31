@@ -63,7 +63,7 @@ EXPERT_PROFILES = {
         "temperature and humidity are both available."
     ),
     "HARDWARE": (
-        "You are a LoRaLink hardware diagnostics specialist. Analyze relay states, flow rates, "
+        "You are a Magic hardware diagnostics specialist. Analyze relay states, flow rates, "
         "and device telemetry. Flag any readings outside normal operating parameters."
     ),
 }
@@ -263,8 +263,8 @@ mqtt_client_ref = None
 def on_mqtt_connect(client, userdata, flags, rc, properties=None):
     if rc == 0:
         log.info("MQTT connected -- subscribing to sensor topics")
-        client.subscribe("loralink/+/sensor/+", qos=1)
-        client.subscribe("loralink/telemetry/+", qos=1)
+        client.subscribe("magic/+/sensor/+", qos=1)
+        client.subscribe("magic/telemetry/+", qos=1)
     else:
         log.error(f"MQTT connection failed: rc={rc}")
 

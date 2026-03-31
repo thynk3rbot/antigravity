@@ -1,8 +1,8 @@
 @echo off
-TITLE LoRaLink Firmware Flasher
+TITLE Magic Firmware Flasher
 color 0E
 echo =======================================================
-echo          LoRaLink Firmware Builder & Flasher
+echo          Magic Firmware Builder & Flasher
 echo =======================================================
 echo.
 echo This script will build the current firmware structure and upload it to

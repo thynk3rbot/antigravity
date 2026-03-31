@@ -21,7 +21,7 @@ def send_cmd(cmd):
         return False
 
 def main():
-    print(f"Connecting to LoRaLink Webapp at {BASE_URL}...")
+    print(f"Connecting to Magic Webapp at {BASE_URL}...")
 
     # 1. Check if server is up
     try:

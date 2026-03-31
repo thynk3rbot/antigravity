@@ -21,8 +21,8 @@ def create_api_app(message_queue: MessageQueue, transport_manager: TransportMana
         Configured FastAPI application instance
     """
     app = FastAPI(
-        title="LoRaLink Daemon API",
-        description="PC Daemon transport hub for LoRaLink ESP32 swarm",
+        title="Magic Daemon API",
+        description="PC Daemon transport hub for Magic ESP32 swarm",
         version="0.1.0"
     )
 

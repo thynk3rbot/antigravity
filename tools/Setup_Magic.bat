@@ -1,7 +1,7 @@
 @echo off
 TITLE Magic Bridge Setup
 echo =======================================================
-echo          LoRaLink Magic Bridge Setup
+echo          Magic Magic Bridge Setup
 echo =======================================================
 echo.
 echo Installing Python dependencies for Magic...

@@ -102,12 +102,12 @@ See `config.example.json` for the full schema. Key sections:
 
 ## Examples
 
-See `examples/loralink/config.json` for a real-world configuration used in ESP32 firmware development with Claude + Ollama + Antigravity IDE.
+See `examples/magic/config.json` for a real-world configuration used in ESP32 firmware development with Claude + Ollama + Antigravity IDE.
 
 ### Known Orion Instances
 
 | Instance | Domain | Location |
 |----------|--------|----------|
-| LoRaLink | ESP32 mesh firmware | This repo (`examples/loralink/`) |
+| Magic | ESP32 mesh firmware | This repo (`examples/magic/`) |
 | Orion's Garden | Gardening knowledge base | `C:\Users\spw1\Documents\Garden\` |
-| LoRaLink Assistant | Multi-domain AI chat | `tools/assistant/` (planned) |
+| Magic Assistant | Multi-domain AI chat | `tools/assistant/` (planned) |

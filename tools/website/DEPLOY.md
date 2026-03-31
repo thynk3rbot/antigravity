@@ -1,4 +1,4 @@
-# LoRaLink Website — VPS Deployment Guide
+# Magic Website — VPS Deployment Guide
 
 ## Prerequisites
 
@@ -37,7 +37,7 @@ Add device credentials via EMQX dashboard: Authentication → Add user.
 ## 3. Python dependencies
 
 ```bash
-cd /opt/loralink-website   # or wherever you deploy the repo
+cd /opt/magic-website   # or wherever you deploy the repo
 pip install -r tools/website/requirements.txt
 ```
 
@@ -46,11 +46,11 @@ pip install -r tools/website/requirements.txt
 ## 4. Nginx config
 
 ```bash
-sudo cp tools/website/nginx/loralink.conf /etc/nginx/sites-available/loralink
+sudo cp tools/website/nginx/magic.conf /etc/nginx/sites-available/magic
 # Edit the file — replace YOUR_DOMAIN with your domain
-sudo nano /etc/nginx/sites-available/loralink
+sudo nano /etc/nginx/sites-available/magic
 
-sudo ln -s /etc/nginx/sites-available/loralink /etc/nginx/sites-enabled/
+sudo ln -s /etc/nginx/sites-available/magic /etc/nginx/sites-enabled/
 sudo nginx -t && sudo systemctl reload nginx
 ```
 
@@ -79,16 +79,16 @@ uvicorn server:app --host 0.0.0.0 --port 8001
 
 ## 7. Systemd service (recommended)
 
-Create `/etc/systemd/system/loralink-web.service`:
+Create `/etc/systemd/system/magic-web.service`:
 
 ```ini
 [Unit]
-Description=LoRaLink Corporate Website
+Description=Magic Corporate Website
 After=network.target
 
 [Service]
 User=www-data
-WorkingDirectory=/opt/loralink-website/tools/website
+WorkingDirectory=/opt/magic-website/tools/website
 Environment="MQTT_BROKER_URL=wss://YOUR_DOMAIN/mqtt"
 ExecStart=/usr/local/bin/uvicorn server:app --host 0.0.0.0 --port 8001
 Restart=always
@@ -99,8 +99,8 @@ WantedBy=multi-user.target
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable loralink-web
-sudo systemctl start loralink-web
+sudo systemctl enable magic-web
+sudo systemctl start magic-web
 ```
 
 ---

@@ -1,7 +1,7 @@
 #include <Arduino.h>
 
 // =============================================================================
-//  LoRaLink Xiao Satellite — Serial Sensor Bridge
+//  Magic Xiao Satellite — Serial Sensor Bridge
 //  Target: Seeeduino XIAO SAMD21 (or any Arduino-compatible)
 //  Connects to Heltec LoRa V3 via UART at 115200 baud
 //  (c) 2026 Steven P Williams (spw1.com)

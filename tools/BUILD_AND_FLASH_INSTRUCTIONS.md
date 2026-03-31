@@ -107,7 +107,7 @@ python daemon/src/main.py --monitor
 tools/phase50_operations.bat queue
 
 # 5. View metrics in webapp
-python tools/webapp/server.py --device loralink-master
+python tools/webapp/server.py --device magic-master
 # Open http://localhost:8000 → 🔗 Hybrid Proxy tab
 ```
 
@@ -130,10 +130,10 @@ python tools/webapp/server.py --device loralink-master
 
 ```bash
 # Quick status check
-curl http://loralink-master.local/api/status
+curl http://magic-master.local/api/status
 
 # Check mesh topology
-mqtt_sub loralink/topology
+mqtt_sub magic/topology
 
 # Verify proxy integration
 http://localhost:8000/api/proxy/status

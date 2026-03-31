@@ -8,11 +8,11 @@ REM 4. Workflow for shipping product
 
 setlocal enabledelayedexpansion
 
-set "QUEUE_FILE=%APPDATA%\LoRaLink\ollama_queue.txt"
-set "RESULTS_DIR=%APPDATA%\LoRaLink\ollama_results"
+set "QUEUE_FILE=%APPDATA%\Magic\ollama_queue.txt"
+set "RESULTS_DIR=%APPDATA%\Magic\ollama_results"
 set "MODEL=qwen2.5-coder:14b"
 
-if not exist "%APPDATA%\LoRaLink" mkdir "%APPDATA%\LoRaLink"
+if not exist "%APPDATA%\Magic" mkdir "%APPDATA%\Magic"
 if not exist "%RESULTS_DIR%" mkdir "%RESULTS_DIR%"
 
 echo ================================================================
@@ -24,7 +24,7 @@ echo MODEL: %MODEL%
 echo.
 
 REM The actual task (substantial, worth async processing)
-set "TASK_PROMPT=You are a firmware architect. Generate a COMPLETE Phase 50 implementation guide for LoRaLink Autonomous Mesh Sovereignty. Include: 1) Device firmware requirements (MQTT contract, command types, error handling). 2) Daemon API specification (REST endpoints for mesh control, provisioning, routing). 3) Code skeleton for device mesh command handler. 4) Code skeleton for daemon mesh router. 5) Integration checklist. Keep response detailed and actionable (aim for 2000+ tokens)."
+set "TASK_PROMPT=You are a firmware architect. Generate a COMPLETE Phase 50 implementation guide for Magic Autonomous Mesh Sovereignty. Include: 1) Device firmware requirements (MQTT contract, command types, error handling). 2) Daemon API specification (REST endpoints for mesh control, provisioning, routing). 3) Code skeleton for device mesh command handler. 4) Code skeleton for daemon mesh router. 5) Integration checklist. Keep response detailed and actionable (aim for 2000+ tokens)."
 
 echo Queueing task...
 echo TASK_ID=phase50_guide_%random%_%date:~-2%%time:~0,2%%time:~3,2% >> "%QUEUE_FILE%"

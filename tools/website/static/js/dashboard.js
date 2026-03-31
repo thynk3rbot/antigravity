@@ -1,9 +1,9 @@
-// dashboard.js — LoRaLink MQTT Dashboard
+// dashboard.js — Magic MQTT Dashboard
 // All untrusted data (client IDs, message payloads) is handled via
 // textContent / createElement to prevent XSS from malicious broker clients.
 
 const BROKER_URL = window.MQTT_BROKER_URL || 'ws://localhost:8083/mqtt';
-const TOPIC_PREFIX = 'loralink';
+const TOPIC_PREFIX = 'magic';
 const clients = {};
 
 // Returns the text content of a div built with textContent — no HTML injection possible.

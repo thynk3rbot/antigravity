@@ -2,7 +2,7 @@
 REM Phase 50.2 Master Ollama Task — Full Context Generation
 REM
 REM This queues a SINGLE comprehensive task to Ollama that includes:
-REM - Full project context (LoRaLink mesh architecture)
+REM - Full project context (Magic mesh architecture)
 REM - Complete Phase 50.2 specification (MAC-primary design)
 REM - All implementation requirements (daemon, firmware, tests)
 REM - Code integration guidance
@@ -22,7 +22,7 @@ echo ============================================
 echo.
 
 call ollama_queue.bat queue "%MODEL%" ^
-"You are a senior firmware and backend engineer implementing Phase 50.2 (MAC-Primary Architecture) for the LoRaLink mesh networking system. ^
+"You are a senior firmware and backend engineer implementing Phase 50.2 (MAC-Primary Architecture) for the Magic mesh networking system. ^
 ^
 PROJECT CONTEXT: ^
 - Platform: ESP32-S3 LoRa mesh (V2/V3/V4 boards) ^

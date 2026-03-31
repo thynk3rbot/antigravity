@@ -1,6 +1,6 @@
 """
 NutriCalc Server — FastAPI backend.
-Same structural patterns as tools/webapp/server.py (LoRaLink).
+Same structural patterns as tools/webapp/server.py (Magic).
 Run: uvicorn server:app --reload --port 8100
 """
 
@@ -176,7 +176,7 @@ def mqtt_connect():
         mqtt_state.connected = False
 
 
-# ── WebSocket manager (same pattern as LoRaLink) ─────────────────────────────
+# ── WebSocket manager (same pattern as Magic) ─────────────────────────────
 ws_clients: list[WebSocket] = []
 app_loop: asyncio.AbstractEventLoop = None
 

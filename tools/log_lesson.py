@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-log_lesson.py — LoRaLink Persistence Utility
+log_lesson.py — Magic Persistence Utility
 Captures technical lessons learned to prevent regressions.
 Usage: python tools/log_lesson.py "Summary of lesson" "Detailed technical reasoning"
 """

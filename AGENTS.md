@@ -1,4 +1,4 @@
-# AI Agent Behavior & Personality (LoRaLink)
+# AI Agent Behavior & Personality (Magic)
 
 This repository is designed for high-efficiency pair programming between human and AI. Follow these patterns to optimize token usage and accuracy.
 

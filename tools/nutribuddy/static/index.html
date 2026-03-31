@@ -93,7 +93,7 @@
   .btn-sm { padding: 4px 10px; font-size: 12px; }
   .btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
-  /* 3-state button — LoRaLink pattern */
+  /* 3-state button — Magic pattern */
   .state-label { font-size: 11px; margin-left: 4px; opacity: 0.7; }
   .state-pending { background: var(--warn) !important; color: #0f1117 !important; }
   .state-ok      { background: var(--accent) !important; color: #0f1117 !important; }
@@ -284,7 +284,7 @@
   </div>
 
   <nav class="suit-header-nav">
-      <a href="http://localhost:8000" class="suit-link"><i class="fas fa-microchip"></i> LoRaLink</a>
+      <a href="http://localhost:8000" class="suit-link"><i class="fas fa-microchip"></i> Magic</a>
       <a href="/" class="suit-link active"><i class="fas fa-vial"></i> NutriCalc</a>
       <a href="http://localhost:8200" class="suit-link"><i class="fas fa-route"></i> Rag-Router</a>
       <a href="http://localhost:8010" class="suit-link"><i class="fas fa-globe"></i> Viai.club</a>
@@ -1529,7 +1529,7 @@ function getCompoundCost(name) {
   return chemicals?.compounds?.find(c => c.name === name)?.cost_per_kg || 0;
 }
 
-// 3-state publish button (LoRaLink pattern)
+// 3-state publish button (Magic pattern)
 function setPublishState(state) {
   const btn = document.getElementById('publish-btn');
   const lbl = document.getElementById('publish-state');
@@ -1789,7 +1789,7 @@ function setScrapeStatus(running, text = '', done = 0, total = 0) {
   document.getElementById('scrape-progress-count').textContent = total > 0 ? `${done}/${total}` : '';
 }
 
-// ── Log console (LoRaLink pattern) ─────────────────────────────────────────────
+// ── Log console (Magic pattern) ─────────────────────────────────────────────
 function _appendLog(containerId, msg, type) {
   const el = document.getElementById(containerId);
   if (!el) return;

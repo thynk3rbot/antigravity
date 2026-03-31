@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-ble_instrument.py — LoRaLink-AnyToAny BLE Instrumentation Framework
+ble_instrument.py — Magic-AnyToAny BLE Instrumentation Framework
 
 Connects to the Heltec ESP32-S3 via Nordic UART Service (NUS) BLE profile,
 exercises all command groups in rotation, pushes the firmware's dynamic task
@@ -36,7 +36,7 @@ from pathlib import Path
 from typing import Optional
 
 # ── Rotation strategy persistence ───────────────────────────────────────────
-_PREFS_FILE = Path(__file__).parent / ".loralink_prefs.json"
+_PREFS_FILE = Path(__file__).parent / ".magic_prefs.json"
 _ROTATION_STRATEGIES = ["sequential", "weighted", "adaptive", "random", "interleave"]
 
 # ── Optional rich import (degrades gracefully to plain print) ────────────────
@@ -738,7 +738,7 @@ class Orchestrator:
                 layout["header"].update(Panel(
                     f"{conn}  |  Device: [cyan]{self.ble.device_name}[/cyan]  |  "
                     f"Uptime: {uptime:.0f}s  |  Log: {self.config.log_path}",
-                    title="[bold]LoRaLink BLE Instrument[/bold]",
+                    title="[bold]Magic BLE Instrument[/bold]",
                 ))
 
                 t = Table(box=None, show_header=True, header_style="bold cyan")
@@ -891,7 +891,7 @@ async def _main(config: Config) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="LoRaLink-AnyToAny BLE Instrumentation Framework",
+        description="Magic-AnyToAny BLE Instrumentation Framework",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )
@@ -936,7 +936,7 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    console.print("[bold cyan]LoRaLink BLE Instrumentation Framework[/bold cyan]")
+    console.print("[bold cyan]Magic BLE Instrumentation Framework[/bold cyan]")
     console.print(f"  Device prefix : {args.device}")
     console.print(f"  HTTP polling  : {args.ip or 'disabled'}")
     console.print(f"  Rotate every  : {args.interval}s")

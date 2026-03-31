@@ -1,12 +1,12 @@
 @echo off
-TITLE LoRaLink Startup Registration
+TITLE Magic Startup Registration
 color 0B
 
 echo =======================================================
-echo          LoRaLink Startup Registration
+echo          Magic Startup Registration
 echo =======================================================
 echo.
-echo This script will register LoRaLink to start automatically
+echo This script will register Magic to start automatically
 echo whenever you log into this computer.
 echo.
 
@@ -20,13 +20,13 @@ if not exist "%TARGET_PATH%" (
     exit /b 1
 )
 
-echo Registering task "LoRaLink_AutoStart"...
-schtasks /create /tn "LoRaLink_AutoStart" /tr "\"%TARGET_PATH%\"" /sc onlogon /rl highest /f
+echo Registering task "Magic_AutoStart"...
+schtasks /create /tn "Magic_AutoStart" /tr "\"%TARGET_PATH%\"" /sc onlogon /rl highest /f
 
 if %errorlevel% equ 0 (
     echo.
     echo =======================================================
-    echo [SUCCESS] LoRaLink is now set to start on login!
+    echo [SUCCESS] Magic is now set to start on login!
     echo =======================================================
     echo.
 ) else (

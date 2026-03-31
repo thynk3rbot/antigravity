@@ -9,10 +9,10 @@ REM   ollama_queue.bat "process"
 
 setlocal enabledelayedexpansion
 
-set "QUEUE_FILE=%APPDATA%\LoRaLink\ollama_queue.txt"
-set "RESULTS_DIR=%APPDATA%\LoRaLink\ollama_results"
+set "QUEUE_FILE=%APPDATA%\Magic\ollama_queue.txt"
+set "RESULTS_DIR=%APPDATA%\Magic\ollama_results"
 
-if not exist "%APPDATA%\LoRaLink" mkdir "%APPDATA%\LoRaLink"
+if not exist "%APPDATA%\Magic" mkdir "%APPDATA%\Magic"
 if not exist "%RESULTS_DIR%" mkdir "%RESULTS_DIR%"
 
 if "%~1"=="queue" (

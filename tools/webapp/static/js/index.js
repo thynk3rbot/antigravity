@@ -1,5 +1,5 @@
 /**
- * LoRaLink Workspace Engine v2.0
+ * Magic Workspace Engine v2.0
  * Unified logic for Cockpit, Mesh, Scheduler, and Files.
  */
 
@@ -51,7 +51,7 @@ function switchModule(module) {
         spectrum: "RF Spectrum Analysis",
         prototype: "Prototype Hub & Simulation"
     };
-    document.getElementById('view-title').textContent = titles[module] || "LoRaLink";
+    document.getElementById('view-title').textContent = titles[module] || "Magic";
 
     if (module === 'mesh') loadDiscovery();
     if (module === 'mesh' && !_mqttClient) initMqtt();

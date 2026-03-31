@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>LoRaLink Suite — Fleet Control</title>
+    <title>Magic Suite — Fleet Control</title>
     <link rel="stylesheet" href="/static/css/shared.css" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/winbox@0.2.82/dist/css/winbox.min.css" />
     <style>
@@ -1164,8 +1164,8 @@
     <!-- ── Header ────────────────────────────────────────────────────────────── -->
     <div class="hdr">
       <h1>
-        <img src="/static/media/logo.png" alt="LoRaLink Suite" class="logo-img" />
-        LoRaLink Suite
+        <img src="/static/media/logo.png" alt="Magic Suite" class="logo-img" />
+        Magic Suite
         <span id="fwv" class="text-dim text-xs"></span>
       </h1>
       <div class="hdr-right">
@@ -2028,7 +2028,7 @@
             <div id="pin-header-j3" class="header-col"></div>
             <div class="board-visual">
               <div class="oled-placeholder">0.96" OLED</div>
-              <div class="board-logo">LoRaLink<br />V3 Gateway</div>
+              <div class="board-logo">Magic<br />V3 Gateway</div>
             </div>
             <div id="pin-header-j2" class="header-col"></div>
           </div>
@@ -4594,7 +4594,7 @@
         const pa = document.getElementById("ble-prefix-a");
         const pb = document.getElementById("ble-prefix-b");
         const body = {
-          ble_prefix_a: (pa ? pa.value.trim() : "LoRaLink") || "LoRaLink",
+          ble_prefix_a: (pa ? pa.value.trim() : "Magic") || "Magic",
           ble_prefix_b: pb ? pb.value.trim() : "",
         };
         try {
@@ -5432,7 +5432,7 @@
       function newProduct() {
         selectProduct(
           {
-            _schema: "loralink-product-v1",
+            _schema: "magic-product-v1",
             name: "",
             hw: "Heltec V3",
             config_file: "",
@@ -5458,7 +5458,7 @@
           return;
         }
         const p = {
-          _schema: "loralink-product-v1",
+          _schema: "magic-product-v1",
           name,
           hw: document.getElementById("prod-hw")?.value.trim() || "",
           config_file: document.getElementById("prod-cfg")?.value.trim() || "",
@@ -6964,7 +6964,7 @@
 
       // ── RSSI Sparklines ──────────────────────────────────────────────
       const RSSI_HISTORY_LEN = 10;
-      const RSSI_SS_KEY = "loralink_rssi_history";
+      const RSSI_SS_KEY = "magic_rssi_history";
       // Restore ring buffers from sessionStorage so sparklines survive page refresh
       let _rssiHistory = (() => {
         try {
@@ -7004,7 +7004,7 @@
 
       // ── Performance Monitor ──────────────────────────────────────────────────
       const PERF_HISTORY_LEN       = 120;   // ~2 minutes at 1 sample/sec
-      const PERF_SS_KEY            = "loralink_perf_history";
+      const PERF_SS_KEY            = "magic_perf_history";
       const PERF_ALERT_COOLDOWN_MS = 60000; // min gap between repeated alerts per metric
       const PERF_SAMPLE_DIVISOR    = 4;     // decimate 4 Hz WS feed to ~1 sample/sec
 
@@ -8161,9 +8161,9 @@
           const lbl = document.getElementById('mqtt-broker-label');
           if (dot) { dot.style.background='var(--ok)'; dot.style.boxShadow='0 0 6px var(--ok)'; }
           if (lbl) lbl.textContent = `Broker: ${host}:8083`;
-          _mqttClient.subscribe('loralink/telemetry/#');
-          _mqttClient.subscribe('loralink/msg/#');
-          _mqttClient.subscribe('loralink/status/#');
+          _mqttClient.subscribe('magic/telemetry/#');
+          _mqttClient.subscribe('magic/msg/#');
+          _mqttClient.subscribe('magic/status/#');
           mqttLog('System', 'Connected to EMQX broker', 'ok');
         });
         _mqttClient.on('error', (e) => {
@@ -8231,7 +8231,7 @@
       function mqttSendCmd(id, cmd) {
         if (window.ACCESS_LEVEL === 'readonly') return;
         if (!_mqttClient) { showNotif('Not connected to MQTT broker', 'err'); return; }
-        _mqttClient.publish(`loralink/cmd/${id}`, cmd);
+        _mqttClient.publish(`magic/cmd/${id}`, cmd);
         mqttLog('System', `Sent ${cmd} → ${id}`, 'cmd');
       }
 
@@ -8240,7 +8240,7 @@
         const cmd = prompt('Broadcast command to all MQTT nodes:');
         if (!cmd) return;
         if (!_mqttClient) { showNotif('Not connected to MQTT broker', 'err'); return; }
-        _mqttClient.publish('loralink/cmd/all', cmd);
+        _mqttClient.publish('magic/cmd/all', cmd);
         mqttLog('System', `BROADCAST: ${cmd}`, 'cmd');
       }
 
@@ -8505,7 +8505,7 @@
     </script>
 
     <footer class="global-footer">
-      <div>LoRaLink Configurator <span class="footer-ver">v1.5.0-2026.03.03.23</span></div>
+      <div>Magic Configurator <span class="footer-ver">v1.5.0-2026.03.03.23</span></div>
       <div>&copy; 2026 Steven P Williams · <a href="https://spw1.com" target="_blank" rel="noopener">spw1.com</a></div>
       <div class="mt-4 opacity-50">All Rights Reserved</div>
     </footer>

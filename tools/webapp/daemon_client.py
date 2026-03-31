@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 class BaseDeviceClient(ABC):
     """Abstract interface for device communication clients.
 
-    Any client that talks to LoRaLink devices — whether through the PC Daemon,
+    Any client that talks to Magic devices — whether through the PC Daemon,
     directly via HTTP to an ESP32, or via BLE — must implement this interface.
 
     The webapp holds a BaseDeviceClient reference and never needs to know
@@ -46,7 +46,7 @@ class BaseDeviceClient(ABC):
 
 
 class DaemonClient(BaseDeviceClient):
-    """HTTP client for communicating with the LoRaLink PC Daemon.
+    """HTTP client for communicating with the Magic PC Daemon.
 
     The webapp uses this to delegate ALL device communication to the daemon,
     which handles transport selection (HTTP/BLE/Serial/LoRa/MQTT) internally.

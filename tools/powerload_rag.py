@@ -4,7 +4,7 @@ from pathlib import Path
 
 def powerload():
     print("="*60)
-    print(" ANTIGRAVITY POWERLOAD: LORALINK DEVELOPMENT CONTEXT")
+    print(" ANTIGRAVITY POWERLOAD: MAGIC DEVELOPMENT CONTEXT")
     print("="*60)
     
     repo_root = Path(__file__).resolve().parent.parent

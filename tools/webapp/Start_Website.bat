@@ -1,8 +1,8 @@
 @echo off
-TITLE LoRaLink Corporate Website
+TITLE Magic Corporate Website
 color 0E
 echo =======================================================
-echo          LoRaLink Corporate Website
+echo          Magic Corporate Website
 echo =======================================================
 echo.
 echo Starting corporate website on port 8010...

@@ -22,7 +22,7 @@ DEVICES = [
         "name": "Master",
         "id": "3c11206a-2909-47f2-b357-ee0937b6b396",
         "config_file": "heltec_v3_generic.json",
-        "expected_name": "LoRaLink-TestUnit-V3",
+        "expected_name": "Magic-TestUnit-V3",
     },
     {
         "name": "Slave",

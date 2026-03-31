@@ -1,14 +1,14 @@
 {
   "project": {
-    "name": "LoRaLink Assistant",
+    "name": "Magic Assistant",
     "description": "Multi-domain AI chat assistant with local RAG support",
     "version": "0.1.0"
   },
   "branding": {
-    "app_name": "LoRaLink Assistant",
+    "app_name": "Magic Assistant",
     "tagline": "Your Local AI Knowledge Assistant",
-    "copyright": "LoRaLink(tm) Copyright 2026 spw1.com. All Rights Reserved.",
-    "icon_path": "static/media/loralink_icon.png",
+    "copyright": "Magic(tm) Copyright 2026 spw1.com. All Rights Reserved.",
+    "icon_path": "static/media/magic_icon.png",
     "accent_color": "#00b4d8",
     "theme": "dark"
   },

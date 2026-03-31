@@ -1,6 +1,6 @@
-# LoRaLink PC Daemon
+# Magic PC Daemon
 
-Central transport hub for LoRaLink device control.
+Central transport hub for Magic device control.
 
 ## Features
 - Multi-protocol transport (Serial, HTTP, BLE, LoRa, MQTT)

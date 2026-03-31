@@ -536,7 +536,7 @@ Then update URLs accordingly:
 - Context-sensitive help
 - Deployment status display
 
-**Total:** 390 lines of batch code, modeled after LoRaLink
+**Total:** 390 lines of batch code, modeled after Magic
 
 ---
 

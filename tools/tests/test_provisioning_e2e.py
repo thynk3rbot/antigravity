@@ -40,7 +40,7 @@ async def test_provision_basic(api_app):
 
     # Simulate device in registry
     test_device = Node(
-        id="loralink-27",
+        id="magic-27",
         name="Test-Device",
         type="wifi",
         address="172.16.0.100"
@@ -48,7 +48,7 @@ async def test_provision_basic(api_app):
 
     # Mock request
     provision_req = {
-        "device_id": "loralink-27",
+        "device_id": "magic-27",
         "carrier": "bare",
         "product": None,
         "identity": {"name": "Device-27", "role": "node"},
@@ -70,7 +70,7 @@ async def test_provision_basic(api_app):
 
     # Verify provision request parses correctly
     req = ProvisionRequest(**provision_req)
-    assert req.device_id == "loralink-27"
+    assert req.device_id == "magic-27"
     assert req.carrier == "bare"
     assert req.reboot is True
 
@@ -81,7 +81,7 @@ async def test_provision_rv12v_with_feature_override(api_app):
 
     # Simulate disabling GPS on an RV12V board
     provision_req = {
-        "device_id": "loralink-28",
+        "device_id": "magic-28",
         "carrier": "rv12v",
         "product": None,
         "features": {"gps": 0},  # Override GPS off
@@ -158,19 +158,19 @@ def test_provision_response_model():
     """Test ProvisionResponse data model."""
     resp = ProvisionResponse(
         status="ok",
-        device_id="loralink-27",
+        device_id="magic-27",
         reboot_in_ms=2000
     )
 
     resp_dict = resp.to_dict()
     assert resp_dict["status"] == "ok"
-    assert resp_dict["device_id"] == "loralink-27"
+    assert resp_dict["device_id"] == "magic-27"
     assert resp_dict["reboot_in_ms"] == 2000
 
     # Error response
     error_resp = ProvisionResponse(
         status="error",
-        device_id="loralink-28",
+        device_id="magic-28",
         error_msg="Carrier profile not found"
     )
     assert error_resp.status == "error"

@@ -285,7 +285,7 @@ async def websocket_chat(websocket: WebSocket):
 
 @app.get("/api/fleet/census")
 async def fleet_census():
-    """Performs a live mDNS discovery for LoRaLink devices."""
+    """Performs a live mDNS discovery for Magic devices."""
     zc = Zeroconf()
     listener = DiscoveryListener()
     browser = ServiceBrowser(zc, "_http._tcp.local.", listener)

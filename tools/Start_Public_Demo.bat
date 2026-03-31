@@ -1,8 +1,8 @@
 @echo off
-TITLE LoRaLink Public Demo Tunnels
+TITLE Magic Public Demo Tunnels
 color 0E
 echo =======================================================
-echo          LoRaLink Public Demo Tunnel Setup
+echo          Magic Public Demo Tunnel Setup
 echo =======================================================
 echo.
 echo This script will create temporary public URLs for your
@@ -12,7 +12,7 @@ echo.
 
 REM Ensure local services are running first
 echo [1/4] Ensuring local services are running...
-start "LoRaLink Services" cmd /c "%~dp0Start_All_Services.bat"
+start "Magic Services" cmd /c "%~dp0Start_All_Services.bat"
 timeout /t 5 /nobreak > nul
 
 echo.

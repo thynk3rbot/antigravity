@@ -1,5 +1,5 @@
 {
-  "_schema": "loralink-schedule-v1",
+  "_schema": "magic-schedule-v1",
   "_device": "heltec_v3_farm_automation",
   "schedules": [
     {
