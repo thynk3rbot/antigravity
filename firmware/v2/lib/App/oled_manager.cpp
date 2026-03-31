@@ -102,7 +102,7 @@ static void drawFooter(uint8_t pageNum) {
 
 static void displayPage1() {
     display.clearDisplay();
-    drawHeader("Network");
+    drawHeader("Net");
     display.setCursor(0, 14);
     display.printf("%s\n", g_cached.ip);
     display.printf("%u connected\n", g_cached.peerCount);
@@ -113,7 +113,7 @@ static void displayPage1() {
 
 static void displayPage2() {
     display.clearDisplay();
-    drawHeader("Power & LoRa");
+    drawHeader("Radio");
     display.setCursor(0, 14);
     display.printf("%.2f V\n", g_cached.batVoltage);
     display.printf("%d dBm\n", g_cached.loraRSSI);
@@ -124,7 +124,7 @@ static void displayPage2() {
 
 static void displayPage3() {
     display.clearDisplay();
-    drawHeader("Transports");
+    drawHeader("Trans");
     display.setCursor(0, 14);
     display.printf("BLE   %s\n", g_cached.bleActive ? "ON" : "OFF");
     display.printf("MQTT  %s\n", g_cached.mqttActive ? "ON" : "OFF");

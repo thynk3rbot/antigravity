@@ -136,6 +136,13 @@ void ControlLoop::updateOLED() {
 
     oled.setPeerCount(MeshCoordinator::instance().getNeighborCount());
 
+#ifdef HAS_GPS
+    {
+      auto gps = GPSManager::getData();
+      oled.setGPS(gps.lat, gps.lon, gps.satellites, gps.hasFix);
+    }
+#endif
+
     // NOTE: oled.update() now called at 100Hz in main loop for button sensitivity
     lastOLEDUpdate = now;
   }
