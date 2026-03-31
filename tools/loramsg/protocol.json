@@ -1,0 +1,144 @@
+{
+  "_comment": "Magic Messenger — Protocol Configuration v1.0",
+
+  "protocol": {
+    "name": "LMX",
+    "version": "1.0",
+    "description": "Encrypted, transport-agnostic mesh messaging. Text or structured addr/cmd/param format."
+  },
+
+  "addressing": {
+    "short_id_bytes": 1,
+    "broadcast": 255,
+    "format": "0x01..0xFE unicast, 0xFF broadcast",
+    "assignment": "NVS g_ourNodeID — set via SETNAME or provisioning"
+  },
+
+  "packet": {
+    "header_size": 12,
+    "max_payload_bytes": 210,
+    "max_wire_bytes": 250,
+    "sync": [170, 77],
+    "header_fields": {
+      "sync":       { "offset": 0,  "size": 2, "note": "0xAA 0x4D" },
+      "dest":       { "offset": 2,  "size": 1, "note": "destination short ID" },
+      "src":        { "offset": 3,  "size": 1, "note": "originating short ID" },
+      "packet_id":  { "offset": 4,  "size": 4, "note": "monotonic counter, random start" },
+      "flags":      { "offset": 8,  "size": 1, "note": "[HopLimit:3][WantAck:1][MsgType:4]" },
+      "hop_start":  { "offset": 9,  "size": 1, "note": "original hop limit (for hops-used calc)" },
+      "reserved":   { "offset": 10, "size": 2, "note": "zero, reserved for future use" }
+    }
+  },
+
+  "message_types": {
+    "0x0": { "name": "TEXT",          "description": "UTF-8 plain text or addr/cmd/param string" },
+    "0x1": { "name": "ACK",           "description": "Delivery acknowledgement — payload: [orig_packet_id:4]" },
+    "0x2": { "name": "NACK",          "description": "Negative ack — payload: [orig_packet_id:4][reason:1]" },
+    "0x8": { "name": "FRAGMENT",      "description": "Fragment of a larger message — see fragmentation" },
+    "0x6": { "name": "NODE_ANNOUNCE", "description": "Broadcast node presence and transport capabilities" },
+    "0x7": { "name": "PING",          "description": "Liveness check, dest responds with ACK" }
+  },
+
+  "text_protocol": {
+    "format": "addr cmd param  |  free text",
+    "description": "TEXT payload is either a structured command or plain UTF-8 message",
+    "structured": {
+      "syntax": "<addr_hex> <CMD> [params...]",
+      "example": "FF STATUS\n01 RELAY 1 ON\n02 ASK What is the soil moisture?",
+      "note": "addr field is advisory — LMX header dest is authoritative for routing"
+    },
+    "plain_text": {
+      "syntax": "any UTF-8 string not starting with a hex byte followed by space+uppercase",
+      "example": "Hello from node 2"
+    }
+  },
+
+  "fragmentation": {
+    "enabled": true,
+    "trigger_bytes": 210,
+    "max_fragments": 8,
+    "fragment_payload": {
+      "frag_index":      { "offset": 0, "size": 1, "range": "0..N-1" },
+      "frag_count":      { "offset": 1, "size": 1, "range": "1..8" },
+      "orig_packet_id":  { "offset": 2, "size": 4, "note": "packet_id of the first fragment" },
+      "data":            { "offset": 6, "note": "fragment payload bytes" }
+    },
+    "reassembly_timeout_ms": 10000,
+    "reassembly_buffer_count": 4,
+    "note": "All fragments carry same dest/src. Reassembled at dest before dispatch to app layer."
+  },
+
+  "encryption": {
+    "algorithm": "AES-128-GCM",
+    "key_source": "NVSManager::getCryptoKey() — 16 bytes, fleet-shared",
+    "scope": "entire wire packet (header + payload)",
+    "overhead_bytes": 28,
+    "note": "Transport (LoRaTransport) handles encrypt/decrypt transparently. App layer sees plaintext."
+  },
+
+  "routing": {
+    "mode": "managed_flooding",
+    "default_hop_limit": 3,
+    "max_hop_limit": 7,
+    "relay_rule": "Forward if hop_limit > 0 AND dest != my_id (unicast relay) OR dest == broadcast",
+    "dedup": {
+      "cache_entries": 64,
+      "ttl_ms": 300000
+    },
+    "ack": {
+      "retries": 3,
+      "timeout_ms": 5000,
+      "applies_to": "unicast TEXT packets with want_ack=1"
+    }
+  },
+
+  "transport_priority": {
+    "description": "Select best available transport to reach dest. Fall back if unavailable.",
+    "order": ["wifi_http", "espnow", "ble", "lora"],
+    "transports": {
+      "wifi_http": {
+        "type": "HTTP POST",
+        "endpoint": "http://<peer_ip>:8401/lmx",
+        "requires": "peer IP known via mDNS or neighbor table",
+        "latency": "low",
+        "range": "LAN"
+      },
+      "espnow": {
+        "type": "ESP-NOW",
+        "requires": "peer MAC known",
+        "latency": "very low",
+        "range": "~100m"
+      },
+      "ble": {
+        "type": "BLE GATT write",
+        "requires": "BLE connection established",
+        "latency": "medium",
+        "range": "~30m"
+      },
+      "lora": {
+        "type": "LoRa broadcast/unicast",
+        "requires": "always available",
+        "latency": "high",
+        "range": "~2km"
+      }
+    },
+    "neighbor_capability_field": "NODE_ANNOUNCE payload — bitmask [wifi:1][espnow:1][ble:1][lora:1]"
+  },
+
+  "node_announce": {
+    "interval_ms": 60000,
+    "payload": {
+      "capabilities": { "offset": 0, "size": 1, "note": "[wifi:1][espnow:1][ble:1][lora:1]" },
+      "wifi_ip":      { "offset": 1, "size": 4, "note": "IPv4 if wifi available, else 0" },
+      "name":         { "offset": 5, "size": 8, "note": "null-padded node name (first 8 chars)" }
+    }
+  },
+
+  "daemon": {
+    "port": 8400,
+    "serial_baud": 115200,
+    "serial_lmx_prefix": "[LMX] ",
+    "serial_send_cmd": "MSG {dest_hex} {text}",
+    "note": "Daemon bridges phone (WebSocket) <-> Heltec (USB serial) <-> mesh (LoRa/ESP-NOW)"
+  }
+}

@@ -1,4 +1,5 @@
 #include "command_manager.h"
+#include "msg_manager.h"
 #include "nvs_manager.h"
 #include "schedule_manager.h"
 #include "gps_manager.h"
@@ -140,6 +141,8 @@ void CommandManager::process(const String& input, CommandManager::ResponseCallba
         response = _handleRepeater(args);
     } else if (cmd == "SLEEP") {
         response = _handleSleep(args);
+    } else if (cmd == "MSG") {
+        response = _handleMsg(args);
     } else {
         for (auto* plugin : PluginManager::getInstance().getPlugins()) {
             String pluginResponse = plugin->handleCommand(cmd, args);
@@ -327,4 +330,20 @@ String CommandManager::_handleRepeater(const String& args) {
 
 String CommandManager::_handleSleep(const String& args) {
     return "{\"ok\":false}";
+}
+
+// MSG <dest_hex> <text>  — send a Magic Messenger message over LMX
+// e.g. MSG FF Hello world   (broadcast)
+//      MSG 02 STATUS         (structured: addr cmd)
+String CommandManager::_handleMsg(const String& args) {
+    int sp = args.indexOf(' ');
+    if (sp < 0) return "{\"ok\":false,\"error\":\"Usage: MSG <dest_hex> <text>\"}";
+
+    uint8_t dest = (uint8_t)strtol(args.substring(0, sp).c_str(), nullptr, 16);
+    String text  = args.substring(sp + 1);
+    text.trim();
+    if (text.length() == 0) return "{\"ok\":false,\"error\":\"Empty message\"}";
+
+    bool ok = MsgManager::getInstance().sendText(dest, text);
+    return ok ? "{\"ok\":true}" : "{\"ok\":false,\"error\":\"Send failed\"}";
 }

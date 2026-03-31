@@ -70,6 +70,7 @@ private:
     static String _handleNodes();
     static String _handleRepeater(const String& args);
     static String _handleSleep(const String& args);
+    static String _handleMsg(const String& args);
 
     // Parse "CMD ARGS" -> cmd and args
     static void _parseCommand(const String& input, String& cmd, String& args);
