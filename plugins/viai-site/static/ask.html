@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ask viai — AI Test</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #0a0a0f;
+      color: #e2e8f0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .card {
+      background: #12121a;
+      border: 1px solid #2a2a3a;
+      border-radius: 12px;
+      padding: 32px;
+      width: 100%;
+      max-width: 600px;
+    }
+    h1 { font-size: 1.4rem; color: #00d4ff; margin-bottom: 6px; }
+    .sub { font-size: 0.85rem; color: #64748b; margin-bottom: 24px; }
+    label { display: block; font-size: 0.8rem; color: #94a3b8; margin-bottom: 6px; }
+    input, textarea, select {
+      width: 100%;
+      background: #0a0a0f;
+      border: 1px solid #2a2a3a;
+      border-radius: 6px;
+      color: #e2e8f0;
+      padding: 10px 12px;
+      font-size: 0.9rem;
+      margin-bottom: 16px;
+      outline: none;
+    }
+    input:focus, textarea:focus, select:focus { border-color: #00d4ff; }
+    textarea { min-height: 80px; resize: vertical; }
+    button {
+      width: 100%;
+      background: #00d4ff;
+      color: #0a0a0f;
+      border: none;
+      border-radius: 6px;
+      padding: 12px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+    button:hover { opacity: 0.85; }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+    .answer {
+      margin-top: 20px;
+      background: #0a0a0f;
+      border: 1px solid #2a2a3a;
+      border-radius: 6px;
+      padding: 16px;
+      font-size: 0.88rem;
+      line-height: 1.6;
+      white-space: pre-wrap;
+      display: none;
+    }
+    .answer.show { display: block; }
+    .error { color: #f87171; }
+    .status { font-size: 0.75rem; color: #64748b; margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Ask viai</h1>
+    <p class="sub">Test query — connect to your local AI</p>
+
+    <label>Node ID</label>
+    <input type="text" id="nodeId" value="test-node" placeholder="e.g. Magic-A3F2">
+
+    <label>Your Question</label>
+    <textarea id="query" placeholder="e.g. What does a pH of 5.2 mean for my plants?">What does a pH of 5.2 with EC 1.8 mean for my hydroponic system?</textarea>
+
+    <button id="askBtn" onclick="ask()">Ask viai</button>
+    <p class="status" id="status"></p>
+
+    <div class="answer" id="answer"></div>
+  </div>
+
+  <script>
+    // ── Config ── paste your Cloudflare Tunnel URL here
+    const VIAI_URL = 'https://ask.viai.club'
+
+    async function ask() {
+      const nodeId = document.getElementById('nodeId').value.trim() || 'test-node'
+      const query  = document.getElementById('query').value.trim()
+      const btn    = document.getElementById('askBtn')
+      const status = document.getElementById('status')
+      const answer = document.getElementById('answer')
+
+      if (!query) return
+
+      btn.disabled = true
+      btn.textContent = 'Thinking...'
+      status.textContent = `Querying ${VIAI_URL}...`
+      answer.className = 'answer'
+      answer.textContent = ''
+
+      try {
+        const res = await fetch(`${VIAI_URL}/api/query`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ node_id: nodeId, query })
+        })
+
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+
+        const data = await res.json()
+        const text = data.answer || data.response || JSON.stringify(data, null, 2)
+
+        answer.textContent = text
+        answer.className = 'answer show'
+        status.textContent = `✓ Response received`
+
+      } catch (err) {
+        answer.textContent = `Error: ${err.message}\n\nMake sure:\n1. Cloudflare tunnel is running\n2. VIAI_URL is set correctly in this file`
+        answer.className = 'answer show error'
+        status.textContent = 'Failed'
+      } finally {
+        btn.disabled = false
+        btn.textContent = 'Ask viai'
+      }
+    }
+  </script>
+</body>
+</html>

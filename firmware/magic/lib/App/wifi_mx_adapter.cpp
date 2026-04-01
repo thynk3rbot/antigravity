@@ -1,6 +1,8 @@
 #include "wifi_mx_adapter.h"
 #include "command_manager.h"
 #include "../Transport/wifi_transport.h"
+#include "../Transport/mqtt_transport.h"
+#include <ArduinoJson.h>
 #include <esp_log.h>
 
 static const char* TAG = "WiFiMxAdapter";

@@ -35,19 +35,72 @@ DEFAULT_CONFIG = {
             "base_url": "http://localhost:11434",
             "default_model": "qwen2.5-coder:14b",
         },
+        # Free providers — priority order: groq → gemini → cerebras → openrouter:free → openrouter:paid
+        "providers": {
+            "groq": {
+                "base_url": "https://api.groq.com/openai/v1",
+                "api_key_env": "GROQ_API_KEY",
+                "default_model": "llama-3.3-70b-versatile",
+                "free": True,
+                "models": [
+                    "llama-3.3-70b-versatile",   # best free general model
+                    "llama-3.1-8b-instant",       # fast/cheap
+                    "gemma2-9b-it",
+                    "mixtral-8x7b-32768",
+                ],
+            },
+            "gemini": {
+                "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
+                "api_key_env": "GEMINI_API_KEY",
+                "default_model": "gemini-2.0-flash",
+                "free": True,
+                "models": [
+                    "gemini-2.0-flash",           # best free, 1M context
+                    "gemini-1.5-flash",
+                ],
+            },
+            "cerebras": {
+                "base_url": "https://api.cerebras.ai/v1",
+                "api_key_env": "CEREBRAS_API_KEY",
+                "default_model": "llama-3.3-70b",
+                "free": True,
+                "models": [
+                    "llama-3.3-70b",              # 2000 tok/s — fastest available
+                    "llama-3.1-8b",
+                ],
+            },
+            "openrouter": {
+                "base_url": "https://openrouter.ai/api/v1",
+                "api_key_env": "OPENROUTER_API_KEY",
+                "default_model": "meta-llama/llama-3.1-8b-instruct:free",
+                "free_models": [
+                    "meta-llama/llama-3.1-8b-instruct:free",
+                    "google/gemma-2-9b-it:free",
+                    "mistralai/mistral-7b-instruct:free",
+                    "microsoft/phi-3-mini-128k-instruct:free",
+                ],
+                "paid_fallback": "anthropic/claude-3-sonnet",
+            },
+        },
+        # Legacy single-cloud config (kept for backward compat)
         "cloud": {
             "provider": "openrouter",
             "base_url": "https://openrouter.ai/api/v1",
             "api_key_env": "OPENROUTER_API_KEY",
-            "default_model": "anthropic/claude-3-sonnet",
+            "default_model": "meta-llama/llama-3.1-8b-instruct:free",
         },
         "prefer_local": True,
+        "prefer_free": True,        # try free providers before paid
+        "free_provider_order": ["groq", "gemini", "cerebras", "openrouter"],
         "health_check_ttl": 30,
         "pricing": {
             "claude-3-opus": [0.015, 0.075],
             "claude-3-sonnet": [0.003, 0.015],
             "gpt-4": [0.03, 0.06],
             "gpt-3.5-turbo": [0.0005, 0.0015],
+            "llama-3.3-70b-versatile": [0.0, 0.0],   # groq free
+            "gemini-2.0-flash": [0.0, 0.0],           # gemini free tier
+            "llama-3.3-70b": [0.0, 0.0],              # cerebras free tier
         },
     },
     "rag": {"enabled": False},
