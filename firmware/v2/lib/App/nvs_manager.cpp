@@ -38,11 +38,16 @@ bool NVSManager::init() {
   // Initialize NVS flash partition
   esp_err_t err = nvs_flash_init();
 
-  if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-    // NVS partition is full or has new version; erase and reinitialize
-    Serial.println("[NVS] NVS partition full/outdated - erasing...");
-    ESP_ERROR_CHECK(nvs_flash_erase());
+  if (err == ESP_ERR_NVS_NO_FREE_PAGES) {
+    // Partition genuinely full — erase is the only recovery option
+    Serial.println("[NVS] WARNING: NVS partition full - erasing (data loss)");
+    nvs_flash_erase();
     err = nvs_flash_init();
+  } else if (err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+    // New firmware version — NVS format is still compatible, do NOT erase.
+    // Individual key reads will return defaults for any missing keys.
+    Serial.println("[NVS] New firmware version detected - preserving existing data");
+    err = ESP_OK;
   }
 
   if (err != ESP_OK) {

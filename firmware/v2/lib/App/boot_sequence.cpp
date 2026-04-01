@@ -8,6 +8,7 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <esp_system.h>
+#include <esp_task_wdt.h>
 
 #include "boot_sequence.h"
 #include "nvs_manager.h"
@@ -148,6 +149,10 @@ void BootSequence::initCore() {
   }
   vTaskDelay(pdMS_TO_TICKS(500)); // Enforce rail stability
   
+  // Extend task WDT timeout: default 5s is too short when mDNS + async_tcp
+  // compete for WiFi stack locks under normal operation (observed: async_tcp WDT at ~60s)
+  esp_task_wdt_init(15, true); // 15s timeout, panic+reboot on trigger
+
   Serial.println("[CHECK] Initializing I2C Mutex...");
   if (!g_i2cMutex) {
       g_i2cMutex = xSemaphoreCreateMutex();

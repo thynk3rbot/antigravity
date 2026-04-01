@@ -12,6 +12,7 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <esp_system.h>
+#include <esp_task_wdt.h>
 #include <stdio.h>
 
 #include "../lib/App/nvs_manager.h"
@@ -188,7 +189,9 @@ void wifiTask(void* param) {
 #ifdef ENABLE_MQTT_TRANSPORT
     MQTTTransport::pollStatic();
 #endif
-    // 50ms allows OTA to complete while not starving control loop
+    // Feed WDT after OTA/mDNS work — prevents async_tcp starvation cascade
+    // when WiFi stack locks are briefly held during mDNS advertisement
+    esp_task_wdt_reset();
     vTaskDelay(pdMS_TO_TICKS(50));
   }
 }
