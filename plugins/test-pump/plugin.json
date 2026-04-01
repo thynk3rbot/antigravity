@@ -1,0 +1,36 @@
+{
+  "$schema": "magic-plugin-v1",
+  "name": "test-pump",
+  "display_name": "Test Data Pump",
+  "description": "Simulates Magic device fleet telemetry for development and demos",
+  "version": "1.0.0",
+
+  "run": {
+    "cmd": "python pump.py",
+    "cwd": ".",
+    "env_file": ".env",
+    "language": "python",
+    "requirements": "requirements.txt"
+  },
+
+  "port": null,
+  "health": null,
+
+  "infrastructure": {
+    "requires": ["mqtt"],
+    "docker_compose": null
+  },
+
+  "auto_start": false,
+  "restart_policy": "never",
+
+  "menu": {
+    "group": "Development",
+    "icon": "🧪",
+    "actions": [
+      {"label": "Start Pump", "type": "action", "value": "start"},
+      {"label": "Stop Pump", "type": "action", "value": "stop"},
+      {"label": "View Logs", "type": "action", "value": "logs"}
+    ]
+  }
+}

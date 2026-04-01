@@ -1,0 +1,39 @@
+{
+  "name": "Healthy Fleet",
+  "description": "3 devices with normal telemetry, stable battery, good signal",
+  "devices": [
+    {
+      "node_id": "Magic-A3F2",
+      "battery_mv_start": 4100,
+      "battery_drain_mv_per_hour": 10,
+      "rssi_center": -42,
+      "rssi_jitter": 5,
+      "neighbors": ["Magic-B1E7", "Magic-C4D9"],
+      "relay_1": false,
+      "relay_2": false,
+      "gps": {"lat": 40.7128, "lon": -74.0060, "alt": 10.0}
+    },
+    {
+      "node_id": "Magic-B1E7",
+      "battery_mv_start": 3800,
+      "battery_drain_mv_per_hour": 15,
+      "rssi_center": -58,
+      "rssi_jitter": 8,
+      "neighbors": ["Magic-A3F2"],
+      "relay_1": true,
+      "relay_2": false,
+      "gps": {"lat": 40.7580, "lon": -73.9855, "alt": 25.0}
+    },
+    {
+      "node_id": "Magic-C4D9",
+      "battery_mv_start": 3600,
+      "battery_drain_mv_per_hour": 20,
+      "rssi_center": -65,
+      "rssi_jitter": 10,
+      "neighbors": ["Magic-A3F2"],
+      "relay_1": false,
+      "relay_2": true,
+      "gps": null
+    }
+  ]
+}

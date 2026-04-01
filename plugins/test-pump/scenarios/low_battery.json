@@ -1,0 +1,17 @@
+{
+  "name": "Low Battery Alert",
+  "description": "One device draining fast — triggers battery warnings",
+  "devices": [
+    {
+      "node_id": "Magic-DEAD",
+      "battery_mv_start": 3300,
+      "battery_drain_mv_per_hour": 100,
+      "rssi_center": -75,
+      "rssi_jitter": 15,
+      "neighbors": [],
+      "relay_1": false,
+      "relay_2": false,
+      "gps": null
+    }
+  ]
+}
