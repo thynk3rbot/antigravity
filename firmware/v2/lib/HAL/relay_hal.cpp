@@ -8,6 +8,7 @@
 #include "native_hal.h"
 #include <Arduino.h>
 #include <cstring>
+#include "../App/nvs_manager.h"
 
 // Static instance
 RelayHAL& relayHAL = RelayHAL::getInstance();
@@ -51,6 +52,14 @@ void RelayHAL::init() {
   _enabled = 0xFF;
   _stateChangeCount = 0;
 
+  // Restore saved relay state from NVS
+  uint8_t savedMask = NVSManager::getRelayMask(0x00);
+  if (savedMask != 0x00) {
+    _applyState(savedMask);
+    _state = savedMask;
+    Serial.printf("[RelayHAL] Restored relay state 0x%02X from NVS\n", savedMask);
+  }
+
   Serial.printf("[RelayHAL] Initialized %d relay channels (%d skipped) via Universal Routing\n",
                 initialized, skipped);
 }
@@ -67,6 +76,7 @@ void RelayHAL::setState(uint8_t mask) {
   _applyState(mask);
   _state = mask;
   _stateChangeCount++;
+  NVSManager::setRelayMask(_state);
 
   Serial.printf("[RelayHAL] State changed to 0x%02X (change #%lu)\n",
                 _state, (unsigned long)_stateChangeCount);

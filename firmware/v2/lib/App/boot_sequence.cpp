@@ -7,6 +7,7 @@
 #include <Wire.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
+#include <esp_system.h>
 
 #include "boot_sequence.h"
 #include "nvs_manager.h"
@@ -91,7 +92,7 @@ void BootSequence::initCore() {
   Serial.begin(SERIAL_BAUD);
   
   uint32_t startWait = millis();
-  uint32_t waitTimeout = BOOT_SAFE_DELAY_USB_MS; // Project standard for Windows enumeration
+  uint32_t waitTimeout = 1000; // v0.4.1-4: Reduced from 5000ms for faster boot
   
   while (!Serial && (millis() - startWait < waitTimeout)) {
     vTaskDelay(pdMS_TO_TICKS(10));
@@ -104,6 +105,28 @@ void BootSequence::initCore() {
     Serial.println("  ! NVS init failed");
   } else {
     Serial.println("  ✓ NVS Ready");
+  }
+
+  // Capture hardware reset reason immediately after NVS is available
+  {
+    esp_reset_reason_t reason = esp_reset_reason();
+    const char* reasonStr = "UNKNOWN";
+    switch (reason) {
+      case ESP_RST_POWERON:  reasonStr = "POWERON";  break;
+      case ESP_RST_EXT:      reasonStr = "EXT_PIN";  break;
+      case ESP_RST_SW:       reasonStr = "SW_RESET"; break;
+      case ESP_RST_PANIC:    reasonStr = "PANIC";    break;
+      case ESP_RST_INT_WDT:  reasonStr = "INT_WDT";  break;
+      case ESP_RST_TASK_WDT: reasonStr = "TASK_WDT"; break;
+      case ESP_RST_WDT:      reasonStr = "WDT";      break;
+      case ESP_RST_BROWNOUT: reasonStr = "BROWNOUT"; break;
+      case ESP_RST_SDIO:     reasonStr = "SDIO";     break;
+      default: break;
+    }
+    NVSManager::setResetReason(reasonStr);
+    NVSManager::incrementBootCount();
+    Serial.printf("[BOOT] Reset #%u — reason: %s\n",
+                  NVSManager::getBootCount(), reasonStr);
   }
 
   if (!LittleFS.begin(true)) {
@@ -169,9 +192,12 @@ void BootSequence::initCore() {
   pinMode(BAT_ADC_CTRL, OUTPUT);
   digitalWrite(BAT_ADC_CTRL, HIGH); // V4 requires 37 HIGH to enable the divider
 
-  Serial.printf("[V4] Enabling GPS Power (GPIO %d)...\n", GPS_EN_PIN);
+  Serial.printf("[V4] Enabling GPS Power (GPIO %d, Active LOW)...\n", GPS_EN_PIN);
   pinMode(GPS_EN_PIN, OUTPUT);
   digitalWrite(GPS_EN_PIN, LOW); // V4 GPS Power is Active LOW
+  
+  // Extra stabilization delay for V4 GPS UART
+  vTaskDelay(pdMS_TO_TICKS(500));
 #endif
 
   Serial.println("[CHECK] Initializing MCP...");

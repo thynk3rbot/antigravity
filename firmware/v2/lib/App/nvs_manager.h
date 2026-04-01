@@ -192,6 +192,8 @@ public:
     // ========================================================================
     static bool getRelayState(uint8_t relayNum);
     static bool setRelayState(uint8_t relayNum, bool state);
+    static uint8_t getRelayMask(uint8_t defaultVal = 0x00);
+    static bool setRelayMask(uint8_t mask);
     static uint8_t getPowerMode(uint8_t defaultVal = 0);
     static bool setPowerMode(uint8_t mode);
 
@@ -274,6 +276,7 @@ private:
     static constexpr const char* KEY_CRYPTO_KEY  = "crypto_key";
     static constexpr const char* KEY_RELAY1      = "relay1_state";
     static constexpr const char* KEY_RELAY2      = "relay2_state";
+    static constexpr const char* KEY_RELAY_MASK  = "relay_mask";
     static constexpr const char* KEY_POWER_MODE  = "power_mode";
     static constexpr const char* KEY_MQTT_BROKER = "mqtt_broker";
     static constexpr const char* KEY_MQTT_PORT   = "mqtt_port";

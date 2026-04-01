@@ -404,10 +404,8 @@ void OLEDManager::update() {
 
     uint32_t now = millis();
     if (g_wakeRequested) { setDisplayOn(true); g_wakeRequested = false; }
-    // Only sleep if not USB powered
-    if (g_displayOn && !PowerManager::isPowered() && (now - g_lastActivityTime >= SLEEP_TIMEOUT_MS)) setDisplayOn(false);
-    // Keep display alive when USB connected
-    if (PowerManager::isPowered() && !g_displayOn) { setDisplayOn(true); g_lastActivityTime = now; }
+    // Blank after timeout regardless of power source — wake via button press
+    if (g_displayOn && (now - g_lastActivityTime >= SLEEP_TIMEOUT_MS)) setDisplayOn(false);
 
     // Handle button press detected by ISR
     if (!g_buttonHandled) {

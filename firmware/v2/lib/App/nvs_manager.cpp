@@ -349,6 +349,24 @@ bool NVSManager::setRelayState(uint8_t relayNum, bool state) {
   return (err == ESP_OK);
 }
 
+uint8_t NVSManager::getRelayMask(uint8_t defaultVal) {
+  nvs_handle_t handle;
+  if (nvs_open(NVS_NAMESPACE, NVS_READONLY, &handle) != ESP_OK) return defaultVal;
+  uint8_t mask = defaultVal;
+  nvs_get_u8(handle, KEY_RELAY_MASK, &mask);
+  nvs_close(handle);
+  return mask;
+}
+
+bool NVSManager::setRelayMask(uint8_t mask) {
+  nvs_handle_t handle;
+  if (nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle) != ESP_OK) return false;
+  esp_err_t err = nvs_set_u8(handle, KEY_RELAY_MASK, mask);
+  if (err == ESP_OK) err = nvs_commit(handle);
+  nvs_close(handle);
+  return (err == ESP_OK);
+}
+
 uint8_t NVSManager::getPowerMode(uint8_t defaultVal) {
   nvs_handle_t handle;
   if (nvs_open(NVS_NAMESPACE, NVS_READONLY, &handle) != ESP_OK) return defaultVal;
