@@ -10,6 +10,16 @@
 
 You are building a **test data pump** that simulates a fleet of Magic devices by publishing MQTT messages. The daemon, dashboard, LVC service, and all plugins receive this data exactly as if it came from real hardware. This is essential for development without physical devices and for customer demos.
 
+### Existing Code to Reference (DO NOT copy blindly — use as reference)
+
+We already have two spoofing/simulation files in the repo. **Read these first** for patterns and lessons:
+
+1. **`tools/testing/mqtt_spoof.py`** — MQTT command spoofer with paho v2 API (`CallbackAPIVersion.VERSION2`), async connect, clean callback structure. Use this as reference for the MQTT client setup pattern.
+2. **`daemon/src/transmitter.py`** — Simple telemetry generator that publishes fake battery/RSSI/uptime to MQTT. Uses the **old** `MagicCache/` topic prefix (not the firmware contract). The test pump must use `magic/{node_id}/telemetry` instead.
+
+**What to take from them:** paho-mqtt connection pattern, callback structure, publish loop.
+**What NOT to take:** the `MagicCache/` topic prefix (wrong), the v1 paho Client API (use v2), the async wrapper (pump should be synchronous/threaded, not asyncio).
+
 ### What You're Building
 
 A plugin directory at `plugins/test-pump/` with:
