@@ -31,6 +31,7 @@
 #include "../lib/HAL/relay_hal.h"
 #include "../lib/App/oled_manager.h"
 #include "../lib/Transport/mqtt_transport.h"
+#include "../lib/App/wifi_mx_adapter.h"
 
 // ============================================================================
 // Forward Declarations
@@ -189,6 +190,9 @@ void wifiTask(void* param) {
 #ifdef ENABLE_MQTT_TRANSPORT
     MQTTTransport::pollStatic();
 #endif
+    // Mx framework: Drain wifi queue in this task context
+    WiFiMxAdapter::instance().drainQueue();
+
     // Feed WDT after OTA/mDNS work — prevents async_tcp starvation cascade
     // when WiFi stack locks are briefly held during mDNS advertisement
     esp_task_wdt_reset();
