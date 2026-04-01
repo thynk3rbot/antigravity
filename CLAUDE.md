@@ -185,10 +185,67 @@ not in the registry, ADD IT — do not work around it with a raw IP.
 **Never do this:** `pio run -t upload -e heltec_v4_ota_29` (hardcoded IP, bypasses registry)
 **Always do this:** flash via daemon API using device_id from registry
 
+## Phase 2: Daemon, Dashboard & Quality Pipeline [NEW]
+
+### Daemon Architecture
+- **Location:** `daemon/`
+- **Tech:** Python 3.11, asyncio, FastAPI
+- **Startup:** `python daemon/src/main.py` (listens on :8001)
+- **Config:** `daemon/config.json` — MQTT broker, InfluxDB endpoint, OTA registry
+- **Responsibilities:** MQTT federation, plugin discovery, OTA delivery, health monitoring
+
+### Dashboard (React)
+- **Location:** `daemon/dashboard/`
+- **Tech:** React 19, Vite, TypeScript, Tailwind CSS, ECharts
+- **Startup:** `npm install && npm run dev` → localhost:5173
+- **Data:** MQTT.js (WebSocket :8083 live) + InfluxDB REST (:8086 historical)
+- **Design:** Dark theme (#0a0a0f bg, #00d4ff cyan) — matches device webserver
+
+### Infrastructure Stack
+- **MQTT:** EMQX 5.5 (docker-compose, admin :18083, WebSocket :8083)
+- **Timeseries:** InfluxDB 2.7 (docker-compose, UI :8086, token: magic-dev-token)
+- **Ingest:** Telegraf 1.30 (magic/+/telemetry → InfluxDB)
+- **Startup:** `cd plugins/_infrastructure && docker compose up -d`
+
+### Plugin System
+- **Discovery:** `plugins/*/plugin.json` (self-describing manifest)
+- **Widgets:** Each plugin declares dashboard widget types (stat, gauge, line-chart, table, mqtt-explorer, custom)
+- **Service Tiers:** Daemon filters by customer tier (starter/pro/enterprise)
+- **Lifecycle:** init → register commands → expose widgets → listen MQTT
+
+### Quality Pipeline (Strategic)
+- **Tool:** `tools/quality/pipeline.py` (Ollama-driven review/grade/learn/teach)
+- **Purpose:** Graded code reviews, safety audits, pattern extraction, institutional knowledge
+- **Output:** Reports + ChromaDB knowledge base for future sessions
+
+### Data Flow (End-to-End)
+```
+Device (firmware/magic/) → MQTT (magic/{node_id}/telemetry)
+  → EMQX (:18083) → Telegraf → InfluxDB (:8086)
+    → Dashboard (localhost:5173) → User (fleet overview + charts)
+```
+
+### Phase 2 Quick Start
+```bash
+# Terminal 1: Infrastructure (blocks dashboard)
+cd plugins/_infrastructure && docker compose up -d
+
+# Terminal 2: Dashboard (waits for infra)
+cd daemon/dashboard && npm install && npm run dev
+
+# Terminal 3: Test telemetry (validates pipeline)
+cd plugins/test-pump && python pump.py --scenario healthy_fleet
+
+# Terminal 4: Quality pipeline (optional, strategic)
+cd tools/quality && python pipeline.py review --since 24h
+```
+
 ## Shortcuts & Workflows
 
 - `/build` - `pio run -e heltec_v4` (or heltec_v3)
 - `/flash` - `pio run -t upload -e heltec_v4` — version auto-increments
 - `/monitor` - `pio device monitor -b 115200`
 - `/webapp` - `python tools/webapp/server.py` → `http://localhost:8000`
+- `/daemon` - `python daemon/src/main.py` → :8001 (daemon API)
+- `/dashboard` - `cd daemon/dashboard && npm run dev` → :5173 (React dashboard)
 - `/commit` - Claude handles: stage → commit → tag → push
