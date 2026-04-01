@@ -25,7 +25,7 @@ git pull origin main
 
 **For V2 (Active Development)**
 ```bash
-cd firmware/v2
+cd firmware/magic
 pio run -e heltec_wifi_lora_32_V3
 ```
 
@@ -92,7 +92,7 @@ If running fleet test tonight:
 
 ```bash
 # 1. Build V2 firmware
-cd firmware/v2
+cd firmware/magic
 pio run -e heltec_wifi_lora_32_V3
 
 # 2. Flash all devices
@@ -117,9 +117,9 @@ python tools/webapp/server.py --device magic-master
 
 | File | Change |
 |------|--------|
-| `firmware/v2/src/main.cpp` | Task priority decoupling |
-| `firmware/v2/lib/App/oled_manager.cpp` | Deferred I2C refresh |
-| `firmware/v2/lib/App/control_loop.cpp` | Sensor caching |
+| `firmware/magic/src/main.cpp` | Task priority decoupling |
+| `firmware/magic/lib/App/oled_manager.cpp` | Deferred I2C refresh |
+| `firmware/magic/lib/App/control_loop.cpp` | Sensor caching |
 | `tools/webapp/server.py` | Proxy API endpoints |
 | `tools/webapp/static/index.html` | Proxy UI page |
 | `daemon/src/mqtt_client.py` | Topic alignment |

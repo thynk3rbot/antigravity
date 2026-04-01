@@ -199,11 +199,11 @@ POST /api/firmware/upload  → upload new binary to library
 ## Key Files to Modify
 
 ### Firmware (AG's domain)
-- `firmware/v2/lib/App/plugin_manager.cpp/h` — extend as Feature Registry
-- `firmware/v2/lib/App/nvs_manager.cpp/h` — add `features`, `hw`, `mesh` namespace accessors
-- `firmware/v2/lib/App/boot_sequence.cpp` — conditional init based on registry
-- `firmware/v2/lib/App/http_api.cpp` — add `/api/provision` and `/api/config` endpoints
-- `firmware/v2/src/main.cpp` — wire PluginManager registry into boot
+- `firmware/magic/lib/App/plugin_manager.cpp/h` — extend as Feature Registry
+- `firmware/magic/lib/App/nvs_manager.cpp/h` — add `features`, `hw`, `mesh` namespace accessors
+- `firmware/magic/lib/App/boot_sequence.cpp` — conditional init based on registry
+- `firmware/magic/lib/App/http_api.cpp` — add `/api/provision` and `/api/config` endpoints
+- `firmware/magic/src/main.cpp` — wire PluginManager registry into boot
 
 ### Daemon (Claude's domain)
 - `tools/daemon/api.py` — add `/api/provision` endpoint

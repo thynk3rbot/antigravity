@@ -9,7 +9,7 @@
 **System Status:** ✅ Production ready. Claude finished the daemon. Your job: test firmware on hardware.
 
 **What to do today:**
-1. Build firmware: `cd firmware/v2 && pio run -e heltec_v4`
+1. Build firmware: `cd firmware/magic && pio run -e heltec_v4`
 2. Flash device: `pio run -t upload -e heltec_v4` (double-click `Factory_USB_Flasher.bat` if easier)
 3. Start daemon: `Start_Magic.bat` (or `python daemon/src/main.py`)
 4. Check: Open http://localhost:8000 — your device should appear online
@@ -47,7 +47,7 @@
 
 ### Step 1: Build Firmware
 ```bash
-cd firmware/v2
+cd firmware/magic
 pio run -e heltec_v4
 # Wait ~2 minutes for compilation
 # Should end with: "BUILD SUCCESSFUL" ✓
@@ -132,7 +132,7 @@ python tools/testing/integration_test.py --ip 192.168.1.XX --transports http,mqt
 
 ### Firmware Location
 ```
-firmware/v2/lib/App/
+firmware/magic/lib/App/
 ├── CommandManager.cpp     ← All 24 commands
 ├── GossipManager.cpp      ← Peer discovery
 ├── MsgManager.cpp         ← Node announce + heartbeat
@@ -195,7 +195,7 @@ ping 192.168.1.XX    # Does it respond?
 
 | File | Purpose | Where |
 | --- | --- | --- |
-| `firmware/v2/` | Firmware source | Build/flash this |
+| `firmware/magic/` | Firmware source | Build/flash this |
 | `Factory_USB_Flasher.bat` | Flash virgin devices | Double-click to use |
 | `Start_Magic.bat` | Launch everything | Double-click to start daemon |
 | `tools/usb_flasher.py` | USB flasher tool (Python) | Use if batch file fails |
@@ -220,7 +220,7 @@ Read these in order (each is 5-20 minutes):
 
 ```
 TIME: TODAY
-TASK 1: Build firmware (cd firmware/v2 && pio run -e heltec_v4)
+TASK 1: Build firmware (cd firmware/magic && pio run -e heltec_v4)
 TASK 2: Flash device (pio run -t upload -e heltec_v4)
 TASK 3: Start daemon (Start_Magic.bat)
 TASK 4: Check dashboard (http://localhost:8000)
@@ -261,7 +261,7 @@ Got: [actual error message or behavior]
 
 ```bash
 # Build
-cd firmware/v2 && pio run -e heltec_v4
+cd firmware/magic && pio run -e heltec_v4
 
 # Flash via USB
 pio run -t upload -e heltec_v4

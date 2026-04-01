@@ -14,7 +14,7 @@
           { "key": "uptime",     "label": "Uptime",       "type": "duration", "visible": true,  "order": 5,  "critical": false },
           { "key": "peer_cnt",   "label": "Peers",        "type": "integer",  "visible": false, "order": 6,  "critical": false },
           { "key": "mode",       "label": "Power Mode",   "type": "string",   "visible": false, "order": 7,  "critical": false },
-          { "key": "ip",         "label": "IP Address",   "type": "ipv4",     "visible": false, "order": 8,  "critical": false }
+          { "key": "ip",         "label": "IP",   "type": "ipv4",     "visible": false, "order": 8,  "critical": false }
         ]
       },
       "vstatus": {
@@ -24,8 +24,8 @@
           { "key": "id",             "label": "Device ID",      "type": "string",      "visible": true,  "order": 2,  "critical": false, "page": 1 },
           { "key": "ver",            "label": "Firmware",       "type": "string",      "visible": true,  "order": 3,  "critical": false, "page": 0 },
           { "key": "hw",             "label": "Hardware Rev",   "type": "string",      "visible": true,  "order": 4,  "critical": false, "page": 0 },
-          { "key": "ip",             "label": "IP Address",     "type": "ipv4",        "visible": true,  "order": 5,  "critical": false, "page": 1 },
-          { "key": "mac",            "label": "MAC Address",    "type": "string",      "visible": false, "order": 6,  "critical": false, "page": 1 },
+          { "key": "ip",             "label": "IP",     "type": "ipv4",        "visible": true,  "order": 5,  "critical": false, "page": 1 },
+          { "key": "mac",            "label": "MAC",    "type": "string",      "visible": false, "order": 6,  "critical": false, "page": 1 },
           { "key": "bat_pct",        "label": "Battery %",      "type": "percent",     "visible": true,  "order": 7,  "critical": true,  "page": 2 },
           { "key": "bat_v",          "label": "Battery V",      "type": "float",       "visible": true,  "order": 8,  "critical": true,  "page": 2 },
           { "key": "mode",           "label": "Power Mode",     "type": "string",      "visible": true,  "order": 9,  "critical": false, "page": 2 },
@@ -51,12 +51,12 @@
         "fields": [
           { "key": "name",       "label": "Device Name",  "type": "string",   "visible": true,  "order": 1,  "critical": false },
           { "key": "ver",        "label": "Firmware",     "type": "string",   "visible": true,  "order": 2,  "critical": false },
-          { "key": "bat_pct",    "label": "Battery %",    "type": "percent",  "visible": true,  "order": 3,  "critical": true  },
+	  { "key": "bat_pct",    "label": "Battery %",    "type": "percent",  "visible": true,  "order": 3,  "critical": true  },
           { "key": "lora_rssi",  "label": "Signal dBm",   "type": "dbm",      "visible": true,  "order": 4,  "critical": false },
           { "key": "uptime",     "label": "Uptime",       "type": "duration", "visible": true,  "order": 5,  "critical": false },
           { "key": "peer_cnt",   "label": "Peers",        "type": "integer",  "visible": false, "order": 6,  "critical": false },
           { "key": "mode",       "label": "Power Mode",   "type": "string",   "visible": false, "order": 7,  "critical": false },
-          { "key": "ip",         "label": "IP Address",   "type": "ipv4",     "visible": false, "order": 8,  "critical": false },
+          { "key": "ip",         "label": "IP",   "type": "ipv4",     "visible": false, "order": 8,  "critical": false },
           { "key": "gps",        "label": "GPS",          "type": "gps",      "visible": true,  "order": 9,  "critical": false }
         ]
       },
@@ -67,8 +67,8 @@
           { "key": "id",             "label": "Device ID",      "type": "string",      "visible": true,  "order": 2,  "critical": false, "page": 1 },
           { "key": "ver",            "label": "Firmware",       "type": "string",      "visible": true,  "order": 3,  "critical": false, "page": 0 },
           { "key": "hw",             "label": "Hardware Rev",   "type": "string",      "visible": true,  "order": 4,  "critical": false, "page": 0 },
-          { "key": "ip",             "label": "IP Address",     "type": "ipv4",        "visible": true,  "order": 5,  "critical": false, "page": 1 },
-          { "key": "mac",            "label": "MAC Address",    "type": "string",      "visible": false, "order": 6,  "critical": false, "page": 1 },
+          { "key": "ip",             "label": "IP",             "type": "ipv4",        "visible": true,  "order": 5,  "critical": false, "page": 1 },
+          { "key": "mac",            "label": "MAC",            "type": "string",      "visible": false, "order": 6,  "critical": false, "page": 1 },
           { "key": "bat_pct",        "label": "Battery %",      "type": "percent",     "visible": true,  "order": 7,  "critical": true,  "page": 2 },
           { "key": "bat_v",          "label": "Battery V",      "type": "float",       "visible": true,  "order": 8,  "critical": true,  "page": 2 },
           { "key": "mode",           "label": "Power Mode",     "type": "string",      "visible": true,  "order": 9,  "critical": false, "page": 2 },

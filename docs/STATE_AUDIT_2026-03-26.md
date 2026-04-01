@@ -64,18 +64,18 @@ firmware/
 
 ### AG's Firmware Changes (v2 only — NOT COMMITTED)
 ```
-firmware/v2/lib/App/boot_sequence.cpp         ← I2C mutex fixes
-firmware/v2/lib/App/command_manager.cpp       ← Added VSTATUS
-firmware/v2/lib/App/control_loop.cpp          ← ?
-firmware/v2/lib/App/oled_manager.cpp          ← OLED hardening
-firmware/v2/lib/App/power_manager.cpp         ← VEXT pulse sequence
-firmware/v2/lib/App/status_builder.cpp        ← New status commands
-firmware/v2/lib/HAL/mcp_hal.cpp               ← MCP changes
-firmware/v2/lib/HAL/mcp_manager.cpp           ← ?
-firmware/v2/lib/Transport/mqtt_transport.cpp  ← MQTT changes
-firmware/v2/lib/Transport/mqtt_transport.h    ← MQTT header changes
-firmware/v2/platformio.ini                    ← Config changes
-firmware/v2/docs/AGENT_RADIO.md               ← Status notes
+firmware/magic/lib/App/boot_sequence.cpp         ← I2C mutex fixes
+firmware/magic/lib/App/command_manager.cpp       ← Added VSTATUS
+firmware/magic/lib/App/control_loop.cpp          ← ?
+firmware/magic/lib/App/oled_manager.cpp          ← OLED hardening
+firmware/magic/lib/App/power_manager.cpp         ← VEXT pulse sequence
+firmware/magic/lib/App/status_builder.cpp        ← New status commands
+firmware/magic/lib/HAL/mcp_hal.cpp               ← MCP changes
+firmware/magic/lib/HAL/mcp_manager.cpp           ← ?
+firmware/magic/lib/Transport/mqtt_transport.cpp  ← MQTT changes
+firmware/magic/lib/Transport/mqtt_transport.h    ← MQTT header changes
+firmware/magic/platformio.ini                    ← Config changes
+firmware/magic/docs/AGENT_RADIO.md               ← Status notes
 ```
 
 **BLOCKER:** AG's firmware work is 100% uncommitted. Tests can't validate it.
@@ -97,7 +97,7 @@ tools/assistant/                          ← NEW (from my spec)
 tools/discover_fleet.py                   ← NEW (what is this?)
 tools/fleet_deploy.ps1                    ← NEW (deployment script)
 docs/CLAUDE_ORIENTATION.md                ← NEW (what is this?)
-firmware/v2/data/telemetry_schema.json    ← NEW (schema file)
+firmware/magic/data/telemetry_schema.json    ← NEW (schema file)
 tools/webapp/static/telemetry_registry.json ← NEW (registry)
 ```
 

@@ -25,7 +25,7 @@ Ensure the entire Heltec fleet (V2, V3, V4) is stabilized on version 0.4.0 with 
 -   **Port Lock Mgmt**: All deployment scripts must terminate `server.py` and `pio` before attempting serial handshake.
 
 ## 3. Implementation (Phase 2 Candidate)
-Implementations should be performing in `firmware/v2/src/main.cpp`, `lib/App/oled_manager.cpp`, and `platformio.ini`.
+Implementations should be performing in `firmware/magic/src/main.cpp`, `lib/App/oled_manager.cpp`, and `platformio.ini`.
 
 ## 4. Verification (Phase 3 Audit)
 -   Verify build status for `heltec_v2`, `heltec_v3`, `heltec_v4`.

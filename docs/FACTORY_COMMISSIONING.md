@@ -279,7 +279,7 @@ If flashing fails:
 1. **Check USB connection** — is it a high-power hub or direct PC port?
 2. **Check device drivers** — see Troubleshooting section
 3. **Check PlatformIO** — run `pio system info` to verify install
-4. **Check firmware path** — ensure `firmware/v2/` exists and is readable
+4. **Check firmware path** — ensure `firmware/magic/` exists and is readable
 5. **Report error** with exact message + device details to team
 
 ---

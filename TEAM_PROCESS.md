@@ -48,7 +48,7 @@ Ollama is free, local, and always running. Don't hand-write what it can generate
 
 ## How to Queue an Ollama Task
 
-From `firmware/v2/` or `tools/` directory:
+From `firmware/magic/` or `tools/` directory:
 
 ```bash
 # Generate boilerplate code
