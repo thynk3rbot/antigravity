@@ -41,7 +41,7 @@ public:
      *
      * @return JsonDocument containing full status (or empty doc on error)
      */
-    static StaticJsonDocument<2048> buildStatus();
+    static StaticJsonDocument<3072> buildStatus();
 
     /**
      * @brief Build status and serialize to string
@@ -123,6 +123,12 @@ public:
      * @brief Add hardware I/O map
      */
     static void addHardwareMap(JsonDocument& doc);
+
+    /**
+     * @brief Add display page map — each status field mapped to its OLED page number
+     * page 1=Net  2=Radio  3=Trans  4=Relays  5=GPS
+     */
+    static void addDisplayMap(JsonDocument& doc);
 
 private:
     // Static state for historical data

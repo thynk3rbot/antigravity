@@ -46,8 +46,8 @@ uint32_t StatusBuilder::lastBootTimestamp = 0;
 // Public Methods
 // ============================================================================
 
-StaticJsonDocument<2048> StatusBuilder::buildStatus() {
-    StaticJsonDocument<2048> doc;
+StaticJsonDocument<3072> StatusBuilder::buildStatus() {
+    StaticJsonDocument<3072> doc;
 
     // Add all sections to the document
     addBasicInfo(doc);
@@ -66,12 +66,13 @@ StaticJsonDocument<2048> StatusBuilder::buildStatus() {
     addSystemInfo(doc);
     addPluginList(doc);
     addHardwareMap(doc);
+    addDisplayMap(doc);
 
     return doc;
 }
 
 std::string StatusBuilder::buildStatusString() {
-    StaticJsonDocument<2048> doc = buildStatus();
+    StaticJsonDocument<3072> doc = buildStatus();
     std::string result;
     serializeJson(doc, result);
     return result;
@@ -109,8 +110,8 @@ void StatusBuilder::addBasicInfo(ArduinoJson::JsonDocument& doc) {
         doc["hw"] = String(NVSManager::getHardwareVersion("V3").c_str());
     #endif
 
-    doc["version"] = FIRMWARE_VERSION;
-    doc["ver"] = FIRMWARE_VERSION; // Matrix uses 'ver'
+    doc["version"] = String(FIRMWARE_VERSION);
+    doc["ver"] = String(FIRMWARE_VERSION); // Matrix uses 'ver'
     doc["mac"] = WiFi.macAddress();
 
     std::string ip = WiFiTransport::getIP();
@@ -344,4 +345,51 @@ void StatusBuilder::addPluginList(ArduinoJson::JsonDocument& doc) {
 void StatusBuilder::addHardwareMap(ArduinoJson::JsonDocument& doc) {
     // ArduinoJson::JsonObject map = doc.createNestedObject("hardware_map");
     // TODO: Populate with actual GPIO mapping from board_config.h
+}
+
+// ── Display Page Map ──────────────────────────────────────────────────────────
+// Maps each status field to the OLED page number where it is displayed.
+// Page 1=Net  2=Radio  3=Trans  4=Relays  5=GPS
+// Allows the webapp/daemon to highlight the relevant screen for any field.
+
+void StatusBuilder::addDisplayMap(ArduinoJson::JsonDocument& doc) {
+    ArduinoJson::JsonObject m = doc.createNestedObject("display");
+
+    // Page 1 — Net: IP address, peer count, device name
+    m["ip"]          = 1;
+    m["name"]        = 1;
+    m["peer_cnt"]    = 1;
+    m["peers"]       = 1;
+    m["mac"]         = 1;
+
+    // Page 2 — Radio: battery and LoRa signal
+    m["bat_v"]          = 2;
+    m["bat"]            = 2;
+    m["bat_pct"]        = 2;
+    m["bat_percentage"] = 2;
+    m["mode"]           = 2;
+    m["vext"]           = 2;
+    m["lora_rssi"]      = 2;
+    m["lora_snr"]       = 2;
+    m["rssi_history"]   = 2;
+
+    // Page 3 — Trans: transport connectivity
+    m["wifi_connected"]  = 3;
+    m["wifi_rssi"]       = 3;
+    m["ble_connected"]   = 3;
+    m["ble_device_name"] = 3;
+    m["ble_enabled"]     = 3;
+    m["mqtt_connected"]  = 3;
+    m["mqtt_broker"]     = 3;
+    m["transports"]      = 3;
+
+    // Page 4 — Relays: relay state, temperature, heap
+    m["relay"]           = 4;
+    m["temp_c"]          = 4;
+    m["heap"]            = 4;
+    m["heap_percentage"] = 4;
+    m["uptime_seconds"]  = 4;
+
+    // Page 5 — GPS
+    m["gps"]             = 5;
 }

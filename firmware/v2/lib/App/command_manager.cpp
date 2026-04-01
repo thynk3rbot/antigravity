@@ -227,6 +227,16 @@ String CommandManager::_handleStatus() {
     gpsObj["alt"] = gps.alt;
 #endif
 
+    // OLED page map: each field → display page (1=Net 2=Radio 3=Trans 4=Relays 5=GPS)
+    JsonObject disp = root.createNestedObject("display");
+    disp["name"]      = 1;  disp["ip"]       = 1;  disp["peer_cnt"]  = 1;
+    disp["bat_pct"]   = 2;  disp["mode"]     = 2;  disp["vext"]      = 2;
+    disp["lora_rssi"] = 2;
+    disp["wifi_connected"] = 3;  disp["ble_connected"] = 3;
+    disp["mqtt_connected"] = 3;
+    disp["relay"]  = 4;  disp["uptime"] = 4;
+    disp["gps"]    = 5;
+
     String response;
     serializeJson(doc, response);
     return response;
