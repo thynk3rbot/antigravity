@@ -403,7 +403,132 @@ Plugins declare their own port in `plugin.json`. Daemon enforces no collisions a
 
 ---
 
-## 10. Success Criteria
+## 10. Security — End-to-End Encryption
+
+### Current State
+
+| Transport | Encryption | Status |
+|---|---|---|
+| LoRa (device ↔ device) | AES-128-GCM (mbedTLS) | ✅ E2E encrypted |
+| ESP-NOW (device ↔ device) | AES-128-GCM (mbedTLS) | ✅ E2E encrypted |
+| MQTT (device → daemon) | Plaintext JSON | ❌ Not encrypted |
+| HTTP (device → daemon) | Plaintext JSON | ❌ Not encrypted |
+
+### V3 Target: Encrypt the MxWire Layer
+
+MQTT becomes a blind pipe. The broker never sees plaintext.
+
+```
+Device                                          Daemon
+MxMessage → MxWire::serialize() → binary        binary → Crypto::decrypt() → MxWire::deserialize() → MxMessage
+            → Crypto::encrypt()                           ↑
+            → MQTT publish (opaque bytes)                 MQTT subscribe (opaque bytes)
+```
+
+**Implementation:**
+- Firmware: `MxTransport(MQTT)::send()` calls `Crypto::encrypt()` on the serialized MxWire buffer before `mqtt.publish()`
+- Daemon: `MxTransport(MQTT)::recv()` calls `Crypto.decrypt()` on the raw bytes before `MxWire.deserialize()`
+- Key: AES-128-GCM, same key on both sides. Firmware loads from NVS (`NVSManager::getCryptoKey()`). Daemon loads from `_infrastructure/.env` (`MAGIC_CRYPTO_KEY=hex_string`).
+- IV: Fresh 12-byte random per packet (already implemented in `Crypto::encrypt()`).
+- AAD: MxWire header bytes (op, subject_id) — authenticated but not encrypted, so routing can happen without decryption if needed.
+- Wire format: `[12-byte IV][encrypted MxWire payload][16-byte GCM tag]` — 28 bytes overhead per message.
+
+**Self-describing format lives inside the encryption envelope.** MxRecord fields, dirty_mask deltas, subject IDs — all encrypted. The transport layer (MQTT) sees opaque bytes. The bus layer (MxBus) sees plaintext MxMessages after decryption. Plugins never touch crypto — they subscribe to MxBus subjects and get clean data.
+
+**Key rotation:** `SETKEY` command on firmware + daemon config update. Both sides must agree. Mismatched keys = GCM auth failure = dropped packets (fail-safe, not fail-open).
+
+---
+
+## 11. UX — Dashboard & MQTT Management
+
+### Principle
+
+The EMQX dashboard (`:18083`) already provides full MQTT management — topic explorer, client list, message inspector, ACLs. We don't rebuild this. We **embed** it.
+
+### Dashboard Integration
+
+The Magic Dashboard (`plugins/webapp`) provides a unified view with embedded panels:
+
+| Panel | Source | Purpose |
+|---|---|---|
+| Device Fleet | Daemon API `/api/plugins/lvc-service` | Live device status from MxRecord LVC |
+| MQTT Explorer | EMQX Dashboard iframe or API proxy | Topic browser, message inspector |
+| Plugin Status | Daemon API `/api/plugins` | Start/stop/health of all plugins |
+| Relay Control | Daemon API → `CommandMxBridge` | GPIO/relay toggle with live feedback |
+| Telemetry | MxBus subscription via WebSocket | Real-time charts (battery, RSSI, uptime) |
+| RAG Query | Plugin API proxy to `:8403` | IoT question answering |
+
+### Tray Icon Menu (Dynamic)
+
+Built from `/api/plugins` + `/api/infrastructure`:
+
+```
+🐙 Magic
+├── Dashboard           → localhost:8000
+├── MQTT Explorer       → localhost:18083
+├── ─────────────
+├── Devices ▸
+│   ├── 🟢 Magic-A3F2   (bat: 87%, RSSI: -42)
+│   ├── 🟢 Magic-B1E7   (bat: 62%, RSSI: -58)
+│   └── 🔴 Magic-C4D9   (last seen: 3m ago)
+├── Services ▸
+│   ├── ✅ Dashboard      [Stop]  :8000
+│   ├── ✅ LVC Service    [Stop]
+│   ├── ⬚ RAG Router     [Start] :8403
+│   ├── ⬚ Assistant      [Start] :8300
+│   └── ⬚ viai Testbed   [Start] :8500
+├── Infrastructure ▸
+│   ├── MQTT: 🟢 EMQX 5.5
+│   ├── DB:   🟢 Postgres 15
+│   └── [Restart All]
+├── ─────────────
+└── Exit
+```
+
+**Devices section** is populated from MxBus `HEARTBEAT` subject — daemon tracks last-seen timestamp per device. Green = heard in last 60s. Red = silent.
+
+### Widget Library for Plugins
+
+Plugins that serve web UIs can import shared dashboard components:
+
+```
+plugins/_shared/widgets/
+├── device-card.js       ← device status card (name, battery, RSSI, relay state)
+├── telemetry-chart.js   ← real-time chart (connects to daemon WebSocket)
+├── relay-toggle.js      ← relay on/off switch (calls daemon API)
+├── mqtt-topic-tree.js   ← topic browser (proxied from EMQX API)
+└── status-badge.js      ← health indicator (green/yellow/red)
+```
+
+Any plugin imports `<script src="/_shared/widgets/device-card.js">` and gets a consistent, branded component. No duplication across plugin UIs.
+
+---
+
+## 12. Test Data Pump
+
+For development and demo without live hardware:
+
+```
+plugins/test-pump/
+├── plugin.json
+├── pump.py              ← generates fake MxMessages at configurable rate
+├── scenarios/
+│   ├── healthy_fleet.json    ← 3 devices, normal telemetry
+│   ├── low_battery.json      ← device going critical
+│   ├── mesh_partition.json   ← network split scenario
+│   └── relay_toggle.json     ← relay state changes
+└── .env.example
+```
+
+The pump publishes to MQTT using the same wire format as real firmware. The daemon can't tell the difference. Useful for:
+- Dashboard development without hardware
+- Demo to customers (viai.club)
+- Integration testing
+- Load testing (crank up message rate)
+
+---
+
+## 13. Success Criteria
 
 1. Drop a new directory in `plugins/` with a valid `plugin.json` → it appears in the tray menu within 10 seconds (hot-reload) or on next daemon restart
 2. No code changes required to add a new plugin
