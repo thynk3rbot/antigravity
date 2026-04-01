@@ -8,7 +8,7 @@
 #include "http_api.h"
 #include "nvs_manager.h"
 #include "status_builder.h"
-#include "command_manager.h"
+#include "command_mx_bridge.h"
 #include <ESPAsyncWebServer.h>
 #include <ArduinoJson.h>
 #include <LittleFS.h>
@@ -264,7 +264,7 @@ void HttpAPI::handleRelay(AsyncWebServerRequest* request) {
   snprintf(cmdBuf, sizeof(cmdBuf), "RELAY 1 %s", action);
   
   String responseJson;
-  CommandManager::process(String(cmdBuf), [&responseJson](const String& resp) {
+  CommandMxBridge::process(String(cmdBuf), [&responseJson](const String& resp) {
     responseJson = resp;
   });
 
@@ -349,9 +349,9 @@ void HttpAPI::handleCommand(AsyncWebServerRequest* request) {
     }
   }
 
-  // Route through CommandManager — handles STATUS, RELAY, SETWIFI, BLINK, REBOOT, HELP
+  // Route through CommandMxBridge — handles STATUS, RELAY, SETWIFI, BLINK, REBOOT, HELP
   String responseJson;
-  CommandManager::process(cmdStr, [&responseJson](const String& resp) {
+  CommandMxBridge::process(cmdStr, [&responseJson](const String& resp) {
     responseJson = resp;
   });
 

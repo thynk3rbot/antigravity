@@ -32,6 +32,7 @@
 #include "../lib/App/oled_manager.h"
 #include "../lib/Transport/mqtt_transport.h"
 #include "../lib/App/wifi_mx_adapter.h"
+#include "../lib/App/command_mx_bridge.h"
 
 // ============================================================================
 // Forward Declarations
@@ -216,7 +217,7 @@ void loop() {
     String input = Serial.readStringUntil('\n');
     input.trim();
     if (input.length() > 0) {
-      CommandManager::process(input, [](const String& response) {
+      CommandMxBridge::process(input, [](const String& response) {
         Serial.println(response);
       });
     }

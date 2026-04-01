@@ -1,4 +1,5 @@
 #include "serial_transport.h"
+#include "../App/command_mx_bridge.h"
 #include <Arduino.h>
 
 SerialTransport& SerialTransport::getInstance() {
@@ -42,8 +43,8 @@ void SerialTransport::poll() {
                 _rxBuffer.trim();
                 Serial.printf("\n[SERIAL] Processing: '%s'\n", _rxBuffer.c_str());
                 
-                // Route directly to CommandManager for human-readable processing
-                CommandManager::process(_rxBuffer, [](const String& response) {
+                // Route directly to CommandMxBridge for human-readable processing
+                CommandMxBridge::process(_rxBuffer, [](const String& response) {
                     Serial.print("\n> ");
                     Serial.println(response);
                     Serial.print("AG> "); 
