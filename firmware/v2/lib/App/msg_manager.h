@@ -126,6 +126,12 @@ public:
     // Send a text message (fragments automatically if > LMX_FRAG_DATA_SIZE)
     bool sendText(uint8_t dest, const String& text, bool wantAck = true);
 
+    // Send by device name — resolves name from neighbor table, falls back to broadcast
+    bool sendTextByName(const String& destName, const String& text, bool wantAck = true);
+
+    // Resolve device name to short node ID (0xFF = not found / broadcast)
+    uint8_t resolveNameToId(const String& name);
+
     // Process a raw LMX packet from any transport
     void handleLmxPacket(const uint8_t* data, size_t len, TransportType source);
 

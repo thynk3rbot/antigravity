@@ -406,6 +406,57 @@ void MsgManager::announceNode() {
     Serial.printf("[MSG] NODE_ANNOUNCE caps=0x%02X\n", caps);
 }
 
+// ── Name Resolution & sendTextByName ─────────────────────────────────
+
+// Returns the node ID for the given name.
+// Returns LMX_BROADCAST (0xFF) if not found.
+// Returns 0xFE as a sentinel if the name matches more than one neighbor (ambiguous).
+uint8_t MsgManager::resolveNameToId(const String& name) {
+    uint8_t found   = 0xFF;  // LMX_BROADCAST = not found
+    int     matches = 0;
+
+    for (int i = 0; i < LMX_NEIGHBOR_SLOTS; i++) {
+        if (!_neighbors[i].active) continue;
+        String stored = String(_neighbors[i].name);
+
+        bool hit = false;
+        if (stored.equalsIgnoreCase(name)) {
+            hit = true;
+        } else if (name.length() > 6 && name.substring(0, 6).equalsIgnoreCase("Magic-")) {
+            // Caller used full "Magic-XXX", stored is just the suffix
+            if (stored.equalsIgnoreCase(name.substring(6))) hit = true;
+        } else if (stored.length() > 6 && stored.substring(0, 6).equalsIgnoreCase("Magic-")) {
+            // Stored is "Magic-XXX", caller used just the suffix
+            if (stored.substring(6).equalsIgnoreCase(name)) hit = true;
+        }
+
+        if (hit) {
+            found = _neighbors[i].src;
+            matches++;
+            if (matches > 1) {
+                Serial.printf("[MSG] Duplicate name '%s' in neighbor table — ambiguous\n", name.c_str());
+                return 0xFE;  // ambiguous sentinel
+            }
+        }
+    }
+    return found;  // 0xFF if not found, valid ID if exactly one match
+}
+
+bool MsgManager::sendTextByName(const String& destName, const String& text, bool wantAck) {
+    uint8_t dest = resolveNameToId(destName);
+    if (dest == 0xFE) {
+        // Ambiguous — two or more neighbors share this name
+        Serial.printf("[MSG] ERROR: '%s' matches multiple neighbors — not sent\n", destName.c_str());
+        return false;
+    }
+    if (dest == LMX_BROADCAST) {
+        Serial.printf("[MSG] '%s' not in neighbor table — broadcasting\n", destName.c_str());
+    } else {
+        Serial.printf("[MSG] '%s' → 0x%02X\n", destName.c_str(), dest);
+    }
+    return sendText(dest, text, wantAck);
+}
+
 // ── Tick ──────────────────────────────────────────────────────────────
 
 void MsgManager::tick() {

@@ -52,8 +52,33 @@ void CommandManager::process(const String& input, CommandManager::ResponseCallba
     trimmed.trim();
     if (trimmed.length() == 0) return;
 
+    // Shortcut: "@name text" — send text message to named node without MSG prefix
+    // e.g. "@Barn hello" or "@A3F2 open sesame"
+    if (trimmed.startsWith("@")) {
+        int spaceIdx = trimmed.indexOf(' ');
+        String destName = (spaceIdx < 0) ? trimmed.substring(1) : trimmed.substring(1, spaceIdx);
+        String msgText  = (spaceIdx < 0) ? String("") : trimmed.substring(spaceIdx + 1);
+        msgText.trim();
+        if (destName.length() == 0) {
+            if (responseCallback) responseCallback("{\"ok\":false,\"error\":\"Usage: @name text\"}");
+            return;
+        }
+        if (msgText.length() == 0) {
+            if (responseCallback) responseCallback("{\"ok\":false,\"error\":\"Empty message\"}");
+            return;
+        }
+        uint8_t resolved = MsgManager::getInstance().resolveNameToId(destName);
+        if (resolved == 0xFE) {
+            if (responseCallback) responseCallback("{\"ok\":false,\"error\":\"Ambiguous: multiple neighbors named '" + destName + "'\"}");
+            return;
+        }
+        bool ok = MsgManager::getInstance().sendText(resolved, msgText);
+        if (responseCallback) responseCallback(ok ? "{\"ok\":true}" : "{\"ok\":false,\"error\":\"Send failed\"}");
+        return;
+    }
+
     String cmd, args;
-    
+
     // 1. Try JSON Decoding
     if (trimmed.startsWith("{")) {
         DynamicJsonDocument doc(512);
@@ -258,7 +283,8 @@ String CommandManager::_handleReboot() {
 }
 
 String CommandManager::_handleHelp() {
-    return "Available commands: STATUS, VSTATUS, RELAY, SETNAME, SETWIFI, SETIP, SETBROKER, BLINK, REBOOT, GETCONFIG, SCHED, FORWARD, GPS, ASK, LIST, LOAD, FACTORY_RESET, HELP";
+    return "Available commands: STATUS, VSTATUS, RELAY, SETNAME, SETWIFI, SETIP, SETBROKER, BLINK, REBOOT, GETCONFIG, SCHED, FORWARD, GPS, ASK, LIST, LOAD, FACTORY_RESET, HELP, MSG, NODES, SLEEP\n"
+           "Messaging shortcuts: @name text  (send to neighbor by name)  |  MSG <name|hex> <text>";
 }
 
 String CommandManager::_handleSetName(const String& args) {
@@ -370,18 +396,42 @@ String CommandManager::_handleSleep(const String& args) {
     return "{\"ok\":false}";
 }
 
-// MSG <dest_hex> <text>  — send a Magic Messenger message over LMX
-// e.g. MSG FF Hello world   (broadcast)
-//      MSG 02 STATUS         (structured: addr cmd)
+// MSG <dest> <text>  — send a text message over LMX mesh
+// dest can be:
+//   - hex node ID  (e.g. "FF" for broadcast, "02" for node 0x02)
+//   - device name  (e.g. "Barn", "Magic-A3F2") — resolved via neighbor table
+// e.g. MSG FF hello world
+//      MSG Barn open the gate
+//      MSG A3F2 STATUS
 String CommandManager::_handleMsg(const String& args) {
     int sp = args.indexOf(' ');
-    if (sp < 0) return "{\"ok\":false,\"error\":\"Usage: MSG <dest_hex> <text>\"}";
+    if (sp < 0) return "{\"ok\":false,\"error\":\"Usage: MSG <dest> <text>\"}";
 
-    uint8_t dest = (uint8_t)strtol(args.substring(0, sp).c_str(), nullptr, 16);
-    String text  = args.substring(sp + 1);
+    String destStr = args.substring(0, sp);
+    String text    = args.substring(sp + 1);
     text.trim();
     if (text.length() == 0) return "{\"ok\":false,\"error\":\"Empty message\"}";
 
-    bool ok = MsgManager::getInstance().sendText(dest, text);
+    bool ok = false;
+    // If destStr is purely hex characters (1-2 chars), treat as node ID
+    // Otherwise resolve by name
+    bool isHex = (destStr.length() <= 2);
+    if (isHex) {
+        for (unsigned int i = 0; i < destStr.length(); i++) {
+            char c = destStr.charAt(i);
+            if (!((c >= '0' && c <= '9') || (c >= 'A' && c <= 'F') ||
+                  (c >= 'a' && c <= 'f'))) { isHex = false; break; }
+        }
+    }
+    if (isHex) {
+        uint8_t dest = (uint8_t)strtol(destStr.c_str(), nullptr, 16);
+        ok = MsgManager::getInstance().sendText(dest, text);
+    } else {
+        uint8_t resolved = MsgManager::getInstance().resolveNameToId(destStr);
+        if (resolved == 0xFE) {
+            return "{\"ok\":false,\"error\":\"Ambiguous: multiple neighbors named '" + destStr + "'\"}";
+        }
+        ok = MsgManager::getInstance().sendText(resolved, text);
+    }
     return ok ? "{\"ok\":true}" : "{\"ok\":false,\"error\":\"Send failed\"}";
 }
