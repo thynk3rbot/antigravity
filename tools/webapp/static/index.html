@@ -216,6 +216,7 @@
                 <a class="nav-item" onclick="switchPage('ops')">🐙 Ops Center</a>
                 <a class="nav-item" onclick="switchPage('admin')">⚙️ Admin</a>
                 <a class="nav-item" onclick="switchPage('magiccache')">💾 Magic Cache</a>
+                <a class="nav-item" onclick="switchPage('fields')">📋 Field Config</a>
 
                 <div class="fleet-header">Active Fleet</div>
                 <div id="sidebar-node-list" class="node-mini-list">
@@ -751,6 +752,53 @@
                 </div>
             </div>
 
+            <!-- Field Config Page -->
+            <div id="pg-fields" class="page">
+                <div style="padding:20px;max-width:1100px">
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+                        <h2 style="margin:0;color:var(--accent);font-size:1.1rem;letter-spacing:.05em">📋 FIELD CONFIGURATION</h2>
+                        <div style="display:flex;gap:8px;align-items:center">
+                            <label style="color:var(--text-dim);font-size:.8rem">Class:</label>
+                            <select id="fc-class" onchange="fcLoad()" style="background:#111;border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:4px">
+                                <option value="v4">V4</option>
+                                <option value="v3">V3</option>
+                            </select>
+                            <label style="color:var(--text-dim);font-size:.8rem">Response:</label>
+                            <select id="fc-type" onchange="fcLoad()" style="background:#111;border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:4px">
+                                <option value="status">STATUS</option>
+                                <option value="vstatus">VSTATUS</option>
+                            </select>
+                            <button onclick="fcAddRow()" class="btn-sm" style="background:rgba(0,212,255,.1);border:1px solid var(--accent);color:var(--accent);padding:4px 10px;border-radius:4px;cursor:pointer;font-size:.8rem">+ Add Field</button>
+                            <button onclick="fcSave()" class="btn-sm" style="background:rgba(0,255,0,.1);border:1px solid #0f0;color:#0f0;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:.8rem">💾 Save</button>
+                            <button onclick="fcReset()" class="btn-sm" style="background:rgba(255,80,0,.1);border:1px solid #f50;color:#f50;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:.8rem">↺ Reset</button>
+                        </div>
+                    </div>
+                    <div id="fc-status" style="font-size:.8rem;color:var(--text-dim);margin-bottom:10px;height:18px"></div>
+                    <div style="overflow-x:auto">
+                    <table style="width:100%;border-collapse:collapse;font-size:.8rem" id="fc-table">
+                        <thead>
+                            <tr style="border-bottom:1px solid var(--border);color:var(--text-dim)">
+                                <th style="text-align:left;padding:6px 8px;width:140px">Field Key</th>
+                                <th style="text-align:left;padding:6px 8px;width:160px">Label</th>
+                                <th style="text-align:left;padding:6px 8px;width:110px">Type</th>
+                                <th style="text-align:center;padding:6px 8px;width:60px">Visible</th>
+                                <th style="text-align:center;padding:6px 8px;width:60px">Critical</th>
+                                <th style="text-align:center;padding:6px 8px;width:60px">Order</th>
+                                <th style="text-align:center;padding:6px 8px;width:60px">Screen</th>
+                                <th style="text-align:center;padding:6px 8px;width:40px">Del</th>
+                            </tr>
+                        </thead>
+                        <tbody id="fc-tbody">
+                            <tr><td colspan="8" style="text-align:center;padding:20px;color:var(--text-dim)">Loading…</td></tr>
+                        </tbody>
+                    </table>
+                    </div>
+                    <div style="margin-top:10px;color:var(--text-dim);font-size:.75rem">
+                        Screen: 1=Net&nbsp; 2=Radio&nbsp; 3=Trans&nbsp; 4=Relays&nbsp; 5=GPS&nbsp; 0=off-screen
+                    </div>
+                </div>
+            </div>
+
             <!-- Terminal Area -->
             <div class="terminal-panel" id="terminal-log">
                 <!-- Log entries -->
@@ -938,5 +986,16 @@
     <script src="/static/js/test_harness.js"></script>
     <script src="/static/js/app.js"></script>
     <script src="/static/js/magiccache.js"></script>
+    <script src="/static/js/field_config.js"></script>
+    <script>
+    // Auto-load field config when that page is shown
+    (function(){
+        var _origSwitch = window.switchPage;
+        window.switchPage = function(page) {
+            _origSwitch && _origSwitch(page);
+            if (page === 'fields') { setTimeout(fcLoad, 50); }
+        };
+    })();
+    </script>
 </body>
 </html>
