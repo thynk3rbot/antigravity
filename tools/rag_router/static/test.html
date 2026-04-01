@@ -226,7 +226,7 @@
 
   async function checkHealth() {
     try {
-      const resp = await fetch('http://localhost:8200/api/nodes');
+      const resp = await fetch('http://localhost:8403/api/nodes');
       if (resp.ok) {
         document.getElementById('status').className = 'status ready';
         document.getElementById('status').textContent = '✅ Connected to RAG Router';
@@ -290,7 +290,7 @@
     addResult('Querying RAG Router...');
 
     try {
-      const resp = await fetch('http://localhost:8200/api/ingest-and-query', {
+      const resp = await fetch('http://localhost:8403/api/ingest-and-query', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)

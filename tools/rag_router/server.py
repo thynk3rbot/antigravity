@@ -23,13 +23,13 @@ load_dotenv()
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = os.path.join(BASE_DIR, "static")
 
-DIFY_BASE_URL = os.getenv("DIFY_BASE_URL", "http://localhost:5001/v1")
+DIFY_BASE_URL = os.getenv("DIFY_BASE_URL", "http://localhost:8402/v1")
 DIFY_API_KEY = os.getenv("DIFY_API_KEY", "")
 MQTT_BROKER = os.getenv("MQTT_BROKER", "localhost")
-MQTT_PORT = int(os.getenv("MQTT_PORT", "1883"))
+MQTT_PORT = int(os.getenv("MQTT_PORT", "1884"))
 MQTT_USER = os.getenv("MQTT_USER", "")
 MQTT_PASS = os.getenv("MQTT_PASS", "")
-RAG_ROUTER_PORT = int(os.getenv("RAG_ROUTER_PORT", "8200"))
+RAG_ROUTER_PORT = int(os.getenv("RAG_ROUTER_PORT", "8403"))
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 
 logging.basicConfig(level=getattr(logging, LOG_LEVEL), format="%(asctime)s [%(levelname)s] %(message)s")
@@ -104,12 +104,16 @@ async def query_dify(query_text, domain, conversation_id=""):
     expert_prompt = EXPERT_PROFILES.get(domain, "Analyze the following sensor data.")
     full_query = f"{expert_prompt}\n\nSensor Data:\n{query_text}"
     headers = {"Authorization": f"Bearer {DIFY_API_KEY}", "Content-Type": "application/json"}
-    payload = {"inputs": {"domain": domain}, "query": full_query, "response_mode": "blocking", "user": "rag-router"}
+    payload = {"inputs": {"domain": domain, "query": full_query}, "response_mode": "blocking", "user": "rag-router"}
     if conversation_id:
         payload["conversation_id"] = conversation_id
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.post(f"{DIFY_BASE_URL}/chat-messages", headers=headers, json=payload)
+        async with httpx.AsyncClient(timeout=300.0) as client:
+            # Try chat-messages first, fall back to completion-messages
+            chat_payload = {**payload, "query": full_query}
+            resp = await client.post(f"{DIFY_BASE_URL}/chat-messages", headers=headers, json=chat_payload)
+            if resp.status_code == 400 and "not_chat_app" in resp.text:
+                resp = await client.post(f"{DIFY_BASE_URL}/completion-messages", headers=headers, json=payload)
             resp.raise_for_status()
             data = resp.json()
             return {
@@ -205,6 +209,7 @@ ws_clients = set()
 
 
 async def broadcast(event, data):
+    global ws_clients
     msg = json.dumps({"event": event, "data": data, "ts": datetime.now(timezone.utc).isoformat()})
     stale = set()
     for ws in ws_clients:
