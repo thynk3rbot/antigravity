@@ -7,7 +7,9 @@
 // ============================================================================
 //   FIRMWARE & FEATURE FLAGS
 // ============================================================================
-#define FIRMWARE_VERSION "v0.2.82"
+#ifndef FIRMWARE_VERSION
+#define FIRMWARE_VERSION "0.0.21V3"
+#endif
 #define FIRMWARE_NAME "LoRaLink Any2Any"
 #define HARDWARE_ID "Heltec ESP32 LoRa V3"
 #define CONFIG_SCHEMA "1.0"
