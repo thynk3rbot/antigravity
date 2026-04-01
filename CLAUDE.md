@@ -74,15 +74,21 @@ When modifying firmware, check this table and update all listed tool files in th
 2. **Feature branches are short-lived.** Branch from `main`, do the work, PR back within the same session or next day.
 3. **Never accumulate parallel long-lived branches.** If a feature branch is >2 days old without a PR, something is wrong.
 4. **Flash from `main` only.** All PlatformIO build environments target the `main` branch.
-5. **Both `firmware/v1/` and `firmware/v2/` coexist.** v1 is active development, v2 is test bed.
+5. **`firmware/magic/`** is the single active firmware directory (renamed from v2). v1 has been retired.
 6. **OTA deploy targets:** use mDNS — `pio run -e ota_master` or `pio run -e ota_slave` (resolves via `magic-<id>.local`, no hardcoded IPs)
 7. **Single build, multi-flash** — build once, OTA to all devices; never build separately per device.
 
 ### Directory Layout (canonical)
 ```
 main/
-├── firmware/v1/     ← Active development firmware (flash this)
-├── firmware/v2/     ← V2 test bed
+├── firmware/magic/  ← Active firmware (ESP32-S3 V3/V4, Mx framework)
+│   ├── lib/App/     ← Application managers (boot, command, control, etc.)
+│   ├── lib/Mx/      ← Mx framework (bus, queue, pool, LVC, transport)
+│   ├── lib/HAL/     ← Hardware abstraction (radio, relay, sensor, MCP)
+│   ├── lib/Transport/ ← Transport layer (LoRa, WiFi, BLE, MQTT, Serial)
+│   └── src/main.cpp ← FreeRTOS task definitions
+├── daemon/          ← PC daemon (Python, async Mx backend)
+│   └── src/mx/      ← Python Mx framework
 ├── tools/           ← Webapp, version scripts, fleet tools
 ├── docs/            ← Plans, versioning, specs
 ├── .version         ← Version state file

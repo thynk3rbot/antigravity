@@ -21,7 +21,7 @@ Magic-AnyToAny is a modular firmware framework that enables **any wireless inter
 This repository contains both the stable and development versions of the Magic firmware, along with supporting tools:
 
 - **[firmware/v1/](file:///c:/Users/spw1/Documents/Code/Antigravity/firmware/v1/)** — Stable Any-to-Any Framework (v1.6.0). Supports V2/V3 hardware, TaskScheduler, and GPS.
-- **[firmware/v2/](file:///c:/Users/spw1/Documents/Code/Antigravity/firmware/v2/)** — Next-Gen FreeRTOS-based Firmware (v2.0.0). Focuses on HAL abstraction and V4 board support.
+- **[firmware/magic/](file:///c:/Users/spw1/Documents/Code/Antigravity/firmware/magic/)** — Next-Gen FreeRTOS-based Firmware (v2.0.0). Focuses on HAL abstraction and V4 board support.
 - **[tools/](file:///c:/Users/spw1/Documents/Code/Antigravity/tools/)** — Management tools, WebApp dashboard, and local RAG router.
 - **[01_planning/](file:///c:/Users/spw1/Documents/Code/Antigravity/01_planning/)** — Architecture specs and design documents.
 

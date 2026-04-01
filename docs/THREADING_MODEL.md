@@ -1,4 +1,4 @@
-# Threading Model — firmware/v2
+# Threading Model — firmware/magic
 
 **Last updated:** 2026-04-01
 **Status:** Active — WDT stability fix landed in 0.0.22, SEF queue model planned

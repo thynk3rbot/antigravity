@@ -108,7 +108,7 @@ gh pr create \
   --title "unify: merge all v2 firmware, v1 fixes, and tools into main" \
   --body "$(cat <<'EOF'
 ## Summary
-- Merges the full v2 firmware test bed (`firmware/v2/`)
+- Merges the full v2 firmware test bed (`firmware/magic/`)
 - Brings v1 firmware to v0.2.82 with GPS V4 support, Web-OTA, power management
 - Adds version management tooling (`tools/version.sh`, `.version`)
 - Adds ScheduleManager, unified CommandManager routing, fleet build environments
@@ -208,13 +208,13 @@ Add the following section to `CLAUDE.md` after the Git Workflow section:
 2. **Feature branches are short-lived.** Branch from `main`, do the work, PR back within the same session or next day.
 3. **Never accumulate parallel long-lived branches.** If a feature branch is >2 days old without a PR, something is wrong.
 4. **Flash from `main` only.** All PlatformIO build environments target the `main` branch.
-5. **Both `firmware/v1/` and `firmware/v2/` coexist.** v1 is active development, v2 is test bed.
+5. **Both `firmware/v1/` and `firmware/magic/` coexist.** v1 is active development, v2 is test bed.
 
 ### Directory Layout (canonical)
 ```
 main/
 ├── firmware/v1/     ← Active development firmware (flash this)
-├── firmware/v2/     ← V2 test bed
+├── firmware/magic/     ← V2 test bed
 ├── tools/           ← Webapp, version scripts, fleet tools
 ├── docs/            ← Plans, versioning, specs
 ├── .version         ← Version state file
@@ -256,7 +256,7 @@ Expected: `SUCCESS` (or at minimum, compiles without error).
 **Step 3: Verify v2 builds**
 
 ```bash
-cd firmware/v2 && pio run -e heltec_v3_hub 2>&1 | tail -5
+cd firmware/magic && pio run -e heltec_v3_hub 2>&1 | tail -5
 ```
 
 Expected: `SUCCESS`

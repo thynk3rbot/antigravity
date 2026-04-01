@@ -133,7 +133,7 @@ The Magic platform is a **cloud-free, self-hosted fleet management system** for 
 ### Pattern 3: Gossip Protocol
 - **Problem:** State dissemination at 1000s of devices. No central broker.
 - **Solution:** Peer-to-peer gossip. Each device tells 3 neighbors. Exponential spread.
-- **Implementation:** `firmware/v2/lib/App/GossipManager.*` (300 lines)
+- **Implementation:** `firmware/magic/lib/App/GossipManager.*` (300 lines)
 - **Spread Time:** 45-70 minutes for 1000 devices (O(log n) rounds)
 - **Memory:** ~2MB for 10,000 peer list
 - **Overhead:** 1 message per 5 minutes per device

@@ -44,7 +44,7 @@ Per `AGENT_ASSIGNMENTS.md`, the following files were touched by the implementati
 > **PROTOCOL BREACH**: The implementation was performed by the Review Agent (Antigravity) before the Implementation Agent (Claude) could execute Phase 2. This has created a "unassigned" status in `agent-tracking.py`.
 
 ### Recommendations:
-1.  **Halt Implementation**: No further changes to `firmware/v2/lib/App/` by Antigravity.
+1.  **Halt Implementation**: No further changes to `firmware/magic/lib/App/` by Antigravity.
 2.  **Claude Review**: Claude should review the `POST /api/provision` implementation in `http_api.cpp` to ensure it matches the `pc-daemon.py` requirements.
 3.  **Handshake Required**: Antigravity standing by for Claude's "Audit Approved" signal before closing Phase 3 Baseline.
 

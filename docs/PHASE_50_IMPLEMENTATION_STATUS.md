@@ -142,10 +142,10 @@ Phase 50 is DONE when ALL of these pass:
 
 ```
 Firmware V2:
-  firmware/v2/lib/App/boot_sequence.cpp/h      — Boot orchestration
-  firmware/v2/lib/App/control_loop.cpp/h       — Periodic maintenance
-  firmware/v2/lib/App/message_handler.cpp/h    — Message dispatch
-  firmware/v2/src/main.cpp                      — Task setup
+  firmware/magic/lib/App/boot_sequence.cpp/h      — Boot orchestration
+  firmware/magic/lib/App/control_loop.cpp/h       — Periodic maintenance
+  firmware/magic/lib/App/message_handler.cpp/h    — Message dispatch
+  firmware/magic/src/main.cpp                      — Task setup
 
 Daemon:
   daemon/src/mesh_router.py                     — Routing engine

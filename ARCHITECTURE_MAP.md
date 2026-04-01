@@ -32,10 +32,10 @@ It is a working architecture index, not a substitute for reading source files.
 The firmware follows a **Library-centric, specialized manager architecture**.
 
 ### Path Structure (v2)
-- `firmware/v2/lib/HAL/`: Hardware Abstraction Layer (Board-specific configs).
-- `firmware/v2/lib/Transport/`: Network and radio drivers (WiFi, LoRa, BLE, ESP-NOW).
-- `firmware/v2/lib/App/`: Business logic (CommandManager, StatusBuilder, NVS).
-- `firmware/v2/src/main.cpp`: System integration and task orchestration.
+- `firmware/magic/lib/HAL/`: Hardware Abstraction Layer (Board-specific configs).
+- `firmware/magic/lib/Transport/`: Network and radio drivers (WiFi, LoRa, BLE, ESP-NOW).
+- `firmware/magic/lib/App/`: Business logic (CommandManager, StatusBuilder, NVS).
+- `firmware/magic/src/main.cpp`: System integration and task orchestration.
 
 ### Key Properties
 - Components are decoupled into libraries for easier testing and board switching.

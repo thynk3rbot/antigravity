@@ -246,7 +246,7 @@ Start_Magic.bat
 
 ## Next Steps (After Infrastructure is Up)
 
-1. **Build firmware:** `cd firmware/v2 && pio run -e heltec_v4`
+1. **Build firmware:** `cd firmware/magic && pio run -e heltec_v4`
 2. **Flash device:** `pio run -t upload -e heltec_v4`
 3. **Check dashboard:** Device should appear at http://localhost:8000
 
