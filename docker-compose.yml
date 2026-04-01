@@ -1,13 +1,17 @@
 version: '3.8'
 
 services:
-  mosquitto:
-    image: eclipse-mosquitto:latest
+  mqtt:
+    image: emqx/emqx:5.5
     container_name: magic_mqtt
     ports:
-      - "1883:1883"       # MQTT broker (standard port)
-    volumes:
-      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf
+      - "1883:1883"       # MQTT TCP (devices + test pump)
+      - "8083:8083"       # MQTT WebSocket (React dashboard)
+      - "18083:18083"     # EMQX Admin UI
+    environment:
+      - EMQX_DASHBOARD__DEFAULT_USERNAME=admin
+      - EMQX_DASHBOARD__DEFAULT_PASSWORD=magic123
+      - EMQX_LOG__CONSOLE__LEVEL=warning
     restart: unless-stopped
 
   db:
@@ -43,7 +47,7 @@ services:
     image: telegraf:1.30
     container_name: magic_ingest
     depends_on:
-      - mosquitto
+      - mqtt
       - influxdb
     volumes:
       - ./telegraf.conf:/etc/telegraf/telegraf.conf:ro
