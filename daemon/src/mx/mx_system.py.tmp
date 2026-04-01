@@ -1,0 +1,70 @@
+# daemon/src/mx/mx_system.py
+import asyncio
+from .mx_bus import MxBus
+
+class MxSystem:
+    _instance = None
+
+    @classmethod
+    def instance(cls):
+        if cls._instance is None:
+            cls._instance = cls()
+        return cls._instance
+
+    def __init__(self):
+        self.bus = MxBus()
+
+    async def start(self):
+        pass
+
+    async def stop(self):
+        pass
+
+# daemon/src/test_mx.py
+import asyncio
+import sys
+from pathlib import Path
+
+# Add src to path
+sys.path.append(str(Path(__file__).parent))
+
+from mx.mx_bus import MxBus
+from mx.mx_queue import MxQueue
+from mx.mx_message import MxMessage, MxOp
+from mx.mx_record import MxRecord
+
+async def main():
+    print("Starting Mx smoke tests...")
+    bus = MxBus()
+    queue = MxQueue("test", maxsize=8)
+    
+    # Test Subscribe
+    bus.subscribe("node_status", queue)
+    
+    # Test Publish
+    msg = MxMessage(op=MxOp.UPDATE, subject="node_status", payload={"battery_mv": 3700})
+    delivered = await bus.publish(msg)
+    assert delivered == 1, f"Expected 1 delivery, got {delivered}"
+    print("✓ Publish/Subscribe delivered")
+
+    # Test Receive
+    received = await queue.receive(timeout=1.0)
+    assert received is not None
+    assert received.op == MxOp.UPDATE
+    assert received.payload["battery_mv"] == 3700
+    print("✓ Queue receive valid")
+
+    # Test LVC Record
+    rec = MxRecord(subject="node_status")
+    rec.update({"battery_mv": 3700, "rssi": -45})
+    assert rec.get_delta() == {"battery_mv": 3700, "rssi": -45}
+    assert rec.get_delta() == {} # Should be empty after clear
+    
+    rec.update({"rssi": -50})
+    assert rec.get_delta() == {"rssi": -50}
+    print("✓ LVC Record delta tracking")
+
+    print("\nAll Mx smoke tests passed!")
+
+if __name__ == "__main__":
+    asyncio.run(main())

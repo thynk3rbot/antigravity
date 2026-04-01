@@ -1,6 +1,11 @@
 #include "power_manager.h"
 #include "../HAL/board_config.h"
 #include "nvs_manager.h"
+#include <cstring>
+#include "../Mx/mx_bus.h"
+#include "../Mx/mx_subjects.h"
+#include "../Mx/mx_record.h"
+#include "../Transport/lora_transport.h"
 
 // ============================================================================
 // Static member definitions
@@ -290,6 +295,22 @@ void PowerManager::autoUpdateMode() {
         if (_modeChangeCallback) {
             _modeChangeCallback(_mode);
         }
+
+        // Broadcast status update on mode change
+        MxMessage msg;
+        memset(&msg, 0, sizeof(msg));
+        msg.op = MxOp::UPDATE;
+        msg.subject_id = MxSubjects::NODE_STATUS;
+
+        MxNodeStatus rec;
+        memset(&rec, 0, sizeof(rec));
+        rec.battery_mv = (uint16_t)(_lastVoltage * 1000.0f);
+        rec.rssi = LoRaTransport::getInstance().getSignalStrength(); 
+        rec.uptime_s = millis() / 1000;
+        
+        memcpy(msg.payload, &rec, sizeof(rec));
+        msg.payload_len = sizeof(rec);
+        MxBus::instance().publish(msg);
     }
 }
 

@@ -1,0 +1,56 @@
+# daemon/src/mx/mx_queue.py
+import asyncio
+from .mx_message import MxMessage
+
+class MxQueue:
+    def __init__(self, name: str, maxsize: int = 64):
+        self.name = name
+        self._queue: asyncio.Queue[MxMessage] = asyncio.Queue(maxsize=maxsize)
+
+    async def post(self, msg: MxMessage) -> bool:
+        try:
+            self._queue.put_nowait(msg)
+            return True
+        except asyncio.QueueFull:
+            return False
+
+    async def receive(self, timeout: float = None) -> MxMessage | None:
+        try:
+            return await asyncio.wait_for(self._queue.get(), timeout=timeout)
+        except (asyncio.TimeoutError, asyncio.exceptions.TimeoutError):
+            return None
+
+    def pending(self) -> int:
+        return self._queue.qsize()
+
+# daemon/src/mx/mx_bus.py
+import asyncio
+import logging
+from collections import defaultdict
+from .mx_message import MxMessage, MxOp
+from .mx_queue import MxQueue
+
+log = logging.getLogger("mx.bus")
+
+class MxBus:
+    def __init__(self):
+        self._subscriptions: dict[str, list[MxQueue]] = defaultdict(list)
+
+    def subscribe(self, subject: str, queue: MxQueue):
+        self._subscriptions[subject].append(queue)
+        log.info(f"subscribe: {subject} -> {queue.name}")
+
+    def unsubscribe(self, subject: str, queue: MxQueue):
+        self._subscriptions[subject] = [
+            q for q in self._subscriptions[subject] if q is not queue
+        ]
+
+    async def publish(self, msg: MxMessage) -> int:
+        subs = self._subscriptions.get(msg.subject, [])
+        delivered = 0
+        for queue in subs:
+            if await queue.post(msg):
+                delivered += 1
+            else:
+                log.warning(f"queue full: {queue.name} dropped {msg.op.name}")
+        return delivered

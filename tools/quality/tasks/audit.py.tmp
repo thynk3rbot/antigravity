@@ -1,0 +1,71 @@
+# tools/quality/tasks/audit.py
+from .base import BaseTask
+from pathlib import Path
+from datetime import datetime
+
+class AuditTask(BaseTask):
+    def gather(self) -> str:
+        code = ""
+        for path in [self.repo_root / "firmware/magic/lib", self.repo_root / "daemon/src"]:
+            for f in path.rglob("*"):
+                if f.suffix in [".h", ".cpp", ".py"]:
+                    code += f"\n--- {f.relative_to(self.repo_root)} ---\n"
+                    code += f.read_text(encoding="utf-8", errors="ignore")
+        return code
+
+    def save(self, result: str):
+        date_str = datetime.now().strftime("%Y-%m-%d")
+        report_dir = self.repo_root / "reports"
+        report_dir.mkdir(exist_ok=True)
+        report_path = report_dir / f"{date_str}-safety-audit.md"
+        report_path.write_text(result, encoding="utf-8")
+        print(f"Audit report saved to {report_path}")
+
+# tools/quality/tasks/learn.py
+from .base import BaseTask
+from pathlib import Path
+
+class LearnTask(BaseTask):
+    def gather(self) -> str:
+        # Read core architectural files only
+        core_files = [
+            "firmware/magic/lib/Mx/mx_bus.cpp",
+            "daemon/src/mx/mx_bus.py",
+            "plugins/_infrastructure/docker-compose.yml"
+        ]
+        context = ""
+        for f_path in core_files:
+            p = self.repo_root / f_path
+            if p.exists():
+                context += f"\nFILE: {f_path}\n"
+                context += p.read_text(encoding="utf-8", errors="ignore")
+        return context
+
+    def save(self, result: str):
+        knowledge_dir = self.repo_root / "knowledge"
+        knowledge_dir.mkdir(exist_ok=True)
+        (knowledge_dir / "patterns.md").write_text(result, encoding="utf-8")
+        print(f"Knowledge patterns saved to knowledge/patterns.md")
+
+# tools/quality/tasks/teach.py
+import subprocess
+from pathlib import Path
+from .base import BaseTask
+
+class TeachTask(BaseTask):
+    def gather(self, bug_hash=None, fix_hash=None) -> str:
+        if not bug_hash or not fix_hash:
+            return ""
+        try:
+            bug_diff = subprocess.run(["git", "show", bug_hash], capture_output=True, text=True, cwd=self.repo_root).stdout
+            fix_diff = subprocess.run(["git", "show", fix_hash], capture_output=True, text=True, cwd=self.repo_root).stdout
+            return f"BUG_DIFF:\n{bug_diff}\n\nFIX_DIFF:\n{fix_diff}"
+        except Exception as e:
+            return f"Git error in teach: {e}"
+
+    def save(self, result: str):
+        knowledge_dir = self.repo_root / "knowledge" / "lessons"
+        knowledge_dir.mkdir(parents=True, exist_ok=True)
+        report_path = knowledge_dir / f"lesson-{datetime.now().strftime('%Y%m%d%H%M')}.md"
+        report_path.write_text(result, encoding="utf-8")
+        print(f"New lesson saved to {report_path}")

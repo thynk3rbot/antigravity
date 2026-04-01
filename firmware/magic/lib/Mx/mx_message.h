@@ -1,28 +1,33 @@
+// firmware/magic/lib/Mx/mx_message.h
 #pragma once
 #include <cstdint>
+#include <cstddef>
 
 /**
- * MxOp — The seven fundamental operations of the Mx framework.
+ * MxOp — Universal operation types for the Mx Framework.
  */
 enum class MxOp : uint8_t {
-    UPDATE = 0,       // Field-level merge into existing record
-    INSERT,           // New record creation
-    REMOVE,           // Record deletion
-    SUBSCRIBE,        // Register interest in a subject
-    UNSUBSCRIBE,      // Deregister interest
-    EXECUTE,          // Command execution (STATUS, RELAY, GPIO, etc.)
-    WALK              // Enumerate all records in a cache
+    UPDATE = 0,       // field-level merge into existing record
+    INSERT,           // new record creation
+    REMOVE,           // record deletion
+    SUBSCRIBE,        // register interest in a subject
+    UNSUBSCRIBE,      // deregister interest
+    EXECUTE,          // command execution
+    WALK              // enumerate all records
 };
 
 /**
- * MxMessage — Universal message container for the Mx bus.
- * Sized to fit exactly into a single LoRa frame (256 bytes) including header.
+ * MxMessage — Fixed-size container for internal bus messaging.
+ * Payload size fits one LoRa frame (256 bytes) minus header.
  */
+constexpr size_t MX_PAYLOAD_MAX = 246;
+
 struct MxMessage {
-    MxOp op;                    // 1 byte — operation type
-    uint8_t src_transport;      // 1 byte — which transport sent this
-    uint16_t subject_id;        // 2 bytes — subject identifier
-    uint8_t payload[252];       // payload — sized to LoRa max
-    uint8_t payload_len;        // actual payload length
+    MxOp op;                    // 1 byte
+    uint8_t src_transport;      // 1 byte (enum)
+    uint16_t subject_id;        // 2 bytes
+    uint8_t payload[MX_PAYLOAD_MAX]; // 246 bytes
+    uint8_t payload_len;        // 1 byte
 };
-// Total size: 257 bytes. In practice, usually allocated in a pool.
+
+#include "mx_subjects.h"

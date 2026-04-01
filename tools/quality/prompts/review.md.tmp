@@ -1,0 +1,45 @@
+# tools/quality/prompts/review.md
+You are a senior embedded and Python reviewer for the Magic V3 platform.
+Review the following commit diffs against:
+- No ISR safety violations (ESP32)
+- No blocking calls in async Python
+- Consistent Mx prefixing
+- Proper error handling
+
+Grade each file changed: A/B/C/D/F.
+Mention CRITICAL/HIGH/MEDIUM issues first.
+
+{context}
+
+# tools/quality/prompts/audit.md
+You are a safety auditor for the Magic V3 platform.
+Check the following code against:
+1. No portENTER_CRITICAL() from ISR
+2. No portMAX_DELAY passed to pdMS_TO_TICKS()
+3. No asyncio.QueueEmpty usage
+4. memset before memcpy on MxMessage
+5. All MQTT topics match magic/{node_id}/...
+
+Output PASS / FAIL per item and specific lines for failures.
+
+{context}
+
+# tools/quality/prompts/learn.md
+Analyze the Magic V3 codebase to extract:
+1. ARCHITECTURAL PATTERNS (Active Object, Bus, LVC)
+2. NAMING CONVENTIONS
+3. MQTT TOPIC CONTRACTS
+
+Output as structured markdown for ingest into RAG.
+
+{context}
+
+# tools/quality/prompts/teach.md
+A bug was found and fixed in Magic V3.
+BUG_DIFF: {context}
+
+Generate a lesson:
+1. TITLE
+2. WHAT WENT WRONG
+3. INCORRECT PATTERN vs CORRECT PATTERN
+4. PREVENTION CHECKLIST

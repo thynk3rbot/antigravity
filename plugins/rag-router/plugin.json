@@ -1,0 +1,51 @@
+{
+  "$schema": "magic-plugin-v1",
+  "name": "rag-router",
+  "display_name": "RAG Router",
+  "description": "IoT-to-RAG routing microservice via Dify",
+  "version": "1.0.0",
+  "author": "spw1",
+
+  "run": {
+    "cmd": "python server.py",
+    "cwd": ".",
+    "env_file": ".env",
+    "language": "python",
+    "requirements": "requirements.txt"
+  },
+
+  "port": 8403,
+  "health": {
+    "endpoint": "/health",
+    "interval_s": 30,
+    "timeout_s": 5,
+    "retries": 3
+  },
+
+  "infrastructure": {
+    "requires": ["mqtt"],
+    "docker_compose": null
+  },
+
+  "auto_start": false,
+  "restart_policy": "on-failure",
+
+  "menu": {
+    "group": "Services",
+    "icon": "🔍",
+    "url": "http://localhost:8403",
+    "actions": [
+      {"label": "Open Dashboard", "type": "url", "value": "http://localhost:8403"},
+      {"label": "View Logs", "type": "action", "value": "logs"},
+      {"label": "Restart", "type": "action", "value": "restart"}
+    ]
+  },
+
+  "api": {
+    "base_url": "http://localhost:8403",
+    "endpoints": [
+      {"method": "GET",  "path": "/health"},
+      {"method": "POST", "path": "/api/query"}
+    ]
+  }
+}

@@ -4,8 +4,7 @@
 
 using std::min;
 
-// Payload capacity of an MxMessage (matches mx_message.h: uint8_t payload[252])
-static constexpr size_t MX_PAYLOAD_MAX = sizeof(MxMessage::payload);
+// Use global MX_PAYLOAD_MAX from mx_message.h
 
 void CommandMxBridge::process(const String& input, CommandManager::ResponseCallback callback) {
     // 1. Publish inbound command to bus (EXECUTE on COMMAND subject)

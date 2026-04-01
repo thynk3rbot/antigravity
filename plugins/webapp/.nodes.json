@@ -1,0 +1,112 @@
+[
+  {
+    "id": "COM7",
+    "name": "COM7",
+    "type": "serial",
+    "address": "COM7",
+    "active": false,
+    "online": false,
+    "hardware": "Unknown",
+    "mac": "Unknown",
+    "last_seen": 1774898470.376683
+  },
+  {
+    "id": "COM19",
+    "name": "COM19",
+    "type": "serial",
+    "address": "COM19",
+    "active": false,
+    "online": false,
+    "hardware": "Unknown",
+    "mac": "Unknown",
+    "last_seen": 1774956636.5987456
+  },
+  {
+    "id": "COM20",
+    "name": "COM20",
+    "type": "serial",
+    "address": "COM20",
+    "active": false,
+    "online": false,
+    "hardware": "Unknown",
+    "mac": "Unknown",
+    "last_seen": 1774558807.6763325
+  },
+  {
+    "id": "44:1B:F6:70:A4:B8",
+    "name": "magic-Peer4V4",
+    "type": "wifi",
+    "address": "172.16.0.29",
+    "active": false,
+    "online": false,
+    "hardware": "V3",
+    "mac": "44:1B:F6:70:A4:B8",
+    "last_seen": 1774892847.6791716
+  },
+  {
+    "id": "7C:9E:BD:46:7E:34",
+    "name": "magic-Peer5V2",
+    "type": "wifi",
+    "address": "172.16.0.30",
+    "active": false,
+    "online": false,
+    "hardware": "V3",
+    "mac": "7C:9E:BD:46:7E:34",
+    "last_seen": 1774558816.590333
+  },
+  {
+    "id": "10:51:DB:58:E6:C8",
+    "name": "magic-Peer1V3",
+    "type": "wifi",
+    "address": "172.16.0.27",
+    "active": false,
+    "online": false,
+    "hardware": "V3",
+    "mac": "10:51:DB:58:E6:C8",
+    "last_seen": 1774629463.2700522
+  },
+  {
+    "id": "COM16",
+    "name": "COM16",
+    "type": "serial",
+    "address": "COM16",
+    "active": false,
+    "online": true,
+    "hardware": "Unknown",
+    "mac": "Unknown",
+    "last_seen": 1774997738.384127
+  },
+  {
+    "id": "44:1B:F6:6F:97:D4",
+    "name": "magic-Peer-V4",
+    "type": "wifi",
+    "address": "172.16.0.43",
+    "active": false,
+    "online": false,
+    "hardware": "V3",
+    "mac": "44:1B:F6:6F:97:D4",
+    "last_seen": 1774892845.3763018
+  },
+  {
+    "id": "COM24",
+    "name": "COM24",
+    "type": "serial",
+    "address": "COM24",
+    "active": false,
+    "online": true,
+    "hardware": "Unknown",
+    "mac": "Unknown",
+    "last_seen": 1774997738.385127
+  },
+  {
+    "id": "10:51:DB:51:FC:C4",
+    "name": "magic-Peer2V3",
+    "type": "wifi",
+    "address": "172.16.0.26",
+    "active": false,
+    "online": false,
+    "hardware": "V3",
+    "mac": "10:51:DB:51:FC:C4",
+    "last_seen": 1774892853.36282
+  }
+]

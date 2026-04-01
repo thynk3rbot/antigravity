@@ -1,0 +1,123 @@
+/* plugins/viai-site/static/style.css */
+:root {
+  --bg-primary: #0a0a0f;
+  --bg-card: #12121a;
+  --bg-elevated: #1a1a2e;
+  --accent: #00d4ff;
+  --accent-secondary: #7c3aed;
+  --text-primary: #e2e8f0;
+  --text-muted: #64748b;
+  --success: #22c55e;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  line-height: 1.6;
+  font-size: 16px;
+}
+
+header {
+  padding: 2rem 1rem;
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+nav a {
+  color: var(--text-muted);
+  text-decoration: none;
+  margin-left: 2rem;
+  transition: color 0.3s;
+}
+
+nav a:hover, nav a.active {
+  color: var(--accent);
+}
+
+.hero {
+  padding: 6rem 1rem;
+  text-align: center;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+h1 {
+  font-size: 3.5rem;
+  margin-bottom: 1rem;
+  background: linear-gradient(to right, var(--accent), var(--accent-secondary));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.feature-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 2rem;
+  max-width: 1200px;
+  margin: 4rem auto;
+  padding: 0 1rem;
+}
+
+.card {
+  background: var(--bg-card);
+  padding: 2rem;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.06);
+  transition: transform 0.3s, border-color 0.3s;
+}
+
+.card:hover {
+  transform: translateY(-5px);
+  border-color: var(--accent);
+}
+
+button, .cta {
+  background: var(--accent);
+  color: var(--bg-primary);
+  border: none;
+  padding: 0.8rem 2rem;
+  font-weight: 700;
+  border-radius: 6px;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-block;
+  transition: opacity 0.3s;
+}
+
+button:hover, .cta:hover {
+  opacity: 0.9;
+}
+
+footer {
+  text-align: center;
+  padding: 4rem 1rem;
+  color: var(--text-muted);
+  border-top: 1px solid rgba(255,255,255,0.06);
+  margin-top: 4rem;
+}
+
+#fleet-demo, #search-results {
+  margin-top: 2rem;
+}
+
+.device-card {
+  padding: 1rem;
+  margin-bottom: 0.5rem;
+  border-left: 4px solid var(--text-muted);
+  background: var(--bg-elevated);
+}
+
+.device-card.online { border-left-color: var(--success); }
+.device-card.offline { border-left-color: var(--danger); }

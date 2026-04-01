@@ -1,0 +1,75 @@
+// firmware/magic/lib/Mx/mx_bus.h
+#pragma once
+#include "mx_message.h"
+#include "mx_queue.h"
+#include <array>
+
+constexpr uint8_t MX_MAX_SUBSCRIPTIONS = 32;
+
+struct MxSubscription {
+    uint16_t subject_id;
+    MxQueue* queue;
+};
+
+class MxBus {
+public:
+    static MxBus& instance() {
+        static MxBus bus;
+        return bus;
+    }
+
+    bool subscribe(uint16_t subject_id, MxQueue* queue);
+    bool unsubscribe(uint16_t subject_id, MxQueue* queue);
+
+    uint8_t publish(const MxMessage& msg);
+    uint8_t publishFromISR(const MxMessage& msg, BaseType_t* woken);
+
+private:
+    MxBus() = default;
+    std::array<MxSubscription, MX_MAX_SUBSCRIPTIONS> m_subs{};
+};
+
+// firmware/magic/lib/Mx/mx_bus.cpp
+#include "mx_bus.h"
+
+bool MxBus::subscribe(uint16_t subject_id, MxQueue* queue) {
+    for (auto& sub : m_subs) {
+        if (sub.subject_id == 0) {
+            sub.subject_id = subject_id;
+            sub.queue = queue;
+            return true;
+        }
+    }
+    return false;
+}
+
+bool MxBus::unsubscribe(uint16_t subject_id, MxQueue* queue) {
+    for (auto& sub : m_subs) {
+        if (sub.subject_id == subject_id && sub.queue == queue) {
+            sub.subject_id = 0;
+            sub.queue = nullptr;
+            return true;
+        }
+    }
+    return false;
+}
+
+uint8_t MxBus::publish(const MxMessage& msg) {
+    uint8_t count = 0;
+    for (auto& sub : m_subs) {
+        if (sub.subject_id == msg.subject_id && sub.queue) {
+            if (sub.queue->post(msg)) count++;
+        }
+    }
+    return count;
+}
+
+uint8_t MxBus::publishFromISR(const MxMessage& msg, BaseType_t* woken) {
+    uint8_t count = 0;
+    for (auto& sub : m_subs) {
+        if (sub.subject_id == msg.subject_id && sub.queue) {
+            if (sub.queue->postFromISR(msg, woken)) count++;
+        }
+    }
+    return count;
+}

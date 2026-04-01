@@ -1,0 +1,42 @@
+{
+  "$schema": "magic-plugin-v1",
+  "name": "webapp",
+  "display_name": "Magic Dashboard",
+  "description": "Primary fleet management and telemetry visualization dashboard",
+  "version": "1.0.0",
+  "author": "spw1",
+
+  "run": {
+    "cmd": "npm run dev",
+    "cwd": ".",
+    "env_file": ".env",
+    "language": "javascript",
+    "requirements": "package.json"
+  },
+
+  "port": 8000,
+  "health": {
+    "endpoint": "/",
+    "interval_s": 30,
+    "timeout_s": 5,
+    "retries": 3
+  },
+
+  "infrastructure": {
+    "requires": ["mqtt"],
+    "docker_compose": null
+  },
+
+  "auto_start": true,
+  "restart_policy": "on-failure",
+
+  "menu": {
+    "group": "Services",
+    "icon": "🌐",
+    "url": "http://localhost:8000",
+    "actions": [
+      {"label": "Open Dashboard", "type": "url", "value": "http://localhost:8000"},
+      {"label": "View Logs", "type": "action", "value": "logs"}
+    ]
+  }
+}

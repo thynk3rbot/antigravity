@@ -1,0 +1,91 @@
+// firmware/magic/lib/Mx/mx_pool.h
+#pragma once
+#include "mx_message.h"
+#include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
+
+constexpr uint8_t MX_POOL_SIZE = 16;
+
+class MxPool {
+public:
+    static MxPool& instance() {
+        static MxPool pool;
+        return pool;
+    }
+
+    MxMessage* alloc();
+    MxMessage* allocFromISR();
+    void release(MxMessage* slot);
+    uint8_t available() const;
+
+private:
+    MxPool();
+    MxMessage m_slots[MX_POOL_SIZE];
+    bool m_free[MX_POOL_SIZE];
+    SemaphoreHandle_t m_mutex;
+    volatile uint8_t m_isr_head;
+};
+
+// firmware/magic/lib/Mx/mx_pool.cpp
+#include "mx_pool.h"
+#include <cstring>
+
+MxPool::MxPool() : m_isr_head(0) {
+    m_mutex = xSemaphoreCreateMutex();
+    for (int i = 0; i < MX_POOL_SIZE; i++) {
+        m_free[i] = true;
+    }
+}
+
+MxMessage* MxPool::alloc() {
+    if (xSemaphoreTake(m_mutex, pdMS_TO_TICKS(100)) != pdTRUE) return nullptr;
+    
+    MxMessage* slot = nullptr;
+    for (int i = 0; i < MX_POOL_SIZE; i++) {
+        if (m_free[i]) {
+            m_free[i] = false;
+            slot = &m_slots[i];
+            memset(slot, 0, sizeof(MxMessage));
+            break;
+        }
+    }
+    
+    xSemaphoreGive(m_mutex);
+    return slot;
+}
+
+MxMessage* MxPool::allocFromISR() {
+    // Simple lock-free atomic head scan for ISR
+    for (int i = 0; i < MX_POOL_SIZE; i++) {
+        uint8_t idx = (m_isr_head + i) % MX_POOL_SIZE;
+        if (m_free[idx]) {
+            m_free[idx] = false;
+            m_isr_head = (idx + 1) % MX_POOL_SIZE;
+            MxMessage* slot = &m_slots[idx];
+            memset(slot, 0, sizeof(MxMessage));
+            return slot;
+        }
+    }
+    return nullptr;
+}
+
+void MxPool::release(MxMessage* slot) {
+    if (!slot) return;
+    uintptr_t addr = (uintptr_t)slot;
+    uintptr_t base = (uintptr_t)m_slots;
+    
+    if (addr < base || addr >= base + sizeof(m_slots)) return;
+    
+    uint8_t idx = (addr - base) / sizeof(MxMessage);
+    
+    // In mutex-protected path if possible, but release is often simpler
+    m_free[idx] = true;
+}
+
+uint8_t MxPool::available() const {
+    uint8_t count = 0;
+    for (int i = 0; i < MX_POOL_SIZE; i++) {
+        if (m_free[i]) count++;
+    }
+    return count;
+}

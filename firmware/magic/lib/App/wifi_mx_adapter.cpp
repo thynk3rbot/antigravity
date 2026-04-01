@@ -18,8 +18,37 @@ void WiFiMxAdapter::init() {
     // Subscribe to commands and node status updates
     MxBus::instance().subscribe(MxSubjects::COMMAND, this, &m_queue);
     MxBus::instance().subscribe(MxSubjects::NODE_STATUS, this, &m_queue);
+    MxBus::instance().subscribe(MxSubjects::GPS_POSITION, this, &m_queue);
 
     m_initialized = true;
+}
+
+void WiFiMxAdapter::_publishMqtt(const MxMessage& msg) {
+    if (!WiFiTransport::isConnected()) return;
+
+    // Convert Mx subjects to MQTT topics: magic/{nodeId}/mx/{subject_name}
+    String subjectName = "unknown";
+    if (msg.subject_id == MxSubjects::NODE_STATUS) subjectName = "status";
+    else if (msg.subject_id == MxSubjects::GPS_POSITION) subjectName = "gps";
+    else return; // Only mirror telemetry subjects
+
+    String topic = "magic/" + MQTTTransport::instance()->getNodeId() + "/mx/" + subjectName;
+
+    // Use JSON for MQTT observability (compatible with Telegraf)
+    StaticJsonDocument<512> doc;
+    doc["node_id"] = MQTTTransport::instance()->getNodeId();
+    doc["subject_id"] = msg.subject_id;
+    doc["op"] = (uint8_t)msg.op;
+    
+    // Add common record fields based on payload if possible
+    // Note: The binary record is passed for parsing in Telegraf,
+    // but we can provide the raw bytes or a base64 version here.
+    // For now, we'll just push the "update" trigger.
+    doc["updated"] = millis();
+
+    String out;
+    serializeJson(doc, out);
+    MQTTTransport::instance()->publishTelemetry(out);
 }
 
 void WiFiMxAdapter::drainQueue() {
@@ -62,6 +91,9 @@ void WiFiMxAdapter::drainQueue() {
 }
 
 bool WiFiMxAdapter::consume(const MxMessage& msg) {
-    // Safety Checklist: Post to queue with 0 tick timeout (Non-blocking)
+    // 1. Mirror to MQTT Infrastructure immediately (Production Bridge)
+    _publishMqtt(msg);
+
+    // 2. Post to internal local queue for secondary processing
     return m_queue.post(msg);
 }

@@ -1,0 +1,69 @@
+// firmware/magic/lib/Mx/mx_wire.h
+#pragma once
+#include "mx_message.h"
+
+/**
+ * MxWire — Serialization for Mesh/LoRa.
+ * Encapsulates the binary wire format.
+ */
+class MxWire {
+public:
+    static constexpr uint8_t HEADER_SIZE = 10;
+    static constexpr uint8_t CRC_SIZE = 2;
+
+    static uint8_t serialize(const MxMessage& msg, uint8_t* buffer, uint8_t max_len);
+    static bool deserialize(const uint8_t* buffer, uint8_t len, MxMessage& msg);
+    static uint16_t calculateCRC(const uint8_t* data, uint16_t len);
+};
+
+// firmware/magic/lib/Mx/mx_wire.cpp
+#include "mx_wire.h"
+#include <cstring>
+#include <algorithm>
+
+uint8_t MxWire::serialize(const MxMessage& msg, uint8_t* buffer, uint8_t max_len) {
+    if (max_len < HEADER_SIZE + msg.payload_len) return 0;
+    
+    buffer[0] = static_cast<uint8_t>(msg.op);
+    buffer[1] = 0; // source high
+    buffer[2] = 0; // source low
+    buffer[3] = (msg.subject_id >> 8) & 0xFF;
+    buffer[4] = msg.subject_id & 0xFF;
+    buffer[5] = 0; // sequence
+    buffer[6] = 5; // TTL
+    buffer[7] = msg.payload_len;
+    
+    memcpy(&buffer[8], msg.payload, msg.payload_len);
+    
+    uint16_t crc = calculateCRC(buffer, 8 + msg.payload_len);
+    buffer[8 + msg.payload_len] = (crc >> 8) & 0xFF;
+    buffer[9 + msg.payload_len] = crc & 0xFF;
+    
+    return 10 + msg.payload_len;
+}
+
+bool MxWire::deserialize(const uint8_t* buffer, uint8_t len, MxMessage& msg) {
+    if (len < HEADER_SIZE) return false;
+    
+    uint8_t payload_len = buffer[7];
+    if (len < HEADER_SIZE / 2 + payload_len) return false; // Basic bounds
+    
+    msg.op = static_cast<MxOp>(buffer[0]);
+    msg.subject_id = (buffer[3] << 8) | buffer[4];
+    msg.payload_len = std::min((uint8_t)payload_len, (uint8_t)MX_PAYLOAD_MAX);
+    memcpy(msg.payload, &buffer[8], msg.payload_len);
+    
+    return true;
+}
+
+uint16_t MxWire::calculateCRC(const uint8_t* data, uint16_t len) {
+    uint16_t crc = 0xFFFF;
+    for (uint16_t i = 0; i < len; i++) {
+        crc ^= (uint16_t)data[i] << 8;
+        for (uint8_t j = 0; j < 8; j++) {
+            if (crc & 0x8000) crc = (crc << 1) ^ 0x1021;
+            else crc <<= 1;
+        }
+    }
+    return crc;
+}

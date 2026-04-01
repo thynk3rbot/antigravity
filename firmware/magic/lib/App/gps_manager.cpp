@@ -3,6 +3,9 @@
 #include <TinyGPS++.h>
 #include "../HAL/board_config.h"
 #include "ArduinoJson.h"
+#include "../Mx/mx_bus.h"
+#include "../Mx/mx_subjects.h"
+#include "../Mx/mx_record.h"
 
 // ---------------------------------------------------------------------------
 // Static Member Initialization
@@ -58,6 +61,29 @@ void GPSManager::update() {
         _currentData.hdop = _gps.hdop.value();
 
         _lastUpdate = millis();
+
+        // -------------------------------------------------------------------
+        // Mx Bridge: Broadcast GPS update to the bus
+        // -------------------------------------------------------------------
+        MxMessage msg;
+        memset(&msg, 0, sizeof(msg));
+        msg.op = MxOp::UPDATE;
+        msg.subject_id = MxSubjects::GPS_POSITION;
+        
+        MxGpsPosition rec;
+        memset(&rec, 0, sizeof(rec));
+        rec.latitude = _currentData.lat;
+        rec.longitude = _currentData.lon;
+        rec.altitude = _currentData.alt;
+        rec.num_sats = _currentData.satellites;
+        rec.fix_age_ms = _currentData.fixAge;
+        rec.hdop_scaled = (uint16_t)(_currentData.hdop); // TinyGPS hdop is already scaled
+        
+        // Pack into payload (binary)
+        memcpy(msg.payload, &rec, sizeof(rec));
+        msg.payload_len = sizeof(rec);
+        
+        MxBus::instance().publish(msg);
     }
 }
 

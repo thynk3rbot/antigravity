@@ -7,7 +7,11 @@
  * MxPool — Static pre-allocated pool for MxMessage objects.
  * Guarantees zero heap allocation for internal messaging.
  */
-constexpr uint8_t MX_POOL_SIZE = 16;
+#ifdef BOARD_HAS_PSRAM
+  constexpr uint16_t MX_POOL_SIZE = 128;
+#else
+  constexpr uint16_t MX_POOL_SIZE = 16;
+#endif
 
 class MxPool {
 public:
@@ -29,8 +33,8 @@ public:
 
 private:
     MxPool();
-    MxMessage m_slots[MX_POOL_SIZE];
-    bool m_free[MX_POOL_SIZE];          // true = available
+    MxMessage* m_slots;
+    bool* m_free;                       // Dynamically sized based on pool size
     SemaphoreHandle_t m_mutex;
     portMUX_TYPE m_spinlock = portMUX_INITIALIZER_UNLOCKED;
 };

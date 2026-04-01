@@ -8,9 +8,9 @@
  * MxSubscription — Internal tracking for subject registrations.
  */
 struct MxSubscription {
-    uint16_t subject_id;        // 0 = unused slot
+    uint16_t subject_id;
     MxConsumer* consumer;
-    MxQueue* queue;             // target queue (consumer's inbox)
+    MxQueue* queue;
 };
 
 /**

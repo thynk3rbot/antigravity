@@ -1,0 +1,70 @@
+# tools/quality/tasks/base.py
+from pathlib import Path
+import httpx
+import logging
+
+class BaseTask:
+    def __init__(self, repo_root: Path, config: dict):
+        self.repo_root = repo_root
+        self.config = config
+        self.ollama_url = config.get("ollama_url", "http://localhost:11434")
+        self.model = config.get("model", "qwen2.5-coder:14b")
+
+    def gather(self) -> str:
+        raise NotImplementedError
+
+    def prompt(self, context: str) -> str:
+        # Load from prompts/{task}.md and replace {context}
+        task_name = self.__class__.__name__.replace("Task", "").lower()
+        prompt_path = Path(__file__).parent.parent / "prompts" / f"{task_name}.md"
+        if not prompt_path.exists():
+            return f"Review this: {context}"
+        
+        template = prompt_path.read_text(encoding="utf-8")
+        return template.replace("{context}", context)
+
+    async def analyze(self, prompt: str) -> str:
+        async with httpx.AsyncClient(timeout=600.0) as client:
+            try:
+                resp = await client.post(
+                    f"{self.ollama_url}/api/generate",
+                    json={"model": self.model, "prompt": prompt, "stream": False}
+                )
+                return resp.json().get("response", "No response from Ollama")
+            except Exception as e:
+                return f"Ollama Error: {e}"
+
+    def save(self, result: str):
+        raise NotImplementedError
+
+    async def run(self):
+        context = self.gather()
+        if not context:
+            return "No context gathered."
+        full_prompt = self.prompt(context)
+        result = await self.analyze(full_prompt)
+        self.save(result)
+        return result
+
+# tools/quality/tasks/review.py
+import subprocess
+from datetime import datetime
+from pathlib import Path
+from .base import BaseTask
+
+class ReviewTask(BaseTask):
+    def gather(self, since="24h") -> str:
+        try:
+            cmd = ["git", "log", f"--since={since}", "-p"]
+            res = subprocess.run(cmd, capture_output=True, text=True, cwd=self.repo_root)
+            return res.stdout
+        except Exception as e:
+            return f"Git error: {e}"
+
+    def save(self, result: str):
+        date_str = datetime.now().strftime("%Y-%m-%d")
+        report_dir = self.repo_root / "reports"
+        report_dir.mkdir(exist_ok=True)
+        report_path = report_dir / f"{date_str}-commit-review.md"
+        report_path.write_text(result, encoding="utf-8")
+        print(f"Review report saved to {report_path}")

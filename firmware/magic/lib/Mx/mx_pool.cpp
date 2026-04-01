@@ -8,6 +8,23 @@ MxPool& MxPool::instance() {
 
 MxPool::MxPool() {
     m_mutex = xSemaphoreCreateMutex();
+
+#ifdef BOARD_HAS_PSRAM
+    // Allocate slots in PSRAM for V4/S3 boards
+    m_slots = (MxMessage*)heap_caps_malloc(MX_POOL_SIZE * sizeof(MxMessage), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    m_free = (bool*)heap_caps_malloc(MX_POOL_SIZE * sizeof(bool), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    
+    if (!m_slots || !m_free) {
+        // Fallback to internal SRAM if PSRAM allocation fails
+        m_slots = (MxMessage*)heap_caps_malloc(MX_POOL_SIZE * sizeof(MxMessage), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+        m_free = (bool*)heap_caps_malloc(MX_POOL_SIZE * sizeof(bool), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    }
+#else
+    // Standard SRAM allocation for V2/V3
+    m_slots = (MxMessage*)heap_caps_malloc(MX_POOL_SIZE * sizeof(MxMessage), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    m_free = (bool*)heap_caps_malloc(MX_POOL_SIZE * sizeof(bool), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+#endif
+
     for (int i = 0; i < MX_POOL_SIZE; i++) {
         m_free[i] = true;
     }

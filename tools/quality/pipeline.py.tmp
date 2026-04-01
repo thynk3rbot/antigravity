@@ -1,0 +1,57 @@
+# tools/quality/pipeline.py
+import argparse
+import asyncio
+import json
+from pathlib import Path
+from tasks.review import ReviewTask
+from tasks.audit import AuditTask
+from tasks.learn import LearnTask
+from tasks.teach import TeachTask
+
+REPO_ROOT = Path(__file__).parent.parent.parent
+
+async def main():
+    parser = argparse.ArgumentParser(description="Magic V3 Quality Pipeline")
+    subparsers = parser.add_subparsers(dest="command")
+
+    review_p = subparsers.add_parser("review", help="Review recent commits")
+    review_p.add_argument("--since", default="24h")
+
+    subparsers.add_parser("audit", help="Safety audit of firmware + daemon")
+    subparsers.add_parser("learn", help="Extract patterns from codebase")
+
+    teach_p = subparsers.add_parser("teach", help="Generate lesson from bug fix")
+    teach_p.add_argument("bug_hash")
+    teach_p.add_argument("fix_hash")
+
+    args = parser.parse_args()
+
+    config_path = Path(__file__).parent / "config.json"
+    config = json.loads(config_path.read_text()) if config_path.exists() else {}
+
+    if args.command == "review":
+        task = ReviewTask(REPO_ROOT, config)
+        await task.run()
+    elif args.command == "audit":
+        task = AuditTask(REPO_ROOT, config)
+        await task.run()
+    elif args.command == "learn":
+        task = LearnTask(REPO_ROOT, config)
+        await task.run()
+    elif args.command == "teach":
+        task = TeachTask(REPO_ROOT, config)
+        # Pass hashes to gather (slight override of base run if needed)
+        context = task.gather(args.bug_hash, args.fix_hash)
+        full_prompt = task.prompt(context)
+        result = await task.analyze(full_prompt)
+        task.save(result)
+
+if __name__ == "__main__":
+    asyncio.run(main())
+
+# tools/quality/config.json
+{
+  "ollama_url": "http://localhost:11434",
+  "model": "qwen2.5-coder:14b",
+  "repo_root": "../../"
+}

@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Knowledge Base | viai.club</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <header>
+        <div class="logo"><strong>viai</strong>.club</div>
+        <nav>
+            <a href="/">Home</a>
+            <a href="/static/products.html">Products</a>
+            <a href="/static/customers.html">Customers</a>
+            <a href="/static/docs.html" class="active">Docs</a>
+        </nav>
+    </header>
+
+    <main class="hero">
+        <h1>Documentation</h1>
+        <p>Everything you need to build on the Magic V3 platform.</p>
+    </main>
+
+    <section class="feature-grid">
+        <div class="card" style="grid-column: 1 / -1;">
+            <h3>Search Knowledge Base</h3>
+            <form id="search-form" style="margin-top: 1rem;">
+                <input type="text" id="search-query" placeholder="Ask a question (e.g., How to configure LoRa?)" style="width: 70%; padding: 0.8rem; border-radius: 6px; border: 1px solid var(--text-muted); background: var(--bg-primary); color: var(--text-primary);">
+                <button type="submit">Ask AI</button>
+            </form>
+            <div id="search-results"></div>
+        </div>
+
+        <div class="card">
+            <h3>Getting Started</h3>
+            <ul>
+                <li>Hardware Kit Overview</li>
+                <li>First-time Setup</li>
+                <li>Connecting to the Mesh</li>
+            </ul>
+        </div>
+        <div class="card">
+            <h3>API Reference</h3>
+            <ul>
+                <li>MxBus Protocol</li>
+                <li>REST Endpoints</li>
+                <li>Telemetry Schema</li>
+            </ul>
+        </div>
+    </section>
+
+    <footer>
+        <p>&copy; 2026 viai.club. All rights reserved.</p>
+    </footer>
+
+    <script src="/static/main.js"></script>
+</body>
+</html>

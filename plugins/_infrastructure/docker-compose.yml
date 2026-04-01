@@ -1,0 +1,66 @@
+# Magic V3 Unified Infrastructure
+# Location: plugins/_infrastructure/docker-compose.yml
+
+services:
+  emqx:
+    image: emqx/emqx:5.5
+    container_name: magic-emqx
+    ports:
+      - "11883:1883"      # MQTT TCP (dev/testing, mapped from 1883 inside)
+      - "8084:8083"       # MQTT WebSocket (browser)
+      - "18084:18083"     # EMQX Dashboard
+    environment:
+      - EMQX_NAME=magic
+      - EMQX_DASHBOARD__DEFAULT_USERNAME=admin
+      - EMQX_DASHBOARD__DEFAULT_PASSWORD=magic123
+    volumes:
+      - magic_emqx_data:/opt/emqx/data
+      - magic_emqx_log:/opt/emqx/log
+    healthcheck:
+      test: ["CMD", "emqx_ctl", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  influxdb:
+    image: influxdb:2.7
+    container_name: magic-influxdb
+    ports:
+      - "8086:8086"       # InfluxDB UI + API
+    environment:
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=magic
+      - DOCKER_INFLUXDB_INIT_PASSWORD=magic123
+      - DOCKER_INFLUXDB_INIT_ORG=magic
+      - DOCKER_INFLUXDB_INIT_BUCKET=telemetry
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=${INFLUXDB_TOKEN:-magic-dev-token}
+    volumes:
+      - magic_influxdb_data:/var/lib/influxdb2
+    healthcheck:
+      test: ["CMD", "influx", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  telegraf:
+    image: telegraf:1.30
+    container_name: magic-telegraf
+    depends_on:
+      emqx:
+        condition: service_healthy
+      influxdb:
+        condition: service_healthy
+    volumes:
+      - ./telegraf.conf:/etc/telegraf/telegraf.conf:ro
+    environment:
+      - INFLUXDB_TOKEN=${INFLUXDB_TOKEN:-magic-dev-token}
+      - MQTT_BROKER=emqx
+      - MQTT_PORT=1883
+    restart: unless-stopped
+
+volumes:
+  magic_emqx_data:
+  magic_emqx_log:
+  magic_influxdb_data:

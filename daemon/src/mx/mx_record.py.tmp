@@ -1,0 +1,53 @@
+# daemon/src/mx/mx_record.py
+from dataclasses import dataclass, field
+from typing import Any
+import time
+
+@dataclass
+class MxRecord:
+    subject: str
+    sequence: int = 0
+    timestamp: float = field(default_factory=time.time)
+    fields: dict = field(default_factory=dict)
+    dirty: set = field(default_factory=set)
+
+    def update(self, changes: dict):
+        """Merge changes and track dirty fields."""
+        for k, v in changes.items():
+            if self.fields.get(k) != v:
+                self.fields[k] = v
+                self.dirty.add(k)
+        self.sequence += 1
+        self.timestamp = time.time()
+
+    def get_delta(self) -> dict:
+        """Return delta and clear dirty set."""
+        delta = {k: self.fields[k] for k in self.dirty if k in self.fields}
+        self.dirty.clear()
+        return delta
+
+# daemon/src/mx/mx_consumer.py
+from abc import ABC, abstractmethod
+from .mx_message import MxMessage
+
+class MxConsumer(ABC):
+    @abstractmethod
+    async def consume(self, msg: MxMessage) -> bool:
+        ...
+
+# daemon/src/mx/mx_transport.py
+from abc import ABC, abstractmethod
+from .mx_message import MxMessage
+
+class MxTransport(ABC):
+    @abstractmethod
+    def name(self) -> str: ...
+
+    @abstractmethod
+    async def send(self, msg: MxMessage) -> bool: ...
+
+    @abstractmethod
+    async def start(self): ...
+
+    @abstractmethod
+    async def stop(self): ...

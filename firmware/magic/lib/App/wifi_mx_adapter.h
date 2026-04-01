@@ -30,7 +30,11 @@ public:
     bool consume(const MxMessage& msg) override;
 
 private:
-    WiFiMxAdapter() = default;
+    WiFiMxAdapter() : m_initialized(false) {}
+    ~WiFiMxAdapter() {}
+
+    void _publishMqtt(const MxMessage& msg);
+
+    bool m_initialized;
     MxQueue m_queue{"wifi", 8};
-    bool m_initialized = false;
 };

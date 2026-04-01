@@ -1,0 +1,45 @@
+// firmware/magic/lib/Mx/mx_system.h
+#pragma once
+#include "mx_bus.h"
+#include "mx_pool.h"
+
+class MxSystem {
+public:
+    static MxSystem& instance() {
+        static MxSystem system;
+        return system;
+    }
+
+    void init();
+    void tick(); // call periodically to handle system-level Mx tasks
+
+private:
+    MxSystem() = default;
+    uint32_t m_last_heartbeat = 0;
+};
+
+// firmware/magic/lib/Mx/mx_system.cpp
+#include "mx_system.h"
+#include "mx_record.h"
+#include <Arduino.h>
+
+void MxSystem::init() {
+    // Both are singletons, instance() call ensures static init
+    MxPool::instance();
+    MxBus::instance();
+}
+
+void MxSystem::tick() {
+    if (millis() - m_last_heartbeat > 5000) {
+        m_last_heartbeat = millis();
+        
+        MxMessage msg;
+        msg.op = MxOp::UPDATE;
+        msg.subject_id = MxSubjects::HEARTBEAT;
+        msg.payload_len = 4;
+        uint32_t uptime = millis() / 1000;
+        memcpy(msg.payload, &uptime, 4);
+        
+        MxBus::instance().publish(msg);
+    }
+}
